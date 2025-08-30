@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Moja aplikacija</string>
+    <string name="nav_header_desc">Opis glave navigacije</string>
+    <string name="nav_header_title">Naslov nav-header</string>
+    <string name="nav_header_subtitle">Podnaslov nav-header</string>
+    <string name="menu_home">Domov</string>
+    <string name="menu_gallery">Galerija</string>
+    <string name="menu_slideshow">Diaprojekcija</string>
+    <string name="action_settings">Nastavitve</string>
+    <string name="default_web_client_id">551351477998-t69spragd7bmfe0so7823utfca8io89a.apps.googleusercontent.com</string>
+</resources>

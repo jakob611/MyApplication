@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "551351477998",
+    "project_id": "looksmaxingapp",
+    "storage_bucket": "looksmaxingapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:551351477998:android:215de073a5209066c1f5ff",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkn6KDeKNxCeEOAc5ZCjBPNfyVcQauJ5k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
