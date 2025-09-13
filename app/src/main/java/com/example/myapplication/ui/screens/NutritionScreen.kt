@@ -2,60 +2,148 @@
 
 package com.example.myapplication.ui.screens
 
-import android.util.Log
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.view.LayoutInflater
+import android.view.View
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.annotation.ColorInt
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidViewBinding
+import androidx.core.view.isVisible
+import com.example.myapplication.databinding.ItemTrackedFoodBinding
+import com.example.myapplication.databinding.NutritionScreenBinding
 import com.example.myapplication.network.FatSecretApi
 import com.example.myapplication.network.FoodDetail
 import com.example.myapplication.network.FoodSummary
-import com.example.myapplication.network.MealRanker
 import com.example.myapplication.network.MealFeatures
+import com.example.myapplication.network.MealRanker
 import com.example.myapplication.ui.theme.DrawerBlue
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import java.util.Locale
+import kotlin.math.roundToInt
 
+// ========== Custom donut view (MORA biti public, ne private) ==========
+class DonutProgressView @JvmOverloads constructor(
+    context: android.content.Context,
+    attrs: android.util.AttributeSet? = null
+) : View(context, attrs) {
 
-// ========== MODELI & PARSER ==========
+    var progress: Float = 0f
+        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
 
-data class ParsedMacrosForNutrition(
+    @ColorInt var baseColor: Int = 0xFFE5E7EB.toInt()
+        set(value) { field = value; basePaint.color = value; invalidate() }
+
+    @ColorInt var progressColor: Int = 0xFF1976F6.toInt()
+        set(value) { field = value; progressPaint.color = value; invalidate() }
+
+    var thicknessPx: Float = dp(16f)
+        set(value) {
+            field = value
+            basePaint.strokeWidth = value
+            progressPaint.strokeWidth = value
+            updateRect()
+            invalidate()
+        }
+
+    var startAngle: Float = 135f
+    var sweepAngle: Float = 270f
+
+    private val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = thicknessPx
+        color = baseColor
+    }
+    private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = thicknessPx
+        color = progressColor
+    }
+    private val arcRect = RectF()
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = MeasureSpec.getSize(heightMeasureSpec)
+        val size = if (w == 0 || h == 0) maxOf(w, h) else minOf(w, h)
+        val finalSize = if (size == 0) dp(190f).toInt() else size
+        setMeasuredDimension(finalSize, finalSize)
+        updateRect()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        updateRect()
+    }
+
+    private fun updateRect() {
+        val half = thicknessPx / 2f
+        arcRect.set(
+            paddingLeft + half,
+            paddingTop + half,
+            width - paddingRight - half,
+            height - paddingBottom - half
+        )
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.drawArc(arcRect, startAngle, sweepAngle, false, basePaint)
+        canvas.drawArc(arcRect, startAngle, sweepAngle * progress, false, progressPaint)
+    }
+
+    private fun dp(v: Float) = v * resources.displayMetrics.density
+}
+
+// ========== MODELI & PARSER (ne spreminjamo) ==========
+
+private data class ParsedMacrosForNutrition(
     val calories: Int?,
     val proteinG: Int?,
     val carbsG: Int?,
     val fatG: Int?
 )
-fun parseMacroBreakdown(text: String?): ParsedMacros {
-    // ... parser telo kot prej ...
-    if (text.isNullOrBlank()) return ParsedMacros(null, null, null, null)
+
+private fun parseMacroBreakdown(text: String?): ParsedMacrosForNutrition {
+    if (text.isNullOrBlank()) return ParsedMacrosForNutrition(null, null, null, null)
     val proteinTotalRe = Regex("""Protein:\s*[\d.]+g\/kg\s*\(([\d.]+)g total\)""", RegexOption.IGNORE_CASE)
     val proteinSimpleRe = Regex("""Protein:\s*([\d.]+)g(?:\b|,)""", RegexOption.IGNORE_CASE)
     val carbsRe = Regex("""Carbs:\s*([\d.]+)g""", RegexOption.IGNORE_CASE)
@@ -68,12 +156,7 @@ fun parseMacroBreakdown(text: String?): ParsedMacros {
     val fat = fatRe.find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.toInt()
     val calories = caloriesRe.find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.toInt()
 
-    return ParsedMacros(
-        calories = calories,
-        proteinG = protein,
-        carbsG = carbs,
-        fatG = fat
-    )
+    return ParsedMacrosForNutrition(calories, protein, carbs, fat)
 }
 
 private enum class MealType(val title: String) { Breakfast("Breakfast"), Lunch("Lunch"), Dinner("Dinner"), Snacks("Snacks") }
@@ -90,22 +173,19 @@ private data class TrackedFood(
     val fatG: Double?
 )
 
-private data class UserPrefs(
-    val likes: List<String> = emptyList()
-)
+private data class UserPrefs(val likes: List<String> = emptyList())
 
 // ========== MAIN SCREEN ==========
 
 @Composable
 fun NutritionScreen(plan: PlanResult? = null) {
     val context = LocalContext.current
-    val mealRanker = remember { MealRanker(context) }
+    val mealRanker = remember(context) { MealRanker(context) }
     val scope = rememberCoroutineScope()
     var userPrefs by remember { mutableStateOf<UserPrefs?>(null) }
     var showFavDialog by remember { mutableStateOf(false) }
     var showEditFavDialog by remember { mutableStateOf(false) }
 
-    // Branje favourites iz Firestore (glavni dokument "users/{uid}")
     LaunchedEffect(Unit) {
         val uid = Firebase.auth.currentUser?.uid
         if (uid != null) {
@@ -139,24 +219,18 @@ fun NutritionScreen(plan: PlanResult? = null) {
     fun autoFillAIWholeFatSecret() {
         scope.launch {
             val allFoods = mutableListOf<FoodSummary>()
-            // Za vsako živilo posebej naredi search!
             userPrefs?.likes?.forEach { like ->
                 val cleanQuery = like.trim().replace("\"", "")
                 val foods = FatSecretApi.searchFoods(cleanQuery, 1, 20)
                 allFoods.addAll(foods)
             }
 
-            Log.d("FIREBASE_LIKES", userPrefs?.likes.toString())
-            Log.d("ALL_FOODS", allFoods.map { it.name }.toString())
-
-            // Če ni hrane, ne kliči MealRanker!
             if (allFoods.isEmpty()) {
                 Toast.makeText(context, "No favourite foods for autofill!", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
-            val filteredFoods = allFoods // tukaj filter ni več potreben
-
+            val filteredFoods = allFoods
             val featuresList = filteredFoods.map { food ->
                 val foodDetail = FatSecretApi.getFoodDetail(food.id.toString())
                 MealFeatures(
@@ -169,11 +243,8 @@ fun NutritionScreen(plan: PlanResult? = null) {
                     country = 0, like = 0, recentUsage = 0
                 )
             }
-            Log.d("API_FOOD_DEBUG", "All foods count: ${allFoods.size}")
             val scores = mealRanker.rankMeals(featuresList)
-            val topFoods = filteredFoods.zip(scores)
-                .sortedByDescending { it.second }
-                .take(12)
+            val topFoods = filteredFoods.zip(scores).sortedByDescending { it.second }.take(12)
             trackedFoods = topFoods.mapIndexed { i, (food, _) ->
                 val detail = FatSecretApi.getFoodDetail(food.id)
                 TrackedFood(
@@ -190,195 +261,123 @@ fun NutritionScreen(plan: PlanResult? = null) {
             }
         }
     }
-    Surface(color = Color(0xFFF3F4F6)) {
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp, top = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    TopCard(
-                        consumedKcal = consumedKcal,
-                        targetKcal = targetCalories,
-                        consumedProtein = consumedProtein,
-                        targetProtein = targetProtein,
-                        consumedCarbs = consumedCarbs,
-                        targetCarbs = targetCarbs,
-                        consumedFat = consumedFat,
-                        targetFat = targetFat
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Button(
-                            onClick = { autoFillAIWholeFatSecret() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB), contentColor = Color.White)
-                        ) { Text("AI Autofill (FatSecret)") }
-                        Button(
-                            onClick = { showEditFavDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB), contentColor = Color.White)
-                        ) { Text("My favourites") }
-                    }
-                }
-                items(MealType.values()) { meal ->
-                    val itemsForMeal = trackedFoods.filter { it.meal == meal }
-                    MealCard(
-                        title = meal.title,
-                        items = itemsForMeal,
-                        onAdd = { sheetMeal = meal },
-                        onDeleteItem = { del -> trackedFoods = trackedFoods.filterNot { it.id == del.id } }
-                    )
-                }
-            }
 
-            if (showFavDialog) {
-                FavouritesDialog(
-                    initial = userPrefs?.likes ?: emptyList(),
-                    onDone = { selectedFoods ->
-                        val uid = Firebase.auth.currentUser?.uid
-                        if (uid != null) {
-                            Firebase.firestore.collection("users").document(uid)
-                                .set(mapOf("likes" to selectedFoods), SetOptions.merge())
-                                .addOnSuccessListener {
-                                    userPrefs = UserPrefs(likes = selectedFoods)
-                                    showFavDialog = false
-                                }
+    // DESIGN je v XML; tukaj ga inflatamo in vežemo podatke.
+    AndroidViewBinding(factory = NutritionScreenBinding::inflate) {
+        // Donut krog – identičen figmi (startAngle 135°, sweep 270°, zaobljeni konci)
+        val progress = (consumedKcal.toFloat() / targetCalories.toFloat()).coerceIn(0f, 1f)
+        val remaining = kotlin.math.abs(targetCalories - consumedKcal)
+
+        val ringColor = if (consumedKcal > targetCalories) Color(0xFFE11D48) else DrawerBlue
+        val grayBg = Color(0xFFE5E7EB)
+
+// Donut: gap spodaj-desno kot na sliki
+        donutRing.apply {
+            thicknessPx = resources.displayMetrics.density * 16f
+            startAngle = 0f          // iz 135f -> 0f (gap se premakne na spodnje-desno)
+            sweepAngle = 270f        // ali 300f, če želiš manjši gap (~60°)
+            baseColor = grayBg.toArgb()
+            progressColor = ringColor.toArgb()
+            this.progress = progress
+        }
+
+        tvRemaining.text = remaining.toString()
+        tvRemainingLabel.text = "Remaining"
+
+        // Makroji – večja pisava je v XML; tu nastavimo besedila
+        tvMacrosProtein.text = "Protein: ${consumedProtein.roundToInt()}g"
+        tvMacrosFat.text = "Fat: ${consumedFat.roundToInt()}g"
+        tvMacrosCarbs.text = "Carbs: ${consumedCarbs.roundToInt()}g"
+        tvMacrosSugar.text = "Sugar: \u2013g"
+
+        // Gumbi ADD – odprejo Compose bottom sheet
+        btnAddBreakfast.setOnClickListener { sheetMeal = MealType.Breakfast }
+        btnAddLunch.setOnClickListener { sheetMeal = MealType.Lunch }
+        btnAddDinner.setOnClickListener { sheetMeal = MealType.Dinner }
+        btnAddSnacks.setOnClickListener { sheetMeal = MealType.Snacks }
+
+        // Render seznama v sekcije
+        fun renderMeal(meal: MealType) {
+            val parent = when (meal) {
+                MealType.Breakfast -> containerBreakfast
+                MealType.Lunch -> containerLunch
+                MealType.Dinner -> containerDinner
+                MealType.Snacks -> containerSnacks
+            }
+            parent.removeAllViews()
+            val inflater = LayoutInflater.from(root.context)
+            val itemsForMeal = trackedFoods.filter { it.meal == meal }
+            itemsForMeal.forEach { itx ->
+                val row = ItemTrackedFoodBinding.inflate(inflater, parent, false)
+                row.tvItemName.text = itx.name
+                row.tvItemInfo.text = "${itx.amount.toInt()} ${itx.unit} • ${itx.caloriesKcal.roundToInt()} kcal"
+                row.btnDelete.setOnClickListener {
+                    trackedFoods = trackedFoods.filterNot { t -> t.id == itx.id }
+                }
+                parent.addView(row.root)
+            }
+        }
+        renderMeal(MealType.Breakfast)
+        renderMeal(MealType.Lunch)
+        renderMeal(MealType.Dinner)
+        renderMeal(MealType.Snacks)
+
+        tvRecommended.isVisible = true
+    }
+
+    // Compose dialogi/sheet ostanejo
+    if (showFavDialog) {
+        FavouritesDialog(
+            initial = userPrefs?.likes ?: emptyList(),
+            onDone = { selectedFoods ->
+                val uid = Firebase.auth.currentUser?.uid
+                if (uid != null) {
+                    Firebase.firestore.collection("users").document(uid)
+                        .set(mapOf("likes" to selectedFoods), SetOptions.merge())
+                        .addOnSuccessListener {
+                            userPrefs = UserPrefs(likes = selectedFoods)
+                            showFavDialog = false
                         }
-                    }
-                )
-            }
-
-            if (showEditFavDialog) {
-                FavouritesDialog(
-                    initial = userPrefs?.likes ?: emptyList(),
-                    onDone = { selectedFoods ->
-                        val uid = Firebase.auth.currentUser?.uid
-                        if (uid != null) {
-                            Firebase.firestore.collection("users").document(uid)
-                                .set(mapOf("likes" to selectedFoods), SetOptions.merge())
-                                .addOnSuccessListener {
-                                    userPrefs = UserPrefs(likes = selectedFoods)
-                                    showEditFavDialog = false
-                                }
-                        }
-                    },
-                    onCancel = { showEditFavDialog = false }
-                )
-            }
-
-            if (sheetMeal != null) {
-                ModalBottomSheet(
-                    onDismissRequest = { sheetMeal = null },
-                    sheetState = sheetState,
-                    containerColor = Color.White,
-                    tonalElevation = 6.dp
-                ) {
-                    AddFoodSheet(
-                        meal = sheetMeal!!,
-                        onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { sheetMeal = null } },
-                        onAddTracked = { tf -> trackedFoods = trackedFoods + tf }
-                    )
                 }
             }
+        )
+    }
+
+    if (showEditFavDialog) {
+        FavouritesDialog(
+            initial = userPrefs?.likes ?: emptyList(),
+            onDone = { selectedFoods ->
+                val uid = Firebase.auth.currentUser?.uid
+                if (uid != null) {
+                    Firebase.firestore.collection("users").document(uid)
+                        .set(mapOf("likes" to selectedFoods), SetOptions.merge())
+                        .addOnSuccessListener {
+                            userPrefs = UserPrefs(likes = selectedFoods)
+                            showEditFavDialog = false
+                        }
+                }
+            },
+            onCancel = { showEditFavDialog = false }
+        )
+    }
+
+    if (sheetMeal != null) {
+        ModalBottomSheet(
+            onDismissRequest = { sheetMeal = null },
+            sheetState = sheetState,
+            containerColor = Color.White,
+            tonalElevation = 6.dp
+        ) {
+            AddFoodSheet(
+                meal = sheetMeal!!,
+                onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { sheetMeal = null } },
+                onAddTracked = { tf -> trackedFoods = trackedFoods + tf }
+            )
         }
     }
 }
 
-// ===== UI helperji =====
-
-@Composable
-private fun TopCard(
-    consumedKcal: Int, targetKcal: Int,
-    consumedProtein: Double, targetProtein: Int,
-    consumedCarbs: Double, targetCarbs: Int,
-    consumedFat: Double, targetFat: Int
-) {
-    val ringColor = if (consumedKcal > targetKcal) Color(0xFFE11D48) else DrawerBlue
-    val labelColor = if (consumedKcal > targetKcal) Color(0xFFE11D48) else Color(0xFF6B7280)
-    val remaining = kotlin.math.abs(targetKcal - consumedKcal)
-    val progress = (consumedKcal.toFloat() / targetKcal.toFloat()).coerceIn(0f, 1f)
-    val titleText = if (consumedKcal > targetKcal) "Over by" else "Remaining"
-    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-        Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Box(
-                    modifier = Modifier.size(120.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(progress = { 1f }, color = Color(0xFFE5E7EB), strokeWidth = 12.dp)
-                    CircularProgressIndicator(progress = { progress }, color = ringColor, trackColor = Color.Transparent, strokeWidth = 12.dp, modifier = Modifier.matchParentSize())
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(remaining.toString(), style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = ringColor)
-                        Text(titleText, style = MaterialTheme.typography.bodySmall, color = labelColor)
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("Calories: $consumedKcal / $targetKcal kcal", style = MaterialTheme.typography.bodySmall, color = labelColor, modifier = Modifier.align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MacroPill("Protein", consumedProtein, targetProtein, "g")
-                MacroPill("Carbs", consumedCarbs, targetCarbs, "g")
-                MacroPill("Fat", consumedFat, targetFat, "g")
-            }
-        }
-    }
-}
-
-@Composable
-private fun MacroPill(label: String, consumed: Double, target: Int, unit: String) {
-    Column(horizontalAlignment = Alignment.Start) {
-        Text("$label:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF4B5563))
-        val txt = if (target > 0) "${consumed.roundToInt()}/$target $unit" else "${consumed.roundToInt()} $unit"
-        Text(txt, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color(0xFF111827))
-    }
-}
-
-@Composable
-private fun MealCard(
-    title: String,
-    items: List<TrackedFood>,
-    onAdd: () -> Unit,
-    onDeleteItem: (TrackedFood) -> Unit
-) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFFF1F5F9)) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827), modifier = Modifier.weight(1f))
-                FilledIconButton(onClick = onAdd, shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = DrawerBlue, contentColor = Color.White)) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add")
-                }
-            }
-            if (items.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.forEach { itx ->
-                        Surface(shape = RoundedCornerShape(10.dp), color = Color.White) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(itx.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color(0xFF111827))
-                                    Text("${itx.amount.toInt()} ${itx.unit} • ${itx.caloriesKcal.roundToInt()} kcal", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
-                                }
-                                IconButton(onClick = { onDeleteItem(itx) }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = Color(0xFFF15A5A))
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                Spacer(Modifier.height(6.dp))
-                Text("No items added yet.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
-            }
-        }
-    }
-}
+// ===== Dialogi/sheet (Compose) – nespremenjeno od tu naprej =====
 
 @Composable
 fun FavouritesDialog(
@@ -395,7 +394,7 @@ fun FavouritesDialog(
         onDismissRequest = { onCancel?.invoke() },
         confirmButton = {
             Button(
-                onClick = { if (selectedFoods.size >= 1) onDone(selectedFoods) }, // Lahko shraniš že ko je samo en
+                onClick = { if (selectedFoods.size >= 1) onDone(selectedFoods) },
                 enabled = selectedFoods.size >= 1
             ) { Text("Save favourites") }
         },
@@ -406,7 +405,7 @@ fun FavouritesDialog(
         },
         title = { Text("Choose your favourite foods") },
         text = {
-            Column {
+            androidx.compose.foundation.layout.Column {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -420,7 +419,7 @@ fun FavouritesDialog(
                 }) { Text("Search") }
                 LazyColumn(Modifier.heightIn(max = 300.dp)) {
                     items(searchResults) { food ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Checkbox(
                                 checked = selectedFoods.contains(food.name),
                                 onCheckedChange = { checked ->
@@ -434,13 +433,12 @@ fun FavouritesDialog(
                         }
                     }
                 }
-                // Seznam izbranih živil, vsak ima možnost za izbris (gumb X)
                 Text("Selected: ${selectedFoods.size} of 20")
                 LazyColumn {
                     items(selectedFoods) { food ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Text(food)
-                            Spacer(Modifier.width(10.dp))
+                            androidx.compose.foundation.layout.Spacer(Modifier.padding(end = 10.dp))
                             IconButton(onClick = {
                                 selectedFoods = selectedFoods - food
                             }) {
@@ -463,76 +461,65 @@ private fun AddFoodSheet(meal: MealType, onClose: () -> Unit, onAddTracked: (Tra
     var results by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var showAmountDialogFor by remember { mutableStateOf<FoodDetail?>(null) }
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Add food to ${meal.title}", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827))
-            Spacer(Modifier.weight(1f))
+    fun doSearch() {
+        scope.launch {
+            searching = true
+            searchError = null
+            runCatching { FatSecretApi.searchFoods(query, 1, 20) }
+                .onSuccess { results = it }
+                .onFailure { e -> searchError = e.message ?: "Search failed" }
+            searching = false
+        }
+    }
+
+    androidx.compose.foundation.layout.Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        androidx.compose.foundation.layout.Row(Modifier, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Add food to ${meal.title}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp))
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Close") }
         }
-        Spacer(Modifier.height(8.dp))
 
-        OutlinedTextField(
-            value = query, onValueChange = { query = it }, singleLine = true,
-            leadingIcon = { Icon(Icons.Filled.Search, null) },
-            placeholder = { Text("Search foods (e.g., chicken breast)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                scope.launch {
-                    searching = true
-                    searchError = null
-                    runCatching { FatSecretApi.searchFoods(query, 1, 20) }
-                        .onSuccess { results = it }
-                        .onFailure { searchError = it.message ?: "Search failed" }
-                    searching = false
-                }
-            }),
-            trailingIcon = {
-                TextButton(onClick = {
-                    scope.launch {
-                        searching = true
-                        searchError = null
-                        runCatching { FatSecretApi.searchFoods(query, 1, 20) }
-                            .onSuccess { results = it }
-                            .onFailure { searchError = it.message ?: "Search failed" }
-                        searching = false
-                    }
-                }) { Text("Search") }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        // TextField + gumb Search
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("Search foods (e.g., chicken breast)") },
+                modifier = Modifier.weight(1f),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { doSearch() })
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(horizontal = 6.dp))
+            Button(onClick = { doSearch() }) { Text("Search") }
+        }
+
         if (searching) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp), color = DrawerBlue)
+            LinearProgressIndicator(Modifier.padding(top = 6.dp), color = DrawerBlue)
         }
         if (searchError != null) {
             Text(searchError!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
         }
-        Spacer(Modifier.height(8.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 420.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 12.dp)
+            modifier = Modifier.heightIn(min = 100.dp, max = 420.dp).padding(top = 8.dp)
         ) {
             items(results) { item ->
-                Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFF8FAFC), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(item.name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = Color(0xFF111827))
-                            Text(item.description ?: "", maxLines = 2, style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
+                androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.padding(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                            Text(item.name, style = MaterialTheme.typography.titleSmall)
+                            Text(item.description ?: "", maxLines = 2, style = MaterialTheme.typography.bodySmall)
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    runCatching { FatSecretApi.getFoodDetail(item.id) }
-                                        .onSuccess { d -> showAmountDialogFor = d }
-                                        .onFailure { e -> searchError = e.message ?: "Failed to load food detail" }
-                                }
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = DrawerBlue, contentColor = Color.White),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                        ) { Text("Add") }
+                        Button(onClick = {
+                            scope.launch {
+                                runCatching { FatSecretApi.getFoodDetail(item.id) }
+                                    .onSuccess { d -> showAmountDialogFor = d }
+                                    .onFailure { e -> searchError = e.message ?: "Failed to load food detail" }
+                            }
+                        }) { Text("Add") }
                     }
                 }
             }
@@ -548,31 +535,17 @@ private fun AddFoodSheet(meal: MealType, onClose: () -> Unit, onAddTracked: (Tra
 
 @Composable
 private fun AmountDialog(detail: FoodDetail, meal: MealType, onCancel: () -> Unit, onConfirm: (TrackedFood) -> Unit) {
-    val metricUnit = detail.metricServingUnit?.lowercase(Locale.US)?.let {
-        when (it) { "g", "ml" -> it; else -> null }
-    }
+    val metricUnit = detail.metricServingUnit?.lowercase(Locale.US)?.let { if (it == "g" || it == "ml") it else null }
     var unit by remember(detail) { mutableStateOf(metricUnit ?: "servings") }
     var amountText by remember(detail) { mutableStateOf(if (unit == "servings") "1" else "100") }
     val amount = amountText.toDoubleOrNull()
 
     val preview = remember(detail, unit, amount) {
         if (amount == null) detail else detail.copy(
-            caloriesKcal = when (unit) {
-                "g", "ml" -> (detail.caloriesKcal ?: 0.0) * (amount / 100.0)
-                else -> (detail.caloriesKcal ?: 0.0) * amount
-            },
-            proteinG = when (unit) {
-                "g", "ml" -> (detail.proteinG ?: 0.0) * (amount / 100.0)
-                else -> (detail.proteinG ?: 0.0) * amount
-            },
-            carbsG = when (unit) {
-                "g", "ml" -> (detail.carbsG ?: 0.0) * (amount / 100.0)
-                else -> (detail.carbsG ?: 0.0) * amount
-            },
-            fatG = when (unit) {
-                "g", "ml" -> (detail.fatG ?: 0.0) * (amount / 100.0)
-                else -> (detail.fatG ?: 0.0) * amount
-            }
+            caloriesKcal = when (unit) { "g", "ml" -> (detail.caloriesKcal ?: 0.0) * (amount / 100.0) else -> (detail.caloriesKcal ?: 0.0) * amount },
+            proteinG = when (unit) { "g", "ml" -> (detail.proteinG ?: 0.0) * (amount / 100.0) else -> (detail.proteinG ?: 0.0) * amount },
+            carbsG = when (unit) { "g", "ml" -> (detail.carbsG ?: 0.0) * (amount / 100.0) else -> (detail.carbsG ?: 0.0) * amount },
+            fatG = when (unit) { "g", "ml" -> (detail.fatG ?: 0.0) * (amount / 100.0) else -> (detail.fatG ?: 0.0) * amount }
         )
     }
 
@@ -590,67 +563,40 @@ private fun AmountDialog(detail: FoodDetail, meal: MealType, onCancel: () -> Uni
                                 amount = amount,
                                 unit = unit,
                                 caloriesKcal = preview.caloriesKcal ?: 0.0,
-                                proteinG = preview.proteinG,
-                                carbsG = preview.carbsG,
-                                fatG = preview.fatG
+                                proteinG = preview.proteinG, carbsG = preview.carbsG, fatG = preview.fatG
                             )
                         )
                     }
                 },
                 enabled = amount != null && amount > 0,
-                colors = ButtonDefaults.buttonColors(containerColor = DrawerBlue, contentColor = Color.White)
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = DrawerBlue, contentColor = Color.White
+                )
             ) { Text("Add to ${meal.title}") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
-        title = { Text(detail.name, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
+        title = { Text(detail.name, style = MaterialTheme.typography.titleLarge) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            androidx.compose.foundation.layout.Column {
                 if (metricUnit != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AssistChip(
-                            onClick = { unit = metricUnit }, label = { Text(metricUnit.uppercase()) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (unit == metricUnit) DrawerBlue else Color(0xFFE5E7EB),
-                                labelColor = if (unit == metricUnit) Color.White else Color.Black
-                            )
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        AssistChip(
-                            onClick = { unit = "servings" }, label = { Text("Servings") },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (unit == "servings") DrawerBlue else Color(0xFFE5E7EB),
-                                labelColor = if (unit == "servings") Color.White else Color.Black
-                            )
-                        )
+                    androidx.compose.foundation.layout.Row {
+                        AssistChip(onClick = { unit = metricUnit }, label = { Text(metricUnit.uppercase()) })
+                        androidx.compose.foundation.layout.Spacer(Modifier.padding(end = 8.dp))
+                        AssistChip(onClick = { unit = "servings" }, label = { Text("Servings") })
                     }
                 } else {
-                    Text("No metric weight/volume available. Using servings.", color = Color(0xFF6B7280), fontSize = 12.sp)
+                    Text("No metric weight/volume available. Using servings.", fontSize = 12.sp)
                 }
 
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { txt -> amountText = txt.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }.replace(',', '.') },
+                    onValueChange = { txt -> amountText = txt.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.') },
                     singleLine = true,
                     label = { Text(when (unit) { "g" -> "Amount (g)"; "ml" -> "Amount (ml)"; else -> "Amount (servings)" }) },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
                 )
 
-                Column(
-                    modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(10.dp)).padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("Preview for $amountText $unit", fontWeight = FontWeight.SemiBold)
-                    Text("Calories: ${preview.caloriesKcal?.roundToInt()} kcal")
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Protein: ${preview.proteinG?.let { "%.1f".format(it) } ?: "-"} g")
-                        Text("Carbs: ${preview.carbsG?.let { "%.1f".format(it) } ?: "-"} g")
-                        Text("Fat: ${preview.fatG?.let { "%.1f".format(it) } ?: "-"} g")
-                    }
-                }
+                Text("Calories: ${preview.caloriesKcal?.roundToInt()} kcal")
             }
         }
     )

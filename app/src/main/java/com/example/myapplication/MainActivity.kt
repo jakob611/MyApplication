@@ -129,6 +129,7 @@ private fun AppBottomBar(
     }
 }
 
+
 class MainActivity : ComponentActivity() {
     private lateinit var googleSignInClient: GoogleSignInClient
 
