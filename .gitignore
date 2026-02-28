@@ -13,3 +13,26 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Build log datoteke (ne sodijo v git)
+build_*.txt
+build_*.log
+*.log
+out.log
+script_output.txt
+
+# Python / JS pomožni skripti (ne del projekta)
+*.py
+*.js
+
+# Shell skripti v root (debug pomočniki)
+debug_*.sh
+debug_*.ps1
+
+# Backup datoteke
+*_BACKUP_*.kt
+*_backup_*.kt
+
+# Ekstrahiran APK vsebina
+/apk_contents/
+
