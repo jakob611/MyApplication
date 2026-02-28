@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.example.myapplication.network.OpenFoodFactsAPI
 import com.example.myapplication.network.OpenFoodFactsProduct
