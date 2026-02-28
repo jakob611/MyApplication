@@ -19,7 +19,8 @@ object DailySyncManager {
 
     private const val TAG = "DailySyncManager"
     private const val PREFS_SYNC = "daily_sync_prefs"
-    private const val KEY_LAST_SYNCED_DATE = "last_synced_date"
+    // Set sincranih datumov (zamenjuje stari single-string KEY_LAST_SYNCED_DATE)
+    private const val KEY_SYNCED_DATES = "synced_dates_set"
 
     // SharedPreferences ključi (deljeni z NutritionScreen)
     const val PREFS_FOOD = "food_cache"
@@ -64,14 +65,26 @@ object DailySyncManager {
 
     /** Preveri ali je bil dani datum že sincirano. Internal — kliče ga tudi DailySyncWorker. */
     internal fun isSynced(context: Context, date: String): Boolean {
-        return context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
-            .getString(KEY_LAST_SYNCED_DATE, "") == date
+        val prefs = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
+        // Podpira Set datumov — yesterday in today sta oba lahko sincirani hkrati
+        val synced = prefs.getStringSet(KEY_SYNCED_DATES, emptySet()) ?: emptySet()
+        return date in synced
     }
 
     /** Označi dani datum kot sincirano. Internal — kliče ga tudi DailySyncWorker. */
     internal fun markSynced(context: Context, date: String) {
-        context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
-            .edit().putString(KEY_LAST_SYNCED_DATE, date).apply()
+        val prefs = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
+        // Ohrani obstoječe sincirane datume, dodaj novega
+        val existing = prefs.getStringSet(KEY_SYNCED_DATES, emptySet())?.toMutableSet() ?: mutableSetOf()
+        existing.add(date)
+        // Počisti stare datume (starejše od 7 dni) da Set ne raste v neskončnost
+        val cutoff = run {
+            val cal = java.util.Calendar.getInstance()
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -7)
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+        }
+        existing.removeAll { it < cutoff }
+        prefs.edit().putStringSet(KEY_SYNCED_DATES, existing).apply()
     }
 
     /**

@@ -43,10 +43,11 @@ internal fun WaterControlsRow(
     textPrimary: Color,
     lastClickState: MutableState<Long>,
     onMinus: (Int) -> Unit,
-    onPlus: (Int) -> Unit
+    onPlus: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.wrapContentWidth(),
+        modifier = modifier.wrapContentWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -284,4 +285,5 @@ internal fun HintText(text: String) {
         modifier = Modifier.fillMaxWidth()
     )
 }
+
 
