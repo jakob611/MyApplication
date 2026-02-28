@@ -66,23 +66,23 @@ object DailySyncManager {
 
     // ───── Sync logika ──────────────────────────────────────────────────────
 
-    /** Preveri ali je bil dani datum že sincirano. */
-    private fun isSynced(context: Context, date: String): Boolean {
-        val synced = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
-            .getString(KEY_LAST_SYNCED_DATE, "")
-        return synced == date
+    /** Preveri ali je bil dani datum že sincirano. Internal — kliče ga tudi DailySyncWorker. */
+    internal fun isSynced(context: Context, date: String): Boolean {
+        return context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
+            .getString(KEY_LAST_SYNCED_DATE, "") == date
     }
 
-    /** Označi dani datum kot sincirano. */
-    private fun markSynced(context: Context, date: String) {
+    /** Označi dani datum kot sincirano. Internal — kliče ga tudi DailySyncWorker. */
+    internal fun markSynced(context: Context, date: String) {
         context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
             .edit().putString(KEY_LAST_SYNCED_DATE, date).apply()
     }
 
     /**
      * Preveri ali obstajajo podatki za dani dan (ne pošiljamo praznih syncov).
+     * Internal — kliče ga tudi DailySyncWorker.
      */
-    private fun hasDataForDate(context: Context, date: String): Boolean {
+    internal fun hasDataForDate(context: Context, date: String): Boolean {
         val water = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE)
             .getInt("water_$date", 0)
         val burned = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
@@ -149,16 +149,29 @@ object DailySyncManager {
 
     /**
      * Kliče se ob ODPRTJU aplikacije (iz MainActivity).
-     * Sinciranle VČERAJŠNJE podatke prek WorkManager-ja, če niso bili syncani.
-     * Danes ne syncamo — podatki so šele v nastajanju, WorkManager bo to naredil ob onPause.
+     *
+     * Razpored:
+     *  - VČERAJ: sinciraj prek WorkManager če ni bilo
+     *  - DANES:  sinciraj prek WorkManager če ima nesincirane podatke
+     *            (primer: app je bila zaprta brez interneta med dnevom)
      */
     fun syncOnAppOpen(context: Context, uid: String) {
         val yesterday = yesterday()
+        val today = todayStr()
+
+        // Včeraj — sinciraj če ni bilo še
         if (!isSynced(context, yesterday) && hasDataForDate(context, yesterday)) {
             Log.d(TAG, "syncOnAppOpen: queuing yesterday $yesterday via WorkManager")
             com.example.myapplication.worker.DailySyncWorker.schedule(context)
+            return // Worker bo povzel oba dneva pri naslednjem zagonu
+        }
+
+        // Danes — sinciraj če ima podatke ki niso bili sincirani (npr. brez interneta)
+        if (!isSynced(context, today) && hasDataForDate(context, today)) {
+            Log.d(TAG, "syncOnAppOpen: queuing today $today via WorkManager (previously unsynced)")
+            com.example.myapplication.worker.DailySyncWorker.schedule(context)
         } else {
-            Log.d(TAG, "syncOnAppOpen: yesterday $yesterday already synced or has no data")
+            Log.d(TAG, "syncOnAppOpen: all data synced (yesterday=$yesterday, today=$today)")
         }
     }
 }

@@ -319,9 +319,14 @@ fun NutritionScreen(
         onDispose { reg?.remove() }
     }
 
-    // Persist danaĹˇnji jedilnik â€” todayId je skupni kljuÄŤ za vse lokalne cache-e
+    // ── Identifikacija uporabnika ──────────────────────────────────────────────
+    // POMEMBNO: uid mora biti v remember{} — getCurrentUserDocId() se ne sme klicati
+    // ob vsakem recomposition, ker bi to vsakič restartalo DisposableEffect(uid, todayId)
+    // in ustvarjalo nove Firestore listenerje (memory leak + napačno obnašanje).
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
+
+    // todayId — skupni ključ za vse lokalne cache-e (food, water, burned)
     val todayId = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
     var lastSyncedSignature by remember { mutableStateOf("") }
     fun foodsSignature(list: List<TrackedFood>) = list.joinToString("|") { tf ->
         listOf(
@@ -618,116 +623,45 @@ fun NutritionScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Water controls
-            Row(
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = {
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastWaterClickState.value < 80) return@FloatingActionButton
-                        lastWaterClickState.value = now
-                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
-                            context,
-                            com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK
-                        )
-                        waterConsumedMl = maxOf(0, waterConsumedMl - 50)
-                    },
-                    containerColor = Color(0xFF2563EB),
-                    contentColor = Color.White,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Text(
-                    "đź’§ 50ml",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary // Uporablja dinamiÄŤno barvo
-                )
-
-                FloatingActionButton(
-                    onClick = {
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastWaterClickState.value < 80) return@FloatingActionButton
-                        lastWaterClickState.value = now
-                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
-                            context,
-                            com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK
-                        )
-                        waterConsumedMl += 50
-                    },
-                    containerColor = Color(0xFF2563EB),
-                    contentColor = Color.White,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+            WaterControlsRow(
+                waterConsumedMl = waterConsumedMl,
+                textPrimary = textPrimary,
+                lastClickState = lastWaterClickState,
+                onMinus = { newVal ->
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
+                    waterConsumedMl = newVal
+                },
+                onPlus = { newVal ->
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
+                    waterConsumedMl = newVal
+                },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             // Macro numbers row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                fun getMacroColor(consumed: Double, target: Int): Color {
-                    if (target <= 0) return textPrimary
-                    val deviation = kotlin.math.abs((consumed - target) / target)
-                    return when {
-                        deviation <= 0.10 -> Color(0xFF10B981) // Green
-                        deviation <= 0.20 -> Color(0xFFF59E0B) // Yellow
-                        else -> Color(0xFFEF4444) // Red
-                    }
-                }
-
-                Text(
-                    text = macroLabel("Protein", consumedProtein, targetProtein, userProfile.weightUnit),
-                    color = getMacroColor(consumedProtein, targetProtein),
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-
-                Text(
-                    text = macroLabel("Fat", consumedFat, targetFat, userProfile.weightUnit),
-                    color = getMacroColor(consumedFat, targetFat),
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-
-                Text(
-                    text = macroLabel("Carbs", consumedCarbs, targetCarbs, userProfile.weightUnit),
-                    color = getMacroColor(consumedCarbs, targetCarbs),
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
+            MacroTextRow(
+                consumedProtein = consumedProtein,
+                consumedFat = consumedFat,
+                consumedCarbs = consumedCarbs,
+                targetProtein = targetProtein,
+                targetFat = targetFat,
+                targetCarbs = targetCarbs,
+                textPrimary = textPrimary,
+                weightUnit = userProfile.weightUnit
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "Tap colored segments for details",
-                color = Color(0xFF6B7280),
-                fontSize = 12.sp,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+            HintText("Tap colored segments for details")
 
             Spacer(modifier = Modifier.height(12.dp))
 
             // Make custom meals button
             Button(
                 onClick = {
-                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
-                        context,
-                        com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK
-                    )
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
                     showMakeCustom = true
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -741,39 +675,13 @@ fun NutritionScreen(
 
             // Saved custom meals
             savedMeals.forEach { meal ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                        .clickable {
-                            pendingCustomMeal = meal
-                            askWhereToAdd = true
-                        },
-                    colors = CardDefaults.cardColors(containerColor = surfaceVariantColor),
-                    shape = RoundedCornerShape(18.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, DrawerBlue)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp, 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = meal.name,
-                            fontSize = 14.sp,
-                            color = textPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { confirmDelete = meal }) {
-                            Icon(
-                                painter = painterResource(android.R.drawable.ic_menu_delete),
-                                contentDescription = "Delete",
-                                tint = textPrimary
-                            )
-                        }
-                    }
-                }
+                SavedMealChip(
+                    meal = meal,
+                    textPrimary = textPrimary,
+                    surfaceVariantColor = surfaceVariantColor,
+                    onClick = { pendingCustomMeal = meal; askWhereToAdd = true },
+                    onDelete = { confirmDelete = meal }
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -785,107 +693,19 @@ fun NutritionScreen(
                 MealType.Dinner to "Dinner",
                 MealType.Snacks to "Snacks"
             ).forEach { (mealType, title) ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = surfaceVariantColor),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = title,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = textPrimary
-                            )
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
-                                        context,
-                                        com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK
-                                    )
-                                    sheetMeal = mealType
-                                },
-                                containerColor = Color(0xFF1976F6),
-                                contentColor = Color.White
-                            ) {
-                                Icon(
-                                    painter = painterResource(android.R.drawable.ic_input_add),
-                                    contentDescription = "Add"
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Meal line separator
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(Color(0xFF1976F6), shape = androidx.compose.foundation.shape.CircleShape)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(4.dp)
-                                    .padding(start = 8.dp)
-                                    .background(Color(0xFFCCCCCC), shape = RoundedCornerShape(2.dp))
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Food items for this meal
-                        trackedFoods.filter { it.meal == mealType }.forEach { itx ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable { showFoodDetailDialog = itx },
-                                colors = CardDefaults.cardColors(containerColor = surfaceVariantColor),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = itx.name,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = textPrimary
-                                        )
-                                        Text(
-                                            text = "${itx.amount.toInt()} ${itx.unit} â€˘ ${itx.caloriesKcal.roundToInt()} kcal",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF6B7280)
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        trackedFoods = trackedFoods.filterNot { t -> t.id == itx.id }
-                                    }) {
-                                        Icon(
-                                            painter = painterResource(android.R.drawable.ic_menu_delete),
-                                            contentDescription = "Delete",
-                                            tint = Color(0xFFEF4444)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                MealCard(
+                    mealType = mealType,
+                    title = title,
+                    trackedFoods = trackedFoods,
+                    surfaceVariantColor = surfaceVariantColor,
+                    textPrimary = textPrimary,
+                    onAddFood = {
+                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
+                        sheetMeal = mealType
+                    },
+                    onFoodClick = { showFoodDetailDialog = it },
+                    onFoodDelete = { trackedFoods = trackedFoods.filterNot { t -> t.id == it.id } }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

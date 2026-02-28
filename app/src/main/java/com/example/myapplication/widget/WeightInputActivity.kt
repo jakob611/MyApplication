@@ -109,9 +109,12 @@ class WeightInputActivity : ComponentActivity() {
                         val today = LocalDate.now().toString()
                         val db = Firebase.firestore
 
-                        // Save to weightLogs (for chart)
+                        // Save to weightLogs (for chart) — merge: ne izbriši obstoječih polj
                         db.collection("users").document(uid).collection("weightLogs").document(today)
-                            .set(mapOf("date" to today, "weightKg" to w, "updatedAt" to FieldValue.serverTimestamp()))
+                            .set(
+                                mapOf("date" to today, "weightKg" to w, "updatedAt" to FieldValue.serverTimestamp()),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
                             .addOnSuccessListener {
                                 Log.d("WeightInput", "Saved to weightLogs: $w kg")
 

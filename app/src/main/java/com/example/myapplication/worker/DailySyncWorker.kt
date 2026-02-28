@@ -112,6 +112,8 @@ class DailySyncWorker(
                 .set(payload, SetOptions.merge())
                 .await()
 
+            // POPRAVEK: Označi datum kot sincirano — brez tega se sync ponovi ob vsakem zagonu
+            DailySyncManager.markSynced(applicationContext, today)
             Log.d(TAG, "OK [$today]: water=$waterMl ml, burned=$burnedKcal kcal, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
             Result.success()
 
