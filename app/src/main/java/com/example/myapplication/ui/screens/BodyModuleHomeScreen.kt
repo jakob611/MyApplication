@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
@@ -23,12 +22,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -41,7 +38,6 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.myapplication.data.AlgorithmPreferences
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -114,14 +110,30 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         // Determine if remote is newer or better?
                         // Generally, we want to maximize progress or trust the latest sync.
                         val currentLocalTotal = prefs.getInt("total_workouts_completed", 0)
+                        val currentLocalPlanDay = prefs.getInt("plan_day", 1)
 
-                        if (remoteTotal > currentLocalTotal) {
+                        // Sinciraj če: Firestore ima več workoutov, ali če je lokalni planDay še na 1
+                        // (npr. po reinstall-u) in Firestore ima napredek
+                        val shouldSyncFromRemote = remoteTotal > currentLocalTotal ||
+                            (currentLocalPlanDay <= 1 && remotePlanDay > 1)
+
+                        if (shouldSyncFromRemote) {
                             prefs.edit {
-                                putInt("streak_weeks", remoteStreak) // Sync streak weeks
+                                putInt("streak_weeks", remoteStreak)
                                 putInt("total_workouts_completed", remoteTotal)
                                 putInt("weekly_done", remoteWeekly)
-                                putInt("plan_day", remotePlanDay) // Sync planDay
+                                putInt("plan_day", remotePlanDay)
                                 putLong("last_workout_epoch", remoteLastEpoch)
+                            }
+                        }
+
+                        // Sinciraj weeklyTarget iz Firestorea — local prefs ga nastavi samo ob
+                        // kreiranju plana, ampak po reinstall-u ali zamenjavi plana bi bil napačen
+                        val remoteWeeklyTarget = (remoteStats["weekly_target"] as? Number)?.toInt()
+                        if (remoteWeeklyTarget != null && remoteWeeklyTarget > 0) {
+                            val localTarget = prefs.getInt("weekly_target", 0)
+                            if (localTarget == 0 || shouldSyncFromRemote) {
+                                prefs.edit { putInt("weekly_target", remoteWeeklyTarget) }
                             }
                         }
                     }
@@ -213,35 +225,25 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             val currentWeeklyDone = if (shouldReset) 0 else prefs.getInt("weekly_done", 0)
             val weeklyTarget = prefs.getInt("weekly_target", 4)
 
-            // ─── Shrani workout v Firestore kot en dokument ───────────────
-            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-            if (uid != null) {
-                val workoutDoc = hashMapOf(
-                    "date" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                    "type" to if (isExtraWorkout) "extra" else "regular",
-                    "totalKcal" to totalKcal,
-                    "totalTimeMin" to totalTimeMin,
-                    "exercisesCount" to exerciseResults.size,
-                    "planDay" to _ui.value.planDay,
-                    "exercises" to exerciseResults
-                )
-                try {
-                    com.google.firebase.ktx.Firebase.firestore
-                        .collection("users").document(uid)
-                        .collection("workoutSessions")
-                        .add(workoutDoc)
-                } catch (_: Exception) {}
-            }
-
+            // Extra workout — nima tedenskega locka, shrani takoj
             if (isExtraWorkout) {
+                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                if (uid != null) {
+                    val workoutDoc = hashMapOf(
+                        "date" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "type" to "extra",
+                        "totalKcal" to totalKcal,
+                        "totalTimeMin" to totalTimeMin,
+                        "exercisesCount" to exerciseResults.size,
+                        "planDay" to _ui.value.planDay,
+                        "exercises" to exerciseResults
+                    )
+                    try { com.google.firebase.ktx.Firebase.firestore.collection("users").document(uid).collection("workoutSessions").add(workoutDoc) } catch (_: Exception) {}
+                }
                 val newTotal = _ui.value.totalWorkoutsCompleted + 1
                 val extraCount = prefs.getInt("total_extra_workouts", 0) + 1
-                prefs.edit {
-                    putInt("total_workouts_completed", newTotal)
-                    putInt("total_extra_workouts", extraCount)
-                }
+                prefs.edit { putInt("total_workouts_completed", newTotal); putInt("total_extra_workouts", extraCount) }
                 _ui.value = _ui.value.copy(totalWorkoutsCompleted = newTotal)
-
                 val workoutXP = 30
                 val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                 val context = getApplication<android.app.Application>().applicationContext
@@ -256,9 +258,10 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
 
+            // Regular workout — preveri pogoje PREDEN shranimo karkoli
             if (!isFirstToday) return@launch
 
-            // WEEKLY LOCK
+            // WEEKLY LOCK — tedenski cilj dosežen
             if (currentWeeklyDone >= weeklyTarget && !shouldReset) {
                 withContext(Dispatchers.Main) {
                     android.widget.Toast.makeText(
@@ -270,23 +273,31 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
 
+            // ─── Vsi pogoji OK — zdaj shrani workout v Firestore ─────────
+            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+            if (uid != null) {
+                val workoutDoc = hashMapOf(
+                    "date" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "type" to "regular",
+                    "totalKcal" to totalKcal,
+                    "totalTimeMin" to totalTimeMin,
+                    "exercisesCount" to exerciseResults.size,
+                    "planDay" to _ui.value.planDay,
+                    "exercises" to exerciseResults
+                )
+                try { com.google.firebase.ktx.Firebase.firestore.collection("users").document(uid).collection("workoutSessions").add(workoutDoc) } catch (_: Exception) {}
+            }
+
             // ─── Regular plan workout ─────────────────────────────────────
             val newWeeklyDone = if (shouldReset) 1 else currentWeeklyDone + 1
             val newPlanDay = _ui.value.planDay + 1
             val newTotal = _ui.value.totalWorkoutsCompleted + 1
 
-            // STREAK se ne povečuje tukaj — to naredi izključno WeeklyStreakWorker ob koncu tedna.
-            // S tem preprečimo dvojni increment.
+            // STREAK in TEŽAVNOST se ne spremenita tukaj —
+            // to naredi izključno WeeklyStreakWorker ob polnoči konca tedna.
+            // S tem preprečimo dvojni increment (enkrat tukaj + enkrat v Workerju).
             val currentStreak = prefs.getInt("streak_weeks", 0)
-
-            // Ob koncu tedna: povečaj težavnost za 0.5 (samo lokalno, Firestore sync naredi Worker)
             val context = getApplication<android.app.Application>().applicationContext
-            if (newWeeklyDone >= weeklyTarget) {
-                AlgorithmPreferences.incrementWeeklyDifficulty(context)
-                if (AlgorithmPreferences.isRecoveryMode(context)) {
-                    AlgorithmPreferences.endRecoveryMode(context)
-                }
-            }
 
             prefs.edit {
                 putLong("last_workout_epoch", today.toEpochDay())
@@ -300,11 +311,12 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             if (userEmail.isNotEmpty()) {
                 com.example.myapplication.data.UserPreferences.saveWorkoutStats(
                     email = userEmail,
-                    streak = currentStreak, // streak se ne poveča tukaj
+                    streak = currentStreak,
                     totalWorkouts = newTotal,
                     weeklyDone = newWeeklyDone,
                     lastWorkoutEpoch = today.toEpochDay(),
-                    planDay = newPlanDay
+                    planDay = newPlanDay,
+                    weeklyTarget = weeklyTarget  // shrani v Firestore za sync po reinstall-u
                 )
             }
 
@@ -908,8 +920,8 @@ fun PlanPathDialog(
     // Calculate total days: ALWAYS 4 weeks × user's chosen activity level
     // Don't use plan.weeks because determineOptimalTrainingDays may have reduced it
     val totalPlanDays = 4 * safeGoal
-    val currentWeekGlobal = ((currentDay - 1) / safeGoal) + 1
-    val blockStartWeek = ((currentWeekGlobal - 1) / 4) * 4 + 1
+    // startWeek je vedno 1 — PlanPathVisualizer prikaže vse dni od 1 naprej
+    val blockStartWeek = 1
 
     // Dark mode support
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f

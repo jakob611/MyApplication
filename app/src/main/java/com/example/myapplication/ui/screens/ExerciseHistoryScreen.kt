@@ -68,7 +68,7 @@ fun ExerciseHistoryScreen(
 
 @Composable
 private fun ExercisesTab() {
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     var entries by remember { mutableStateOf<List<ExerciseLog>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
@@ -155,7 +155,7 @@ private fun ExercisesTab() {
 
 @Composable
 private fun WorkoutsTab() {
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     var entries by remember { mutableStateOf(listOf<WorkoutEntry>()) }
     var loading by remember { mutableStateOf(true) }
     LaunchedEffect(uid) {

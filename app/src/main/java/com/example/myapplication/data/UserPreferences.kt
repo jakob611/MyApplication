@@ -422,17 +422,28 @@ object UserPreferences {
         }
     }
 
-    suspend fun saveWorkoutStats(email: String, streak: Int, totalWorkouts: Int, weeklyDone: Int, lastWorkoutEpoch: Long, planDay: Int = 1) {
+    suspend fun saveWorkoutStats(
+        email: String,
+        streak: Int,
+        totalWorkouts: Int,
+        weeklyDone: Int,
+        lastWorkoutEpoch: Long,
+        planDay: Int = 1,
+        weeklyTarget: Int = 0  // 0 = ne posodabljaj (obdrži obstoječo vrednost)
+    ) {
         try {
+            val data = mutableMapOf<String, Any>(
+                "streak_days" to streak,
+                "total_workouts_completed" to totalWorkouts,
+                "weekly_done" to weeklyDone,
+                "last_workout_epoch" to lastWorkoutEpoch,
+                "plan_day" to planDay
+            )
+            // Shrani weeklyTarget samo če je > 0 (ob kreiranju plana ali zamenjavi)
+            if (weeklyTarget > 0) data["weekly_target"] = weeklyTarget
             db.collection("users")
                 .document(email)
-                .set(mapOf(
-                    "streak_days" to streak,
-                    "total_workouts_completed" to totalWorkouts,
-                    "weekly_done" to weeklyDone,
-                    "last_workout_epoch" to lastWorkoutEpoch,
-                    "plan_day" to planDay
-                ), SetOptions.merge())
+                .set(data, SetOptions.merge())
                 .await()
         } catch (e: Exception) {
             Log.e("UserPreferences", "❌ Error saving profile to Firestore", e)
@@ -449,7 +460,8 @@ object UserPreferences {
                     "total_workouts_completed" to (doc.getLong("total_workouts_completed")?.toInt() ?: 0),
                     "weekly_done" to (doc.getLong("weekly_done")?.toInt() ?: 0),
                     "last_workout_epoch" to (doc.getLong("last_workout_epoch") ?: 0L),
-                    "plan_day" to (doc.getLong("plan_day")?.toInt() ?: 1)
+                    "plan_day" to (doc.getLong("plan_day")?.toInt() ?: 1),
+                    "weekly_target" to (doc.getLong("weekly_target")?.toInt() ?: 0)
                 )
             } else null
         } catch (e: Exception) {
