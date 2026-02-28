@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -48,7 +47,8 @@ class WaterInputActivity : ComponentActivity() {
     @Composable
     private fun WaterInputDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
         val context = LocalContext.current
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        // uid v remember{} — ne sme se klicati ob vsakem recomposition
+        val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
         var waterInput by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -115,6 +115,9 @@ class WaterInputActivity : ComponentActivity() {
                             )
                             .addOnSuccessListener {
                                 Log.d("WaterInput", "Saved to dailyLogs: $w ml")
+                                // Posodobi lokalni cache — NutritionScreen bere iz tega
+                                com.example.myapplication.persistence.DailySyncManager
+                                    .saveWaterLocally(context, w, today)
                                 // Update widget
                                 WaterWidgetProvider.updateWidgetFromApp(context, w)
                                 onSaved()
