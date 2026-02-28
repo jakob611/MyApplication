@@ -24,6 +24,8 @@ android {
         buildConfigField("String", "FATSECRET_BASE_URL", "\"$fatsecretBaseUrl\"")
         buildConfigField("String", "FITNESS_API_BASE_URL", "\"$fitnessApiBaseUrl\"")
         buildConfigField("String", "BACKEND_API_KEY", "\"$backendKey\"")
+        // Ohrani samo slovenščino in angleščino - zmanjša velikost res/ map
+        resourceConfigurations += listOf("sl", "en")
     }
     buildTypes {
         release {
@@ -45,6 +47,22 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    // Pakiriaj samo arm64-v8a in armeabi-v7a - izpusti x86/x86_64 (samo emulatorji)
+    // To zmanjsa APK za ~10MB (libbarhopper_v3.so je 5MB za vsak x86 ABI)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true  // en APK za distribucijo
+        }
+    }
+    // Pakiriaj samo navedene ABI v APK (ne ustvari locenih APK)
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/x86/**", "lib/x86_64/**")
+        }
     }
 }
 dependencies {
