@@ -24,12 +24,11 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+import okhttp3.RequestBody.Companion.toRequestBody
+
 // Firebase imports
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 val Context.dataStore by preferencesDataStore(name = "plans_datastore")
 
@@ -41,9 +40,19 @@ object PlanDataStore {
     private const val PLANS_COLLECTION = "user_plans"
 
 
+    // Helper to get resolved ID
+    suspend fun getResolvedUserId(): String? {
+        if (auth.currentUser == null) return null
+        return try {
+            FirestoreHelper.getCurrentUserDocRef().id
+        } catch (e: Exception) {
+            auth.currentUser?.uid // Fallback
+        }
+    }
+
     // Dodaj znotraj object PlanDataStore
     suspend fun migrateLocalPlansToFirestore(context: Context) {
-        val userId = getCurrentUserId() ?: return
+        val userId = getResolvedUserId() ?: return
         try {
             // preberi lokalne plane
             val localPlans = loadLocalPlansAndSend(context)
@@ -58,7 +67,7 @@ object PlanDataStore {
             if (!snapshot.exists()) {
                 // migriraj lokalne -> Firestore
                 savePlans(context, localPlans)
-                Log.d("PlanDataStore", "Migrated ${localPlans.size} local plans to Firestore")
+                Log.d("PlanDataStore", "Migrated ${localPlans.size} local plans to Firestore ($userId)")
             } else {
                 Log.d("PlanDataStore", "User already has plans in Firestore, skipping migration")
             }
@@ -67,11 +76,32 @@ object PlanDataStore {
         }
     }
 
-    fun getCurrentUserId(): String? = auth.currentUser?.uid
+    suspend fun deleteAllPlans() {
+        val userId = getResolvedUserId() ?: return
+        try {
+            // Check if user has plans in Firestore
+            val docRef = firestore.collection(PLANS_COLLECTION).document(userId)
+            val snapshot = docRef.get().await()
 
-    fun plansFlow(context: Context): Flow<List<PlanResult>> = callbackFlow {
-        val userId = getCurrentUserId()
-        Log.d("PlanDataStore", "plansFlow called with userId: $userId")
+            if (snapshot.exists()) {
+                 docRef.delete().await()
+                 Log.d("PlanDataStore", "Deleted all plans for user: $userId")
+            }
+        } catch (e: Exception) {
+            Log.e("PlanDataStore", "Error deleting all plans: ${e.message}")
+            throw e
+        }
+    }
+
+    fun plansFlow(): Flow<List<PlanResult>> = callbackFlow {
+        // Resolve ID async inside the flow
+        val userId = try {
+            if (auth.currentUser != null) FirestoreHelper.getCurrentUserDocRef().id else null
+        } catch (e: Exception) {
+            auth.currentUser?.uid
+        }
+
+        Log.d("PlanDataStore", "plansFlow called with resolved userId: $userId")
 
         if (userId == null) {
             Log.e("PlanDataStore", "User not logged in - returning empty list")
@@ -89,6 +119,7 @@ object PlanDataStore {
                 }
 
                 if (snapshot != null && snapshot.exists()) {
+                    @Suppress("UNCHECKED_CAST")
                     val plansData = snapshot.get("plans") as? List<Map<String, Any>>
                     val plans = plansData?.mapNotNull { convertMapToPlanResult(it) } ?: emptyList()
                     trySend(plans)
@@ -113,7 +144,9 @@ object PlanDataStore {
     }
 
     suspend fun savePlans(context: Context, plans: List<PlanResult>) {
-        val userId = getCurrentUserId()
+        val userId = getResolvedUserId()
+
+        // Always save locally first as backup/cache
         saveToLocalDataStore(context, plans)
 
         if (userId == null) {
@@ -148,19 +181,21 @@ object PlanDataStore {
                                 )
                             }
                         )
-                    }
+                    },
+                    "focusAreas" to plan.focusAreas,
+                    "equipment" to plan.equipment
                 )
                 plan.algorithmData?.let { algo ->
                     planMap["algorithmData"] = hashMapOf<String, Any>(
-                        "bmi" to algo.bmi,
-                        "bmr" to algo.bmr,
-                        "tdee" to algo.tdee,
-                        "proteinPerKg" to algo.proteinPerKg,
-                        "caloriesPerKg" to algo.caloriesPerKg,
-                        "caloricStrategy" to algo.caloricStrategy,
-                        "detailedTips" to algo.detailedTips,
-                        "macroBreakdown" to algo.macroBreakdown,
-                        "trainingStrategy" to algo.trainingStrategy
+                        "bmi" to (algo.bmi ?: 0.0),
+                        "bmr" to (algo.bmr ?: 0.0),
+                        "tdee" to (algo.tdee ?: 0.0),
+                        "proteinPerKg" to (algo.proteinPerKg ?: 0.0),
+                        "caloriesPerKg" to (algo.caloriesPerKg ?: 0.0),
+                        "caloricStrategy" to (algo.caloricStrategy ?: ""),
+                        "detailedTips" to (algo.detailedTips ?: emptyList<String>()),
+                        "macroBreakdown" to (algo.macroBreakdown ?: ""),
+                        "trainingStrategy" to (algo.trainingStrategy ?: "")
                     )
                 }
                 planMap
@@ -178,7 +213,7 @@ object PlanDataStore {
     }
 
     suspend fun addPlan(context: Context, newPlan: PlanResult) {
-        val userId = getCurrentUserId()
+        val userId = getResolvedUserId()
         if (userId == null) {
             val localPlans = loadLocalPlansAndSend(context).toMutableList()
             localPlans.add(newPlan)
@@ -209,7 +244,7 @@ object PlanDataStore {
     }
 
     suspend fun deletePlan(context: Context, planId: String) {
-        val userId = getCurrentUserId()
+        val userId = getResolvedUserId()
         if (userId == null) {
             val localPlans = loadLocalPlansAndSend(context).filter { it.id != planId }
             saveToLocalDataStore(context, localPlans)
@@ -239,6 +274,23 @@ object PlanDataStore {
         }
     }
 
+    suspend fun clearPlan(context: Context) {
+        // Clear local DataStore
+        context.dataStore.edit { prefs ->
+            prefs.remove(PLANS_KEY)
+        }
+
+        // Clear Firestore active plan
+        try {
+            val userRef = FirestoreHelper.getCurrentUserDocRef()
+            userRef.collection("activePlan").document("current")
+                .delete()
+                .await()
+        } catch (e: Exception) {
+            Log.e("PlanDataStore", "Failed to delete active plan: ${e.message}")
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun convertMapToPlanResult(planMap: Map<String, Any>): PlanResult? {
         return try {
@@ -260,7 +312,7 @@ object PlanDataStore {
                 carbs = (planMap["carbs"] as? Number)?.toInt() ?: 0,
                 fat = (planMap["fat"] as? Number)?.toInt() ?: 0,
                 trainingPlan = planMap["trainingPlan"] as? String ?: "",
-                trainingDays = (planMap["trainingDays"] as? Number)?.toInt() ?: 0,
+                trainingDays = (planMap["trainingDays"] as? Number)?.toInt()?.takeIf { it > 0 } ?: 4,
                 sessionLength = (planMap["sessionLength"] as? Number)?.toInt() ?: 0,
                 tips = planMap["tips"] as? List<String> ?: emptyList(),
                 createdAt = (planMap["createdAt"] as? Number)?.toLong() ?: 0L,
@@ -268,6 +320,16 @@ object PlanDataStore {
                 experience = planMap["experience"] as? String,
                 goal = planMap["goal"] as? String,
                 weeks = weeks,
+                focusAreas = when (val fa = planMap["focusAreas"]) {
+                    is List<*> -> fa.filterIsInstance<String>()
+                    is String -> if (fa.isBlank()) emptyList() else fa.split(",").map { it.trim() }
+                    else -> emptyList()
+                },
+                equipment = when (val eq = planMap["equipment"]) {
+                    is List<*> -> eq.filterIsInstance<String>()
+                    is String -> if (eq.isBlank()) emptyList() else eq.split(",").map { it.trim() }
+                    else -> emptyList()
+                },
                 algorithmData = (planMap["algorithmData"] as? Map<String, Any>)?.let { algoMap ->
                     AlgorithmData(
                         bmi = (algoMap["bmi"] as? Number)?.toDouble() ?: 0.0,
@@ -336,10 +398,7 @@ object PlanDataStore {
                 put("timestamp", System.currentTimeMillis())
             }
 
-            val body = RequestBody.create(
-                "application/json; charset=utf-8".toMediaTypeOrNull(),
-                json.toString()
-            )
+            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
 
             val request = Request.Builder()
                 .url(url)
@@ -394,8 +453,8 @@ object PlanDataStore {
                             tips = parseStringArray(jsonObject.optJSONArray("tips")),
                             createdAt = System.currentTimeMillis(),
                             trainingLocation = quizData["training_location"] as? String ?: "Home",
-                            experience = jsonObject.optString("experience", null),
-                            goal = jsonObject.optString("goal", null),
+                            experience = jsonObject.optString("experience").takeIf { it.isNotEmpty() },
+                            goal = jsonObject.optString("goal").takeIf { it.isNotEmpty() },
                             weeks = weeks,
                             algorithmData = null
                         )

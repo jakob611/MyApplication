@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Spa
@@ -14,8 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -24,40 +25,50 @@ fun FaceModuleScreen(
     onBack: () -> Unit = {},
     onGoldenRatioClick: () -> Unit = {}
 ) {
-    val backgroundGradient = Brush.verticalGradient(
-        listOf(
-            Color(0xFF17223B),
-            Color(0xFF25304A),
-            Color(0xFF193446),
-            Color(0xFF1E2D24)
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundGradient)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(20.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Inline header with back button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                }
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "FACE MODULE",
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
             // Title
             Text(
                 "Face Enhancement",
                 style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp),
-                color = Color(0xFF7be0c7),
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
             Text(
                 "Enhance your facial aesthetics with science-backed methods",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF6B7A99),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
@@ -74,7 +85,7 @@ fun FaceModuleScreen(
                     )
                 },
                 onClick = onGoldenRatioClick,
-                cardColor = Color(0xFF2A1810),
+                cardColor = MaterialTheme.colorScheme.surface,
                 borderColor = Color(0xFFFEE440)
             )
 
@@ -157,7 +168,7 @@ fun FaceFeatureCard(
             Text(
                 description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFB6C6E6),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
 

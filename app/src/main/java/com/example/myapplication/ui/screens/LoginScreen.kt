@@ -4,8 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -40,9 +42,12 @@ fun LoginScreen(
     onBackToHome: () -> Unit = {},
     errorMessage: String? = null,
     onGoogleSignInClick: () -> Unit = {},
-    onForgotPassword: (String) -> Unit = {}
+    onForgotPassword: (String) -> Unit = {},
+    startInSignUp: Boolean = false,
+    onTermsClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {}
 ) {
-    var authMode by remember { mutableStateOf(AuthMode.SIGN_UP) }
+    var authMode by remember { mutableStateOf(if (startInSignUp) AuthMode.SIGN_UP else AuthMode.SIGN_IN) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -60,11 +65,13 @@ fun LoginScreen(
     val lightGray = Color(0xFFF5F5F5)
     val textGray = Color(0xFF666666)
     val borderGray = Color(0xFFE0E0E0)
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -94,8 +101,11 @@ fun LoginScreen(
                     errorMessage = errorMessage,
                     primaryBlue = primaryBlue,
                     lightGray = lightGray,
-                    textGray = textGray,
-                    borderGray = borderGray
+                    textGray = textSecondary,
+                    borderGray = borderGray,
+                    textPrimary = textPrimary,
+                    onTermsClick = onTermsClick,
+                    onPrivacyClick = onPrivacyClick
                 )
 
                 AuthMode.SIGN_IN -> SignInContent(
@@ -111,13 +121,16 @@ fun LoginScreen(
                     },
                     onGoogleSignInClick = onGoogleSignInClick,
                     onForgotPasswordClick = { authMode = AuthMode.FORGOT_PASSWORD },
-                    onSwitchToSignUp = { authMode = AuthMode.SIGN_UP }, // Added this line
+                    onSwitchToSignUp = { authMode = AuthMode.SIGN_UP },
                     errorMessage = errorMessage,
                     hasTriedLogin = hasTriedLogin,
                     primaryBlue = primaryBlue,
                     lightGray = lightGray,
-                    textGray = textGray,
-                    borderGray = borderGray
+                    textGray = textSecondary,
+                    borderGray = borderGray,
+                    textPrimary = textPrimary,
+                    onTermsClick = onTermsClick,
+                    onPrivacyClick = onPrivacyClick
                 )
 
                 AuthMode.FORGOT_PASSWORD -> ForgotPasswordContent(
@@ -155,18 +168,21 @@ private fun SignUpContent(
     primaryBlue: Color,
     lightGray: Color,
     textGray: Color,
-    borderGray: Color
+    borderGray: Color,
+    textPrimary: Color = Color.Black,
+    onTermsClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {}
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     ) {
         // Title
         Text(
             text = "Create an account",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.Black,
+            color = textPrimary,
             textAlign = TextAlign.Center
         )
 
@@ -270,7 +286,7 @@ private fun SignUpContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = textPrimary),
             border = BorderStroke(width = 1.dp, color = borderGray),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -289,14 +305,34 @@ private fun SignUpContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Terms and privacy
-        Text(
-            text = "By clicking continue, you agree to our Terms of Service\nand Privacy Policy",
-            fontSize = 12.sp,
-            color = textGray,
-            textAlign = TextAlign.Center,
-            lineHeight = 16.sp
-        )
+        // Terms and privacy - clickable
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "By clicking continue, you agree to our",
+                fontSize = 12.sp,
+                color = textGray,
+                textAlign = TextAlign.Center
+            )
+            Row {
+                Text(
+                    text = "Terms of Service",
+                    fontSize = 12.sp,
+                    color = primaryBlue,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onTermsClick() }
+                )
+                Text(" and ", fontSize = 12.sp, color = textGray)
+                Text(
+                    text = "Privacy Policy",
+                    fontSize = 12.sp,
+                    color = primaryBlue,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onPrivacyClick() }
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(40.dp))
 
@@ -304,23 +340,23 @@ private fun SignUpContent(
         Text(
             text = "Already have an account?",
             fontSize = 16.sp,
-            color = Color.Black,
+            color = textPrimary,
             fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Button(
+        OutlinedButton(
             onClick = onSwitchToSignIn,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryBlue),
+            border = BorderStroke(width = 1.dp, color = primaryBlue),
             shape = RoundedCornerShape(8.dp)
         ) {
             Text(
                 text = "Log in",
-                color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -339,13 +375,16 @@ private fun SignInContent(
     onLoginClick: () -> Unit,
     onGoogleSignInClick: () -> Unit,
     onForgotPasswordClick: () -> Unit,
-    onSwitchToSignUp: () -> Unit, // Added this parameter
+    onSwitchToSignUp: () -> Unit,
     errorMessage: String?,
-    hasTriedLogin: Boolean, // Added this parameter
+    hasTriedLogin: Boolean,
     primaryBlue: Color,
     lightGray: Color,
     textGray: Color,
-    borderGray: Color
+    borderGray: Color,
+    textPrimary: Color = Color.Black,
+    onTermsClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {}
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -356,7 +395,7 @@ private fun SignInContent(
             text = "Welcome back",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.Black,
+            color = textPrimary,
             textAlign = TextAlign.Center
         )
 
@@ -447,7 +486,7 @@ private fun SignInContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = textPrimary),
             border = BorderStroke(width = 1.dp, color = borderGray),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -466,14 +505,34 @@ private fun SignInContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Terms and privacy
-        Text(
-            text = "By clicking continue, you agree to our Terms of Service\nand Privacy Policy",
-            fontSize = 12.sp,
-            color = textGray,
-            textAlign = TextAlign.Center,
-            lineHeight = 16.sp
-        )
+        // Terms and privacy - clickable
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "By clicking continue, you agree to our",
+                fontSize = 12.sp,
+                color = textGray,
+                textAlign = TextAlign.Center
+            )
+            Row {
+                Text(
+                    text = "Terms of Service",
+                    fontSize = 12.sp,
+                    color = primaryBlue,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onTermsClick() }
+                )
+                Text(" and ", fontSize = 12.sp, color = textGray)
+                Text(
+                    text = "Privacy Policy",
+                    fontSize = 12.sp,
+                    color = primaryBlue,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onPrivacyClick() }
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(40.dp))
 
@@ -482,7 +541,7 @@ private fun SignInContent(
             Text(
                 text = "Forgot Password?",
                 fontSize = 16.sp,
-                color = Color.Black,
+                color = textPrimary,
                 fontWeight = FontWeight.Medium
             )
 
@@ -511,7 +570,7 @@ private fun SignInContent(
         Text(
             text = "Don't have an account?",
             fontSize = 16.sp,
-            color = Color.Black,
+            color = textPrimary,
             fontWeight = FontWeight.Medium
         )
 
@@ -556,7 +615,7 @@ private fun ForgotPasswordContent(
             text = "Reset Password",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
 
@@ -658,8 +717,8 @@ private fun CustomTextField(
             unfocusedContainerColor = lightGray,
             focusedBorderColor = borderGray,
             unfocusedBorderColor = borderGray,
-            focusedTextColor = Color.Black,
-            unfocusedTextColor = Color.Black
+            focusedTextColor = Color.DarkGray,
+            unfocusedTextColor = Color.DarkGray
         ),
         shape = RoundedCornerShape(8.dp),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -695,8 +754,8 @@ private fun CustomPasswordField(
             unfocusedContainerColor = lightGray,
             focusedBorderColor = borderGray,
             unfocusedBorderColor = borderGray,
-            focusedTextColor = Color.Black,
-            unfocusedTextColor = Color.Black
+            focusedTextColor = Color.DarkGray,
+            unfocusedTextColor = Color.DarkGray
         ),
         shape = RoundedCornerShape(8.dp),
         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),

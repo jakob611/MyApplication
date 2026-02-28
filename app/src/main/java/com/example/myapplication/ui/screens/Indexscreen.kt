@@ -22,11 +22,13 @@ import com.example.myapplication.R
 @Composable
 fun IndexScreen(
     onLoginClick: () -> Unit,
+    onSignUpClick: () -> Unit = onLoginClick,
     onViewProFeatures: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
     ) {
         // Fullscreen background image with blur and overlay
         Image(
@@ -51,19 +53,28 @@ fun IndexScreen(
                     )
                 )
         )
-        // Top right login button
+        // Top right login/signup buttons
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(24.dp),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
+            OutlinedButton(
                 onClick = onLoginClick,
+                shape = RoundedCornerShape(30),
+                border = BorderStroke(1.5.dp, Color(0xFF2563EB))
+            ) {
+                Text("Login", color = Color(0xFF2563EB))
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onSignUpClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                 shape = RoundedCornerShape(30)
             ) {
-                Text("Login / Sign Up")
+                Text("Sign Up")
             }
         }
         // Main centered content

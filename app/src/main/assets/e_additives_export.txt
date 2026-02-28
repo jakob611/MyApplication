@@ -1,0 +1,3530 @@
+E100 - curcumin Curcumin
+
+Name: curcumin Curcumin
+Description: Curcumin is an additive added to foods as a yellow-orange colorant. It is the active substance in the spice turmeric (Curcuma longa). A plant from the ginger family, originating from South Asia. It is cultivated in India, Indonesia, and China. There it is mostly used as a spice (ground root), and also as a dye for fabric, as it gives a yellow pigment.
+Function: Additive added to foods as a yellow-orange colorant.
+Origin: Plant from the ginger family, originating from South Asia. Cultivated in India, Indonesia, and China.
+Health risks: In recommended doses, it is not problematic, but it is not recommended for people with gallstones, jaundice, colic, and liver poisoning. It is also not advisable to take it in larger quantities, as it can cause nausea and migraines. Exceptionally, it can pose a health risk (allergy or food sensitivity). In any case, it is necessary to consider that there is a big difference between curcumin obtained from the plant and that which is synthetically obtained.
+Usage in foods: Added to foods as a yellow-orange colorant. Used as a spice (ground root), and also as a dye for fabric, as it gives a yellow pigment.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E101a - riboflavin 5'-phosphate (Riboflavin-5'-Phosphate)
+
+Name: riboflavin 5'-phosphate (Riboflavin-5'-Phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.500 mg/kg body weight/day (JECFA, 1998) not limited or determined (EFSA, 2013).
+Other details: Not specified.
+
+E104 - quinoline yellow Quinoline Yellow WS
+
+Name: quinoline yellow Quinoline Yellow WS
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E105 - yellow AB Fast Yellow AB
+
+Name: yellow AB Fast Yellow AB
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E106 - sodium riboflavin 5'-phosphate Riboflavin-5-Sodium Phosphate
+
+Name: sodium riboflavin 5'-phosphate Riboflavin-5-Sodium Phosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E110 - sunset yellow FCF Sunset Yellow FCF
+
+Name: sunset yellow FCF Sunset Yellow FCF
+Description: Banned in Norway, Finland, and the United Kingdom. Can cause hives (urticaria), chronic runny nose, stuffy nose, allergies, hyperactivity, kidney tumors, chromosome damage, abdominal pain, nausea and vomiting, digestive disorders, loss of appetite; proven higher incidence of tumors in animals. It is slowly being phased out, and products with this additive will have to be specially labeled in the EU from now on.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Can cause hives (urticaria), chronic runny nose, stuffy nose, allergies, hyperactivity, kidney tumors, chromosome damage, abdominal pain, nausea and vomiting, digestive disorders, loss of appetite; proven higher incidence of tumors in animals.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Banned in Norway, Finland, and the United Kingdom. It is slowly being phased out, and products with this additive will have to be specially labeled in the EU from now on.
+
+E127 - erythrosine
+
+Name: erythrosine
+Description: Partially specified: Banned in Norway and the USA.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Partially specified (but incomplete in the extract).
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E130 - anthraquinone blue Indanthrene blue RS
+
+Name: anthraquinone blue Indanthrene blue RS
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E132 - indigotine Indigo carmine
+
+Name: indigotine Indigo carmine
+Description: Banned in Norway. Likely carcinogenic in animals, nausea, vomiting, high blood pressure, skin inflammation, breathing disorders, allergic reactions.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Likely carcinogenic in animals, nausea, vomiting, high blood pressure, skin inflammation, breathing disorders, allergic reactions.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E133 - brilliant blue FCF
+
+Name: brilliant blue FCF
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E140 - chlorophyll Chlorophylls
+
+Name: chlorophyll Chlorophylls
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E141 - copper complex of chlorophyll
+
+Name: copper complex of chlorophyll
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E143 - green FCF
+
+Name: green FCF
+Description: Banned in the EU.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Potentially carcinogenic and other effects (partially specified).
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E150a - caramel
+
+Name: caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E150b - caustic sulphite caramel / Caustic sulphite caramel
+
+Name: caustic sulphite caramel / Caustic sulphite caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 200.000 mg/kg body weight/day (EFSA, 2011; 300 mg/kg total for all caramel colors).
+Other details: Not specified.
+
+E150d - sulphite ammonia caramel Sulphite ammonia caramel
+
+Name: sulphite ammonia caramel Sulphite ammonia caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 200.000 mg/kg body weight/day (EFSA, 2011; 300 mg/kg total for all caramel colors).
+Other details: Not specified.
+
+E152 - black 7984 Carbon black
+
+Name: black 7984 Carbon black
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E153 - vegetable carbon Vegetable carbon
+
+Name: vegetable carbon Vegetable carbon
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E160e - beta-apo-8'-carotenal Beta-apo-8'-carotenal
+
+Name: beta-apo-8'-carotenal Beta-apo-8'-carotenal
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E160f - ethyl ester of beta-apo-8'-carotenoic acid Ethyl ester of beta-apo-8'-carotenic acid
+
+Name: ethyl ester of beta-apo-8'-carotenoic acid Ethyl ester of beta-apo-8'-carotenic acid
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 5.000 mg/kg body weight/day.
+Other details: Not specified.
+
+E162 - betalain Beetroot Red
+
+Name: betalain Beetroot Red
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E163 - anthocyanins Anthocyanins
+
+Name: anthocyanins Anthocyanins
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E170 - calcium carbonate Calcium carbonate
+
+Name: calcium carbonate Calcium carbonate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E171 - titanium dioxide
+
+Name: titanium dioxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E180 - lithol rubine BK Pigment Rubine
+
+Name: lithol rubine BK Pigment Rubine
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E200 - sorbic acid Sorbic acid
+
+Name: sorbic acid Sorbic acid
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified (values available, but not detailed in the extract).
+Other details: Not specified.
+
+E202 - potassium sorbate / Potassium sorbate
+
+Name: potassium sorbate / Potassium sorbate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified (values available, but not detailed in the extract).
+Other details: Not specified.
+
+E203 - calcium sorbate Calcium sorbate
+
+Name: calcium sorbate Calcium sorbate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E209 - heptyl parahydroxybenzoate (Heptyl p-hydroxybenzoate)
+
+Name: heptyl parahydroxybenzoate (Heptyl p-hydroxybenzoate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E212 - potassium benzoate / Potassium benzoate
+
+Name: potassium benzoate / Potassium benzoate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 5.000 mg/kg body weight/day (EFSA, 2016).
+Other details: Not specified.
+
+E213 - calcium benzoate (Calcium benzoate)
+
+Name: calcium benzoate (Calcium benzoate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E215 - sodium ethyl parahydroxybenzoate (Sodium ethyl p-hydroxybenzoate)
+
+Name: sodium ethyl parahydroxybenzoate (Sodium ethyl p-hydroxybenzoate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E217 - sodium propyl parahydroxybenzoate (Sodium propyl p-hydroxybenzoate)
+
+Name: sodium propyl parahydroxybenzoate (Sodium propyl p-hydroxybenzoate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E219 - sodium methyl parahydroxybenzoate (Sodium methyl p-hydroxybenzoate)
+
+Name: sodium methyl parahydroxybenzoate (Sodium methyl p-hydroxybenzoate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E221 - sodium sulfite (Sodium sulphite)
+
+Name: sodium sulfite (Sodium sulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E223 - sodium metabisulfite (Sodium metabisulphite)
+
+Name: sodium metabisulfite (Sodium metabisulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.700 mg/kg body weight/day (EFSA, 2016; total for all sulfites).
+Other details: Not specified.
+
+E224 - potassium metabisulfite (Potassium metabisulphite)
+
+Name: potassium metabisulfite (Potassium metabisulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E225 - potassium sulfite (Potassium sulphite)
+
+Name: potassium sulfite (Potassium sulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E226 - calcium sulfite (Calcium sulphite)
+
+Name: calcium sulfite (Calcium sulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E227 - calcium hydrogen sulfite (Calcium hydrogen sulphite)
+
+Name: calcium hydrogen sulfite (Calcium hydrogen sulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.700 mg/kg body weight/day (EFSA, 2016; total for all sulfites).
+Other details: Not specified.
+
+E228 - potassium hydrogen sulfite (Potassium hydrogen sulphite)
+
+Name: potassium hydrogen sulfite (Potassium hydrogen sulphite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E230 - biphenyl, diphenyl Biphenyl, diphenyl
+
+Name: biphenyl, diphenyl Biphenyl, diphenyl
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E231 - orthophenylphenol (Orthophenyl phenol)
+
+Name: orthophenylphenol (Orthophenyl phenol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E232 - sodium orthophenylphenol (Sodium orthophenyl phenol)
+
+Name: sodium orthophenylphenol (Sodium orthophenyl phenol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E233 - thiabendazole Thiabendazole
+
+Name: thiabendazole Thiabendazole
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E235 - natamycin Natamycin, Pimaracin
+
+Name: natamycin Natamycin, Pimaracin
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.300 mg/kg body weight/day (JECFA, 1968); 0.300 mg/kg body weight/day (JECFA, 1976); Not limited or determined (SCF, 1979); 0.300 mg/kg body weight/day (JECFA, 2002); Not limited or determined (EFSA, 2009).
+Other details: Not specified.
+
+E240 - formaldehyde Formaldehyde
+
+Name: formaldehyde Formaldehyde
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E242 - dimethyl dicarbonate (Dimethyl dicarbonate)
+
+Name: dimethyl dicarbonate (Dimethyl dicarbonate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E249 - potassium nitrite (Potassium nitrite)
+
+Name: potassium nitrite (Potassium nitrite)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.060 mg/kg body weight/day (SCF, 1997); 0.070 mg/kg body weight/day (JECFA, 2002); 0.070 mg/kg body weight/day (EFSA, 2017).
+Other details: Not specified.
+
+E252 - potassium nitrate (Potassium nitrate)
+
+Name: potassium nitrate (Potassium nitrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 3.700 mg/kg body weight/day (SCF, 1997); 3.700 mg/kg body weight/day (JECFA, 2002); 3.700 mg/kg body weight/day (EFSA, 2017).
+Other details: Not specified.
+
+E261 - potassium acetate (Potassium acetate)
+
+Name: potassium acetate (Potassium acetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license. Feel free to copy, adapt, and distribute further.
+
+E262 - sodium acetate Sodium acetates
+
+Name: sodium acetate Sodium acetates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E263 - calcium acetate (Calcium acetate)
+
+Name: calcium acetate (Calcium acetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E264 - ammonium acetate (Ammonium acetate)
+
+Name: ammonium acetate (Ammonium acetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E266 - sodium dehydroacetate (Sodium dehydroacetate)
+
+Name: sodium dehydroacetate (Sodium dehydroacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E281 - sodium propionate (Sodium propionate)
+
+Name: sodium propionate (Sodium propionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E282 - calcium propionate (Calcium propionate)
+
+Name: calcium propionate (Calcium propionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E283 - potassium propionate (Potassium propionate)
+
+Name: potassium propionate (Potassium propionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E285 - borax (Sodium tetraborate)
+
+Name: borax (Sodium tetraborate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E300 - ascorbic acid (Ascorbic acid)
+
+Name: ascorbic acid (Ascorbic acid)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1981); no limit or specified (EFSA, 2015)
+Other details: Not specified.
+
+E301 - sodium ascorbate (Sodium ascorbate)
+
+Name: sodium ascorbate (Sodium ascorbate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E302 - calcium ascorbate (Calcium ascorbate)
+
+Name: calcium ascorbate (Calcium ascorbate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E303 - potassium ascorbate (Potassium ascorbate)
+
+Name: potassium ascorbate (Potassium ascorbate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E305 - ascorbyl stearate (Ascorbyl stearate)
+
+Name: ascorbyl stearate (Ascorbyl stearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E306 - tocopherol (Tocopherols)
+
+Name: tocopherol (Tocopherols)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or specified (JECFA, 1986); not limited or specified (EFSA, 2015)
+Other details: Not specified.
+
+E307 - alpha-tocopherol (Alpha-tocopherol)
+
+Name: alpha-tocopherol (Alpha-tocopherol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 2.000 mg/kg body weight/day (JECFA, 1986); not limited or specified (EFSA, 2015)
+Other details: Not specified.
+
+E308 - gamma-tocopherol (Gamma-tocopherol)
+
+Name: gamma-tocopherol (Gamma-tocopherol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E309 - delta-tocopherol (Delta-tocopherol)
+
+Name: delta-tocopherol (Delta-tocopherol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or specified (JECFA, 1986; EFSA, 2015)
+Other details: Not specified.
+
+E310 - propyl gallate (Propyl gallate)
+
+Name: propyl gallate (Propyl gallate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section titled "Pregled aditiva" and mentions support for the website through donations and notes that all content (except images) is under Creative Commons license (CC BY 4.0).
+
+E311 - octyl gallate (Octyl gallate)
+
+Name: octyl gallate (Octyl gallate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E312 - dodecyl gallate (Dodecyl gallate)
+
+Name: dodecyl gallate (Dodecyl gallate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E313 - ethyl gallate (Ethyl gallate)
+
+Name: ethyl gallate (Ethyl gallate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on acceptable daily intake (ADI) stating "ni podatka" (no data), and a call to support the website through donations under Creative Commons license (CC BY 4.0).
+
+E316 - sodium erythorbate (Sodium erythorbate)
+
+Name: sodium erythorbate (Sodium erythorbate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E318 - sodium erythorbin (Sodium erythorbin)
+
+Name: sodium erythorbin (Sodium erythorbin)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E319 - butylhydroquinone (Tert-Butylhydroquinone)
+
+Name: butylhydroquinone (Tert-Butylhydroquinone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E320 - butylated hydroxyanisole (Butylated hydroxyanisole)
+
+Name: butylated hydroxyanisole (Butylated hydroxyanisole)
+Description: Butylated hydroxyanisole (BHA) is an antioxidant obtained by the reaction of 4-methoxyphenol and isobutylene.
+Function: It inhibits oxidation and the development of unpleasant odors, used as a preservative.
+Origin: Not specified.
+Health risks: The US National Institutes of Health report carcinogenicity in test animals, especially in large doses. The recommended daily dose up to 0.5 mg/kg body weight is considered much too low by some to cause cancer, but by others, e.g., the state of California, the substance is carcinogenic. It can cause allergic reactions, hyperactivity or other reactions (twitching). Not recommended for children, as the group for supporting children's hyperactivity strongly advocates discontinuing the additive due to its impact on hyperactive behavioral disorders in children. In combination with high vitamin C content, free radicals can be produced that damage cells, including DNA. This has prompted many discussions in the EU and in the ANS additives committee to initiate additional studies on harmfulness and limit the use of BHA.
+Usage in foods: Added to edible oils, fats, margarines, chewing gums, candies, nuts, and generally foods with high fat content (e.g., in quick-prepare potato products and bakery products, because it is stable at high temperatures such as in biscuits, cakes, pastries).
+Acceptable daily intake (ADI): Up to 0.5 mg/kg body weight
+Other details: Used in food and its packaging, animal feed, cosmetics, rubber products, petroleum derivatives, and medicines. Added to edible oils, fats, margarines, chewing gums, candies, nuts, and high-fat foods since the mid-20th century. Banned in Japan since 1958. Recommended for withdrawal in Great Britain but this was abandoned. McDonald's had to discontinue use in its products in the USA in 1986. Banned in infant nutrition.
+
+E321 - butylated hydroxytoluene (Butylated hydroxytoluene)
+
+Name: butylated hydroxytoluene (Butylated hydroxytoluene)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.050 mg/kg body weight/day (SCF, 1987); 0.300 mg/kg body weight/day (JECFA, 1996); 0.250 mg/kg body weight/day (EFSA, 2012)
+Other details: Not specified.
+
+E322a - lecithin (sunflower) (Lecithin (sunflower))
+
+Name: lecithin (sunflower) (Lecithin (sunflower))
+Description: Lecithin is obtained mainly from soy beans, egg yolk, milk, marine sources, oilseed rape, cotton, and sunflower. It is an excellent emulsifier and stabilizer in water-oil/fat mixtures. It is also sold as a dietary supplement or for medical purposes. Sunflower lecithin obtained from sunflower seeds does not pose a health risk.
+Function: Emulsifier and stabilizer in mixtures of water-oil/fat.
+Origin: Mainly from soy beans, egg yolk, milk, marine sources, oilseed rape, cotton, and sunflower (specifically sunflower lecithin from sunflower seeds).
+Health risks: Can pose a health risk because over 90% of soy worldwide is genetically modified. In larger quantities, it can cause stomach issues. Sunflower lecithin does not represent a health risk.
+Usage in foods: Used in many products - confectionery (chocolates, biscuits, ice creams, chewing gums, spreads, flakes), in baking various products, in bread and pastries, pasta, margarine, mayonnaise, etc.
+Acceptable daily intake (ADI): Not specified.
+Other details: Sold also as a dietary supplement or for medical purposes.
+
+E326 - potassium lactate (Potassium lactate)
+
+Name: potassium lactate (Potassium lactate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1979)
+Other details: Not specified.
+
+E327 - calcium lactate (Calcium lactate)
+
+Name: calcium lactate (Calcium lactate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1974)
+Other details: Not specified.
+
+E328 - ammonium lactate (Ammonium lactate)
+
+Name: ammonium lactate (Ammonium lactate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified.
+
+E329 - magnesium lactate (Magnesium lactate)
+
+Name: magnesium lactate (Magnesium lactate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1979)
+Other details: Not specified.
+
+E331 - sodium citrate (Sodium citrates)
+
+Name: sodium citrate (Sodium citrates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified.
+
+E332 - potassium citrate (Potassium citrates)
+
+Name: potassium citrate (Potassium citrates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified.
+
+E333 - calcium citrate (Calcium citrates)
+
+Name: calcium citrate (Calcium citrates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified.
+
+E335 - sodium tartrate (Sodium tartrates)
+
+Name: sodium tartrate (Sodium tartrates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified.
+
+E336 - potassium tartrate (Potassium tartrates)
+
+Name: potassium tartrate (Potassium tartrates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified.
+
+E337 - sodium potassium tartrate (Sodium potassium tartrate)
+
+Name: sodium potassium tartrate (Sodium potassium tartrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified.
+
+E338 - phosphoric acid (Orthophosphoric acid)
+
+Name: phosphoric acid (Orthophosphoric acid)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E339 - sodium phosphate (Sodium phosphates)
+
+Name: sodium phosphate (Sodium phosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E340 - potassium phosphate (Potassium phosphates)
+
+Name: potassium phosphate (Potassium phosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E341 - calcium phosphate (Calcium phosphates)
+
+Name: calcium phosphate (Calcium phosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E342 - ammonium phosphate (Ammonium phosphates)
+
+Name: ammonium phosphate (Ammonium phosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E343 - magnesium phosphate (Magnesium phosphates)
+
+Name: magnesium phosphate (Magnesium phosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified.
+
+E344 - lecithin citrate (Lecithin citrate)
+
+Name: lecithin citrate (Lecithin citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E345 - magnesium citrate (Magnesium citrate)
+
+Name: magnesium citrate (Magnesium citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E349 - ammonium malate (Ammonium malate)
+
+Name: ammonium malate (Ammonium malate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E350 - sodium malate (Sodium malates)
+
+Name: sodium malate (Sodium malates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E351 - potassium malate (Potassium malate)
+
+Name: potassium malate (Potassium malate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E352 - calcium malate (Calcium malates)
+
+Name: calcium malate (Calcium malates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E353 - metatartaric acid (Metatartaric acid)
+
+Name: metatartaric acid (Metatartaric acid)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E354 - calcium tartrate (Calcium tartrate)
+
+Name: calcium tartrate (Calcium tartrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E357 - potassium adipate (Potassium adipate)
+
+Name: potassium adipate (Potassium adipate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E359 - ammonium adipate (Ammonium adipate)
+
+Name: ammonium adipate (Ammonium adipate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E366 - potassium fumarate (Potassium fumarate)
+
+Name: potassium fumarate (Potassium fumarate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on supporting the website through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E367 - calcium fumarate (Calcium fumarate)
+
+Name: calcium fumarate (Calcium fumarate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E368 - ammonium fumarate (Ammonium fumarate)
+
+Name: ammonium fumarate (Ammonium fumarate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E370 - 1,4-heptonolactone (1,4-Heptonolactone)
+
+Name: 1,4-heptonolactone (1,4-Heptonolactone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E375 - niacin (Nicotinic acid)
+
+Name: niacin (Nicotinic acid)
+Description: Niacin or vitamin B3 is naturally present in legumes, milk, eggs, meat and many other products. It is safe for use. However, in larger quantities, it should be avoided by children and infants.
+Function: Not specified.
+Origin: Not specified.
+Health risks: In larger quantities, it should be avoided by children and infants.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E380 - triammonium citrate (Triammonium citrate)
+
+Name: triammonium citrate (Triammonium citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E381 - ammonium ferric citrate (Ammonium ferric citrate)
+
+Name: ammonium ferric citrate (Ammonium ferric citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E383 - calcium glycerylphosphate (Calcium glycerylphosphate)
+
+Name: calcium glycerylphosphate (Calcium glycerylphosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E384 - isopropyl citrate (Isopropyl citrate)
+
+Name: isopropyl citrate (Isopropyl citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E385 - calcium disodium ethylene diamine tetra-acetate (Calcium disodium ethylene diamine tetraacetate)
+
+Name: calcium disodium ethylene diamine tetra-acetate (Calcium disodium ethylene diamine tetraacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 2.500 mg/kg body weight/day (JECFA, 1973)
+Other details: Not specified.
+
+E386 - disodium ethylene diamine tetraacetate (Disodium ethylene diamine tetraacetate)
+
+Name: disodium ethylene diamine tetraacetate (Disodium ethylene diamine tetraacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E388 - thiodipropionic acid (Thiodipropionic acid)
+
+Name: thiodipropionic acid (Thiodipropionic acid)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E389 - dilauryl thiodipropionate (Dilauryl thiodipropionate)
+
+Name: dilauryl thiodipropionate (Dilauryl thiodipropionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E390 - distearyl thiodipropionate (Distearyl thiodipropionate)
+
+Name: distearyl thiodipropionate (Distearyl thiodipropionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content includes a section on acceptable daily intake (ADI) stating "ni podatka" (no data), and a call to support the website through donations under Creative Commons license (CC BY 4.0).
+
+E392 - extracts of rosemary (Extracts of rosemary)
+
+Name: extracts of rosemary (Extracts of rosemary)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E399 - calcium lactobionate (Calcium lactobionate)
+
+Name: calcium lactobionate (Calcium lactobionate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E402 - kalijev alginat (Potassium alginate)
+
+Name: kalijev alginat (Potassium alginate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E403 - amonijev alginat (Ammonium alginate)
+
+Name: amonijev alginat (Ammonium alginate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E404 - kalcijev alginat (Calcium alginate)
+
+Name: kalcijev alginat (Calcium alginate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E405 - propan 1,2-diol alginat (Propane-1,2-diol alginate)
+
+Name: propan 1,2-diol alginat (Propane-1,2-diol alginate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E407 - karagenan (Carrageenan)
+
+Name: karagenan (Carrageenan)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E407a - predelana morska alga eucheuma (Processed eucheuma seaweed)
+
+Name: predelana morska alga eucheuma (Processed eucheuma seaweed)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 75.000 mg/kg body weight/day (EFSA, 2018)
+Other details: Not specified.
+
+E408 - pekovski kvas glikan (Bakers yeast glycan)
+
+Name: pekovski kvas glikan (Bakers yeast glycan)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E409 - arabinogalaktan (Arabinogalactan)
+
+Name: arabinogalaktan (Arabinogalactan)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E426 - hemiceluloza iz soje (Soybean hemicellulose)
+
+Name: hemiceluloza iz soje (Soybean hemicellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E430 - polioksietilen (8) stearat (Polyoxyethylene (8) stearate)
+
+Name: polioksietilen (8) stearat (Polyoxyethylene (8) stearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E431 - polioksietilen (40) stearat (Polyoxyethylene (40) stearate)
+
+Name: polioksietilen (40) stearat (Polyoxyethylene (40) stearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E432 - polioksietilen sorbitan monolaurat (Polyoxyethylene (20) sorbitan monolaurate)
+
+Name: polioksietilen sorbitan monolaurat (Polyoxyethylene (20) sorbitan monolaurate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 25.000 mg/kg body weight/day (JECFA, 1973); 10.000 mg/kg body weight/day (SCF, 2007); 25.000 mg/kg body weight/day (EFSA, 2015)
+Other details: Not specified.
+
+E433 - polioksietilen sorbitan monooleat (Polyoxyethylene (20) sorbitan monooleate)
+
+Name: polioksietilen sorbitan monooleat (Polyoxyethylene (20) sorbitan monooleate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E434 - polioksietilen sorbitan monopalmitat (Polyoxyethylene (20) sorbitan monopalmitate)
+
+Name: polioksietilen sorbitan monopalmitat (Polyoxyethylene (20) sorbitan monopalmitate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 25.000 mg/kg body weight/day (JECFA, 1973); 10.000 mg/kg body weight/day (SCF, 2007); 25.000 mg/kg body weight/day (EFSA, 2015)
+Other details: Not specified.
+
+E435 - polioksietilen sorbitan monostearat (Polyoxyethylene (20) sorbitan monostearate)
+
+Name: polioksietilen sorbitan monostearat (Polyoxyethylene (20) sorbitan monostearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 25.000 mg/kg body weight/day (JECFA, 1973); 10.000 mg/kg body weight/day (SCF, 2007); 25.000 mg/kg body weight/day (JECFA, 2014); 25.000 mg/kg body weight/day (EFSA, 2015)
+Other details: Not specified.
+
+E436 - polioksietilen sorbitan tristearat (Polyoxyethylene (20) sorbitan tristearate)
+
+Name: polioksietilen sorbitan tristearat (Polyoxyethylene (20) sorbitan tristearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E442 - amonijev fosfatid (Ammonium phosphatides)
+
+Name: amonijev fosfatid (Ammonium phosphatides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E444 - saharozni acetat izobutirat (Sucrose acetate isobutyrate)
+
+Name: saharozni acetat izobutirat (Sucrose acetate isobutyrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E445 - glicerolni estri lesnih smol (Glycerol esters of wood rosins)
+
+Name: glicerolni estri lesnih smol (Glycerol esters of wood rosins)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E450 - difosfat (Diphosphates)
+
+Name: difosfat (Diphosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E451 - trifosfat (Triphosphates)
+
+Name: trifosfat (Triphosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E452 - polifosfat (Polyphosphates)
+
+Name: polifosfat (Polyphosphates)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E459 - beta ciklodekstrin (Beta-cyclodextrin)
+
+Name: beta ciklodekstrin (Beta-cyclodextrin)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E461 - metil celuloza (Methyl cellulose)
+
+Name: metil celuloza (Methyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E462 - etil celuloza (Ethyl cellulose)
+
+Name: etil celuloza (Ethyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E463 - hidroksipropil celuloza (Hydroxypropyl cellulose)
+
+Name: hidroksipropil celuloza (Hydroxypropyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E465 - etilmetil celuloza (Ethyl methyl cellulose)
+
+Name: etilmetil celuloza (Ethyl methyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E466 - karboksimetil celuloza (Carboxymethyl cellulose)
+
+Name: karboksimetil celuloza (Carboxymethyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E467 - etilhidroksietil celuloza (Ethyl hydroxyethyl cellulose)
+
+Name: etilhidroksietil celuloza (Ethyl hydroxyethyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E468 - zamrežena natrijeva karboksimetil celuloza (Crosslinked sodium carboxymethyl cellulose)
+
+Name: zamrežena natrijeva karboksimetil celuloza (Crosslinked sodium carboxymethyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E469 - encimsko hidrolizirana karboksimetil celuloza (Enzymically hydrolysed carboxymethylcellulose)
+
+Name: encimsko hidrolizirana karboksimetil celuloza (Enzymically hydrolysed carboxymethylcellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E470 - soli maščobnih kislin (Salts of fatty acids)
+
+Name: soli maščobnih kislin (Salts of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E470a - natrijeve, kalijeve in kalcijeve soli maščobnih kislin (Sodium, potassium and calcium salts of fatty acids)
+
+Name: natrijeve, kalijeve in kalcijeve soli maščobnih kislin (Sodium, potassium and calcium salts of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E470b - magnezijeve soli maščobnih kislin (Magnesium salts of fatty acids)
+
+Name: magnezijeve soli maščobnih kislin (Magnesium salts of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E471 - mono- in digliceridi maščobnih kislin (Mono- and diglycerides of fatty acids)
+
+Name: mono- in digliceridi maščobnih kislin (Mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472a - acetatni estri mono- in digliceridov maščobnih kislin (Acetic acid esters of mono- and diglycerides of fatty acids)
+
+Name: acetatni estri mono- in digliceridov maščobnih kislin (Acetic acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472b - laktatni estri mono- in digliceridov maščobnih kislin (Lactic acid esters of mono- and diglycerides of fatty acids)
+
+Name: laktatni estri mono- in digliceridov maščobnih kislin (Lactic acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472c - citratni estri mono- in digliceridov maščobnih kislin (Citric acid esters of mono- and diglycerides of fatty acids)
+
+Name: citratni estri mono- in digliceridov maščobnih kislin (Citric acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472d - tartratni estri mono- in digliceridov maščobnih kislin (Tartaric acid esters of mono- and diglycerides of fatty acids)
+
+Name: tartratni estri mono- in digliceridov maščobnih kislin (Tartaric acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472e - tartratni mono- in diacetilestri mono- in digliceridov maščobnih kislin (Mono- and diacetyl tartaric acid esters of mono- and diglycerides of fatty acids)
+
+Name: tartratni mono- in diacetilestri mono- in digliceridov maščobnih kislin (Mono- and diacetyl tartaric acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472f - mešanica acetatnih in tartratnih estrov mono- in digliceridov maščobnih kislin (Mixed acetic and tartaric acid esters of mono- and diglycerides of fatty acids)
+
+Name: mešanica acetatnih in tartratnih estrov mono- in digliceridov maščobnih kislin (Mixed acetic and tartaric acid esters of mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E472g - sukcinilirani monogliceridi (Succinylated monoglycerides)
+
+Name: sukcinilirani monogliceridi (Succinylated monoglycerides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E473 - saharozni estri maščobnih kislin (Sucrose esters of fatty acids)
+
+Name: saharozni estri maščobnih kislin (Sucrose esters of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E475 - poliglicerolni estri maščobnih kislin (Polyglycerol esters of fatty acids)
+
+Name: poliglicerolni estri maščobnih kislin (Polyglycerol esters of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 25.000 mg/kg body weight/day (SCF, 1978); 25.000 mg/kg body weight/day (JECFA, 1989); Not limited or determined (EFSA, 2017)
+Other details: Not specified.
+
+E476 - poliglicerol poliricinoleat (Polyglycerol polyricinoleate)
+
+Name: poliglicerol poliricinoleat (Polyglycerol polyricinoleate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E477 - propan 1,2-diolni estri maščobnih kislin (Propane-1,2-diol esters of fatty acids)
+
+Name: propan 1,2-diolni estri maščobnih kislin (Propane-1,2-diol esters of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E478 - laktilizirani estri glicerola in propana-1 maščobnih kislin (Lactylated fatty acid esters of glycerol and propane-1)
+
+Name: laktilizirani estri glicerola in propana-1 maščobnih kislin (Lactylated fatty acid esters of glycerol and propane-1)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E479b - toplotno oksidirano sojino olje, v interakciji z mono- in digliceridi maščobnih kislin (Thermally oxidized soya bean oil interacted with mono- and diglycerides of fatty acids)
+
+Name: toplotno oksidirano sojino olje, v interakciji z mono- in digliceridi maščobnih kislin (Thermally oxidized soya bean oil interacted with mono- and diglycerides of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E480 - dioktil natrijev sulfosukcinat (Dioctyl sodium sulphosuccinate)
+
+Name: dioktil natrijev sulfosukcinat (Dioctyl sodium sulphosuccinate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.100 mg/kg body weight/day (JECFA, 1995)
+Other details: Not specified.
+
+E481 - natrijev stearoil-2-laktilat (Sodium stearoyl-2-lactylate)
+
+Name: natrijev stearoil-2-laktilat (Sodium stearoyl-2-lactylate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 20.000 mg/kg body weight/day (JECFA, 1974); 20.000 mg/kg body weight/day (SCF, 1978); 22.000 mg/kg body weight/day (EFSA, 2013)
+Other details: Not specified.
+
+E482 - kalcijev stearoil-2-laktilat (Calcium stearoyl-2-lactylate)
+
+Name: kalcijev stearoil-2-laktilat (Calcium stearoyl-2-lactylate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E483 - stearil tartrat (Stearyl tartrate)
+
+Name: stearil tartrat (Stearyl tartrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E484 - stearil citrat (Stearyl citrate)
+
+Name: stearil citrat (Stearyl citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E485 - natrijev stearoil fumarat (Sodium stearoyl fumarate)
+
+Name: natrijev stearoil fumarat (Sodium stearoyl fumarate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E486 - kalcijev stearoil fumarat (Calcium stearoyl fumarate)
+
+Name: kalcijev stearoil fumarat (Calcium stearoyl fumarate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E487 - natrijev lauril sulfat (Sodium laurylsulphate)
+
+Name: natrijev lauril sulfat (Sodium laurylsulphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E488 - etoksilirani mono- in digliceridi (Ethoxylated Mono- and Di-Glycerides)
+
+Name: etoksilirani mono- in digliceridi (Ethoxylated Mono- and Di-Glycerides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E489 - metil glukozid, ester kokosovega olja (Methyl glucoside-coconut oil ester)
+
+Name: metil glukozid, ester kokosovega olja (Methyl glucoside-coconut oil ester)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E490 - propan-1,2-diol (Propane-1,2-diol)
+
+Name: propan-1,2-diol (Propane-1,2-diol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E491 - sorbitan monostearat (Sorbitan monostearate)
+
+Name: sorbitan monostearat (Sorbitan monostearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E492 - sorbitan tristearat (Sorbitan tristearate)
+
+Name: sorbitan tristearat (Sorbitan tristearate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 25.000 mg/kg body weight/day (SCF, 1974; individually or in combination (E491, E492 and E495)) 10.000 mg/kg body weight/day (SCF, 2017; individually or in combination (E491, E492, E493, E494 and E495))
+Other details: Not specified.
+
+E493 - sorbitan monolaurat (Sorbitan monolaurate)
+
+Name: sorbitan monolaurat (Sorbitan monolaurate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E494 - sorbitan monooleat (Sorbitan monooleate)
+
+Name: sorbitan monooleat (Sorbitan monooleate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E495 - sorbitan monopalmitat (Sorbitan monopalmitate)
+
+Name: sorbitan monopalmitat (Sorbitan monopalmitate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E496 - sorbitan trioleat (Sorbitan trioleate)
+
+Name: sorbitan trioleat (Sorbitan trioleate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E497 - polioksipropilen polioksietilen polimeri (Polyoxypropylene-polyoxyethylene polymers)
+
+Name: polioksipropilen polioksietilen polimeri (Polyoxypropylene-polyoxyethylene polymers)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E498 - delni poliglicerolni estri polikondenziranih maščobnih kislin ricinusovega olja (Partial polyglycerol esters of polycondensed fatty acids of castor oil)
+
+Name: delni poliglicerolni estri polikondenziranih maščobnih kislin ricinusovega olja (Partial polyglycerol esters of polycondensed fatty acids of castor oil)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E500 - sodium carbonates
+
+Name: sodium carbonates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E501 - potassium carbonates
+
+Name: potassium carbonates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E503 - ammonium carbonates
+
+Name: ammonium carbonates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E504 - magnesium carbonates
+
+Name: magnesium carbonates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E505 - ferrous carbonate
+
+Name: ferrous carbonate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E508 - potassium chloride
+
+Name: potassium chloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E509 - calcium chloride
+
+Name: calcium chloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1973).
+Other details: Not specified.
+
+E510 - ammonium chloride
+
+Name: ammonium chloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1979).
+Other details: Not specified.
+
+E511 - magnesium chloride
+
+Name: magnesium chloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1979).
+Other details: Not specified.
+
+E512 - stannous chloride
+
+Name: stannous chloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA 1988; provisional weekly intake PTWI 14 mg/kg); not limited or defined (JECFA 2000; PTWI 14 mg/kg); not limited or defined (EFSA 2018; PTWI 14 mg/kg).
+Other details: Not specified.
+
+E514 - sodium sulphates
+
+Name: sodium sulphates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 2001).
+Other details: Not specified.
+
+E515 - potassium sulphates
+
+Name: potassium sulphates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1985).
+Other details: Not specified.
+
+E516 - calcium sulphate
+
+Name: calcium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E517 - ammonium sulphate
+
+Name: ammonium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E518 - magnesium sulphate
+
+Name: magnesium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 2007).
+Other details: Not specified.
+
+E519 - copper(II) sulphate
+
+Name: copper(II) sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E520 - aluminium sulphate
+
+Name: aluminium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E521 - aluminium sodium sulphate
+
+Name: aluminium sodium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA 1978; provisional weekly intake PTWI 7 mg/kg); not limited or defined (JECFA 2018; PTWI 7 mg/kg).
+Other details: Not specified.
+
+E522 - aluminium potassium sulphate
+
+Name: aluminium potassium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E523 - aluminium ammonium sulphate
+
+Name: aluminium ammonium sulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E525 - potassium hydroxide
+
+Name: potassium hydroxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E526 - calcium hydroxide
+
+Name: calcium hydroxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E527 - ammonium hydroxide
+
+Name: ammonium hydroxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E528 - magnesium hydroxide
+
+Name: magnesium hydroxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1965).
+Other details: Not specified.
+
+E535 - sodium ferrocyanide
+
+Name: sodium ferrocyanide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E536 - potassium ferrocyanide
+
+Name: potassium ferrocyanide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E537 - ferrous hexacyanomanganate
+
+Name: ferrous hexacyanomanganate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E538 - calcium ferrocyanide
+
+Name: calcium ferrocyanide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E539 - sodium thiosulphate
+
+Name: sodium thiosulphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.700 mg/kg body weight/day (JECFA, 1998; total for all sulfites).
+Other details: Not specified.
+
+E540 - dicalcium diphosphate
+
+Name: dicalcium diphosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1988; provisional weekly intake PTWI 7 mg/kg).
+Other details: Not specified.
+
+E542 - bone phosphate
+
+Name: bone phosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E543 - calcium sodium polyphosphate
+
+Name: calcium sodium polyphosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E544 - calcium polyphosphate
+
+Name: calcium polyphosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E545 - ammonium polyphosphate
+
+Name: ammonium polyphosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E550 - sodium silicates
+
+Name: sodium silicates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E552 - calcium silicate
+
+Name: calcium silicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA 1985, SCF 1991, JECFA 2015, EFSA 2018).
+Other details: Not specified.
+
+E553a - magnesium silicate
+
+Name: magnesium silicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA 1982, SCF 1991, EFSA 2018).
+Other details: Not specified.
+
+E555 - potassium aluminium silicate
+
+Name: potassium aluminium silicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E556 - calcium aluminosilicate
+
+Name: calcium aluminosilicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E559 - aluminium silicate
+
+Name: aluminium silicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1985).
+Other details: Not specified.
+
+E560 - potassium silicate
+
+Name: potassium silicate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E565 - lignosulphonates
+
+Name: lignosulphonates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E566 - natrolite-phonolite
+
+Name: natrolite-phonolite
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E572 - magnesium stearate
+
+Name: magnesium stearate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 2015).
+Other details: Not specified.
+
+E575 - glucono delta-lactone
+
+Name: glucono delta-lactone
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1998).
+Other details: Not specified.
+
+E576 - sodium gluconate
+
+Name: sodium gluconate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E577 - potassium gluconate
+
+Name: potassium gluconate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1998).
+Other details: Not specified.
+
+E578 - calcium gluconate
+
+Name: calcium gluconate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1998).
+Other details: Not specified.
+
+E579 - ferrous gluconate
+
+Name: ferrous gluconate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.800 mg/kg body weight/day (JECFA, 1987; provisional maximum tolerable daily intake PMTDI).
+Other details: Not specified.
+
+E580 - magnesium gluconate
+
+Name: magnesium gluconate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or defined (JECFA, 1998).
+Other details: Not specified.
+
+E585 - ferrous lactate
+
+Name: ferrous lactate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E586 - 4-hexylresorcinol
+
+Name: 4-hexylresorcinol
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E598 - synthetic calcium aluminates
+
+Name: synthetic calcium aluminates
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E621 - monosodium glutamate / Monosodium glutamate
+
+Name: monosodium glutamate / Monosodium glutamate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E622 - monopotassium glutamate / Monopotassium glutamate
+
+Name: monopotassium glutamate / Monopotassium glutamate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E623 - calcium diglutamate / Calcium diglutamate
+
+Name: calcium diglutamate / Calcium diglutamate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E624 - monoammonium glutamate / Monoammonium glutamate
+
+Name: monoammonium glutamate / Monoammonium glutamate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E625 - magnesium diglutamate / Magnesium diglutamate
+
+Name: magnesium diglutamate / Magnesium diglutamate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E627 - disodium guanylate / Disodium guanylate
+
+Name: disodium guanylate / Disodium guanylate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E628 - dipotassium guanylate / Dipotassium guanylate
+
+Name: dipotassium guanylate / Dipotassium guanylate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E629 - calcium guanylate / Calcium guanylate
+
+Name: calcium guanylate / Calcium guanylate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E631 - disodium inosinate / Disodium inosinate
+
+Name: disodium inosinate / Disodium inosinate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E632 - dipotassium inosinate / Dipotassium inosinate
+
+Name: dipotassium inosinate / Dipotassium inosinate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E633 - calcium inosinate / Calcium inosinate
+
+Name: calcium inosinate / Calcium inosinate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E634 - calcium 5'-ribonucleotides / Calcium 5'-ribonucleotides
+
+Name: calcium 5'-ribonucleotides / Calcium 5'-ribonucleotides
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E635 - disodium 5'-ribonucleotides / Disodium 5'-ribonucleotides
+
+Name: disodium 5'-ribonucleotides / Disodium 5'-ribonucleotides
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E637 - ethyl maltol / Ethyl maltol
+
+Name: ethyl maltol / Ethyl maltol
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E640 - glycine and its sodium salt / Glycine and its sodium salt
+
+Name: glycine and its sodium salt / Glycine and its sodium salt
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E642 - lysine hydrochloride / Lysine hydrochloride
+
+Name: lysine hydrochloride / Lysine hydrochloride
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E900 - dimethyl polysiloxane (Dimethyl polysiloxane)
+
+Name: dimethyl polysiloxane (Dimethyl polysiloxane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E905 - microcrystalline wax (Microcrystalline wax)
+
+Name: microcrystalline wax (Microcrystalline wax)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E907 - hydrogenated poly-1-decenes (Hydrogenated poly-1-decenes)
+
+Name: hydrogenated poly-1-decenes (Hydrogenated poly-1-decenes)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E908 - rice bran wax (Rice bran wax)
+
+Name: rice bran wax (Rice bran wax)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E911 - methyl esters of fatty acids (Methyl esters of fatty acids)
+
+Name: methyl esters of fatty acids (Methyl esters of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E912 - montanic acid esters (Montanic acid esters)
+
+Name: montanic acid esters (Montanic acid esters)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E915 - esters of colophony (Esters of colophony)
+
+Name: esters of colophony (Esters of colophony)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E916 - calcium iodate (Calcium iodate)
+
+Name: calcium iodate (Calcium iodate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E917 - potassium iodate (Potassium iodate)
+
+Name: potassium iodate (Potassium iodate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E918 - nitrogen oxides (Nitrogen oxides)
+
+Name: nitrogen oxides (Nitrogen oxides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E919 - nitrosyl chloride (Nitrosyl chloride)
+
+Name: nitrosyl chloride (Nitrosyl chloride)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E922 - potassium persulphate (Potassium persulphate)
+
+Name: potassium persulphate (Potassium persulphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E923 - ammonium persulphate (Ammonium persulphate)
+
+Name: ammonium persulphate (Ammonium persulphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E924 - potassium bromate (Potassium bromate)
+
+Name: potassium bromate (Potassium bromate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E925 - chlorine (Chlorine)
+
+Name: chlorine (Chlorine)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E926 - chlorine dioxide (Chlorine dioxide)
+
+Name: chlorine dioxide (Chlorine dioxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E927a - azodicarbonamide (Azodicarbonamide)
+
+Name: azodicarbonamide (Azodicarbonamide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E928 - benzoyl peroxide (Benzoyl peroxide)
+
+Name: benzoyl peroxide (Benzoyl peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E929 - acetone peroxide (Acetone peroxide)
+
+Name: acetone peroxide (Acetone peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E930 - calcium peroxide (Calcium peroxide)
+
+Name: calcium peroxide (Calcium peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E940 - dichlorodifluoromethane (Dichlorodifluoromethane)
+
+Name: dichlorodifluoromethane (Dichlorodifluoromethane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E945 - chloropentafluoroethane (Chloropentafluoroethane)
+
+Name: chloropentafluoroethane (Chloropentafluoroethane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E946 - octafluorocyclobutane (Octafluorocyclobutane)
+
+Name: octafluorocyclobutane (Octafluorocyclobutane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E949 - hydrogen (Hydrogen)
+
+Name: hydrogen (Hydrogen)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E950 - acesulfame K (Acesulfame potassium)
+
+Name: acesulfame K (Acesulfame potassium)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E958 - glycyrrhizin (Glycyrrhizin)
+
+Name: glycyrrhizin (Glycyrrhizin)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E959 - neohesperidine DC (Neohesperidine dihydrochalcone)
+
+Name: neohesperidine DC (Neohesperidine dihydrochalcone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E960 - steviol glycosides (Steviol glycosides)
+
+Name: steviol glycosides (Steviol glycosides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E962 - aspartame-acesulfame salt (Aspartame-acesulfame salt)
+
+Name: aspartame-acesulfame salt (Aspartame-acesulfame salt)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E964 - polyglycitol syrup (Polyglycitol syrup)
+
+Name: polyglycitol syrup (Polyglycitol syrup)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E999 - quillaia extract (Quillaia extract)
+
+Name: quillaia extract (Quillaia extract)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1001 - choline salts (Choline salts)
+
+Name: choline salts (Choline salts)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1201 - polyvinylpyrrolidone (Polyvinylpyrrolidone)
+
+Name: polyvinylpyrrolidone (Polyvinylpyrrolidone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1202 - polyvinylpolypyrrolidone (Polyvinylpolypyrrolidone)
+
+Name: polyvinylpolypyrrolidone (Polyvinylpolypyrrolidone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1203 - polyvinyl alcohol (Polyvinyl alcohol)
+
+Name: polyvinyl alcohol (Polyvinyl alcohol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1205 - basic methacrylate copolymer (Basic methacrylate copolymer)
+
+Name: basic methacrylate copolymer (Basic methacrylate copolymer)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1402 - alkaline modified starch (Alkaline modified starch)
+
+Name: alkaline modified starch (Alkaline modified starch)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1403 - bleached starch (Bleached starch)
+
+Name: bleached starch (Bleached starch)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1405 - enzyme treated starch (Enzyme treated starch)
+
+Name: enzyme treated starch (Enzyme treated starch)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1410 - monostarch phosphate (Monostarch phosphate)
+
+Name: monostarch phosphate (Monostarch phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1412 - distarch phosphate (Distarch phosphate)
+
+Name: distarch phosphate (Distarch phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1413 - phosphated distarch phosphate (Phosphated distarch phosphate)
+
+Name: phosphated distarch phosphate (Phosphated distarch phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1414 - acetylated distarch phosphate (Acetylated distarch phosphate)
+
+Name: acetylated distarch phosphate (Acetylated distarch phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1420 - starch acetate esterified with acetic anhydride (Starch acetate esterified with acetic anhydride)
+
+Name: starch acetate esterified with acetic anhydride (Starch acetate esterified with acetic anhydride)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1421 - starch acetate esterified with vinyl acetate (Starch acetate esterified with vinyl acetate)
+
+Name: starch acetate esterified with vinyl acetate (Starch acetate esterified with vinyl acetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1422 - acetylated distarch adipate (Acetylated distarch adipate)
+
+Name: acetylated distarch adipate (Acetylated distarch adipate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1423 - acetylated distarch glycerol (Acetylated distarch glycerol)
+
+Name: acetylated distarch glycerol (Acetylated distarch glycerol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1430 - distarch glycerine (Distarch glycerine)
+
+Name: distarch glycerine (Distarch glycerine)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1440 - hydroxy propyl starch (Hydroxy propyl starch)
+
+Name: hydroxy propyl starch (Hydroxy propyl starch)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1441 - hydroxy propyl distarch glycerine (Hydroxy propyl distarch glycerine)
+
+Name: hydroxy propyl distarch glycerine (Hydroxy propyl distarch glycerine)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1442 - hydroxy propyl distarch phosphate (Hydroxy propyl distarch phosphate)
+
+Name: hydroxy propyl distarch phosphate (Hydroxy propyl distarch phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1443 - hydroxy propyl distarch glycerol (Hydroxy propyl distarch glycerol)
+
+Name: hydroxy propyl distarch glycerol (Hydroxy propyl distarch glycerol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1450 - starch sodium octenyl succinate (Starch sodium octenyl succinate)
+
+Name: starch sodium octenyl succinate (Starch sodium octenyl succinate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1451 - acetylated oxidised starch (Acetylated oxidised starch)
+
+Name: acetylated oxidised starch (Acetylated oxidised starch)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1452 - starch aluminium octenyl succinate (Starch aluminium octenyl succinate)
+
+Name: starch aluminium octenyl succinate (Starch aluminium octenyl succinate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1501 - benzylated hydrocarbons (Benzylated hydrocarbons)
+
+Name: benzylated hydrocarbons (Benzylated hydrocarbons)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1502 - butane-1,3-diol (Butane-1, 3-diol)
+
+Name: butane-1,3-diol (Butane-1, 3-diol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1504 - ethyl acetate (Ethyl acetate)
+
+Name: ethyl acetate (Ethyl acetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1505 - triethyl citrate (Triethyl citrate)
+
+Name: triethyl citrate (Triethyl citrate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1516 - glyceryl monoacetate (Glyceryl monoacetate)
+
+Name: glyceryl monoacetate (Glyceryl monoacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1517 - glyceryl diacetate (Glyceryl diacetate)
+
+Name: glyceryl diacetate (Glyceryl diacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1518 - glyceryl triacetate (Glyceryl triacetate)
+
+Name: glyceryl triacetate (Glyceryl triacetate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1520 - propylene glycol (Propylene glycol)
+
+Name: propylene glycol (Propylene glycol)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1521 - polyethylene glycol 8000 (Polyethylene glycol 8000)
+
+Name: polyethylene glycol 8000 (Polyethylene glycol 8000)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.
+
+E1525 - hydroxyethyl cellulose (Hydroxyethyl cellulose)
+
+Name: hydroxyethyl cellulose (Hydroxyethyl cellulose)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Not specified.

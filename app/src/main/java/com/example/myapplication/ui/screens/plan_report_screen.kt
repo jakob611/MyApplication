@@ -38,25 +38,33 @@ fun PlanReportScreen(plan: PlanResult, onBack: () -> Unit) {
                         Text("Algorithm Analysis", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFEE440))
                         Spacer(Modifier.height(8.dp))
                         Text("BMI: ${"%.1f".format(data.bmi)}", style = MaterialTheme.typography.bodyMedium)
-                        Text("BMR: ${data.bmr.toInt()} kcal", style = MaterialTheme.typography.bodyMedium)
-                        Text("TDEE: ${data.tdee.toInt()} kcal", style = MaterialTheme.typography.bodyMedium)
-                        Text("Protein/kg: ${"%.1f".format(data.proteinPerKg)}g", style = MaterialTheme.typography.bodyMedium)
-                        Text("Calories/kg: ${"%.1f".format(data.caloriesPerKg)}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Strategy: ${data.caloricStrategy}", style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.height(12.dp))
-                        Text("Detailed Analysis:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
-                        data.detailedTips.forEach { tip ->
-                            Text("• $tip", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                        Text("BMR: ${data.bmr?.toInt() ?: 0} kcal", style = MaterialTheme.typography.bodyMedium)
+                        Text("TDEE: ${data.tdee?.toInt() ?: 0} kcal", style = MaterialTheme.typography.bodyMedium)
+                        Text("Protein/kg: ${"%.1f".format(data.proteinPerKg ?: 0.0)}g", style = MaterialTheme.typography.bodyMedium)
+                        Text("Calories/kg: ${"%.1f".format(data.caloriesPerKg ?: 0.0)}", style = MaterialTheme.typography.bodyMedium)
+                        if (!data.caloricStrategy.isNullOrBlank()) {
+                            Text("Strategy: ${data.caloricStrategy}", style = MaterialTheme.typography.bodySmall)
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text("Macro Breakdown:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
-                        Text(data.macroBreakdown, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Training Strategy:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
-                        Text(data.trainingStrategy, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                        Spacer(Modifier.height(12.dp))
+                        if (data.detailedTips?.isNotEmpty() == true) {
+                            Text("Detailed Analysis:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
+                            data.detailedTips.forEach { tip ->
+                                Text("• $tip", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (!data.macroBreakdown.isNullOrBlank()) {
+                            Text("Macro Breakdown:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
+                            Text(data.macroBreakdown, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (!data.trainingStrategy.isNullOrBlank()) {
+                            Text("Training Strategy:", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFEE440))
+                            Text(data.trainingStrategy, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+                        }
                     }
                 }
-                Divider(color = Color.Gray, thickness = 1.dp)
+                HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                 Spacer(Modifier.height(8.dp))
             }
 

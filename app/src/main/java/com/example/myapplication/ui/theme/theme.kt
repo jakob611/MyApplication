@@ -21,22 +21,26 @@ private val DarkColors = darkColorScheme(
     primary = Color(0xFF2563EB),      // Modra
     onPrimary = Color.White,
     secondary = Color(0xFFFEE440),    // Rumena
-    onSecondary = Color(0xFF17223B),  // Temno ozadje
-    background = Color(0xFF17223B),   // Temno modro ozadje
+    onSecondary = Color.Black,
+    background = Color(0xFF1F2937),   // Temno sivo ozadje
     onBackground = Color.White,
-    surface = Color(0xFF1C274C),      // Temno modra kartica
+    surface = Color(0xFF374151),      // Temno siva kartica
     onSurface = Color.White,
+    surfaceVariant = Color(0xFF4B5563),
+    onSurfaceVariant = Color(0xFFD1D5DB),
 )
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF2563EB),      // Modra
     onPrimary = Color.White,
     secondary = Color(0xFFFEE440),    // Rumena
-    onSecondary = Color(0xFF17223B),  // Temno ozadje
-    background = Color(0xFFF7F7FA),   // Svetlo ozadje
-    onBackground = Color(0xFF22223B),
-    surface = Color(0xFFEDEDED),      // Svetla kartica
-    onSurface = Color(0xFF22223B),
+    onSecondary = Color.Black,
+    background = Color.White,         // Belo ozadje
+    onBackground = Color.Black,
+    surface = Color(0xFFF7F7FA),      // Svetla kartica
+    onSurface = Color.Black,
+    surfaceVariant = Color(0xFFE5E7EB),
+    onSurfaceVariant = Color(0xFF6B7280),
 )
 
 // --- Tipografija ---
@@ -51,7 +55,7 @@ val AppTypography = Typography(
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = true, // nastavljen na temno kot privzeto
+    darkTheme: Boolean = false, // Light mode as default
     content: @Composable () -> Unit
 ) {
     val colors = if (darkTheme) DarkColors else LightColors

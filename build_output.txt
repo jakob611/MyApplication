@@ -1,0 +1,92 @@
+﻿Reusing configuration cache.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:dataBindingMergeDependencyArtifactsDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:dataBindingGenBaseClassesDebug UP-TO-DATE
+
+> Task :app:processDebugMainManifest
+[com.google.ai.edge.litert:litert-support:1.0.1] C:\Users\tomin\.gradle\caches\9.2.1\transforms\22b5314fe93af6dc17519b35a9684c97\workspace\transformed\litert-support-1.0.1\AndroidManifest.xml Warning:
+	Namespace 'org.tensorflow.lite.support' is used in multiple modules and/or libraries: com.google.ai.edge.litert:litert-support:1.0.1, com.google.ai.edge.litert:litert-support-api:1.0.1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+
+> Task :app:compileDebugKotlin
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/ai_utils.kt:37:28 'fun create(contentType: MediaType?, content: String): RequestBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:212:65 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:213:77 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:351:75 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:356:66 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:479:74 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/network/fatsecret_api_service.kt:489:65 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/persistence/PlanDataStore.kt:377:36 'fun create(contentType: MediaType?, content: String): RequestBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/smartwatch/SmartwatchConnectActivity.kt:25:8 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/smartwatch/SmartwatchConnectActivity.kt:235:23 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/smartwatch/SmartwatchConnectActivity.kt:236:14 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/smartwatch/SmartwatchConnectActivity.kt:237:26 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/smartwatch/SmartwatchConnectActivity.kt:237:94 'class GoogleSignInOptions : AbstractSafeParcelable, Api.ApiOptions.Optional, ReflectedParcelable' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/ui/screens/BodyOverviewViewmodel.kt:21:10 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/ui/screens/HealthConnectScreen.kt:66:13 'fun LinearProgressIndicator(progress: Float, modifier: Modifier = ..., color: Color = ..., trackColor: Color = ..., strokeCap: StrokeCap = ...): Unit' is deprecated. Use the overload that takes `progress` as a lambda.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/ui/screens/MyAccountScreen.kt:92:9 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/ui/screens/WorkoutSessionScreen.kt:400:20 Condition is always 'true'.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HapticFeedback.kt:140:22 'fun vibrate(p0: Long): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:15:8 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:16:8 'class GoogleSignInClient : GoogleApi<GoogleSignInOptions!>' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:17:8 'class GoogleSignInOptions : AbstractSafeParcelable, Api.ApiOptions.Optional, ReflectedParcelable' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:424:27 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:425:53 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:433:23 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:434:16 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:438:34 'class GoogleSignInClient : GoogleApi<GoogleSignInOptions!>' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:439:19 'class GoogleSignInOptions : AbstractSafeParcelable, Api.ApiOptions.Optional, ReflectedParcelable' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:439:47 'class GoogleSignInOptions : AbstractSafeParcelable, Api.ApiOptions.Optional, ReflectedParcelable' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:440:16 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:449:27 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:450:37 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:477:38 'static fun getHistoryClient(p0: Context, p1: GoogleSignInAccount): HistoryClient' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:500:38 'static fun getHistoryClient(p0: Context, p1: GoogleSignInAccount): HistoryClient' is deprecated. Deprecated in Java.
+w: file:///C:/Users/tomin/AndroidStudioProjects/MyApplication/app/src/main/java/com/example/myapplication/utils/HealthDataManager.kt:523:38 'static fun getHistoryClient(p0: Context, p1: GoogleSignInAccount): HistoryClient' is deprecated. Deprecated in Java.
+
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:assembleDebug
+> Task :app:createDebugApkListingFileRedirect
+
+BUILD SUCCESSFUL in 13s
+41 actionable tasks: 11 executed, 30 up-to-date
+Configuration cache entry reused.

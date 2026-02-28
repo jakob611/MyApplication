@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Moja aplikacija</string>
+    <string name="app_name">Glow Upp</string>
     <string name="nav_header_desc">Opis glave navigacije</string>
     <string name="nav_header_title">Naslov nav-header</string>
     <string name="nav_header_subtitle">Podnaslov nav-header</string>
@@ -8,4 +8,8 @@
     <string name="menu_slideshow">Diaprojekcija</string>
     <string name="action_settings">Nastavitve</string>
     <string name="default_web_client_id">551351477998-t69spragd7bmfe0so7823utfca8io89a.apps.googleusercontent.com</string>
+
+    <string name="widget_water_description">Track water intake - add or remove 50ml with one tap</string>
+    <string name="widget_weight_description">Track weight - add or remove 0.1kg with one tap</string>
+    <string name="quick_meal_widget_description">Quick meal logging - add custom meals based on time of day</string>
 </resources>

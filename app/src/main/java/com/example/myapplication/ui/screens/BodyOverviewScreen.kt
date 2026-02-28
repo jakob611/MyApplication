@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -21,116 +22,133 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 
-
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BodyOverviewScreen(
     plans: List<PlanResult>,
     onCreateNewPlan: () -> Unit,
+    onBack: () -> Unit = {}
 ) {
     // Novo: dialog za potrditve, če že obstaja plan
     var showReplaceDialog by remember { mutableStateOf(false) }
 
-    val backgroundGradient = Brush.verticalGradient(
-        listOf(Color(0xFF17223B), Color(0xFF25304A), Color(0xFF193446), Color(0xFF1E2D24))
-    )
     val accentGreen = Color(0xFF13EF92)
     val accentBlue = Color(0xFF2563EB)
     val accentYellow = Color(0xFFFEE440)
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient)
-    ) {
-        Column(
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("My Plan", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = accentBlue,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        }
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(18.dp)
+                .padding(padding)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Icon(
-                Icons.Filled.FitnessCenter,
-                contentDescription = "Body",
-                tint = accentGreen,
+            Column(
                 modifier = Modifier
-                    .size(54.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Body",
-                color = accentGreen,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(Modifier.height(16.dp))
-
-            if (plans.isEmpty()) {
-                // Ni planov
-                Column(
+                    .fillMaxSize()
+                    .padding(18.dp)
+            ) {
+                Icon(
+                    Icons.Filled.FitnessCenter,
+                    contentDescription = "Body",
+                    tint = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "No plans yet!",
-                        color = Color.White,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(30.dp))
+                        .size(54.dp)
+                        .align(Alignment.CenterHorizontally)
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Body",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                Spacer(Modifier.height(16.dp))
+
+                if (plans.isEmpty()) {
+                    // Ni planov
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "No plans yet!",
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(30.dp))
+                        Button(
+                            onClick = onCreateNewPlan, // brez opozorila, ker ni planov
+                            colors = ButtonDefaults.buttonColors(containerColor = accentBlue),
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .height(60.dp)
+                        ) {
+                            Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Create New Plan", fontSize = 18.sp, color = Color.White)
+                        }
+                    }
+                } else {
+                    // Plani obstajajo - prikazuj vse
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        val sortedPlans = plans.sortedByDescending { it.createdAt }
+                        sortedPlans.forEach { plan ->
+                            PlanCard(
+                                plan = plan,
+                                accentGreen = accentGreen,
+                                accentBlue = accentBlue,
+                                accentYellow = accentYellow
+                            )
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+
+                    // Gumb za nov plan vedno na dnu (z opozorilom, če že obstaja)
                     Button(
-                        onClick = onCreateNewPlan, // brez opozorila, ker ni planov
+                        onClick = {
+                            if (plans.isNotEmpty()) {
+                                showReplaceDialog = true
+                            } else {
+                                onCreateNewPlan()
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = accentBlue),
                         modifier = Modifier
                             .fillMaxWidth(0.8f)
-                            .height(60.dp)
+                            .height(52.dp)
+                            .align(Alignment.CenterHorizontally)
                     ) {
                         Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
-                        Text("Create New Plan", fontSize = 18.sp, color = Color.White)
+                        Text("Create Another Plan", fontSize = 16.sp, color = Color.White)
                     }
-                }
-            } else {
-                // Plani obstajajo - prikazuj vse
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    val sortedPlans = plans.sortedByDescending { it.createdAt }
-                    sortedPlans.forEach { plan ->
-                        PlanCard(
-                            plan = plan,
-                            accentGreen = accentGreen,
-                            accentBlue = accentBlue,
-                            accentYellow = accentYellow
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-                }
-
-                // Gumb za nov plan vedno na dnu (z opozorilom, če že obstaja)
-                Button(
-                    onClick = {
-                        if (plans.isNotEmpty()) {
-                            showReplaceDialog = true
-                        } else {
-                            onCreateNewPlan()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = accentBlue),
-                    modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .height(52.dp)
-                        .align(Alignment.CenterHorizontally)
-                ) {
-                    Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Create Another Plan", fontSize = 16.sp, color = Color.White)
                 }
             }
         }
@@ -169,7 +187,8 @@ private fun PlanCard(
     val parsed = remember(plan.algorithmData?.macroBreakdown) {
         plan.algorithmData?.macroBreakdown?.let { parseMacroBreakdown(it) }
     }
-    val caloriesToShow = parsed?.calories ?: plan.calories
+    val rawCalories = parsed?.calories ?: plan.calories
+    val caloriesToShow = (rawCalories / 100) * 100
     val proteinToShow = parsed?.proteinG ?: plan.protein
     val carbsToShow = parsed?.carbsG ?: plan.carbs
     val fatToShow = parsed?.fatG ?: plan.fat
@@ -179,7 +198,7 @@ private fun PlanCard(
             .fillMaxWidth()
             .clickable { expandedPlan = !expandedPlan }
             .animateContentSize(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF232D4B)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp)
     ) {
         Column(Modifier.padding(18.dp)) {
@@ -191,61 +210,81 @@ private fun PlanCard(
                     Text(
                         plan.name,
                         fontSize = 23.sp,
-                        color = accentGreen,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         "Created on ${plan.createdAt.formatPrettyDate()}",
-                        color = Color.LightGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
                 }
                 Icon(
                     if (expandedPlan) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = accentGreen
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Spacer(Modifier.height(8.dp))
 
-            caloriesToShow?.let {
+            // Removed unnecessary safe call
+            Text(
+                "🔥 Calories: $caloriesToShow kcal",
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            // Makro podatki - prilagajajo se širini telefona
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Removed unnecessary safe call
+                    Text(
+                        "🥩 Protein: ${proteinToShow}g",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "🍞 Carbs: ${carbsToShow}g",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    "Calories: ${it} kcal",
-                    color = accentYellow,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    "🥑 Fat: ${fatToShow}g",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                proteinToShow?.let {
-                    Text("Protein: ${it}g", color = Color(0xFF13EF92), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.width(12.dp))
-                carbsToShow?.let {
-                    Text("Carbs: ${it}g", color = Color(0xFF33aaff), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.width(12.dp))
-                fatToShow?.let {
-                    Text("Fat: ${it}g", color = Color(0xFFF04C4C), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
             }
 
             AnimatedVisibility(visible = expandedPlan) {
                 Column {
                     Spacer(Modifier.height(12.dp))
                     if (!plan.goal.isNullOrBlank()) {
-                        Text("Goal: ${plan.goal}", color = accentGreen, fontSize = 15.sp)
+                        Text("🎯 Goal: ${plan.goal}", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
                     }
                     if (!plan.experience.isNullOrBlank()) {
-                        Text("Experience: ${plan.experience}", color = accentGreen, fontSize = 15.sp)
+                        Text("💪 Experience: ${plan.experience}", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
                     }
                     Spacer(Modifier.height(12.dp))
 
                     if (plan.weeks.isEmpty()) {
                         Text(
                             "This plan doesn't have weekly schedule yet.\nCreate a new plan or wait for AI to generate it.",
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
                             modifier = Modifier.padding(8.dp)
                         )
@@ -259,9 +298,7 @@ private fun PlanCard(
                     plan.algorithmData?.let { data ->
                         Spacer(Modifier.height(12.dp))
                         AlgorithmDataSection(
-                            data = data,
-                            accentGreen = accentGreen,
-                            accentYellow = accentYellow
+                            data = data
                         )
                     }
                 }
@@ -284,7 +321,7 @@ fun WeekCard(
             .clickable { expanded = !expanded }
             .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF203154))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column {
             Row(
@@ -336,7 +373,7 @@ fun DayCard(
             .clickable { expanded = !expanded }
             .animateContentSize(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF283B62))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
     ) {
         Column {
             Row(
@@ -367,7 +404,7 @@ fun DayCard(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = accentYellow, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text(ex, color = Color.White, fontSize = 15.sp)
+                            Text(ex, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
                         }
                         Spacer(Modifier.height(2.dp))
                     }
@@ -380,13 +417,11 @@ fun DayCard(
 // --- NOVO: Algorithm sekcija na dnu ---
 @Composable
 private fun AlgorithmDataSection(
-    data: AlgorithmData,
-    accentGreen: Color,
-    accentYellow: Color
+    data: AlgorithmData
 ) {
-    val labelColor = Color(0xFFCBD5E1)
-    val valueColor = Color.White
-    val cardBg = Color(0xFF1F2A4D)
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val valueColor = MaterialTheme.colorScheme.onSurface
+    val cardBg = MaterialTheme.colorScheme.surface
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -395,42 +430,42 @@ private fun AlgorithmDataSection(
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                "Algorithm Analysis",
+                "📊 Algorithm Analysis",
                 style = MaterialTheme.typography.titleMedium,
-                color = accentYellow,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(8.dp))
 
-            StatRow("BMI", String.format("%.1f", data.bmi), labelColor, valueColor)
-            StatRow("BMR", "${data.bmr.toInt()} kcal", labelColor, valueColor)
-            StatRow("TDEE", "${data.tdee.toInt()} kcal", labelColor, valueColor)
-            StatRow("Protein/kg", String.format("%.1f g", data.proteinPerKg), labelColor, valueColor)
-            StatRow("Calories/kg", String.format("%.1f", data.caloriesPerKg), labelColor, valueColor)
+            StatRow("BMI", String.format(Locale.US, "%.1f", data.bmi ?: 0.0), labelColor, valueColor)
+            StatRow("BMR", "${(data.bmr ?: 0.0).toInt()} kcal", labelColor, valueColor)
+            StatRow("TDEE", "${(data.tdee ?: 0.0).toInt()} kcal", labelColor, valueColor)
+            StatRow("Protein/kg", String.format(Locale.US, "%.1f g", data.proteinPerKg ?: 0.0), labelColor, valueColor)
+            StatRow("Calories/kg", String.format(Locale.US, "%.1f", data.caloriesPerKg ?: 0.0), labelColor, valueColor)
 
-            data.caloricStrategy.takeIf { it.isNotBlank() }?.let {
+            data.caloricStrategy?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(10.dp))
                 Text("Caloric strategy", style = MaterialTheme.typography.labelLarge, color = labelColor)
                 Text(it, color = valueColor)
             }
 
-            data.macroBreakdown.takeIf { it.isNotBlank() }?.let {
+            data.macroBreakdown?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(10.dp))
                 Text("Macro breakdown", style = MaterialTheme.typography.labelLarge, color = labelColor)
                 Text(it, color = valueColor)
             }
 
-            data.trainingStrategy.takeIf { it.isNotBlank() }?.let {
+            data.trainingStrategy?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(10.dp))
                 Text("Training strategy", style = MaterialTheme.typography.labelLarge, color = labelColor)
                 Text(it, color = valueColor)
             }
 
-            if (data.detailedTips.isNotEmpty()) {
+            if (data.detailedTips != null && data.detailedTips!!.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 Text("Tips", style = MaterialTheme.typography.labelLarge, color = labelColor)
                 Column {
-                    data.detailedTips.forEach { tip ->
+                    data.detailedTips!!.forEach { tip ->
                         Text("• $tip", color = valueColor, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
@@ -449,7 +484,7 @@ private fun StatRow(label: String, value: String, labelColor: Color, valueColor:
 
 // --- Datum helper ---
 fun Long.formatPrettyDate(): String {
-    val locale = java.util.Locale.ENGLISH
+    val locale = Locale.ENGLISH
     val sdf = java.text.SimpleDateFormat("MMMM d, yyyy", locale)
     return sdf.format(java.util.Date(this))
 }
@@ -468,7 +503,7 @@ private fun parseMacroBreakdown(text: String): ParsedMacros {
     // "Protein: 1.8g/kg (100g total), Carbs: 583g, Fat: 50g, Calories: 3182 kcal/day, Fat loss deficit: -450 kcal/day"
     // "Protein: 2.0g/kg (120g total), Carbs: 589g, Fat: 54g, Calories: 3323 kcal/day, Fat loss deficit: -350 kcal/day"
 
-    val proteinTotalRe = Regex("""Protein:\s*[\d.]+g\/kg\s*\(([\d.]+)g total\)""", RegexOption.IGNORE_CASE)
+    val proteinTotalRe = Regex("""Protein:\s*[\d.]+g/kg\s*\(([\d.]+)g total\)""", RegexOption.IGNORE_CASE)
     val proteinSimpleRe = Regex("""Protein:\s*([\d.]+)g(?:\b|,)""", RegexOption.IGNORE_CASE)
     val carbsRe = Regex("""Carbs:\s*([\d.]+)g""", RegexOption.IGNORE_CASE)
     val fatRe = Regex("""Fat:\s*([\d.]+)g""", RegexOption.IGNORE_CASE)

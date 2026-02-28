@@ -1,0 +1,670 @@
+E300 - ascorbic acid
+
+Name: E300 - ascorbic acid (Ascorbic acid)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1981); no limit or specified (EFSA, 2015)
+Other details: Not specified
+
+E301 - sodium ascorbate
+
+Name: E301 - sodium ascorbate (Sodium ascorbate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not specified (JECFA, 1981); not specified (EFSA, 2015)
+Other details: Not specified
+
+E302 - calcium ascorbate
+
+Name: E302 - calcium ascorbate (Calcium ascorbate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not specified (JECFA, 1981); not specified (EFSA, 2015)
+Other details: Not specified
+
+E303 - potassium ascorbate
+
+Name: E303 - potassium ascorbate (Potassium ascorbate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E305 - ascorbyl stearate
+
+Name: E305 - ascorbyl stearate (Ascorbyl stearate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E306 - tocopherols
+
+Name: E306 - tocopherol (Tocopherols)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not limited or specified (JECFA, 1986); not limited or specified (EFSA, 2015)
+Other details: Not specified
+
+E307 - alpha-tocopherol
+
+Name: E307 - alpha-tocopherol (Alpha-tocopherol)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 2.000 mg/kg body weight/day (JECFA, 1986); not limited or specified (EFSA, 2015)
+Other details: Not specified
+
+E308 - gamma-tocopherol
+
+Name: E308 - gamma-tocopherol (Gamma-tocopherol)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not specified (JECFA, 1986); not specified (EFSA, 2015)
+Other details: Not specified
+
+E309 - delta-tocopherol
+
+Name: E309 - delta-tocopherol (Delta-tocopherol)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not limited or specified (JECFA, 1986; EFSA, 2015)
+Other details: Not specified
+
+E310 - propyl gallate
+
+Name: E310 - propyl gallate (Propyl gallate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section titled "Pregled aditiva" and mentions support for the website through donations and notes that all content (except images) is under Creative Commons license (CC BY 4.0).
+
+E311 - octyl gallate
+
+Name: E311 - octyl gallate (Octyl gallate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E312 - dodecyl gallate
+
+Name: E312 - dodecyl gallate (Dodecyl gallate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E313 - ethyl gallate
+
+Name: E313 - ethyl gallate (Ethyl gallate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on acceptable daily intake (ADI) stating "ni podatka" (no data), and a call to support the website through donations under Creative Commons license (CC BY 4.0).
+
+E316 - sodium erythorbate
+
+Name: E316 - sodium erythorbate (Sodium erythorbate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not specified (JECFA, 1990); 6.000 mg/kg body weight/day (SCF, 1997); 6.000 mg/kg body weight/day (EFSA, 2016)
+Other details: Not specified
+
+E318 - sodium erythorbin
+
+Name: E318 - sodium erythorbin (Sodium erythorbin)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E319 - tert-butylhydroquinone
+
+Name: E319 - butylhydroquinone (Tert-Butylhydroquinone)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E320 - butylated hydroxyanisole
+
+Name: E320 - butylated hydroxyanisole (Butylated hydroxyanisole)
+Description: Butylated hydroxyanisole (BHA) is an antioxidant obtained by the reaction of 4-methoxyphenol and isobutylene.
+Function: It inhibits oxidation and the development of unpleasant odors, used as a preservative.
+Origin: Not specified
+Health risks: The US National Institutes of Health report carcinogenicity in test animals, especially in large doses. The recommended daily dose up to 0.5 mg/kg body weight is considered much too low by some to cause cancer, but by others, e.g., the state of California, the substance is carcinogenic. It can cause allergic reactions, hyperactivity or other reactions (twitching). Not recommended for children, as the group for supporting children's hyperactivity strongly advocates discontinuing the additive due to its impact on hyperactive behavioral disorders in children. In combination with high vitamin C content, free radicals can be produced that damage cells, including DNA. This has prompted many discussions in the EU and in the ANS additives committee to initiate additional studies on harmfulness and limit the use of BHA.
+Usage in foods: Added to edible oils, fats, margarines, chewing gums, candies, nuts, and generally foods with high fat content (e.g., in quick-prepare potato products and bakery products, because it is stable at high temperatures such as in biscuits, cakes, pastries).
+Acceptable daily intake (ADI): Up to 0.5 mg/kg body weight
+Other details: Used in food and its packaging, animal feed, cosmetics, rubber products, petroleum derivatives, and medicines. Added to edible oils, fats, margarines, chewing gums, candies, nuts, and high-fat foods since the mid-20th century. Banned in Japan since 1958. Recommended for withdrawal in Great Britain but this was abandoned. McDonald's had to discontinue use in its products in the USA in 1986. Banned in infant nutrition.
+
+E321 - butylated hydroxytoluene
+
+Name: E321 - butylated hydroxytoluene (Butylated hydroxytoluene)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 0.050 mg/kg body weight/day (SCF, 1987); 0.300 mg/kg body weight/day (JECFA, 1996); 0.250 mg/kg body weight/day (EFSA, 2012)
+Other details: Not specified
+
+E322a - lecithin (sunflower)
+
+Name: E322a - lecithin (sunflower) (Lecithin (sunflower))
+Description: Lecithin is obtained mainly from soy beans, egg yolk, milk, marine sources, oilseed rape, cotton, and sunflower. It is an excellent emulsifier and stabilizer in water-oil/fat mixtures. It is also sold as a dietary supplement or for medical purposes. Sunflower lecithin obtained from sunflower seeds does not pose a health risk.
+Function: Emulsifier and stabilizer in mixtures of water-oil/fat.
+Origin: Mainly from soy beans, egg yolk, milk, marine sources, oilseed rape, cotton, and sunflower (specifically sunflower lecithin from sunflower seeds).
+Health risks: Can pose a health risk because over 90% of soy worldwide is genetically modified. In larger quantities, it can cause stomach issues. Sunflower lecithin does not represent a health risk.
+Usage in foods: Used in many products - confectionery (chocolates, biscuits, ice creams, chewing gums, spreads, flakes), in baking various products, in bread and pastries, pasta, margarine, mayonnaise, etc.
+Acceptable daily intake (ADI): Not specified
+Other details: Sold also as a dietary supplement or for medical purposes.
+
+E326 - potassium lactate
+
+Name: E326 - potassium lactate (Potassium lactate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1979)
+Other details: Not specified
+
+E327 - calcium lactate
+
+Name: E327 - calcium lactate (Calcium lactate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1974)
+Other details: Not specified
+
+E328 - ammonium lactate
+
+Name: E328 - ammonium lactate (Ammonium lactate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified
+
+E329 - magnesium lactate
+
+Name: E329 - magnesium lactate (Magnesium lactate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1979)
+Other details: Not specified
+
+E331 - sodium citrates
+
+Name: E331 - sodium citrate (Sodium citrates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified
+
+E332 - potassium citrates
+
+Name: E332 - potassium citrate (Potassium citrates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified
+
+E333 - calcium citrates
+
+Name: E333 - calcium citrate (Calcium citrates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No limit or specified (JECFA, 1973)
+Other details: Not specified
+
+E335 - sodium tartrates
+
+Name: E335 - sodium tartrate (Sodium tartrates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified
+
+E336 - potassium tartrates
+
+Name: E336 - potassium tartrate (Potassium tartrates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified
+
+E337 - sodium potassium tartrate
+
+Name: E337 - sodium potassium tartrate (Sodium potassium tartrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 30.000 mg/kg body weight/day (JECFA, 1973); 30.000 mg/kg body weight/day (JECFA, 1977)
+Other details: Not specified
+
+E338 - orthophosphoric acid
+
+Name: E338 - phosphoric acid (Orthophosphoric acid)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E339 - sodium phosphates
+
+Name: E339 - sodium phosphate (Sodium phosphates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E340 - potassium phosphates
+
+Name: E340 - potassium phosphate (Potassium phosphates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E341 - calcium phosphates
+
+Name: E341 - calcium phosphate (Calcium phosphates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E342 - ammonium phosphates
+
+Name: E342 - ammonium phosphate (Ammonium phosphates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E343 - magnesium phosphates
+
+Name: E343 - magnesium phosphate (Magnesium phosphates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 70.000 mg/kg body weight/day (JECFA, 1982; maximum tolerable daily intake - MTDI)
+Other details: Not specified
+
+E344 - lecithin citrate
+
+Name: E344 - lecithin citrate (Lecithin citrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E345 - magnesium citrate
+
+Name: E345 - magnesium citrate (Magnesium citrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E349 - ammonium malate
+
+Name: E349 - ammonium malate (Ammonium malate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E350 - sodium malates
+
+Name: E350 - sodium malate (Sodium malates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E351 - potassium malate
+
+Name: E351 - potassium malate (Potassium malate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E352 - calcium malates
+
+Name: E352 - calcium malate (Calcium malates)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the site's work through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E353 - metatartaric acid
+
+Name: E353 - metatartaric acid (Metatartaric acid)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E354 - calcium tartrate
+
+Name: E354 - calcium tartrate (Calcium tartrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E357 - potassium adipate
+
+Name: E357 - potassium adipate (Potassium adipate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E359 - ammonium adipate
+
+Name: E359 - ammonium adipate (Ammonium adipate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E366 - potassium fumarate
+
+Name: E366 - potassium fumarate (Potassium fumarate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on supporting the website through donations and notes that all content (except images) is under Creative Commons (CC BY 4.0) license.
+
+E367 - calcium fumarate
+
+Name: E367 - calcium fumarate (Calcium fumarate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E368 - ammonium fumarate
+
+Name: E368 - ammonium fumarate (Ammonium fumarate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E370 - 1,4-heptonolactone
+
+Name: E370 - 1,4-heptonolactone (1,4-Heptonolactone)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E375 - nicotinic acid
+
+Name: E375 - niacin (Nicotinic acid)
+Description: Niacin or vitamin B3 is naturally present in legumes, milk, eggs, meat and many other products. It is safe for use. However, in larger quantities, it should be avoided by children and infants.
+Function: Not specified
+Origin: Not specified
+Health risks: In larger quantities, it should be avoided by children and infants.
+Usage in foods: Not specified
+Acceptable daily intake (ADI): Not specified
+Other details: Not specified
+
+E380 - triammonium citrate
+
+Name: E380 - triammonium citrate (Triammonium citrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: All content on the website (except images) is under the Creative Commons (CC BY 4.0) license.
+
+E381 - ammonium ferric citrate
+
+Name: E381 - ammonium ferric citrate (Ammonium ferric citrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E383 - calcium glycerylphosphate
+
+Name: E383 - calcium glycerylphosphate (Calcium glycerylphosphate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E384 - isopropyl citrate
+
+Name: E384 - isopropyl citrate (Isopropyl citrate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E385 - calcium disodium ethylene diamine tetraacetate
+
+Name: E385 - calcium disodium ethylene diamine tetra-acetate (Calcium disodium ethylene diamine tetraacetate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): 2.500 mg/kg body weight/day (JECFA, 1973)
+Other details: Not specified
+
+E386 - disodium ethylene diamine tetraacetate
+
+Name: E386 - disodium ethylene diamine tetraacetate (Disodium ethylene diamine tetraacetate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E388 - thiodipropionic acid
+
+Name: E388 - thiodipropionic acid (Thiodipropionic acid)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E389 - dilauryl thiodipropionate
+
+Name: E389 - dilauryl thiodipropionate (Dilauryl thiodipropionate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified
+
+E390 - distearyl thiodipropionate
+
+Name: E390 - distearyl thiodipropionate (Distearyl thiodipropionate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content includes a section on acceptable daily intake (ADI) stating "ni podatka" (no data), and a call to support the website through donations under Creative Commons license (CC BY 4.0).
+
+E392 - extracts of rosemary
+
+Name: E392 - extracts of rosemary (Extracts of rosemary)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: The content is licensed under Creative Commons (CC BY 4.0).
+
+E399 - calcium lactobionate
+
+Name: E399 - calcium lactobionate (Calcium lactobionate)
+Description: Not specified
+Function: Not specified
+Origin: Not specified
+Health risks: Not specified
+Usage in foods: Not specified
+Acceptable daily intake (ADI): No data
+Other details: Not specified

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -120,40 +122,49 @@ fun GoldenRatioScreen(
     var calculatedScore by remember { mutableStateOf<Double?>(null) }
     var advancedAnalysis by remember { mutableStateOf<GoldenRatioAnalysis?>(null) }
 
-    val backgroundGradient = Brush.verticalGradient(
-        listOf(
-            Color(0xFF17223B),
-            Color(0xFF25304A),
-            Color(0xFF193446),
-            Color(0xFF1E2D24)
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundGradient)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(20.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Inline header with back button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                }
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Golden Ratio",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
             // Title
             Text(
                 "Golden Ratio Analysis",
                 style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp),
-                color = Color(0xFFFEE440),
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
             Text(
                 "Medieval beauty assessment using mathematical proportions",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF6B7A99),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 

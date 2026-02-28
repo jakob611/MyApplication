@@ -32,7 +32,7 @@ fun MyPlansScreen(
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
                         .clickable { onPlanClick(plan) },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF232D4B))
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7FA))
                 ) {
                     Row(
                         Modifier
@@ -41,12 +41,12 @@ fun MyPlansScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(plan.name, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Text(plan.name, style = MaterialTheme.typography.titleMedium, color = Color.Black)
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 "Created on ${plan.createdAt.formatPrettyDate()}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.LightGray
+                                color = Color.Gray
                             )
                         }
                         IconButton(onClick = { planToDelete = plan }) {

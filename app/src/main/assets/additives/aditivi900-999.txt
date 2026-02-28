@@ -1,0 +1,340 @@
+E900 - dimethyl polysiloxane
+
+Name: E900 - dimethyl polysiloxane (Dimethyl polysiloxane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E905 - microcrystalline wax
+
+Name: E905 - microcrystalline wax (Microcrystalline wax)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E907 - hydrogenated poly-1-decenes
+
+Name: E907 - hydrogenated poly-1-decenes (Hydrogenated poly-1-decenes)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E908 - rice bran wax
+
+Name: E908 - rice bran wax (Rice bran wax)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E911 - methyl esters of fatty acids
+
+Name: E911 - methyl esters of fatty acids (Methyl esters of fatty acids)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E912 - montanic acid esters
+
+Name: E912 - montanic acid esters (Montanic acid esters)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E915 - esters of colophony
+
+Name: E915 - esters of colophony (Esters of colophony)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E916 - calcium iodate
+
+Name: E916 - calcium iodate (Calcium iodate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E917 - potassium iodate
+
+Name: E917 - potassium iodate (Potassium iodate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E918 - nitrogen oxides
+
+Name: E918 - nitrogen oxides (Nitrogen oxides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E919 - nitrosyl chloride
+
+Name: E919 - nitrosyl chloride (Nitrosyl chloride)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E922 - potassium persulphate
+
+Name: E922 - potassium persulphate (Potassium persulphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E923 - ammonium persulphate
+
+Name: E923 - ammonium persulphate (Ammonium persulphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E924 - potassium bromate
+
+Name: E924 - potassium bromate (Potassium bromate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E925 - chlorine
+
+Name: E925 - chlorine (Chlorine)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E926 - chlorine dioxide
+
+Name: E926 - chlorine dioxide (Chlorine dioxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E927a - azodicarbonamide
+
+Name: E927a - azodicarbonamide (Azodicarbonamide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E928 - benzoyl peroxide
+
+Name: E928 - benzoyl peroxide (Benzoyl peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E929 - acetone peroxide
+
+Name: E929 - acetone peroxide (Acetone peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E930 - calcium peroxide
+
+Name: E930 - calcium peroxide (Calcium peroxide)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E940 - dichlorodifluoromethane
+
+Name: E940 - dichlorodifluoromethane (Dichlorodifluoromethane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E945 - chloropentafluoroethane
+
+Name: E945 - chloropentafluoroethane (Chloropentafluoroethane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E946 - octafluorocyclobutane
+
+Name: E946 - octafluorocyclobutane (Octafluorocyclobutane)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E949 - hydrogen
+
+Name: E949 - hydrogen (Hydrogen)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E950 - acesulfame potassium
+
+Name: E950 - acesulfame K (Acesulfame potassium)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E958 - glycyrrhizin
+
+Name: E958 - glycyrrhizin (Glycyrrhizin)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E959 - neohesperidine dihydrochalcone
+
+Name: E959 - neohesperidine DC (Neohesperidine dihydrochalcone)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E960 - steviol glycosides
+
+Name: E960 - steviol glycosides (Steviol glycosides)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E962 - aspartame-acesulfame salt
+
+Name: E962 - aspartame-acesulfame salt (Aspartame-acesulfame salt)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E964 - polyglycitol syrup
+
+Name: E964 - polyglycitol syrup (Polyglycitol syrup)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.
+
+E999 - quillaia extract
+
+Name: E999 - quillaia extract (Quillaia extract)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note on ADI, without additional details.

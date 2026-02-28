@@ -7,7 +7,7 @@ import kotlinx.coroutines.tasks.await
 
 class MealFeedbackStore {
     private val firestore = Firebase.firestore
-    private val uid: String? get() = Firebase.auth.currentUser?.uid
+    private val uid: String? get() = FirestoreHelper.getCurrentUserDocId()
 
     // Feedback structure: users/{uid}/meal_feedback/{foodId} {like, recentUsage}
     suspend fun getLike(foodId: String): Int {

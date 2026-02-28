@@ -1,0 +1,274 @@
+E100 - curcumin
+
+Name: E100 - curcumin Curcumin
+Description: Curcumin is an additive added to foods as a yellow-orange colorant. It is the active substance in the spice turmeric (Curcuma longa). A plant from the ginger family, originating from South Asia. It is cultivated in India, Indonesia, and China. There it is mostly used as a spice (ground root), and also as a dye for fabric, as it gives a yellow pigment.
+Function: Additive added to foods as a yellow-orange colorant.
+Origin: Plant from the ginger family, originating from South Asia. Cultivated in India, Indonesia, and China.
+Health risks: In recommended doses, it is not problematic, but it is not recommended for people with gallstones, jaundice, colic, and liver poisoning. It is also not advisable to take it in larger quantities, as it can cause nausea and migraines. Exceptionally, it can pose a health risk (allergy or food sensitivity). In any case, it is necessary to consider that there is a big difference between curcumin obtained from the plant and that which is synthetically obtained.
+Usage in foods: Added to foods as a yellow-orange colorant. Used as a spice (ground root), and also as a dye for fabric, as it gives a yellow pigment.
+Acceptable daily intake (ADI): No data.
+Other details: No data.
+
+E101a - riboflavin 5'-phosphate
+
+Name: E101a - riboflavin 5'-phosphate (Riboflavin-5'-Phosphate)
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 0.500 mg/kg body weight/day (JECFA, 1998) not limited or determined (EFSA, 2013).
+Other details: Insufficient relevant content; the page contains only the name and ADI, without additional details.
+
+E104 - quinoline yellow
+
+Name: E104 - quinoline yellow Quinoline Yellow WS
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name and ADI, without additional details.
+
+E105 - yellow AB
+
+Name: E105 - yellow AB Fast Yellow AB
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note about the lack of data for ADI.
+
+E106 - sodium riboflavin 5'-phosphate
+
+Name: E106 - sodium riboflavin 5'-phosphate Riboflavin-5-Sodium Phosphate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note about the lack of data for ADI.
+
+E110 - sunset yellow FCF
+
+Name: E110 - sunset yellow FCF Sunset Yellow FCF
+Description: Banned in Norway, Finland, and the United Kingdom. Can cause hives (urticaria), chronic runny nose, stuffy nose, allergies, hyperactivity, kidney tumors, chromosome damage, abdominal pain, nausea and vomiting, digestive disorders, loss of appetite; proven higher incidence of tumors in animals. It is slowly being phased out, and products with this additive will have to be specially labeled in the EU from now on.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Can cause hives (urticaria), chronic runny nose, stuffy nose, allergies, hyperactivity, kidney tumors, chromosome damage, abdominal pain, nausea and vomiting, digestive disorders, loss of appetite; proven higher incidence of tumors in animals.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Banned in Norway, Finland, and the United Kingdom. It is slowly being phased out, and products with this additive will have to be specially labeled in the EU from now on.
+
+E127 - erythrosine
+
+Name: E127 - erythrosine
+Description: Partially specified: Banned in Norway and the USA.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Partially specified (but incomplete in the extract).
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Insufficient relevant content; the page contains only the name, partial description of the ban, and risks, without full details.
+
+E130 - anthraquinone blue
+
+Name: E130 - anthraquinone blue Indanthrene blue RS
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note about the lack of data for ADI.
+
+E132 - indigotine
+
+Name: E132 - indigotine Indigo carmine
+Description: Banned in Norway. Likely carcinogenic in animals, nausea, vomiting, high blood pressure, skin inflammation, breathing disorders, allergic reactions.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Likely carcinogenic in animals, nausea, vomiting, high blood pressure, skin inflammation, breathing disorders, allergic reactions.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Insufficient relevant content; the page contains only the name and partial description of risks.
+
+E133 - brilliant blue FCF
+
+Name: E133 - brilliant blue FCF
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Insufficient relevant content; the page contains only a partial name and a note about past bans in some countries.
+
+E140 - chlorophyll
+
+Name: E140 - chlorophyll Chlorophylls
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or determined (JECFA 1969, SCF 1975, SCF 1983, EFSA 2015).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E141 - copper complex of chlorophyll
+
+Name: E141 - copper complex of chlorophyll
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name, ADI, and additive type.
+
+E143 - green FCF
+
+Name: E143 - green FCF
+Description: Banned in the EU.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Potentially carcinogenic and other effects (partially specified).
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not specified.
+Other details: Insufficient relevant content; the page contains only the name and partial description of the ban and risks.
+
+E150a - caramel
+
+Name: E150a - caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name, ADI, and caramel color classification.
+
+E150b - caustic sulphite caramel
+
+Name: E150b - caustic sulphite caramel / Caustic sulphite caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 200.000 mg/kg body weight/day (EFSA, 2011; 300 mg/kg total for all caramel colors).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E150d - sulphite ammonia caramel
+
+Name: E150d - sulphite ammonia caramel Sulphite ammonia caramel
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 200.000 mg/kg body weight/day (EFSA, 2011; 300 mg/kg total for all caramel colors).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E152 - black 7984
+
+Name: E152 - black 7984 Carbon black
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): No data.
+Other details: Insufficient relevant content; the page contains only the name and a note about the lack of data for ADI.
+
+E153 - vegetable carbon
+
+Name: E153 - vegetable carbon Vegetable carbon
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or determined (JECFA, 1987; EFSA, 2012).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E160e - beta-apo-8'-carotenal
+
+Name: E160e - beta-apo-8'-carotenal Beta-apo-8'-carotenal
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E160f - ethyl ester of beta-apo-8'-carotenoic acid
+
+Name: E160f - ethyl ester of beta-apo-8'-carotenoic acid Ethyl ester of beta-apo-8'-carotenic acid
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): 5.000 mg/kg body weight/day.
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E162 - betalain
+
+Name: E162 - betalain Beetroot Red
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or determined (EFSA, 2015).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E163 - anthocyanins
+
+Name: E163 - anthocyanins Anthocyanins
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E170 - calcium carbonate
+
+Name: E170 - calcium carbonate Calcium carbonate
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or determined (JECFA 1965, SCF 1990, EFSA 2011).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E171 - titanium dioxide
+
+Name: E171 - titanium dioxide
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Not limited or determined (EFSA, 2016).
+Other details: Insufficient relevant content; the page contains only the name and ADI.
+
+E180 - lithol rubine BK
+
+Name: E180 - lithol rubine BK Pigment Rubine
+Description: Not specified.
+Function: Not specified.
+Origin: Not specified.
+Health risks: Not specified.
+Usage in foods: Not specified.
+Acceptable daily intake (ADI): Specified, but without a specific value in the extract.
+Other details: Insufficient relevant content; the page contains only the name and ADI.

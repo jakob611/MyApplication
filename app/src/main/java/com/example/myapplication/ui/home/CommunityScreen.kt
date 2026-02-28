@@ -1,7 +1,6 @@
 package com.example.myapplication.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,38 +17,30 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
 
 @Composable
 fun CommunityScreen(
-    onUpgrade: () -> Unit = {},
-    onAccept: (CommunityNotification) -> Unit = {}
+    onViewProfile: (String) -> Unit = {}
 ) {
-    val notifications = remember {
-        listOf(
-            CommunityNotification(
-                userName = "nebulanomad",
-                time = "5d",
-                message = "Shared a post you might like",
-                unread = false
-            ),
-            CommunityNotification(
-                userName = "starryskies23",
-                time = "1d",
-                message = "Started following you",
-                unread = true
-            ),
-            CommunityNotification(
-                userName = "nebulanomad",
-                time = "5d",
-                message = "Shared a post you might like",
-                unread = false
-            )
-        )
+    val scope = rememberCoroutineScope()
+    val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<com.example.myapplication.data.PublicProfile>>(emptyList()) }
+    var topUsers by remember { mutableStateOf<List<com.example.myapplication.data.PublicProfile>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+
+    // Load top users on start
+    LaunchedEffect(Unit) {
+        isSearching = true
+        topUsers = com.example.myapplication.persistence.ProfileStore.getTopUsers(10)
+            .filter { it.userId != currentUserId } // Filter out own profile
+        isSearching = false
     }
 
-    var search by remember { mutableStateOf("") }
-
-    Surface(color = Color(0xFFF3F4F6)) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -57,45 +48,97 @@ fun CommunityScreen(
         ) {
             ElevatedCard(
                 modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
+                // Discover Users Content (No tabs)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(color = Color.White)
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Search
+                    // Title
+                    Text(
+                        "Discover Users",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Search bar
                     OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                            if (it.isNotBlank()) {
+                                scope.launch {
+                                    isSearching = true
+                                    searchResults = com.example.myapplication.persistence.ProfileStore.searchPublicProfiles(it)
+                                    isSearching = false
+                                }
+                            } else {
+                                searchResults = emptyList()
+                            }
+                        },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
-                        placeholder = { Text("Friends...") },
+                        placeholder = { Text("Search users...") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(56.dp)
                     )
 
-                    // List
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 12.dp)
-                    ) {
-                        items(
-                            items = notifications.filter {
-                                search.isBlank() ||
-                                        it.userName.contains(search, ignoreCase = true) ||
-                                        it.message.contains(search, ignoreCase = true)
+                    if (isSearching) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (searchQuery.isBlank() && topUsers.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        "Top Users",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(topUsers) { profile ->
+                                    UserSearchResultCard(
+                                        profile = profile,
+                                        onClick = { onViewProfile(profile.userId) }
+                                    )
+                                }
+                            } else if (searchResults.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        "Search Results",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(searchResults) { profile ->
+                                    UserSearchResultCard(
+                                        profile = profile,
+                                        onClick = { onViewProfile(profile.userId) }
+                                    )
+                                }
+                            } else if (searchQuery.isNotBlank()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("No users found", color = Color.Gray)
+                                    }
+                                }
                             }
-                        ) { n ->
-                            NotificationRow(
-                                notification = n,
-                                onAccept = { onAccept(n) }
-                            )
                         }
                     }
                 }
@@ -105,79 +148,68 @@ fun CommunityScreen(
 }
 
 @Composable
-private fun NotificationRow(
-    notification: CommunityNotification,
-    onAccept: () -> Unit
+private fun UserSearchResultCard(
+    profile: com.example.myapplication.data.PublicProfile,
+    onClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Box(modifier = Modifier.size(42.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             // Avatar
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(color = Color(0xFFD1D5DB))
-                    .border(1.dp, Color(0xFFE5E7EB), CircleShape)
-            )
-            if (notification.unread) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(color = Color(0xFFE11D48)) // rdeča pikica
+                    .background(Color(0xFF2563EB)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    profile.username.take(2).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
                 )
             }
-        }
 
-        Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
 
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = notification.userName,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color(0xFF111827)
+                    profile.username,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = notification.time,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF6B7280)
-                )
+                profile.level?.let {
+                    Text(
+                        "Level $it",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
             }
-            Text(
-                text = notification.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF6B7280)
-            )
-        }
 
-        Spacer(Modifier.width(12.dp))
-
-        Button(
-            onClick = onAccept,
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
-                contentColor = Color.White
-            )
-        ) {
-            Text("Accept", style = MaterialTheme.typography.labelLarge)
+            profile.followers?.let {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "$it",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF13EF92)
+                    )
+                    Text(
+                        "Followers",
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
         }
     }
 }
 
-// Public, ker se uporablja v CommunityScreen
-data class CommunityNotification(
-    val userName: String,
-    val time: String,
-    val message: String,
-    val unread: Boolean
-)

@@ -1,13 +1,84 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Package atribut odstranjeno; namespace nastavi Gradle -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Image picker permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Location permissions for run tracking -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Foreground service for run tracking in background -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Activity Recognition for step tracking -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- osmdroid tile caching (not required on Android 10+, but needed for older versions) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- Health Connect permissions -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <!-- Google Fit permissions -->
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Samsung Health permissions -->
+    <uses-permission android:name="com.samsung.health.permission.READ_HEALTH_DATA" />
+    <uses-permission android:name="com.samsung.android.health.permission.READ_HEALTH_DATA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Declare intent to use Health Connect and other health apps -->
+    <queries>
+        <!-- Health Connect -->
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+        <!-- Other health apps -->
+        <package android:name="com.samsung.android.shealth" />
+        <package android:name="com.sec.android.app.shealth" />
+        <package android:name="com.fitbit.FitbitMobile" />
+        <package android:name="com.google.android.apps.fitness" />
+        <package android:name="com.huawei.health" />
+        <package android:name="com.garmin.android.apps.connectmobile" />
+        <package android:name="com.xiaomi.hm.health" />
+        <package android:name="com.apple.android.health" />
+    </queries>
 
     <application
         android:allowBackup="true"
+        android:icon="@drawable/ic_glow_upp_icon"
+        android:roundIcon="@drawable/ic_glow_upp_icon"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
         android:usesCleartextTraffic="false">
+
+        <!-- Health Connect metadata -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -16,5 +87,83 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lightweight dialog activity for weight widget input -->
+        <activity
+            android:name="com.example.myapplication.widget.WeightInputActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Transparent"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask" />
+
+        <!-- Lightweight dialog activity for water widget input -->
+        <activity
+            android:name="com.example.myapplication.widget.WaterInputActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Transparent"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask" />
+
+        <receiver
+            android:name="com.example.myapplication.widget.WaterWidgetProvider"
+            android:exported="true"
+            android:label="Water Tracker">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/water_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name="com.example.myapplication.widget.WeightWidgetProvider"
+            android:exported="true"
+            android:label="Weight Tracker">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weight_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name="com.example.myapplication.widget.QuickMealWidgetProvider"
+            android:exported="true"
+            android:label="Quick Meals">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_meal_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name="com.example.myapplication.widget.StreakWidgetProvider"
+            android:exported="true"
+            android:label="Streak &amp; Plan Day">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="android.intent.action.DATE_CHANGED"/>
+                <action android:name="com.example.myapplication.widget.STREAK_REFRESH"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/streak_widget_info" />
+        </receiver>
+
+        <activity android:name=".smartwatch.SmartwatchConnectActivity" />
+        <activity android:name=".smartwatch.SmartwatchDashboardActivity" />
+
+        <!-- Run Tracking Foreground Service -->
+        <service
+            android:name="com.example.myapplication.service.RunTrackingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 </manifest>

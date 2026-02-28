@@ -27,16 +27,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import android.util.Log
 import com.example.myapplication.persistence.PlanDataStore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import com.example.myapplication.utils.calculateAdvancedBMR
+import com.example.myapplication.utils.calculateEnhancedTDEE
+import com.example.myapplication.utils.calculateSmartCalories
+import com.example.myapplication.utils.calculateOptimalMacros
 import kotlin.math.*
 
 @Composable
 fun BodyPlanQuizScreen(
     onBack: () -> Unit = {},
-    onFinish: (PlanResult) -> Unit = {}
+    onFinish: (PlanResult) -> Unit = {},
+    onQuizDataCollected: ((Map<String, Any>) -> Unit)? = null
 ) {
     // State for all fields
     var step by remember { mutableStateOf(0) }
-    val totalSteps = 12 // Increased for body fat step
+    val totalSteps = 14 // Increased for workout duration step
 
     var gender by remember { mutableStateOf<String?>(null) }
     var age by remember { mutableStateOf("") }
@@ -47,16 +54,14 @@ fun BodyPlanQuizScreen(
     var experience by remember { mutableStateOf<String?>(null) }
     var trainingLocation by remember { mutableStateOf<String?>(null) }
     var frequency by remember { mutableStateOf<String?>(null) }
+    var workoutDuration by remember { mutableStateOf<String?>(null) } // Added workout duration state
+    var equipment by remember { mutableStateOf<List<String>>(emptyList()) } // Added equipment state
+    var focusAreas by remember { mutableStateOf<List<String>>(emptyList()) } // Added focus areas state
     var limitations by remember { mutableStateOf<List<String>>(emptyList()) }
     var nutrition by remember { mutableStateOf<String?>(null) }
     var sleep by remember { mutableStateOf<String?>(null) }
 
     // UI colors
-    val backgroundGradient = Brush.verticalGradient(
-        listOf(
-            Color(0xFF17223B), Color(0xFF25304A), Color(0xFF193446), Color(0xFF1E2D24)
-        )
-    )
     val buttonBlue = Color(0xFF2563EB)
     val accentYellow = Color(0xFFFEE440)
     val softGreen = Color(0xFF13EF92)
@@ -64,7 +69,7 @@ fun BodyPlanQuizScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundGradient)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val scroll = rememberScrollState()
         Card(
@@ -74,7 +79,7 @@ fun BodyPlanQuizScreen(
                 .align(Alignment.Center)
                 .verticalScroll(scroll),
             elevation = CardDefaults.cardElevation(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C274C)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(28.dp)
         ) {
             Column(
@@ -83,7 +88,7 @@ fun BodyPlanQuizScreen(
             ) {
                 // Stepper
                 LinearProgressIndicator(
-                    progress = (step + 1f) / (totalSteps + 1f),
+                    progress = { (step + 1f) / (totalSteps + 1f) },
                     color = buttonBlue,
                     trackColor = Color(0xFF2A3553),
                     modifier = Modifier
@@ -104,11 +109,17 @@ fun BodyPlanQuizScreen(
                     6 -> ExperienceStep(experience, onExperience = { experience = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue)
                     7 -> TrainingLocationStep(trainingLocation, onLocation = { trainingLocation = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue)
                     8 -> FrequencyStep(frequency, onFrequency = { frequency = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue)
-                    9 -> LimitationStep(limitations, onLimitations = { limitations = it }, onNext = { step++ }, onBack = { step-- }, accentYellow, buttonBlue)
-                    10 -> NutritionSleepStep(nutrition, sleep, onNutrition = { nutrition = it }, onSleep = { sleep = it }, onNext = { step++ }, onBack = { step-- }, accentYellow, buttonBlue)
+                    9 -> WorkoutDurationStep(workoutDuration, onDuration = { workoutDuration = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue) // New step
+                    10 -> EquipmentStep(equipment, onEquipment = { equipment = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue)
+                    11 -> FocusAreaStep(focusAreas, onFocus = { focusAreas = it; step++ }, onBack = { step-- }, accentYellow, buttonBlue)
+                    12 -> LimitationStep(limitations, onLimitations = { limitations = it }, onNext = { step++ }, onBack = { step-- }, accentYellow, buttonBlue)
+                    13 -> NutritionSleepStep(nutrition, sleep, onNutrition = { nutrition = it }, onSleep = { sleep = it }, onNext = { step++ }, onBack = { step-- }, accentYellow, buttonBlue)
                     else -> PlanResultStep(
-                        gender, age, height, weight, bodyFat, goal, experience, trainingLocation, frequency, limitations, nutrition, sleep,
-                        accentYellow, buttonBlue, softGreen, onBack, onFinish
+                        gender = gender, age = age, height = height, weight = weight, bodyFat = bodyFat, goal = goal, experience = experience,
+                        trainingLocation = trainingLocation, frequency = frequency, workoutDuration = workoutDuration, equipment = equipment, focusAreas = focusAreas,
+                        limitations = limitations, nutrition = nutrition, sleep = sleep,
+                        accentYellow = accentYellow, buttonBlue = buttonBlue, softGreen = softGreen, onBack = onBack, onFinish = onFinish,
+                        onQuizDataCollected = onQuizDataCollected
                     )
                 }
             }
@@ -120,7 +131,7 @@ fun BodyPlanQuizScreen(
 @Composable
 private fun StepHeader(step: Int, accentYellow: Color, buttonBlue: Color) {
     val stepTitles = listOf(
-        "Gender", "Age", "Height (cm)", "Weight (kg)", "Body Fat %", "Main goal", "Experience", "Training location", "Training frequency", "Limitations", "Nutrition & Sleep", "Your plan"
+        "Gender", "Age", "Height (cm)", "Weight (kg)", "Body Fat %", "Main goal", "Experience", "Training location", "Training frequency", "Workout duration", "Equipment", "Focus Areas", "Limitations", "Nutrition & Sleep", "Your plan"
     )
     Text(
         text = "Step ${step + 1}/${stepTitles.size}: ${stepTitles.getOrElse(step) { "" }}",
@@ -134,7 +145,7 @@ private fun StepHeader(step: Int, accentYellow: Color, buttonBlue: Color) {
 
 @Composable
 private fun GenderStep(selected: String?, onGender: (String) -> Unit, accentYellow: Color, buttonBlue: Color) {
-    Text("Select your gender", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("Select your gender", color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(20.dp))
     Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
         GenderChip(selected == "Male", "Male", Icons.Filled.Male, onGender, buttonBlue, accentYellow)
@@ -161,7 +172,7 @@ private fun GenderChip(selected: Boolean, label: String, icon: androidx.compose.
 private fun AgeStep(
     age: String, onAge: (String) -> Unit, onNext: () -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
 ) {
-    Text("How old are you?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("How old are you?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(20.dp))
     OutlinedTextField(
         value = age,
@@ -188,7 +199,7 @@ private fun AgeStep(
 private fun HeightStep(
     height: String, onHeight: (String) -> Unit, onNext: () -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
 ) {
-    Text("What is your height?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("What is your height?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(20.dp))
     OutlinedTextField(
         value = height,
@@ -215,7 +226,7 @@ private fun HeightStep(
 private fun WeightStep(
     weight: String, onWeight: (String) -> Unit, onNext: () -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
 ) {
-    Text("What is your weight?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("What is your weight?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(20.dp))
     OutlinedTextField(
         value = weight,
@@ -242,7 +253,7 @@ private fun WeightStep(
 private fun BodyFatStep(
     bodyFat: String, onBodyFat: (String) -> Unit, onNext: () -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
 ) {
-    Text("What is your body fat percentage?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("What is your body fat percentage?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
     Text("(Optional - leave empty if unknown)", color = Color.Gray, fontSize = 14.sp)
     Spacer(Modifier.height(20.dp))
@@ -265,8 +276,8 @@ private fun BodyFatStep(
     )
     Spacer(Modifier.height(12.dp))
     Text("Body fat estimation guide:", color = yellow, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-    Text("• Male: 6-13% (athlete), 14-17% (fit), 18-24% (average)", color = Color.White, fontSize = 13.sp)
-    Text("• Female: 16-20% (athlete), 21-24% (fit), 25-31% (average)", color = Color.White, fontSize = 13.sp)
+    Text("• Male: 6-13% (athlete), 14-17% (fit), 18-24% (average)", color = Color.DarkGray, fontSize = 13.sp)
+    Text("• Female: 16-20% (athlete), 21-24% (fit), 25-31% (average)", color = Color.DarkGray, fontSize = 13.sp)
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         TextButton(onClick = onBack) { Text("Back", color = yellow) }
@@ -278,7 +289,7 @@ private fun BodyFatStep(
 
 @Composable
 private fun GoalStep(goal: String?, onGoal: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
-    Text("What is your main goal?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("What is your main goal?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(18.dp))
     Column {
         listOf(
@@ -310,7 +321,7 @@ private fun GoalStep(goal: String?, onGoal: (String) -> Unit, onBack: () -> Unit
 
 @Composable
 private fun ExperienceStep(experience: String?, onExperience: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
-    Text("What is your training experience?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("What is your training experience?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(14.dp))
     Column {
         listOf(
@@ -340,7 +351,7 @@ private fun ExperienceStep(experience: String?, onExperience: (String) -> Unit, 
 
 @Composable
 private fun TrainingLocationStep(selected: String?, onLocation: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
-    Text("Where will you train?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("Where will you train?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(16.dp))
     Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
         Button(
@@ -368,7 +379,7 @@ private fun TrainingLocationStep(selected: String?, onLocation: (String) -> Unit
 
 @Composable
 private fun FrequencyStep(frequency: String?, onFrequency: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
-    Text("How many times per week do you want to train?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("How many times per week do you want to train?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(14.dp))
     Column {
         listOf("2x", "3x", "4x", "5x", "6x").forEach {
@@ -390,6 +401,39 @@ private fun FrequencyStep(frequency: String?, onFrequency: (String) -> Unit, onB
 }
 
 @Composable
+private fun WorkoutDurationStep(duration: String?, onDuration: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
+    Text("How long should each workout be?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+    Text("Choose the time you can dedicate per session", color = Color.Gray, fontSize = 14.sp)
+    Spacer(Modifier.height(14.dp))
+    Column {
+        listOf(
+            "15-30 min" to "Quick workout",
+            "30-45 min" to "Standard workout",
+            "45-60 min" to "Extended workout",
+            "60+ min" to "Full session"
+        ).forEach { (time, description) ->
+            Button(
+                onClick = { onDuration(time) },
+                colors = ButtonDefaults.buttonColors(containerColor = if (duration == time) yellow else blue),
+                shape = RoundedCornerShape(25),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(time, color = if (duration == time) blue else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(description, color = if (duration == time) blue.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                }
+            }
+        }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        TextButton(onClick = onBack) { Text("Back", color = yellow) }
+    }
+}
+
+@Composable
 private fun LimitationStep(
     selected: List<String>,
     onLimitations: (List<String>) -> Unit,
@@ -399,7 +443,7 @@ private fun LimitationStep(
 ) {
     val allLimitations = listOf("None", "Knee injury", "Shoulder injury", "Back pain", "Asthma", "High blood pressure", "Diabetes", "Other")
     val selectedSet = selected.toMutableSet()
-    Text("Do you have any limitations?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("Do you have any limitations?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(14.dp))
     Column {
         allLimitations.forEach {
@@ -418,7 +462,7 @@ private fun LimitationStep(
                         uncheckedColor = blue
                     )
                 )
-                Text(it, color = Color.White)
+                Text(it, color = Color.Black)
             }
         }
     }
@@ -426,6 +470,152 @@ private fun LimitationStep(
         TextButton(onClick = onBack) { Text("Back", color = yellow) }
         Button(
             onClick = onNext,
+            colors = ButtonDefaults.buttonColors(containerColor = blue)
+        ) {
+            Text("Next", color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun EquipmentStep(
+    selected: List<String>, onEquipment: (List<String>) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
+) {
+    var currentSelection by remember { mutableStateOf(selected) }
+    val options = listOf("Dumbbells", "Barbell", "Kettlebell", "Pull-up Bar", "Resistance Bands", "Bench", "Treadmill", "None (Bodyweight)")
+
+    Text("What equipment do you have?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+    Text("Select all that apply", color = Color.Gray, fontSize = 14.sp)
+
+    Spacer(Modifier.height(20.dp))
+
+    Column {
+        options.forEach { option ->
+            Button(
+                onClick = {
+                    currentSelection = if (option == "None (Bodyweight)") {
+                        if (currentSelection.contains(option)) emptyList() else listOf(option)
+                    } else {
+                        val newSet = currentSelection.toMutableSet()
+                        newSet.remove("None (Bodyweight)")
+                        if (newSet.contains(option)) newSet.remove(option) else newSet.add(option)
+                        newSet.toList()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(0.dp),
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Checkbox(
+                        checked = currentSelection.contains(option),
+                        onCheckedChange = { isChecked ->
+                            currentSelection = if (option == "None (Bodyweight)") {
+                                if (isChecked) listOf(option) else emptyList()
+                            } else {
+                                val newSet = currentSelection.toMutableSet()
+                                newSet.remove("None (Bodyweight)")
+                                if (isChecked) newSet.add(option) else newSet.remove(option)
+                                newSet.toList()
+                            }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = Color.Gray)
+                    )
+                    Text(option, modifier = Modifier.padding(start = 8.dp), color = Color.White)
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(20.dp))
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        TextButton(onClick = onBack) { Text("Back", color = yellow) }
+        Button(
+            onClick = { onEquipment(currentSelection) },
+            colors = ButtonDefaults.buttonColors(containerColor = blue)
+        ) {
+            Text("Next", color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun FocusAreaStep(
+    selected: List<String>, onFocus: (List<String>) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color
+) {
+    var currentSelection by remember { mutableStateOf(selected) }
+    val options = listOf("Upper body", "Lower body", "Core", "Cardio", "Flexibility", "Balance", "None")
+
+    Text("What are your focus areas?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+    Text("Select all that apply", color = Color.Gray, fontSize = 14.sp)
+
+    Spacer(Modifier.height(20.dp))
+
+    Column {
+        options.forEach { option ->
+            Button(
+                onClick = {
+                    currentSelection = if (option == "None") {
+                        if (currentSelection.contains(option)) emptyList() else listOf(option)
+                    } else {
+                        val newSet = currentSelection.toMutableSet()
+                        newSet.remove("None")
+                        if (newSet.contains(option)) newSet.remove(option) else newSet.add(option)
+                        newSet.toList()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(0.dp),
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Checkbox(
+                        checked = currentSelection.contains(option),
+                        onCheckedChange = { isChecked ->
+                            currentSelection = if (option == "None") {
+                                if (isChecked) listOf(option) else emptyList()
+                            } else {
+                                val newSet = currentSelection.toMutableSet()
+                                newSet.remove("None")
+                                if (isChecked) newSet.add(option) else newSet.remove(option)
+                                newSet.toList()
+                            }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = Color.Gray)
+                    )
+                    Text(option, modifier = Modifier.padding(start = 8.dp), color = Color.White)
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(20.dp))
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        TextButton(onClick = onBack) { Text("Back", color = yellow) }
+        Button(
+            onClick = {
+                // "None" pomeni brez specifičnega fokusa → Full Body
+                val toSave = if (currentSelection.isEmpty() ||
+                    currentSelection.any { it.equals("None", ignoreCase = true) }
+                ) {
+                    listOf("Full Body")
+                } else {
+                    currentSelection
+                }
+                onFocus(toSave)
+            },
             colors = ButtonDefaults.buttonColors(containerColor = blue)
         ) {
             Text("Next", color = Color.White)
@@ -443,9 +633,9 @@ private fun NutritionSleepStep(
     onBack: () -> Unit,
     yellow: Color, blue: Color
 ) {
-    Text("Nutrition preferences & sleep", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("Nutrition preferences & sleep", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
-    Text("Any dietary restrictions?", color = Color.White)
+    Text("Any dietary restrictions?", color = Color.Black)
     Column {
         listOf("None", "Vegetarian", "Vegan", "Gluten-free", "Keto/LCHF", "Intermittent fasting", "Other").forEach {
             Row(
@@ -501,16 +691,20 @@ private fun NutritionSleepStep(
 private fun PlanResultStep(
     gender: String?, age: String, height: String, weight: String, bodyFat: String?,
     goal: String?, experience: String?, trainingLocation: String?, frequency: String?,
+    workoutDuration: String?, // Added parameter
+    equipment: List<String>,
+    focusAreas: List<String>, // Added parameter
     limitations: List<String>, nutrition: String?, sleep: String?,
     accentYellow: Color, buttonBlue: Color, softGreen: Color,
-    onBack: () -> Unit, onFinish: (PlanResult) -> Unit
+    onBack: () -> Unit, onFinish: (PlanResult) -> Unit,
+    onQuizDataCollected: ((Map<String, Any>) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val plan = remember(gender, age, height, weight, bodyFat, goal, experience, trainingLocation, frequency, limitations, nutrition, sleep) {
+    val plan = remember(gender, age, height, weight, bodyFat, goal, experience, trainingLocation, frequency, workoutDuration, equipment, focusAreas, limitations, nutrition, sleep) {
         generateAdvancedCustomPlan(
-            gender, age, height, weight, bodyFat, goal, experience, trainingLocation, frequency, limitations, nutrition, sleep
+            gender, age, height, weight, bodyFat, goal, experience, trainingLocation, frequency, workoutDuration, equipment, focusAreas, limitations, nutrition, sleep
         )
     }
 
@@ -610,7 +804,7 @@ private fun PlanResultStep(
                 // ✅ NOVO - PRIKAŽI ALGORITHM DATA
                 algorithmData?.let { data ->
                     Spacer(Modifier.height(8.dp))
-                    Text("📈 BMI: ${"%.1f".format(data.bmi)} • BMR: ${data.bmr.toInt()} kcal • TDEE: ${data.tdee.toInt()} kcal",
+                    Text("📈 BMI: ${"%.1f".format(data.bmi ?: 0.0)} • BMR: ${data.bmr?.toInt() ?: 0} kcal • TDEE: ${data.tdee?.toInt() ?: 0} kcal",
                         color = Color.Gray, fontSize = 12.sp)
                 }
             }
@@ -675,7 +869,7 @@ private fun PlanResultStep(
         if (aiLoading) {
             CircularProgressIndicator(color = accentYellow, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(10.dp))
-            Text("AI is creating your advanced plan...", color = accentYellow)
+            Text("Generating your plan...", color = accentYellow)
         } else {
             Button(
                 onClick = {
@@ -683,89 +877,69 @@ private fun PlanResultStep(
                         nameError = true
                         return@Button
                     }
-                    if (PlanDataStore.getCurrentUserId() == null) {
-                        aiError = "Please log in to generate AI plan"
+                    if (com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() == null) {
+                        aiError = "Please log in to generate plan"
                         return@Button
                     }
 
                     aiLoading = true
                     aiError = null
-                    val trainingDaysInt = when(frequency) {
-                        "2x" -> 2
-                        "3x" -> 3
-                        "4x" -> 4
-                        "5x" -> 5
-                        "6x" -> 6
-                        else -> 3
-                    }
-                    val quizData = mapOf(
-                        "gender" to (gender ?: ""),
-                        "age" to age,
-                        "height" to height,
-                        "weight" to weight,
-                        "bodyFat" to (bodyFat ?: ""),
-                        "goal" to (goal ?: ""),
-                        "experience" to (experience ?: ""),
-                        "training_location" to (trainingLocation ?: ""),
-                        "trainingDays" to trainingDaysInt,
-                        "limitations" to limitations,
-                        "nutrition" to (nutrition ?: ""),
-                        "sleep" to (sleep ?: "")
-                    )
 
-                    Log.d("BodyPlanQuiz", "Sending quiz data: $quizData")
+                    // Generate plan locally (NO AI call)
+                    scope.launch {
+                        try {
+                            // Zberi quiz podatke za shranjevanje v UserProfile
+                            val quizData = mapOf(
+                                "gender" to (gender ?: ""),
+                                "age" to age,
+                                "height" to height,
+                                "weight" to weight,
+                                "bodyFat" to (bodyFat ?: ""),
+                                "goal" to (goal ?: ""),
+                                "experience" to (experience ?: ""),
+                                "trainingLocation" to (trainingLocation ?: ""),
+                                "frequency" to (frequency ?: ""),
+                                "equipment" to equipment,
+                                "focusAreas" to focusAreas,
+                                "limitations" to limitations,
+                                "nutrition" to (nutrition ?: ""),
+                                "sleep" to (sleep ?: "")
+                            )
+                            onQuizDataCollected?.invoke(quizData)
 
-                    PlanDataStore.requestAIPlan(
-                        quizData = quizData,
-                        onResult = { aiPlan ->
-                            aiLoading = false
-                            // ✅ DODAJ TA LOG:
-                            Log.d("DEBUG_ALGORITHM", "algorithmData before saving: $algorithmData")
-                            // ✅ DODAJ ALGORITHM DATA V AI PLAN
-                            // V PlanResultStep funkciji kjer je:
-                            onFinish(aiPlan.copy(
+                            val localPlan = generateAdvancedCustomPlan(
+                                gender, age, height, weight, bodyFat, goal, experience,
+                                trainingLocation, frequency, workoutDuration, equipment, focusAreas, limitations, nutrition, sleep
+                            ).copy(
                                 name = planName,
                                 createdAt = System.currentTimeMillis(),
                                 algorithmData = algorithmData
-                            ))
-
-// DODAJ TA LOG PRED onFinish:
-                            Log.d("DEBUG_SAVE", "Sending to onFinish: algorithmData = $algorithmData")
-                            Log.d("DEBUG_SAVE", "algorithmData is null: ${algorithmData == null}")
-                            if (algorithmData != null) {
-                                Log.d("DEBUG_SAVE", "BMI: ${algorithmData.bmi}, BMR: ${algorithmData.bmr}")
-                            }
-                        },
-                        onError = { err ->
+                            )
                             aiLoading = false
-                            aiError = err
-                            Log.e("BodyPlanQuiz", "AI Plan error: $err")
+                            aiError = null
+                            onFinish(localPlan)
 
-                            if (
-                                err?.contains("timeout") == true ||
-                                err?.contains("AI is taking longer") == true ||
-                                err?.contains("Server error") == true ||
-                                err?.contains("Failed to parse") == true ||
-                                err?.contains("AI did not return valid plan") == true
-                            ) {
-                                aiError = "Error generating AI plan. Using local plan..."
-                                scope.launch {
-                                    delay(2000)
-                                    val localPlan = generateAdvancedCustomPlan(
-                                        gender, age, height, weight, bodyFat, goal, experience,
-                                        trainingLocation, frequency, limitations, nutrition, sleep
-                                    ).copy(
-                                        name = planName,
-                                        createdAt = System.currentTimeMillis(),
-                                        algorithmData = algorithmData  // ✅ DODAJ TUDI V LOKALNI PLAN
-                                    )
-                                    aiLoading = false
-                                    aiError = null
-                                    onFinish(localPlan)
+                            // Save weight to weightLogs for Progress graph
+                            val weightKg = weight.toDoubleOrNull()
+                            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                            if (weightKg != null && uid != null) {
+                                try {
+                                    val dateStr = java.time.LocalDate.now().toString()
+                                    Firebase.firestore
+                                        .collection("users").document(uid)
+                                        .collection("weightLogs").document(dateStr)
+                                        .set(mapOf("date" to dateStr, "weightKg" to weightKg))
+                                    Log.d("BodyPlanQuiz", "Saved initial weight $weightKg kg to weightLogs")
+                                } catch (e: Exception) {
+                                    Log.e("BodyPlanQuiz", "Failed to save weight to weightLogs", e)
                                 }
                             }
+                        } catch (e: Exception) {
+                            aiLoading = false
+                            aiError = "Error generating plan: ${e.message}"
+                            Log.e("BodyPlanQuiz", "Plan generation error", e)
                         }
-                    )
+                    }
                 },
                 enabled = planName.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = buttonBlue),
@@ -782,11 +956,32 @@ private fun PlanResultStep(
     }
 }
 
+// --- PLAN STRUCTURE GENERATION ---
+
+fun generatePlanWeeks(trainingDaysPerWeek: Int): List<WeekPlan> {
+    val weeks = mutableListOf<WeekPlan>()
+    val totalWeeks = 4
+
+    for (weekNum in 1..totalWeeks) {
+        val days = mutableListOf<DayPlan>()
+        for (dayNum in 1..trainingDaysPerWeek) {
+            // Each day is empty - exercises are generated dynamically when user starts workout
+            days.add(DayPlan(dayNumber = dayNum, exercises = emptyList()))
+        }
+        weeks.add(WeekPlan(weekNumber = weekNum, days = days))
+    }
+
+    return weeks
+}
+
 // --- COMPLETELY UPGRADED ALGORITHM ---
 
 fun generateAdvancedCustomPlan(
     gender: String?, age: String, height: String, weight: String, bodyFat: String?,
-    goal: String?, experience: String?, trainingLocation: String?, frequency: String?,
+    goal: String?, experience: String?, location: String?, freq: String?,
+    workoutDuration: String?, // Added param
+    equipment: List<String>,
+    focusAreas: List<String>, // Added param
     limitations: List<String>, nutrition: String?, sleep: String?
 ): PlanResult {
 
@@ -805,7 +1000,7 @@ fun generateAdvancedCustomPlan(
     val bmr = calculateAdvancedBMR(weightKg, heightCm, ageYears, isMale, bodyFatPercent)
 
     // Sophisticated TDEE calculation
-    val tdee = calculateEnhancedTDEE(bmr, frequency, experience, ageYears, limitations, sleep)
+    val tdee = calculateEnhancedTDEE(bmr, freq, experience, ageYears, limitations, sleep)
 
     // Advanced caloric target with multiple factors
     val targetCalories = calculateSmartCalories(tdee, goal, experience, bmi, ageYears, isMale, bodyFatPercent, limitations)
@@ -814,21 +1009,30 @@ fun generateAdvancedCustomPlan(
     val macros = calculateOptimalMacros(targetCalories, weightKg, goal, experience, ageYears, isMale, bodyFatPercent, nutrition, limitations)
 
     // Intelligent training program design
-    val trainingDays = determineOptimalTrainingDays(frequency, experience, ageYears, goal, limitations)
-    val trainingPlan = generateIntelligentTrainingPlan(goal, experience, trainingLocation, trainingDays, limitations, ageYears, isMale, bodyFatPercent)
+    val trainingDays = determineOptimalTrainingDays(freq, experience, ageYears, goal, limitations)
+    val trainingPlan = generateIntelligentTrainingPlan(goal, experience, location, trainingDays, limitations, ageYears, isMale, bodyFatPercent)
 
-    // Dynamic session length calculation
-    val sessionLength = calculateOptimalSessionLength(experience, goal, trainingLocation, ageYears, limitations, trainingDays)
+    // Dynamic session length calculation - use user's choice if provided
+    val sessionLength = when(workoutDuration) {
+        "15-30 min" -> 25
+        "30-45 min" -> 40
+        "45-60 min" -> 55
+        "60+ min" -> 75
+        else -> calculateOptimalSessionLength(experience, goal, location, ageYears, limitations, trainingDays)
+    }
 
     // Comprehensive, personalized recommendations
     val tips = generatePersonalizedTips(
-        goal, experience, trainingLocation, limitations, nutrition, sleep,
+        goal, experience, location, limitations, nutrition, sleep,
         ageYears, isMale, bmi, trainingDays, macros.first, macros.second, macros.third,
         bodyFatPercent, targetCalories, tdee
     )
 
+    // Generate actual plan structure: 4 weeks with training days based on frequency
+    val weeksStructure = generatePlanWeeks(trainingDays)
+
     return PlanResult(
-        weeks = emptyList(),
+        weeks = weeksStructure,
         id = java.util.UUID.randomUUID().toString(),
         name = "",
         calories = targetCalories.toInt(),
@@ -840,259 +1044,15 @@ fun generateAdvancedCustomPlan(
         sessionLength = sessionLength,
         tips = tips,
         createdAt = System.currentTimeMillis(),
-        trainingLocation = trainingLocation ?: "Home",
+        trainingLocation = location ?: "Home",
         experience = experience,
-        goal = goal
+        goal = goal,
+        equipment = equipment,
+        focusAreas = focusAreas
     )
 }
 
-// --- ENHANCED CALCULATION FUNCTIONS ---
-
-fun calculateAdvancedBMR(weight: Double, height: Double, age: Int, isMale: Boolean, bodyFat: Double?): Double {
-    return if (bodyFat != null && bodyFat > 0) {
-        // Katch-McArdle formula (more accurate with body fat)
-        val leanBodyMass = weight * (1 - bodyFat / 100)
-        370 + (21.6 * leanBodyMass)
-    } else {
-        // Enhanced Mifflin-St Jeor with age adjustments
-        val baseBMR = if (isMale) {
-            10 * weight + 6.25 * height - 5 * age + 5
-        } else {
-            10 * weight + 6.25 * height - 5 * age - 161
-        }
-
-        // Age-based metabolic adjustments (more precise)
-        when {
-            age < 18 -> baseBMR * 1.12
-            age in 18..25 -> baseBMR * 1.05
-            age in 26..35 -> baseBMR * 1.0
-            age in 36..45 -> baseBMR * 0.97
-            age in 46..55 -> baseBMR * 0.94
-            age in 56..65 -> baseBMR * 0.91
-            else -> baseBMR * 0.87
-        }
-    }
-}
-
-fun calculateEnhancedTDEE(bmr: Double, frequency: String?, experience: String?, age: Int, limitations: List<String>, sleep: String?): Double {
-    // Base activity multiplier (more nuanced)
-    val baseMultiplier = when (frequency) {
-        "2x" -> 1.375
-        "3x" -> 1.55
-        "4x" -> 1.725
-        "5x" -> 1.9
-        "6x" -> 2.0
-        else -> 1.2
-    }
-
-    // Experience efficiency factor
-    val experienceMultiplier = when (experience) {
-        "Beginner" -> 1.08  // Higher energy expenditure due to inefficiency
-        "Intermediate" -> 1.0
-        "Advanced" -> 0.96  // More efficient movement patterns
-        else -> 1.0
-    }
-
-    // Age-based activity adjustment
-    val ageMultiplier = when {
-        age < 25 -> 1.02
-        age in 25..35 -> 1.0
-        age in 36..50 -> 0.98
-        age > 50 -> 0.95
-        else -> 1.0
-    }
-
-    // Sleep quality significantly affects metabolism
-    val sleepMultiplier = when (sleep) {
-        "Less than 6" -> 0.90  // Poor recovery, reduced metabolism
-        "6-7" -> 0.97
-        "7-8" -> 1.0  // Optimal
-        "8-9" -> 1.02
-        "9+" -> 1.01  // Diminishing returns
-        else -> 1.0
-    }
-
-    // Medical limitations adjustment
-    val limitationMultiplier = when {
-        limitations.contains("Asthma") -> 0.92
-        limitations.any { it in listOf("High blood pressure", "Diabetes") } -> 0.94
-        limitations.any { it in listOf("Knee injury", "Shoulder injury", "Back pain") } -> 0.96
-        else -> 1.0
-    }
-
-    return bmr * baseMultiplier * experienceMultiplier * ageMultiplier * sleepMultiplier * limitationMultiplier
-}
-
-fun calculateSmartCalories(tdee: Double, goal: String?, experience: String?, bmi: Double, age: Int, isMale: Boolean, bodyFat: Double?, limitations: List<String>): Double {
-    val baseCalories = when (goal) {
-        "Build muscle" -> {
-            val baseSurplus = when (experience) {
-                "Beginner" -> 450
-                "Intermediate" -> 350
-                "Advanced" -> 250
-                else -> 350
-            }
-
-            // Age and body fat adjustments for muscle building
-            val ageFactor = when {
-                age < 25 -> 1.0
-                age in 25..35 -> 0.95
-                age in 36..45 -> 0.85
-                age in 46..55 -> 0.75
-                else -> 0.65
-            }
-
-            val bodyFatFactor = if (bodyFat != null) {
-                when {
-                    bodyFat < 10 && isMale -> 1.1  // Very lean, can gain more aggressively
-                    bodyFat < 18 && !isMale -> 1.1
-                    bodyFat > 20 && isMale -> 0.8   // Higher body fat, smaller surplus
-                    bodyFat > 28 && !isMale -> 0.8
-                    else -> 1.0
-                }
-            } else 1.0
-
-            tdee + (baseSurplus * ageFactor * bodyFatFactor)
-        }
-
-        "Lose fat" -> {
-            val baseDeficit = when {
-                bmi > 35 -> 750
-                bmi > 30 -> 650
-                bmi > 27 -> 550
-                bmi > 25 -> 450
-                else -> 350
-            }
-
-            // Gender-specific fat loss adjustments
-            val genderFactor = if (isMale) 1.0 else 0.85
-
-            // Age-based metabolic considerations
-            val ageFactor = when {
-                age > 50 -> 0.85  // Slower fat loss for older adults
-                age < 25 -> 1.1   // Faster metabolism in younger people
-                else -> 1.0
-            }
-
-            val adjustedDeficit = baseDeficit * genderFactor * ageFactor
-            val minCalories = if (isMale) 1500.0 else 1200.0
-
-            maxOf(tdee - adjustedDeficit, minCalories)
-        }
-
-        "Recomposition" -> {
-            when {
-                experience == "Beginner" && bmi < 25 -> tdee + 150  // Slight surplus for beginners
-                bmi > 25 -> tdee - 200  // Slight deficit for overweight
-                bodyFat != null && bodyFat > (if (isMale) 15 else 25) -> tdee - 150
-                else -> tdee  // Maintenance
-            }
-        }
-
-        "Improve endurance" -> {
-            val baseSurplus = when (experience) {
-                "Advanced" -> 300  // Advanced endurance athletes need more fuel
-                "Intermediate" -> 250
-                else -> 200
-            }
-            tdee + baseSurplus
-        }
-
-        "General health" -> {
-            when {
-                bmi > 25 -> tdee - 250  // Gentle deficit for overweight
-                bmi < 20 -> tdee + 200  // Slight surplus for underweight
-                else -> tdee  // Maintenance for healthy weight
-            }
-        }
-
-        else -> tdee
-    }
-
-    // Additional adjustments for medical conditions
-    return when {
-        limitations.contains("Diabetes") -> baseCalories * 0.98
-        limitations.contains("High blood pressure") -> baseCalories * 0.97
-        else -> baseCalories
-    }
-}
-
-fun calculateOptimalMacros(calories: Double, weight: Double, goal: String?, experience: String?, age: Int, isMale: Boolean, bodyFat: Double?, nutrition: String?, limitations: List<String>): Triple<Int, Int, Int> {
-
-    // Protein calculation with multiple factors
-    val baseProteinPerKg = when (goal) {
-        "Build muscle" -> when (experience) {
-            "Beginner" -> 1.8
-            "Intermediate" -> 2.0
-            "Advanced" -> 2.2
-            else -> 1.9
-        }
-        "Lose fat" -> when {
-            bodyFat != null && bodyFat > (if (isMale) 20 else 30) -> 2.4  // Higher protein for aggressive cuts
-            else -> 2.0
-        }
-        "Recomposition" -> 2.2
-        "Improve endurance" -> 1.4
-        "General health" -> 1.6
-        else -> 1.7
-    }
-
-    // Age and gender protein adjustments
-    val ageProteinFactor = when {
-        age < 25 -> 1.0
-        age in 25..40 -> 1.05
-        age in 41..55 -> 1.15
-        age in 56..70 -> 1.25
-        else -> 1.35  // Increased protein needs for elderly
-    }
-
-    val genderProteinFactor = if (isMale) 1.0 else 0.95
-
-    // Nutrition style adjustments
-    val nutritionProteinFactor = when (nutrition) {
-        "Vegetarian", "Vegan" -> 1.15  // Higher total to ensure complete amino acids
-        "Keto/LCHF" -> 1.1
-        else -> 1.0
-    }
-
-    val totalProtein = (baseProteinPerKg * weight * ageProteinFactor * genderProteinFactor * nutritionProteinFactor).toInt()
-
-    // Fat calculation based on goals and health
-    val fatPerKg = when {
-        nutrition == "Keto/LCHF" -> when (goal) {
-            "Build muscle" -> 1.8
-            "Lose fat" -> 1.5
-            else -> 1.6
-        }
-        goal == "Lose fat" && bodyFat != null && bodyFat > 25 -> 0.7  // Lower fat for aggressive cuts
-        limitations.contains("High blood pressure") -> 0.8  // Lower saturated fat
-        isMale -> when {
-            age < 30 -> 0.9
-            age < 50 -> 1.0
-            else -> 1.1
-        }
-        else -> when {  // Female
-            age < 30 -> 1.1  // Higher fat needs for hormones
-            age < 50 -> 1.2
-            else -> 1.3
-        }
-    }
-
-    val totalFat = (fatPerKg * weight).toInt()
-
-    // Carbohydrate calculation (remaining calories)
-    val proteinCalories = totalProtein * 4
-    val fatCalories = totalFat * 9
-    val remainingCalories = calories - proteinCalories - fatCalories
-
-    val totalCarbs = when (nutrition) {
-        "Keto/LCHF" -> minOf(50, (remainingCalories / 4).toInt())  // Very low carb
-        "Intermittent fasting" -> maxOf(100, (remainingCalories / 4).toInt())  // Moderate carb
-        else -> maxOf(80, (remainingCalories / 4).toInt())  // Minimum for brain function
-    }
-
-    return Triple(totalProtein, totalCarbs, totalFat)
-}
+// --- TRAINING AND PLANNING FUNCTIONS ---
 
 fun determineOptimalTrainingDays(frequency: String?, experience: String?, age: Int, goal: String?, limitations: List<String>): Int {
     val baseFrequency = when (frequency) {
@@ -1578,3 +1538,9 @@ fun generatePersonalizedTips(
     // Return the most relevant tips (limit to prevent overwhelming the user)
     return tips.distinct().take(15)
 }
+
+
+
+
+
+

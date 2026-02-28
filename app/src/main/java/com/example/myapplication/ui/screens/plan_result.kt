@@ -15,8 +15,10 @@ data class PlanResult(
     val trainingLocation: String,
     val experience: String? = null,
     val goal: String? = null,
+    val equipment: List<String> = emptyList(), // Added equipment
+    val focusAreas: List<String> = emptyList(), // Added focus areas
     val weeks: List<WeekPlan> = emptyList(),
-    val algorithmData: AlgorithmData? = null  // ← DODAJ SAMO TO VRSTICO
+    val algorithmData: AlgorithmData? = null
 )
 
 data class WeekPlan(
