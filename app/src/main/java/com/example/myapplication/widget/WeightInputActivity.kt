@@ -1,6 +1,5 @@
 package com.example.myapplication.widget
 
-import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -15,8 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -50,7 +47,8 @@ class WeightInputActivity : ComponentActivity() {
     @Composable
     private fun WeightInputDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
         val context = LocalContext.current
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        // uid v remember{} — ne sme se klicati ob vsakem recomposition
+        val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
         var weightInput by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }

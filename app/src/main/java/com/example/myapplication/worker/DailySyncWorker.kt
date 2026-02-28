@@ -69,52 +69,62 @@ class DailySyncWorker(
             return Result.success()
         }
 
+        // Sinciraj vse datume ki imajo podatke a niso bili sincirani
+        // (normalno: today + včeraj če je bil zamuden)
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+        val yesterday = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
 
-        val waterMl = applicationContext
-            .getSharedPreferences(DailySyncManager.PREFS_WATER, Context.MODE_PRIVATE)
-            .getInt("water_$today", 0)
-        val burnedKcal = applicationContext
-            .getSharedPreferences(DailySyncManager.PREFS_BURNED, Context.MODE_PRIVATE)
-            .getInt("burned_$today", 0)
-        val foodsJson = DailySyncManager.loadFoodsJson(applicationContext, today)
+        val datesToSync = listOf(yesterday, today).filter { date ->
+            !DailySyncManager.isSynced(applicationContext, date) &&
+            DailySyncManager.hasDataForDate(applicationContext, date)
+        }
 
-        // Nič za sincirati — ne pošiljamo praznih dokumentov
-        if (waterMl == 0 && burnedKcal == 0 && foodsJson.isNullOrBlank()) {
-            Log.d(TAG, "No data for $today, nothing to sync")
+        if (datesToSync.isEmpty()) {
+            Log.d(TAG, "Nothing to sync — all dates already synced")
             return Result.success()
         }
 
         return try {
-            val payload = mutableMapOf<String, Any>(
-                "date" to today,
-                "waterMl" to waterMl,
-                "burnedCalories" to burnedKcal,
-                "syncedAt" to FieldValue.serverTimestamp()
-            )
+            for (date in datesToSync) {
+                val waterMl = applicationContext
+                    .getSharedPreferences(DailySyncManager.PREFS_WATER, Context.MODE_PRIVATE)
+                    .getInt("water_$date", 0)
+                val burnedKcal = applicationContext
+                    .getSharedPreferences(DailySyncManager.PREFS_BURNED, Context.MODE_PRIVATE)
+                    .getInt("burned_$date", 0)
+                val foodsJson = DailySyncManager.loadFoodsJson(applicationContext, date)
 
-            if (!foodsJson.isNullOrBlank()) {
-                runCatching {
-                    val arr = JSONArray(foodsJson)
-                    val items = (0 until arr.length()).map { i ->
-                        val obj = arr.getJSONObject(i)
-                        mutableMapOf<String, Any>().also { map ->
-                            obj.keys().forEach { key -> map[key] = obj.get(key) }
+                val payload = mutableMapOf<String, Any>(
+                    "date" to date,
+                    "waterMl" to waterMl,
+                    "burnedCalories" to burnedKcal,
+                    "syncedAt" to FieldValue.serverTimestamp()
+                )
+
+                if (!foodsJson.isNullOrBlank()) {
+                    runCatching {
+                        val arr = JSONArray(foodsJson)
+                        val items = (0 until arr.length()).map { i ->
+                            val obj = arr.getJSONObject(i)
+                            mutableMapOf<String, Any>().also { map ->
+                                obj.keys().forEach { key -> map[key] = obj.get(key) }
+                            }
                         }
+                        if (items.isNotEmpty()) payload["items"] = items
                     }
-                    if (items.isNotEmpty()) payload["items"] = items
                 }
+
+                Firebase.firestore
+                    .collection("users").document(uid)
+                    .collection("dailyLogs").document(date)
+                    .set(payload, SetOptions.merge())
+                    .await()
+
+                // Označi kot sincirano šele po uspešnem upisu
+                DailySyncManager.markSynced(applicationContext, date)
+                Log.d(TAG, "OK [$date]: water=$waterMl ml, burned=$burnedKcal kcal, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
             }
-
-            Firebase.firestore
-                .collection("users").document(uid)
-                .collection("dailyLogs").document(today)
-                .set(payload, SetOptions.merge())
-                .await()
-
-            // POPRAVEK: Označi datum kot sincirano — brez tega se sync ponovi ob vsakem zagonu
-            DailySyncManager.markSynced(applicationContext, today)
-            Log.d(TAG, "OK [$today]: water=$waterMl ml, burned=$burnedKcal kcal, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
             Result.success()
 
         } catch (e: Exception) {

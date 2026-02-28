@@ -2,10 +2,6 @@ package com.example.myapplication.persistence
 
 import android.content.Context
 import android.util.Log
-import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
-import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,85 +89,24 @@ object DailySyncManager {
     }
 
     /**
-     * Pošlje lokalne podatke za izbrani datum v Firestore.
-     * Varno za večkratni klic — idempotentno (SetOptions.merge).
-     */
-    private fun syncDateToFirestore(context: Context, uid: String, date: String, onDone: ((Boolean) -> Unit)? = null) {
-        if (!hasDataForDate(context, date)) {
-            Log.d(TAG, "No data for $date, skipping sync")
-            onDone?.invoke(true)
-            return
-        }
-
-        val db = Firebase.firestore
-        val docRef = db.collection("users").document(uid)
-            .collection("dailyLogs").document(date)
-
-        val waterMl = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE)
-            .getInt("water_$date", 0)
-        val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
-            .getInt("burned_$date", 0)
-        val foodsJson = loadFoodsJson(context, date)
-
-        val payload = mutableMapOf<String, Any>(
-            "date" to date,
-            "waterMl" to waterMl,
-            "burnedCalories" to burnedKcal,
-            "syncedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
-
-        if (!foodsJson.isNullOrBlank()) {
-            try {
-                val arr = JSONArray(foodsJson)
-                val items = (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i)
-                    val map = mutableMapOf<String, Any>()
-                    obj.keys().forEach { key -> map[key] = obj.get(key) }
-                    map
-                }
-                if (items.isNotEmpty()) payload["items"] = items
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse foods JSON for $date", e)
-            }
-        }
-
-        docRef.set(payload, SetOptions.merge())
-            .addOnSuccessListener {
-                if (date == todayStr()) markSynced(context, date)
-                Log.d(TAG, "Sync OK [$date]: water=$waterMl ml, burned=$burnedKcal kcal, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
-                onDone?.invoke(true)
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Sync FAILED [$date] — will retry later", e)
-                onDone?.invoke(false)
-            }
-    }
-
-    /**
      * Kliče se ob ODPRTJU aplikacije (iz MainActivity).
      *
-     * Razpored:
-     *  - VČERAJ: sinciraj prek WorkManager če ni bilo
-     *  - DANES:  sinciraj prek WorkManager če ima nesincirane podatke
-     *            (primer: app je bila zaprta brez interneta med dnevom)
+     * Razpored — Worker bo sinciiral vse nesincirane datume (yesterday + today):
+     *  - Pokliče Worker samo če obstaja vsaj en datum z nesinciranimi podatki
+     *  - Worker sam ugotovi katere datume mora sincirati (yesterday, today)
      */
     fun syncOnAppOpen(context: Context, uid: String) {
         val yesterday = yesterday()
         val today = todayStr()
 
-        // Včeraj — sinciraj če ni bilo še
-        if (!isSynced(context, yesterday) && hasDataForDate(context, yesterday)) {
-            Log.d(TAG, "syncOnAppOpen: queuing yesterday $yesterday via WorkManager")
-            com.example.myapplication.worker.DailySyncWorker.schedule(context)
-            return // Worker bo povzel oba dneva pri naslednjem zagonu
-        }
+        val needsSync = (!isSynced(context, yesterday) && hasDataForDate(context, yesterday)) ||
+                        (!isSynced(context, today) && hasDataForDate(context, today))
 
-        // Danes — sinciraj če ima podatke ki niso bili sincirani (npr. brez interneta)
-        if (!isSynced(context, today) && hasDataForDate(context, today)) {
-            Log.d(TAG, "syncOnAppOpen: queuing today $today via WorkManager (previously unsynced)")
+        if (needsSync) {
+            Log.d(TAG, "syncOnAppOpen: queuing WorkManager (yesterday=$yesterday, today=$today)")
             com.example.myapplication.worker.DailySyncWorker.schedule(context)
         } else {
-            Log.d(TAG, "syncOnAppOpen: all data synced (yesterday=$yesterday, today=$today)")
+            Log.d(TAG, "syncOnAppOpen: all data synced — nothing to do")
         }
     }
 }

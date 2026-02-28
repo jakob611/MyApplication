@@ -13,10 +13,8 @@ package com.example.myapplication.ui.screens
 // =====================================================================
 
 import android.content.Context
-import android.os.SystemClock
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,11 +37,9 @@ import com.example.myapplication.data.HealthStorage
 import com.example.myapplication.health.HealthConnectManager
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.ui.theme.DrawerBlue
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -499,11 +495,10 @@ fun NutritionScreen(
         com.example.myapplication.persistence.DailySyncManager.saveBurnedLocally(context, activeCaloriesBurned, todayId)
     }
 
-    // Read theme colors in Composable context
+    // Barve iz teme — preberi enkrat v Composable kontekstu
     val backgroundColor = MaterialTheme.colorScheme.background
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val textPrimary = MaterialTheme.colorScheme.onBackground
-    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     // Water tracking (2000ml target)
     val waterTarget = 2000f
