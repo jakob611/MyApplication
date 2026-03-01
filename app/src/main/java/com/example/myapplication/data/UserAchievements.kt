@@ -1,19 +1,5 @@
 package com.example.myapplication.data
 
-data class UserAchievements(
-    val userId: String = "",
-    val currentXP: Long = 0,
-    val totalXP: Long = 0,
-    val level: Int = 1,
-    val badges: List<Badge> = emptyList(),
-    val followers: Int = 0,
-    val following: Int = 0,
-    val activePlanId: String? = null,
-    val totalWorkoutsCompleted: Int = 0,
-    val totalCaloriesBurned: Double = 0.0,
-    val lastLoginDate: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
-)
 
 data class Badge(
     val id: String,
@@ -56,12 +42,6 @@ data class PublicProfile(
     val activePlanSummary: String? = null // Basic plan info if showPlanPath is true
 )
 
-data class XPAward(
-    val amount: Int,
-    val source: XPSource,
-    val timestamp: Long = System.currentTimeMillis(),
-    val description: String
-)
 
 enum class XPSource {
     WORKOUT_COMPLETE,

@@ -150,22 +150,6 @@ object UserPreferences {
         )
     }
 
-    fun addXP(context: Context, email: String, amount: Int, onXPAdded: ((Int) -> Unit)? = null) {
-        val prefs = getPrefs(context)
-        val currentXP = prefs.getInt(userKey(email, KEY_XP), 0)
-        val newXP = currentXP + amount
-        prefs.edit().putInt(userKey(email, KEY_XP), newXP).apply()
-        // Also save to Firestore
-        db.collection("users")
-            .document(email)
-            .set(mapOf(KEY_XP to newXP), SetOptions.merge())
-            .addOnSuccessListener {
-                onXPAdded?.invoke(amount)
-            }
-            .addOnFailureListener { e ->
-                e.printStackTrace()
-            }
-    }
 
     fun addXPWithCallback(context: Context, email: String, amount: Int, onSuccess: (Int) -> Unit) {
         val prefs = getPrefs(context)
@@ -419,16 +403,6 @@ object UserPreferences {
         }
     }
 
-    suspend fun updateSetting(email: String, key: String, value: String) {
-        val uid = Firebase.auth.currentUser?.uid ?: return
-        try {
-            val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            docRef.set(mapOf(key to value), SetOptions.merge()).await()
-        } catch (e: Exception) {
-            Log.e("UserPreferences", "❌ Error saving profile to Firestore", e)
-            e.printStackTrace()
-        }
-    }
 
     suspend fun saveWorkoutStats(
         email: String,
@@ -479,73 +453,6 @@ object UserPreferences {
                 )
             } else null
         } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    /**
-     * Preveri ali je username že zaseden
-     * Returns true če je username available, false če je že uporabljen
-     */
-    suspend fun isUsernameAvailable(username: String, currentUserEmail: String): Boolean {
-        if (username.isBlank()) return false
-        
-        try {
-            val querySnapshot = db.collection("users")
-                .whereEqualTo("username", username)
-                .get()
-                .await()
-            
-            // Če ni rezultatov, je username available
-            if (querySnapshot.isEmpty) return true
-            
-            // Če je en rezultat in je to trenutni uporabnik, je OK
-            if (querySnapshot.documents.size == 1) {
-                val doc = querySnapshot.documents[0]
-                return doc.id == currentUserEmail
-            }
-            
-            // Če je več rezultatov ali rezultat ni trenutni uporabnik, NI available
-            return false
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return false
-        }
-    }
-
-    /**
-     * Upload profile picture to Firebase Storage
-     */
-    suspend fun uploadProfilePicture(
-        email: String,
-        imageUri: android.net.Uri
-    ): String? {
-        return try {
-            android.util.Log.d("ProfilePicture", "Starting upload for $email")
-
-            // Get current user UID (safer than using email in filename)
-            val currentUser = Firebase.auth.currentUser
-            if (currentUser == null) {
-                android.util.Log.e("ProfilePicture", "No authenticated user")
-                return null
-            }
-
-            val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
-            val storageRef = storage.reference
-            // Use UID instead of email for filename (Firebase Storage Rules compatible)
-            val profilePicRef = storageRef.child("profile_pictures/${currentUser.uid}.jpg")
-
-            android.util.Log.d("ProfilePicture", "Uploading file: $imageUri to ${currentUser.uid}.jpg")
-            profilePicRef.putFile(imageUri).await()
-
-            android.util.Log.d("ProfilePicture", "Getting download URL")
-            val downloadUrl = profilePicRef.downloadUrl.await()
-            
-            android.util.Log.d("ProfilePicture", "Upload successful: $downloadUrl")
-            downloadUrl.toString()
-        } catch (e: Exception) {
-            android.util.Log.e("ProfilePicture", "Upload failed", e)
             e.printStackTrace()
             null
         }
