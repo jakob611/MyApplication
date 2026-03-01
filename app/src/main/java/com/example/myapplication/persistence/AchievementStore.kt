@@ -17,7 +17,6 @@ import java.time.LocalDate
 
 object AchievementStore {
     private val firestore = Firebase.firestore
-    private val auth = Firebase.auth
 
     /**
      * Interno: samo shrani XP + level up bonus, brez badge preverjanja.
