@@ -614,7 +614,6 @@ class MainActivity : ComponentActivity() {
                                         onBack = { errorMessage = null; navigateBack() },
                                         errorMessage = errorMessage
                                     )
-                                    currentScreen is Screen.Features -> FeaturesScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.BodyModule -> BodyPlanQuizScreen(
                                         onBack = { navigateBack() },
                                         onQuizDataCollected = { quizData ->

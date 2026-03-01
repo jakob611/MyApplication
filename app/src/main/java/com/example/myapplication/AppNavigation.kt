@@ -60,7 +60,6 @@ sealed class Screen {
     object ProFeatures : Screen()
     object ProSubscription : Screen()
     object Shop : Screen()
-    object Features : Screen()
 
     // Račun
     object MyAccount : Screen()

@@ -105,13 +105,13 @@ class WeeklyStreakWorker(
         weekCompleted: Boolean
     ) {
         try {
-            // KRITIČNO: piši pod email dokumentom (ne uid) — StreakWidget in UserPreferences
-            // bereta iz users/{email}, ne users/{uid}
+            // KRITIČNO: piši pod email dokumentom (ne uid)
             val email = Firebase.auth.currentUser?.email ?: return
             Firebase.firestore.collection("users").document(email)
                 .set(
                     mapOf(
-                        "streak_days" to streak,
+                        "streak_days" to streak,        // bere StreakWidget + BodyModuleHome
+                        "login_streak" to streak,       // bere loadProfileFromFirestore + MainActivity listener
                         "weekly_done" to weeklyDone,
                         "week_completed" to weekCompleted,
                         "is_recovery_week" to !weekCompleted
