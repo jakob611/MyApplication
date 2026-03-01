@@ -242,7 +242,8 @@ object AchievementStore {
             if (calorieXP > 0) {
                 awardXP(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal")
             }
-            // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
+
+            checkAndUnlockBadges(context, updatedProfile)
 
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error recording workout: ${e.message}")
@@ -296,7 +297,7 @@ object AchievementStore {
 
             Log.d("AchievementStore", "Plan zabeležen: totalPlansCreated=${updatedProfile.totalPlansCreated}")
             awardXP(context, email, 100, XPSource.PLAN_CREATED, "Created workout plan")
-            // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
+            checkAndUnlockBadges(context, updatedProfile)
 
         } catch (e: Exception) {
             Log.e("AchievementStore", "Napaka pri beleženju plana: ${e.message}")
@@ -333,7 +334,7 @@ object AchievementStore {
 
             if (profile.lastLoginDate != today) {
                 awardXP(context, email, 10, XPSource.DAILY_LOGIN, "Daily login")
-                // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
+                checkAndUnlockBadges(context, updatedProfile)
             }
 
         } catch (e: Exception) {
