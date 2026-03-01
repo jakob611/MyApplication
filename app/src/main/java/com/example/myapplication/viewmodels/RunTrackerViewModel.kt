@@ -239,13 +239,16 @@ class RunTrackerViewModel : ViewModel() {
             .document(session.id)
             .set(session.toFirestoreMap())
             .addOnSuccessListener {
-                // Add XP for completing run - based on calories burned
+                // XP za tek prek AchievementStore — sproži badge preverjanje
                 val xpForRun = (session.caloriesKcal / 5).toInt().coerceAtLeast(50)
                 val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                com.example.myapplication.data.UserPreferences.addXPWithCallback(appContext, userEmail, xpForRun) { _ ->
-                    // XP added with feedback
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    com.example.myapplication.persistence.AchievementStore.awardXP(
+                        appContext, userEmail, xpForRun,
+                        com.example.myapplication.data.XPSource.RUN_COMPLETED,
+                        "Run: ${"%.1f".format(session.distanceMeters / 1000.0)} km"
+                    )
                 }
-                // Session saved successfully
             }
             .addOnFailureListener { e ->
                 // Handle error
