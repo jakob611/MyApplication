@@ -250,11 +250,13 @@ object UserPreferences {
             KEY_SHOW_PLAN_PATH to profile.showPlanPath,
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
-            KEY_TOTAL_WORKOUTS to profile.totalWorkoutsCompleted,
+            KEY_TOTAL_WORKOUTS to profile.totalWorkoutsCompleted,           // "total_workouts"
+            "total_workouts_completed" to profile.totalWorkoutsCompleted,    // alias za BodyModuleHome
             KEY_TOTAL_CALORIES to profile.totalCaloriesBurned,
             KEY_EARLY_BIRD to profile.earlyBirdWorkouts,
             KEY_NIGHT_OWL to profile.nightOwlWorkouts,
-            KEY_LOGIN_STREAK to profile.currentLoginStreak,
+            KEY_LOGIN_STREAK to profile.currentLoginStreak,                   // "login_streak"
+            "streak_days" to profile.currentLoginStreak,                      // alias za widget + BodyModuleHome
             KEY_LAST_LOGIN to (profile.lastLoginDate ?: ""),
             KEY_TOTAL_PLANS to profile.totalPlansCreated,
             KEY_PROFILE_PICTURE to profile.profilePictureUrl,
@@ -335,12 +337,18 @@ object UserPreferences {
             val showPlanPath = doc.getBoolean(KEY_SHOW_PLAN_PATH) ?: false
             val showChallenges = doc.getBoolean(KEY_SHOW_CHALLENGES) ?: false
             val showFollowers = doc.getBoolean(KEY_SHOW_FOLLOWERS) ?: false
-            // Achievement tracking
-            val totalWorkouts = (doc.get(KEY_TOTAL_WORKOUTS) as? Number)?.toInt() ?: 0
+            // Achievement tracking — beri oba ključa (legacy + novi) in vzemi večjega
+            val totalWorkouts = maxOf(
+                (doc.get(KEY_TOTAL_WORKOUTS) as? Number)?.toInt() ?: 0,         // "total_workouts"
+                (doc.get("total_workouts_completed") as? Number)?.toInt() ?: 0   // alias
+            )
             val totalCalories = (doc.get(KEY_TOTAL_CALORIES) as? Number)?.toDouble() ?: 0.0
             val earlyBird = (doc.get(KEY_EARLY_BIRD) as? Number)?.toInt() ?: 0
             val nightOwl = (doc.get(KEY_NIGHT_OWL) as? Number)?.toInt() ?: 0
-            val loginStreak = (doc.get(KEY_LOGIN_STREAK) as? Number)?.toInt() ?: 0
+            val loginStreak = maxOf(
+                (doc.get(KEY_LOGIN_STREAK) as? Number)?.toInt() ?: 0,  // "login_streak"
+                (doc.get("streak_days") as? Number)?.toInt() ?: 0       // alias
+            )
             val lastLogin = doc.getString(KEY_LAST_LOGIN)
             val totalPlans = (doc.get(KEY_TOTAL_PLANS) as? Number)?.toInt() ?: 0
             val profilePictureUrl = doc.getString(KEY_PROFILE_PICTURE)
@@ -433,7 +441,13 @@ object UserPreferences {
     ) {
         try {
             val data = mutableMapOf<String, Any>(
+                // Poenoten ključ: "login_streak" = berejo loadProfileFromFirestore + MainActivity listener
+                "login_streak" to streak,
+                // Alias za widget in BodyModuleHome ki bere "streak_days"
                 "streak_days" to streak,
+                // Poenoten ključ: "total_workouts" = berejo loadProfileFromFirestore + MainActivity listener
+                "total_workouts" to totalWorkouts,
+                // Alias za BodyModuleHome ki bere "total_workouts_completed"
                 "total_workouts_completed" to totalWorkouts,
                 "weekly_done" to weeklyDone,
                 "last_workout_epoch" to lastWorkoutEpoch,
@@ -446,7 +460,7 @@ object UserPreferences {
                 .set(data, SetOptions.merge())
                 .await()
         } catch (e: Exception) {
-            Log.e("UserPreferences", "❌ Error saving profile to Firestore", e)
+            Log.e("UserPreferences", "❌ Error saving workout stats to Firestore", e)
             e.printStackTrace()
         }
     }

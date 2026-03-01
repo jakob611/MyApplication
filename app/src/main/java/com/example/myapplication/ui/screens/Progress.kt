@@ -831,10 +831,16 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                         .addOnSuccessListener {
                             Log.d("ProgressScreen", "Saved weight $wKg kg to weightLogs")
 
-                            // Add 50 XP for logging weight
+                            // AchievementStore.awardXP sproži badge preverjanje
                             val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                            com.example.myapplication.data.UserPreferences.addXPWithCallback(context, userEmail, 50) { _ ->
-                                android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                com.example.myapplication.persistence.AchievementStore.awardXP(
+                                    context, userEmail, 50,
+                                    com.example.myapplication.data.XPSource.WEIGHT_ENTRY, "Weight logged"
+                                )
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
 
                             // Avtomatsko posodobi nutrition plan z novo težo - UPORABLJA rememberCoroutineScope

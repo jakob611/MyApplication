@@ -20,7 +20,42 @@ object AchievementStore {
     private val auth = Firebase.auth
 
     /**
-     * Award XP to user and update profile
+     * Interno: samo shrani XP + level up bonus, brez badge preverjanja.
+     * Kliče se iz checkAndUnlockBadges (za badge XP nagrade) — prepreči rekurzijo.
+     */
+    private suspend fun awardXPInternal(
+        context: Context,
+        email: String,
+        amount: Int,
+        source: XPSource,
+        description: String = ""
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val currentProfile = UserPreferences.loadProfileFromFirestore(email)
+                ?: UserPreferences.loadProfile(context, email)
+            val oldLevel = currentProfile.level
+            val newXP = currentProfile.xp + amount
+            val updatedProfile = currentProfile.copy(xp = newXP)
+            val newLevel = updatedProfile.level
+            UserPreferences.saveProfile(context, updatedProfile)
+            UserPreferences.saveProfileFirestore(updatedProfile)
+            logXPActivity(email, amount, source.name, description)
+            if (newLevel > oldLevel) {
+                val bonusXP = 200
+                val profileWithBonus = updatedProfile.copy(xp = newXP + bonusXP)
+                UserPreferences.saveProfile(context, profileWithBonus)
+                UserPreferences.saveProfileFirestore(profileWithBonus)
+                logXPActivity(email, bonusXP, "LEVEL_UP_BONUS", "Reached level $newLevel")
+            }
+            Log.d("AchievementStore", "awardXPInternal: $amount XP for $source: $description")
+        } catch (e: Exception) {
+            Log.e("AchievementStore", "Error in awardXPInternal: ${e.message}")
+        }
+    }
+
+    /**
+     * Award XP to user — javna metoda za zunanje klicatelje.
+     * Pokliče awardXPInternal + enkrat checkAndUnlockBadges.
      */
     suspend fun awardXP(
         context: Context,
@@ -30,29 +65,10 @@ object AchievementStore {
         description: String = ""
     ) = withContext(Dispatchers.IO) {
         try {
-            // Beri iz Firestorea — da ne prepiše height/age/gender z null vrednostmi iz lokalnega cache-a
-            val currentProfile = UserPreferences.loadProfileFromFirestore(email)
+            awardXPInternal(context, email, amount, source, description)
+            val updatedProfile = UserPreferences.loadProfileFromFirestore(email)
                 ?: UserPreferences.loadProfile(context, email)
-            val oldLevel = currentProfile.level
-
-            val newXP = currentProfile.xp + amount
-            val updatedProfile = currentProfile.copy(xp = newXP)
-            val newLevel = updatedProfile.level
-
-            UserPreferences.saveProfile(context, updatedProfile)
-            UserPreferences.saveProfileFirestore(updatedProfile)
-            logXPActivity(email, amount, source.name, description)
-
-            if (newLevel > oldLevel) {
-                val bonusXP = 200
-                val profileWithBonus = updatedProfile.copy(xp = newXP + bonusXP)
-                UserPreferences.saveProfile(context, profileWithBonus)
-                UserPreferences.saveProfileFirestore(profileWithBonus)
-                logXPActivity(email, bonusXP, "LEVEL_UP_BONUS", "Reached level $newLevel")
-            }
-
             checkAndUnlockBadges(context, updatedProfile)
-
             Log.d("AchievementStore", "Awarded $amount XP for $source: $description")
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error awarding XP: ${e.message}")
@@ -135,9 +151,9 @@ object AchievementStore {
                         Log.d("AchievementStore", "Unlocking badge: ${badge.id} (progress=$progress, req=$requirement)")
                         unlockBadge(context, freshProfile, badge.id)
                         newlyUnlocked.add(badge.copy(unlocked = true, unlockedAt = System.currentTimeMillis()))
-                        // Award XP for badge unlock (but not recursively for level badges)
+                        // Uporabi awardXPInternal (ne awardXP) — prepreči rekurzijo badge→awardXP→checkBadge→...
                         if (!badge.id.startsWith("level_")) {
-                            awardXP(context, freshProfile.email, 100, XPSource.BADGE_UNLOCKED, "Unlocked: ${badge.name}")
+                            awardXPInternal(context, freshProfile.email, 100, XPSource.BADGE_UNLOCKED, "Unlocked: ${badge.name}")
                         }
                     }
                 }
@@ -240,10 +256,9 @@ object AchievementStore {
 
             val calorieXP = (caloriesBurned / 8).toInt()
             if (calorieXP > 0) {
-                awardXP(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal")
+                // awardXPInternal — badge preverjanje je že bilo v awardXP zgoraj, ne kličemo dvakrat
+                awardXPInternal(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal")
             }
-
-            checkAndUnlockBadges(context, updatedProfile)
 
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error recording workout: ${e.message}")
@@ -297,7 +312,7 @@ object AchievementStore {
 
             Log.d("AchievementStore", "Plan zabeležen: totalPlansCreated=${updatedProfile.totalPlansCreated}")
             awardXP(context, email, 100, XPSource.PLAN_CREATED, "Created workout plan")
-            checkAndUnlockBadges(context, updatedProfile)
+            // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
 
         } catch (e: Exception) {
             Log.e("AchievementStore", "Napaka pri beleženju plana: ${e.message}")
@@ -334,7 +349,7 @@ object AchievementStore {
 
             if (profile.lastLoginDate != today) {
                 awardXP(context, email, 10, XPSource.DAILY_LOGIN, "Daily login")
-                checkAndUnlockBadges(context, updatedProfile)
+                // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
             }
 
         } catch (e: Exception) {

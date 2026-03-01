@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
 
             // ----- Auth stanje -----
             var isLoggedIn by remember { mutableStateOf(false) }
-            var userEmail by remember { mutableStateOf("user@email.com") }
+            var userEmail by remember { mutableStateOf("") }
             var errorMessage by remember { mutableStateOf<String?>(null) }
             var isDarkMode by remember { mutableStateOf(false) }
             var userProfile by remember { mutableStateOf(com.example.myapplication.data.UserProfile(email = userEmail)) }

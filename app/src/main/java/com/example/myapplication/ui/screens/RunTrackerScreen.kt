@@ -68,6 +68,23 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
     var finalAvgSpeed by remember { mutableStateOf(0f) }
     var finalElevationGain by remember { mutableStateOf(0f) }
     var finalElevationLoss by remember { mutableStateOf(0f) }
+    // Dejanska teža iz zadnjega weight loga (ne hardcoded 70kg)
+    var actualWeightKg by remember { mutableStateOf(70.0) }
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
+    LaunchedEffect(uid) {
+        if (uid != null) {
+            try {
+                Firebase.firestore.collection("users").document(uid)
+                    .collection("weightLogs")
+                    .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(1).get()
+                    .addOnSuccessListener { snap ->
+                        val w = snap.documents.firstOrNull()?.get("weightKg") as? Number
+                        if (w != null) actualWeightKg = w.toDouble()
+                    }
+            } catch (_: Exception) {}
+        }
+    }
 
     val serviceConnection = remember {
         object : ServiceConnection {
@@ -218,10 +235,9 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                             if (uid != null) {
                                 val avgSpeedMps = if (finalTime > 0) (finalDistance / finalTime).toFloat() else 0f
                                 val durationSec = finalTime.toInt()
-                                val weightKg = 70.0
                                 val avgKmh = finalAvgSpeed * 3.6f
                                 val coef = when { avgKmh < 5f -> 0.07; avgKmh < 9f -> 0.10; else -> 0.13 }
-                                val calories = (durationSec / 60.0 * coef * weightKg).toInt()
+                                val calories = (durationSec / 60.0 * coef * actualWeightKg).toInt()
                                 val runMap = hashMapOf<String, Any>(
                                     "id" to sessionId, "userId" to uid,
                                     "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
@@ -234,7 +250,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                     "elevationGainM" to finalElevationGain,
                                     "elevationLossM" to finalElevationLoss,
                                     "createdAt" to System.currentTimeMillis(),
-                                    "polylinePoints" to emptyList<Any>() // točke so lokalne
+                                    "polylinePoints" to emptyList<Any>()
                                 )
                                 Firebase.firestore
                                     .collection("users").document(uid)
@@ -242,17 +258,14 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                     .set(runMap)
                             }
                             // Shrani GPS točke LOKALNO (ne v Firestore)
-                            val routePoints = locationPoints.map { loc ->
-                                Pair(loc.latitude, loc.longitude)
-                            }
+                            val routePoints = locationPoints.map { loc -> Pair(loc.latitude, loc.longitude) }
                             if (routePoints.isNotEmpty()) {
-                                com.example.myapplication.persistence.RunRouteStore.saveRoute(
-                                    context, sessionId, routePoints
-                                )
+                                com.example.myapplication.persistence.RunRouteStore.saveRoute(context, sessionId, routePoints)
                             }
                             val xp = ((finalDistance / 100) + (finalTime / 60)).toInt().coerceAtLeast(10)
-                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.let {
-                                com.example.myapplication.data.UserPreferences.addXPWithCallback(context, it, xp) {
+                            val runEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                            if (runEmail != null) {
+                                com.example.myapplication.data.UserPreferences.addXPWithCallback(context, runEmail, xp) { _ ->
                                     android.widget.Toast.makeText(context, "+$xp XP!", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             }

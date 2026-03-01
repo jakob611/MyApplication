@@ -71,5 +71,8 @@ enum class XPSource {
     CALORIES_BURNED,
     BADGE_UNLOCKED,
     FOLLOWER_MILESTONE,
-    STREAK_BONUS
+    STREAK_BONUS,
+    NUTRITION_GOAL,   // Kalorijski cilj dosežen
+    RUN_COMPLETED,    // Tek zaključen
+    WEIGHT_ENTRY      // Vnos teže
 }

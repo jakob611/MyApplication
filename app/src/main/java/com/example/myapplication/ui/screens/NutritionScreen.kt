@@ -471,10 +471,10 @@ fun NutritionScreen(
             if (!prefs.getBoolean(xpKey, false)) {
                 val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
                 if (userEmail != null) {
+                    prefs.edit().putBoolean(xpKey, true).apply()
                     com.example.myapplication.data.UserPreferences.addXPWithCallback(context, userEmail, 100) { _ ->
                         onXPAdded()
                     }
-                    prefs.edit().putBoolean(xpKey, true).apply()
                 }
             }
         }
