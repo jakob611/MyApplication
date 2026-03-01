@@ -43,7 +43,7 @@ class WeeklyStreakWorker(
         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
         val weeklyDone = prefs.getInt("weekly_done", 0)
         val weeklyTarget = prefs.getInt("weekly_target", 3)
-        val currentStreak = prefs.getInt("streak_weeks", 0)
+        val currentStreak = prefs.getInt("streak_days", 0)
         val planDayBeforeCheck = prefs.getInt("plan_day", 1)
 
         // Preberi start of week iz Firestore profila
@@ -62,7 +62,7 @@ class WeeklyStreakWorker(
             // ─── TEDEN USPEŠNO ZAKLJUČEN ─────────────────────────────────
             val newStreak = currentStreak + 1
             prefs.edit()
-                .putInt("streak_weeks", newStreak)
+                .putInt("streak_days", newStreak)
                 .putLong("last_completed_week", today.toEpochDay())
                 .putInt("weekly_done", 0) // Reset za naslednji teden
                 .apply()
@@ -79,7 +79,7 @@ class WeeklyStreakWorker(
             // ─── TEDEN NI BIL ZAKLJUČEN — RESET ──────────────────────────
             val missedDays = weeklyTarget - weeklyDone
             prefs.edit()
-                .putInt("streak_weeks", 0)
+                .putInt("streak_days", 0)
                 .putInt("weekly_done", 0) // Reset za naslednji teden
                 .apply()
 
@@ -105,9 +105,10 @@ class WeeklyStreakWorker(
         weekCompleted: Boolean
     ) {
         try {
-            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                ?: return
-            Firebase.firestore.collection("users").document(uid)
+            // KRITIČNO: piši pod email dokumentom (ne uid) — StreakWidget in UserPreferences
+            // bereta iz users/{email}, ne users/{uid}
+            val email = Firebase.auth.currentUser?.email ?: return
+            Firebase.firestore.collection("users").document(email)
                 .set(
                     mapOf(
                         "streak_days" to streak,

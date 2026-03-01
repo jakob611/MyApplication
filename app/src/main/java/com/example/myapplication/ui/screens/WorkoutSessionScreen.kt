@@ -142,7 +142,8 @@ fun WorkoutSessionScreen(
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
 
     var userWeightKg by remember { mutableStateOf(70.0) }
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+    // uid v remember{} — ne kliči ob vsakem recomposition
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     LaunchedEffect(uid) {
         if (uid != null) {
             try {
@@ -377,24 +378,23 @@ fun WorkoutSessionScreen(
             is WorkoutState.Report -> {
                 val scope = rememberCoroutineScope()
                 WorkoutReportScreen(s.results, s.skipped) {
-                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                    // Uporabi uid iz remember{} (definiran zgoraj) — ne kliči getCurrentUserDocId() znova
                     if (uid != null) {
                        val totalKcal = results.sumOf { it.caloriesKcal }
-                       val xp = (totalKcal/10).coerceAtLeast(50)
-                       com.example.myapplication.data.UserPreferences.addXPWithCallback(context, Firebase.auth.currentUser?.email ?: "", xp) { onXPAdded() }
 
-                       // Record workout for achievements (badge unlock & XP)
+                       // SAMO AchievementStore skrbi za XP — preprečuje dvojni XP
                        scope.launch {
                            val currentHour = java.time.LocalTime.now().hour
+                           val email = Firebase.auth.currentUser?.email ?: ""
                            com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
                                context = context,
-                               email = Firebase.auth.currentUser?.email ?: "",
+                               email = email,
                                caloriesBurned = totalKcal.toDouble(),
                                hour = currentHour
                            )
 
                            // Check for newly unlocked badges
-                           val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, Firebase.auth.currentUser?.email ?: "")
+                           val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
                            val newBadges = com.example.myapplication.persistence.AchievementStore.checkAndUnlockBadges(context, updatedProfile)
 
                            // Show badge unlock animation for first unlocked badge
@@ -402,6 +402,11 @@ fun WorkoutSessionScreen(
                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                    onBadgeUnlocked(badge)
                                }
+                           }
+
+                           // Pokliči onXPAdded na glavnem threadu
+                           kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                               onXPAdded()
                            }
                        }
 

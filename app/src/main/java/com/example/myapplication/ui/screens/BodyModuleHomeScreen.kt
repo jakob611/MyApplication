@@ -119,7 +119,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
 
                         if (shouldSyncFromRemote) {
                             prefs.edit {
-                                putInt("streak_weeks", remoteStreak)
+                                putInt("streak_days", remoteStreak)
                                 putInt("total_workouts_completed", remoteTotal)
                                 putInt("weekly_done", remoteWeekly)
                                 putInt("plan_day", remotePlanDay)
@@ -147,7 +147,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             val weeklyTarget = prefs.getInt("weekly_target", 4)
             android.util.Log.d("BodyModuleHomeVM", "📊 weeklyTarget from SharedPrefs: $weeklyTarget")
             val workoutsToday = prefs.getInt("workouts_today", _ui.value.workoutsToday)
-            val streak = prefs.getInt("streak_weeks", 0) // Changed from streak_days to streak_weeks
+            val streak = prefs.getInt("streak_days", 0)
 
             // Load user preference for start of week
             if (userEmail.isNotEmpty()) {
@@ -244,17 +244,8 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 val extraCount = prefs.getInt("total_extra_workouts", 0) + 1
                 prefs.edit { putInt("total_workouts_completed", newTotal); putInt("total_extra_workouts", extraCount) }
                 _ui.value = _ui.value.copy(totalWorkoutsCompleted = newTotal)
-                val workoutXP = 30
-                val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                val context = getApplication<android.app.Application>().applicationContext
-                if (currentUser?.email != null) {
-                    com.example.myapplication.data.UserPreferences.addXPWithCallback(context, currentUser.email!!, workoutXP) { xp ->
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(context, "+$xp XP (Extra Workout)!", android.widget.Toast.LENGTH_SHORT).show()
-                            onXPAdded()
-                        }
-                    }
-                }
+                // XP za extra workout skrbi AchievementStore.recordWorkoutCompletion v WorkoutSessionScreen
+                // (enako kot regular workout) — tukaj ga ne prištejemo, da ni dvojni XP
                 return@launch
             }
 
@@ -296,7 +287,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             // STREAK in TEŽAVNOST se ne spremenita tukaj —
             // to naredi izključno WeeklyStreakWorker ob polnoči konca tedna.
             // S tem preprečimo dvojni increment (enkrat tukaj + enkrat v Workerju).
-            val currentStreak = prefs.getInt("streak_weeks", 0)
+            val currentStreak = prefs.getInt("streak_days", 0)
             val context = getApplication<android.app.Application>().applicationContext
 
             prefs.edit {
@@ -316,20 +307,16 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     weeklyDone = newWeeklyDone,
                     lastWorkoutEpoch = today.toEpochDay(),
                     planDay = newPlanDay,
-                    weeklyTarget = weeklyTarget  // shrani v Firestore za sync po reinstall-u
+                    weeklyTarget = weeklyTarget
                 )
             }
 
-            val workoutXP = 50
-            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-            if (currentUser?.email != null) {
-                com.example.myapplication.data.UserPreferences.addXPWithCallback(context, currentUser.email!!, workoutXP) { xp ->
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        android.widget.Toast.makeText(context, "+$xp XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
-                        onXPAdded()
-                    }
-                }
-            }
+            // XP za workout doda izključno WorkoutSessionScreen prek AchievementStore — ne dodajamo tukaj
+
+            // Posodobi streak widget takoj po zaključku vadbe
+            val trainingDays = prefs.getInt("weekly_target", 4)
+            val planDayLabel = com.example.myapplication.widget.StreakWidgetProvider.planDayToLabel(newPlanDay, trainingDays)
+            com.example.myapplication.widget.StreakWidgetProvider.updateWidgetFromApp(context, currentStreak, planDayLabel)
 
             _ui.value = _ui.value.copy(
                 streakDays = currentStreak,
@@ -339,11 +326,12 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 isWorkoutDoneToday = true,
                 showCompletionAnimation = true
             )
+            withContext(Dispatchers.Main) { onXPAdded() }
         }
     }
     private suspend fun updateStreak() {
         withContext(Dispatchers.IO) {
-            val currentStreak = prefs.getInt("streak_weeks", 0)
+            val currentStreak = prefs.getInt("streak_days", 0)
             _ui.value = _ui.value.copy(streakDays = currentStreak)
         }
     }

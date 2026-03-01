@@ -33,6 +33,9 @@ import androidx.media3.ui.PlayerView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -885,10 +888,16 @@ private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, set
                 .collection("exerciseLogs")
                 .add(log)
                 .addOnSuccessListener {
-                    val xpForExercise = (caloriesRounded / 5).coerceAtLeast(25)
+                    // Pokliči AchievementStore za posodobitev statistik in XP (enako kot v WorkoutSessionScreen)
                     val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                    com.example.myapplication.data.UserPreferences.addXPWithCallback(context, userEmail, xpForExercise) { _ ->
-                        android.widget.Toast.makeText(context, "+$xpForExercise XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
+                    val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                    CoroutineScope(Dispatchers.IO).launch {
+                        com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
+                            context = context,
+                            email = userEmail,
+                            caloriesBurned = caloriesRounded.toDouble(),
+                            hour = currentHour
+                        )
                     }
                 }
         }

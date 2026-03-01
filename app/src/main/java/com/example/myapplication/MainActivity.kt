@@ -220,6 +220,12 @@ class MainActivity : ComponentActivity() {
                                     val weightUnit = snap.getString("weight_unit") ?: "kg"
                                     val speedUnit = snap.getString("speed_unit") ?: "km/h"
                                     val startOfWeek = snap.getString("start_of_week") ?: "Monday"
+                                    val following = (snap.get("following") as? Number)?.toInt() ?: 0
+                                    val detailedCalories = snap.getBoolean("detailed_calories") ?: false
+                                    val totalWorkoutsCompleted = (snap.get("total_workouts") as? Number)?.toInt() ?: 0
+                                    val totalCaloriesBurned = (snap.get("total_calories") as? Number)?.toDouble() ?: 0.0
+                                    val currentLoginStreak = (snap.get("login_streak") as? Number)?.toInt() ?: 0
+                                    val totalPlansCreated = (snap.get("total_plans_created") as? Number)?.toInt() ?: 0
                                     val isPublic = snap.getBoolean("is_public_profile") ?: false
                                     val showLevel = snap.getBoolean("show_level") ?: false
                                     val showBadges = snap.getBoolean("show_badges") ?: false
@@ -252,8 +258,9 @@ class MainActivity : ComponentActivity() {
                                     userProfile = com.example.myapplication.data.UserProfile(
                                         username = username, email = userEmail,
                                         firstName = firstName, lastName = lastName, address = address,
-                                        xp = xp, followers = followers, badges = badges,
+                                        xp = xp, followers = followers, following = following, badges = badges,
                                         weightUnit = weightUnit, speedUnit = speedUnit, startOfWeek = startOfWeek,
+                                        detailedCalories = detailedCalories,
                                         isPublicProfile = isPublic, showLevel = showLevel, showBadges = showBadges,
                                         showPlanPath = showPlanPath, showChallenges = showChallenges, showFollowers = showFollowers,
                                         profilePictureUrl = profilePictureUrl,
@@ -261,7 +268,11 @@ class MainActivity : ComponentActivity() {
                                         activityLevel = activityLevel, experience = experience, bodyFat = bodyFat,
                                         workoutGoal = workoutGoal, limitations = limitations,
                                         nutritionStyle = nutritionStyle, sleepHours = sleepHours,
-                                        equipment = equipment, focusAreas = focusAreas
+                                        equipment = equipment, focusAreas = focusAreas,
+                                        totalWorkoutsCompleted = totalWorkoutsCompleted,
+                                        totalCaloriesBurned = totalCaloriesBurned,
+                                        currentLoginStreak = currentLoginStreak,
+                                        totalPlansCreated = totalPlansCreated
                                     )
                                     val actParsed = activityLevel?.replace("x", "")?.toIntOrNull()
                                     if (actParsed != null && actParsed > 0) {
@@ -333,7 +344,6 @@ class MainActivity : ComponentActivity() {
                         val previous = navigationStack.removeLastOrNull()
                         if (previous != null) { previousScreen = currentScreen; currentScreen = previous }
                         else currentScreen = if (isLoggedIn) Screen.Dashboard else Screen.Index
-                        scope.launch { drawerState.open() }
                     }
                     currentScreen is Screen.ProFeatures -> { errorMessage = null; currentScreen = previousScreen }
                     currentScreen is Screen.ProSubscription -> { errorMessage = null; currentScreen = Screen.ProFeatures }
@@ -473,16 +483,13 @@ class MainActivity : ComponentActivity() {
                                         onLoadingComplete = {
                                             scope.launch {
                                                 try {
-                                                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                                                    if (uid != null) {
-                                                        val today = LocalDate.now().toString()
-                                                        val doc = Firebase.firestore
-                                                            .collection("users").document(uid)
-                                                            .collection("workouts").document(today)
-                                                            .get().await()
-                                                        if (doc.exists()) navigateTo(Screen.GenerateWorkout)
-                                                        else { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
-                                                    } else { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
+                                                    // Preveri v lokalnih prefs ali je bila vadba danes že opravljena
+                                                    val bmPrefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                                    val lastWorkoutEpoch = bmPrefs.getLong("last_workout_epoch", 0L)
+                                                    val todayEpoch = LocalDate.now().toEpochDay()
+                                                    val workoutDoneToday = lastWorkoutEpoch == todayEpoch
+                                                    if (workoutDoneToday) navigateTo(Screen.GenerateWorkout)
+                                                    else { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
                                                 } catch (_: Exception) { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
                                             }
                                         }
@@ -734,13 +741,13 @@ class MainActivity : ComponentActivity() {
                                     currentScreen is Screen.Contact -> ContactScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.About -> AboutScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.LevelPath -> {
-                                        val prefs = context.getSharedPreferences("body_module", Context.MODE_PRIVATE)
+                                        val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                         LevelPathScreen(userProfile = userProfile, activePlan = plans.firstOrNull(), currentPlanDay = prefs.getInt("plan_day", 1), onBack = { navigateBack() })
                                     }
-                                    currentScreen is Screen.BadgesScreen -> {
-                                        val prefs = context.getSharedPreferences("body_module", Context.MODE_PRIVATE)
-                                        LevelPathScreen(userProfile = userProfile, activePlan = plans.firstOrNull(), currentPlanDay = prefs.getInt("plan_day", 1), onBack = { navigateBack() })
-                                    }
+                                    currentScreen is Screen.BadgesScreen -> BadgesScreenContent(
+                                        userProfile = userProfile,
+                                        onBack = { navigateBack() }
+                                    )
                                     currentScreen is Screen.Achievements -> {
                                         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                         AchievementsScreen(

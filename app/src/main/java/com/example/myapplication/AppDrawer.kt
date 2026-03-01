@@ -27,9 +27,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.UserProfile
+import com.example.myapplication.ui.screens.GenderCache
 
 // -----------------------------------------------------------------------
 // GLOBAL HEADER BAR (prikazan na Dashboard, Progress, Nutrition, Community)
@@ -107,6 +109,7 @@ fun FigmaDrawerContent(
     val CardBg = if (isDarkMode) Color(0xFF374151) else Color(0xFFF3F4F6)
     val TextPrimary = if (isDarkMode) Color.White else Color.Black
     val TextSecondary = if (isDarkMode) Color(0xFFD1D5DB) else Color(0xFF6B7280)
+    val context = LocalContext.current
 
     var isEditingPersonal by remember { mutableStateOf(false) }
     var editedProfile by remember { mutableStateOf(userProfile) }
@@ -549,7 +552,12 @@ fun FigmaDrawerContent(
         EquipmentSelectionDialog(
             currentSelection = userProfile.equipment,
             onDismiss = { showEquipmentDialog = false },
-            onSave = { newEquipment -> onProfileUpdate(userProfile.copy(equipment = newEquipment)); showEquipmentDialog = false },
+            onSave = { newEquipment ->
+                // Pobriši GenderCache da ManualExerciseLogScreen prikaže vaje z novo opremo
+                GenderCache.clear(context)
+                onProfileUpdate(userProfile.copy(equipment = newEquipment))
+                showEquipmentDialog = false
+            },
             isDarkMode = isDarkMode
         )
     }
