@@ -1,7 +1,6 @@
 package com.example.myapplication.persistence
 
 import android.util.Log
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -11,7 +10,6 @@ import kotlinx.coroutines.withContext
 
 object FollowStore {
     private val firestore = Firebase.firestore
-    private val auth = Firebase.auth
 
     /**
      * Follow a user
@@ -130,37 +128,6 @@ object FollowStore {
         }
     }
 
-    /**
-     * Get follower count for a user
-     */
-    suspend fun getFollowerCount(userId: String): Int = withContext(Dispatchers.IO) {
-        try {
-            val snapshot = firestore.collection("follows")
-                .whereEqualTo("followingId", userId)
-                .get()
-                .await()
-            snapshot.size()
-        } catch (e: Exception) {
-            Log.e("FollowStore", "Error getting follower count: ${e.message}")
-            0
-        }
-    }
-
-    /**
-     * Get following count for a user
-     */
-    suspend fun getFollowingCount(userId: String): Int = withContext(Dispatchers.IO) {
-        try {
-            val snapshot = firestore.collection("follows")
-                .whereEqualTo("followerId", userId)
-                .get()
-                .await()
-            snapshot.size()
-        } catch (e: Exception) {
-            Log.e("FollowStore", "Error getting following count: ${e.message}")
-            0
-        }
-    }
 
     /**
      * Get list of followers
