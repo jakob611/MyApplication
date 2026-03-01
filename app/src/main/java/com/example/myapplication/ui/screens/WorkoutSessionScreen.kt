@@ -382,7 +382,7 @@ fun WorkoutSessionScreen(
                     if (uid != null) {
                        val totalKcal = results.sumOf { it.caloriesKcal }
 
-                       // SAMO AchievementStore skrbi za XP — preprečuje dvojni XP
+                       // SAMO AchievementStore skrbi za XP in badge preverjanje
                        scope.launch {
                            val currentHour = java.time.LocalTime.now().hour
                            val email = Firebase.auth.currentUser?.email ?: ""
@@ -393,18 +393,17 @@ fun WorkoutSessionScreen(
                                hour = currentHour
                            )
 
-                           // Check for newly unlocked badges
+                           // Preveri badge-e enkrat — recordWorkoutCompletion je že posodobil profil
                            val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
                            val newBadges = com.example.myapplication.persistence.AchievementStore.checkAndUnlockBadges(context, updatedProfile)
 
-                           // Show badge unlock animation for first unlocked badge
+                           // Prikaži animacijo za prvi odklenjen badge
                            newBadges.firstOrNull()?.let { badge ->
                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                    onBadgeUnlocked(badge)
                                }
                            }
 
-                           // Pokliči onXPAdded na glavnem threadu
                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                onXPAdded()
                            }
