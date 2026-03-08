@@ -411,24 +411,39 @@ object UserPreferences {
         weeklyDone: Int,
         lastWorkoutEpoch: Long,
         planDay: Int = 1,
-        weeklyTarget: Int = 0  // 0 = ne posodabljaj (obdrži obstoječo vrednost)
+        weeklyTarget: Int = 0
     ) {
         try {
             val data = mutableMapOf<String, Any>(
-                // Poenoten ključ: "login_streak" = berejo loadProfileFromFirestore + MainActivity listener
                 "login_streak" to streak,
-                // Alias za widget in BodyModuleHome ki bere "streak_days"
                 "streak_days" to streak,
-                // Poenoten ključ: "total_workouts" = berejo loadProfileFromFirestore + MainActivity listener
                 "total_workouts" to totalWorkouts,
-                // Alias za BodyModuleHome ki bere "total_workouts_completed"
                 "total_workouts_completed" to totalWorkouts,
                 "weekly_done" to weeklyDone,
                 "last_workout_epoch" to lastWorkoutEpoch,
                 "plan_day" to planDay
             )
-            // Shrani weeklyTarget samo če je > 0 (ob kreiranju plana ali zamenjavi)
-            if (weeklyTarget > 0) data["weekly_target"] = weeklyTarget
+            // Shrani weeklyTarget VEDNO če je > 0 — ne more biti 0 ali negativen
+            if (weeklyTarget > 0) {
+                data["weekly_target"] = weeklyTarget
+            } else {
+                // Če weeklyTarget ni podan, poskusi prebrati iz prefs ali activityLevel
+                // da zagotovimo da je v Firestoreu vedno pravilna vrednost
+                try {
+                    val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                    val existingDoc = resolvedRef.get().await()
+                    val existingTarget = (existingDoc.getLong("weekly_target") ?: 0L).toInt()
+                    if (existingTarget > 0) {
+                        // Obdrži obstoječo vrednost — ne prepiši z 0
+                        data["weekly_target"] = existingTarget
+                    } else {
+                        // Preberi iz activityLevel
+                        val actLevel = existingDoc.getString("activityLevel")
+                        val parsed = actLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
+                        if (parsed != null && parsed > 0) data["weekly_target"] = parsed
+                    }
+                } catch (_: Exception) {}
+            }
             db.collection("users")
                 .document(email)
                 .set(data, SetOptions.merge())

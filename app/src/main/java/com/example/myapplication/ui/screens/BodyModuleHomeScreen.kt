@@ -1102,21 +1102,11 @@ fun PlanPathDialog(
     var selectedDayInfo by remember { mutableStateOf<DayPlan?>(null) }
     var selectedDayNumber by remember { mutableStateOf(0) }
 
-    val bmPrefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-
-    // Beri kot State — posodobi se ko refreshFromPrefs dokonča async Firestore klic
-    var localActivityDays by remember { mutableIntStateOf(bmPrefs.getInt("weekly_target", 0)) }
-    LaunchedEffect(Unit) {
-        // Počakaj da ViewModel refreshFromPrefs dokonča (async Firestore klic traja ~200-500ms)
-        kotlinx.coroutines.delay(600)
-        localActivityDays = bmPrefs.getInt("weekly_target", 0)
-    }
-
-    // Priority: 1) SharedPrefs weekly_target, 2) plan.trainingDays, 3) weeklyGoal param
+    // Ne beri iz SharedPrefs — zaupaj weeklyGoal ki pride iz ui.weeklyTarget (StateFlow, vedno svež)
     val planFrequency = when {
-        localActivityDays > 0 -> localActivityDays
+        weeklyGoal > 0 -> weeklyGoal
         currentPlan?.trainingDays != null && currentPlan.trainingDays > 0 -> currentPlan.trainingDays
-        else -> weeklyGoal
+        else -> 3
     }
     val safeGoal = if (planFrequency > 0) planFrequency else 3
 
