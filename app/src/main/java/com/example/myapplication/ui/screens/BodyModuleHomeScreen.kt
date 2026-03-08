@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -44,7 +43,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -60,7 +58,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
-import kotlin.math.roundToInt
 
 
 data class Challenge(
@@ -73,7 +70,7 @@ data class Challenge(
 data class BodyHomeUiState(
     val streakDays: Int = 0,
     val weeklyDone: Int = 0,
-    val weeklyTarget: Int = 4,
+    val weeklyTarget: Int = 3,  // Default 3 (ne 4) — pravilna vrednost se naloži iz Firestore/prefs
     val planDay: Int = 1,
     val totalWorkoutsCompleted: Int = 0, // Skupno število workoutov
     val workoutsToday: Int = 0, // Deprecated but kept for compatibility
@@ -253,9 +250,6 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 )
 
                 // ─── Inicializiraj today_is_rest flag ob zagonu ───────────
-                // Nastavi za DANES glede na plan (ne samo ob zaključku vadbe)
-                val currentTodayIsRest = prefs.getBoolean("today_is_rest", false)
-                // Osvežimo samo če ne vemo (nikoli nastavljeno = epoch 0 = nov dan)
                 val lastRestFlagDay = prefs.getLong("rest_flag_set_epoch", 0L)
                 val todayEpoch = today.toEpochDay()
                 if (lastRestFlagDay != todayEpoch) {
@@ -299,7 +293,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             val shouldReset = lastResetDate == null || lastResetDate.isBefore(currentWeekStart)
 
             val currentWeeklyDone = if (shouldReset) 0 else prefs.getInt("weekly_done", 0)
-            val weeklyTarget = prefs.getInt("weekly_target", 4)
+            val weeklyTarget = prefs.getInt("weekly_target", 3)  // Default 3, ne 4
 
             // Extra workout — nima tedenskega locka, shrani takoj
             if (isExtraWorkout) {
@@ -1104,7 +1098,7 @@ fun PlanPathDialog(
         currentPlan?.trainingDays != null && currentPlan.trainingDays > 0 -> currentPlan.trainingDays
         else -> weeklyGoal
     }
-    val safeGoal = if (planFrequency > 0) planFrequency else 4
+    val safeGoal = if (planFrequency > 0) planFrequency else 3
 
     // Plan ima 4 tedne × 7 dni = 28 dni (vključno z rest dnevi)
     val totalPlanDays = 28
