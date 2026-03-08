@@ -125,9 +125,6 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         val currentLocalTotal = prefs.getInt("total_workouts_completed", 0)
                         val currentLocalPlanDay = prefs.getInt("plan_day", 1)
 
-                        // Sinciraj samo če Firestore ima DEJANSKO podatke (total > 0 ali planDay > 1)
-                        // Ne sinciraj če je Firestore prazen (po delete/fresh start) — da ne prepiše
-                        // praznih vrednosti z lokalnimi vrednostmi ki so prav tako prazne
                         val remoteHasData = remoteTotal > 0 || remotePlanDay > 1 || remoteLastEpoch > 0L
                         val shouldSyncFromRemote = remoteHasData && (
                             remoteTotal > currentLocalTotal ||
@@ -144,11 +141,45 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
 
+                        // weekly_target: vzemi iz Firestore "weekly_target" ključa
                         val remoteWeeklyTarget = (remoteStats["weekly_target"] as? Number)?.toInt()
                         if (remoteWeeklyTarget != null && remoteWeeklyTarget > 0) {
+                            prefs.edit { putInt("weekly_target", remoteWeeklyTarget) }
+                            android.util.Log.d("BodyModuleHomeVM", "weekly_target from Firestore stats: $remoteWeeklyTarget")
+                        } else {
+                            // Fallback: beri activityLevel iz profila (npr. "3x" → 3)
                             val localTarget = prefs.getInt("weekly_target", 0)
-                            if (localTarget == 0 || shouldSyncFromRemote) {
-                                prefs.edit { putInt("weekly_target", remoteWeeklyTarget) }
+                            if (localTarget == 0) {
+                                try {
+                                    val profile = com.example.myapplication.data.UserPreferences.loadProfileFromFirestore(userEmail)
+                                    val actParsed = profile?.activityLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
+                                    if (actParsed != null && actParsed > 0) {
+                                        prefs.edit { putInt("weekly_target", actParsed) }
+                                        android.util.Log.d("BodyModuleHomeVM", "weekly_target from activityLevel: $actParsed")
+                                    } else {
+                                        // Zadnji fallback: beri trainingDays iz Firestore user_plans
+                                        try {
+                                            val userId = com.example.myapplication.persistence.PlanDataStore.getResolvedUserId()
+                                            if (userId != null) {
+                                                val snap = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                    .collection("user_plans").document(userId).get()
+                                                    .await()
+                                                @Suppress("UNCHECKED_CAST")
+                                                val plans = snap.get("plans") as? List<Map<String, Any>>
+                                                val firstPlan = plans?.firstOrNull()
+                                                val td = (firstPlan?.get("trainingDays") as? Number)?.toInt()
+                                                if (td != null && td > 0) {
+                                                    prefs.edit { putInt("weekly_target", td) }
+                                                    android.util.Log.d("BodyModuleHomeVM", "weekly_target from Firestore plan.trainingDays: $td")
+                                                }
+                                            }
+                                        } catch (e2: Exception) {
+                                            android.util.Log.e("BodyModuleHomeVM", "Cannot load trainingDays fallback: ${e2.message}")
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("BodyModuleHomeVM", "Cannot load activityLevel fallback: ${e.message}")
+                                }
                             }
                         }
                     }
@@ -165,12 +196,13 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.edit { putInt("workouts_today", 0) }
             }
 
-            val day = prefs.getInt("plan_day", 1) // Default to 1 if not set
+            val day = prefs.getInt("plan_day", 1)
             val totalWorkouts = prefs.getInt("total_workouts_completed", 0)
-            val weeklyTarget = prefs.getInt("weekly_target", 4)
-            android.util.Log.d("BodyModuleHomeVM", "📊 weeklyTarget from SharedPrefs: $weeklyTarget")
+            // Default 0 — ne 4! Pravilna vrednost pride iz Firestore sync zgoraj
+            val weeklyTargetFromPrefs = prefs.getInt("weekly_target", 0)
             val workoutsToday = prefs.getInt("workouts_today", _ui.value.workoutsToday)
             val streak = prefs.getInt("streak_days", 0)
+            android.util.Log.d("BodyModuleHomeVM", "📊 weeklyTarget from SharedPrefs: $weeklyTargetFromPrefs")
 
             // Load user preference for start of week
             if (userEmail.isNotEmpty()) {
@@ -206,7 +238,10 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     prefs.getInt("weekly_done", 0)
                 }
 
-                // Posodobi state samo če se je kaj spremenilo
+                // weeklyTarget: vzemi iz prefs (ki jih smo posodobili zgoraj), zadnji fallback 3
+                val weeklyTarget = if (weeklyTargetFromPrefs > 0) weeklyTargetFromPrefs else 3
+
+                // Posodobi state
                 _ui.value = _ui.value.copy(
                     planDay = day,
                     weeklyDone = weeklyDone,
@@ -347,7 +382,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
             // XP za workout doda izključno WorkoutSessionScreen prek AchievementStore
 
             // Posodobi streak widget takoj po zaključku vadbe
-            val trainingDays = prefs.getInt("weekly_target", 4)
+            val trainingDays = prefs.getInt("weekly_target", 3)
             val planDayLabel = com.example.myapplication.widget.StreakWidgetProvider.planDayToLabel(newPlanDay, trainingDays)
             com.example.myapplication.widget.StreakWidgetProvider.updateWidgetFromApp(context, newStreak, planDayLabel)
 

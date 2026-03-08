@@ -658,6 +658,14 @@ class MainActivity : ComponentActivity() {
                                                 sleepHours = quizData["sleep"] as? String
                                             )
                                             UserPreferences.saveProfile(context, userProfile)
+                                            // Takoj nastavi weekly_target iz activityLevel — ne čakaj na onFinish
+                                            val freqStr = quizData["frequency"] as? String
+                                            val freqParsed = freqStr?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
+                                            if (freqParsed != null && freqParsed > 0) {
+                                                context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                                    .edit().putInt("weekly_target", freqParsed).apply()
+                                                Log.d("MainActivity", "weekly_target set from quiz: $freqParsed")
+                                            }
                                             scope.launch {
                                                 try {
                                                     val bioRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
