@@ -2,10 +2,13 @@ package com.example.myapplication.ui.screens
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,12 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,14 +34,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,6 +60,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 
 data class Challenge(
@@ -382,9 +393,9 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Zamenja dva dneva v istem tednu (samo isRestDay in focusLabel — ne dayNumber).
-     * Shrani posodobljeni plan v Firestore in vrne posodobljeni PlanResult.
-     * Dovoljeno samo znotraj istega tedna (7-dnevni blok) in samo za prihodnje dni.
+     * Zamenja dva dneva (isRestDay + focusLabel) — dovoljeno med VSEMI tedni, tudi prihodnjimi.
+     * Pattern se razširi: isti relativni položaj v nadaljnjih tednih se prav tako zamenja.
+     * Shrani posodobljeni plan v Firestore.
      */
     fun swapDaysInPlan(
         currentPlan: PlanResult,
@@ -394,30 +405,42 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Preveri da sta v istem tednu
-                val weekA = (dayA - 1) / 7
-                val weekB = (dayB - 1) / 7
-                if (weekA != weekB) {
-                    android.util.Log.w("SwapDays", "Cannot swap days from different weeks: $dayA <-> $dayB")
-                    return@launch
+                // dayInWeek: položaj znotraj tedna (0-based, 0=pon, 6=ned)
+                val posA = (dayA - 1) % 7
+                val posB = (dayB - 1) % 7
+
+                // Zamenjaj v vseh 4 tednih na istih relativnih pozicijah
+                val allDays = currentPlan.weeks.flatMap { it.days }.toMutableList()
+
+                // Najprej zamenjamo konkretna dayA in dayB
+                val idxA = allDays.indexOfFirst { it.dayNumber == dayA }
+                val idxB = allDays.indexOfFirst { it.dayNumber == dayB }
+                if (idxA >= 0 && idxB >= 0) {
+                    val restA = allDays[idxA].isRestDay; val focusA = allDays[idxA].focusLabel
+                    val restB = allDays[idxB].isRestDay; val focusB = allDays[idxB].focusLabel
+                    allDays[idxA] = allDays[idxA].copy(isRestDay = restB, focusLabel = focusB)
+                    allDays[idxB] = allDays[idxB].copy(isRestDay = restA, focusLabel = focusA)
                 }
 
-                // Zamenjaj isRestDay in focusLabel med dnevoma
-                val updatedWeeks = currentPlan.weeks.map { week ->
-                    val updatedDays = week.days.toMutableList()
-                    val idxA = updatedDays.indexOfFirst { it.dayNumber == dayA }
-                    val idxB = updatedDays.indexOfFirst { it.dayNumber == dayB }
-                    if (idxA >= 0 && idxB >= 0) {
-                        val restA = updatedDays[idxA].isRestDay
-                        val focusA = updatedDays[idxA].focusLabel
-                        val restB = updatedDays[idxB].isRestDay
-                        val focusB = updatedDays[idxB].focusLabel
-                        updatedDays[idxA] = updatedDays[idxA].copy(isRestDay = restB, focusLabel = focusB)
-                        updatedDays[idxB] = updatedDays[idxB].copy(isRestDay = restA, focusLabel = focusA)
+                // Nato razširi pattern na vse nadaljnje tedne (tedni ki so > teden dayA in dayB)
+                val startWeek = maxOf((dayA - 1) / 7, (dayB - 1) / 7) + 1 // začni od naslednjega tedna
+                for (weekIdx in startWeek until 4) {
+                    val futureA = weekIdx * 7 + posA + 1
+                    val futureB = weekIdx * 7 + posB + 1
+                    val fIdxA = allDays.indexOfFirst { it.dayNumber == futureA }
+                    val fIdxB = allDays.indexOfFirst { it.dayNumber == futureB }
+                    if (fIdxA >= 0 && fIdxB >= 0) {
+                        val rA = allDays[fIdxA].isRestDay; val fA = allDays[fIdxA].focusLabel
+                        val rB = allDays[fIdxB].isRestDay; val fB = allDays[fIdxB].focusLabel
+                        allDays[fIdxA] = allDays[fIdxA].copy(isRestDay = rB, focusLabel = fB)
+                        allDays[fIdxB] = allDays[fIdxB].copy(isRestDay = rA, focusLabel = fA)
                     }
-                    week.copy(days = updatedDays)
                 }
 
+                // Rekonstruiraj weeks
+                val updatedWeeks = currentPlan.weeks.map { week ->
+                    week.copy(days = allDays.filter { (it.dayNumber - 1) / 7 == week.weekNumber - 1 })
+                }
                 val updatedPlan = currentPlan.copy(weeks = updatedWeeks)
 
                 // Shrani v Firestore
@@ -1022,11 +1045,6 @@ fun PlanPathDialog(
 
     // Lokalni state za plan (posodobi se ob swap)
     var localPlan by remember { mutableStateOf(currentPlan) }
-    // Swap state: če != null, čakamo na izbiro drugega dne za zamenjavo
-    var swapSourceDay by remember { mutableStateOf<Int?>(null) }
-    // Swap dialog
-    var showSwapDialog by remember { mutableStateOf(false) }
-    var swapTargetOptions by remember { mutableStateOf<List<DayPlan>>(emptyList()) }
     // Day info popup: prikaže se ob kliku na dan
     var selectedDayInfo by remember { mutableStateOf<DayPlan?>(null) }
     var selectedDayNumber by remember { mutableStateOf(0) }
@@ -1107,49 +1125,27 @@ fun PlanPathDialog(
                     startWeek = blockStartWeek,
                     isDarkMode = isDark,
                     planWeeks = localPlan?.weeks ?: emptyList(),
-                    swapSourceDay = swapSourceDay,
+                    swapSourceDay = null,
                     onNodeClick = { clickedGlobalDay ->
-                        if (swapSourceDay != null) {
-                            // Swap mode: klik na drugi dan = potrdi zamenjavo
-                            val src = swapSourceDay!!
-                            val weekSrc = (src - 1) / 7
-                            val weekDst = (clickedGlobalDay - 1) / 7
-                            if (weekSrc == weekDst && clickedGlobalDay != src && clickedGlobalDay >= currentDay) {
-                                // Prikaži potrditev
-                                val plan = localPlan
-                                if (plan != null) {
-                                    swapTargetOptions = listOf(
-                                        plan.weeks.flatMap { it.days }.firstOrNull { it.dayNumber == src } ?: DayPlan(src),
-                                        plan.weeks.flatMap { it.days }.firstOrNull { it.dayNumber == clickedGlobalDay } ?: DayPlan(clickedGlobalDay)
-                                    )
-                                    showSwapDialog = true
-                                }
-                            } else if (clickedGlobalDay != src) {
-                                android.widget.Toast.makeText(context, "Zamenjava je možna samo znotraj istega tedna!", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                            swapSourceDay = null
-                        } else {
-                            // Prikaži day info za vsak dan
-                            val plan = localPlan
-                            val dayPlan = plan?.weeks?.flatMap { it.days }?.firstOrNull { it.dayNumber == clickedGlobalDay }
-                                ?: DayPlan(dayNumber = clickedGlobalDay)
-                            selectedDayInfo = dayPlan
-                            selectedDayNumber = clickedGlobalDay
-                        }
+                        val plan = localPlan
+                        val dayPlan = plan?.weeks?.flatMap { it.days }
+                            ?.firstOrNull { it.dayNumber == clickedGlobalDay }
+                            ?: DayPlan(dayNumber = clickedGlobalDay)
+                        selectedDayInfo = dayPlan
+                        selectedDayNumber = clickedGlobalDay
                     },
-                    onNodeLongClick = { longClickedDay ->
-                        // Samo prihodnje dni se dajo prestavljati
-                        if (longClickedDay >= currentDay) {
-                            swapSourceDay = longClickedDay
+                    onDragSwap = { fromDay, toDay ->
+                        val plan = localPlan
+                        if (plan != null && vm != null) {
                             com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
                                 context,
-                                com.example.myapplication.utils.HapticFeedback.FeedbackType.HEAVY_CLICK
+                                com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
                             )
-                            android.widget.Toast.makeText(
-                                context,
-                                "Dan ${longClickedDay} izbran — tapni drug dan v istem tednu za zamenjavo",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            vm.swapDaysInPlan(plan, fromDay, toDay) { updated ->
+                                localPlan = updated
+                                onPlanUpdated?.invoke(updated)
+                                android.widget.Toast.makeText(context, "✅ Swapped + all future weeks updated!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     footerContent = {}
@@ -1172,59 +1168,8 @@ fun PlanPathDialog(
                     )
                 }
 
-                // Swap potrditev dialog
-                if (showSwapDialog && swapTargetOptions.size == 2) {
-                    val dayA = swapTargetOptions[0]
-                    val dayB = swapTargetOptions[1]
-                    AlertDialog(
-                        onDismissRequest = { showSwapDialog = false },
-                        title = { Text("Zamenjaj dneva?", fontWeight = FontWeight.Bold) },
-                        text = {
-                            Column {
-                                Text("Dan ${dayA.dayNumber}: ${if (dayA.isRestDay) "💤 REST" else "💪 ${dayA.focusLabel.ifBlank { "Workout" }}"}")
-                                Text("⇅ zamenjaj z")
-                                Text("Dan ${dayB.dayNumber}: ${if (dayB.isRestDay) "💤 REST" else "💪 ${dayB.focusLabel.ifBlank { "Workout" }}"}")
-                                Spacer(Modifier.height(8.dp))
-                                Text("Zamenjava je možna samo znotraj istega tedna.", fontSize = 12.sp, color = Color.Gray)
-                            }
-                        },
-                        confirmButton = {
-                            Button(onClick = {
-                                showSwapDialog = false
-                                val plan = localPlan
-                                if (plan != null && vm != null) {
-                                    vm.swapDaysInPlan(plan, dayA.dayNumber, dayB.dayNumber) { updated ->
-                                        localPlan = updated
-                                        onPlanUpdated?.invoke(updated)
-                                        android.widget.Toast.makeText(context, "✅ Dneva zamenjana!", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }) { Text("Zamenjaj") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showSwapDialog = false }) { Text("Prekliči") }
-                        }
-                    )
-                }
+                // Swap potrditev dialog — ODSTRANJENO (zdaj je drag&drop)
 
-                // Swap mode indicator na vrhu
-                if (swapSourceDay != null) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF7C3AED))
-                    ) {
-                        Row(
-                            Modifier.padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("🔄 Dan $swapSourceDay izbran — tapni drug dan v tednu", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { swapSourceDay = null }) {
-                                Text("Prekliči", color = Color.White)
-                            }
-                        }
-                    }
-                }
             }
 
             // Floating footer vedno na dnu zaslona
@@ -1290,19 +1235,33 @@ private fun DayInfoDialog(
     onDismiss: () -> Unit,
     onStartToday: () -> Unit
 ) {
+    val context = LocalContext.current
     val week = ((dayNumber - 1) / 7) + 1
     val dayInWeek = ((dayNumber - 1) % 7) + 1
     val isPast = dayNumber < currentDay
     val isToday = dayNumber == currentDay
     val isFuture = dayNumber > currentDay
 
-    // Difficulty iz experience
-    val difficulty = when (plan?.experience?.lowercase()) {
-        "beginner" -> "Beginner 🟢"
-        "intermediate" -> "Intermediate 🟡"
-        "advanced" -> "Advanced 🔴"
-        else -> "Intermediate 🟡"
+    // Difficulty kot 1-10 (to je tista vrednost ki jo dejansko WorkoutGenerator uporablja)
+    val difficultyLevel = remember(context) {
+        com.example.myapplication.data.AlgorithmPreferences.getCurrentDifficulty(context).roundToInt()
+            .coerceIn(1, 10)
     }
+    val difficultyLabel = when {
+        difficultyLevel <= 2 -> "Very Easy"
+        difficultyLevel <= 4 -> "Easy"
+        difficultyLevel <= 6 -> "Moderate"
+        difficultyLevel <= 8 -> "Hard"
+        else -> "Very Hard"
+    }
+    val difficultyColor = when {
+        difficultyLevel <= 2 -> Color(0xFF4CAF50)
+        difficultyLevel <= 4 -> Color(0xFF8BC34A)
+        difficultyLevel <= 6 -> Color(0xFFFFEB3B)
+        difficultyLevel <= 8 -> Color(0xFFFF9800)
+        else -> Color(0xFFF44336)
+    }
+    val difficultyDisplay = "$difficultyLevel/10 — $difficultyLabel"
 
     // Estimated time: sessionLength iz plana, za rest day 0
     val estimatedTime = when {
@@ -1415,11 +1374,12 @@ private fun DayInfoDialog(
                             value = "$estimatedTime min"
                         )
                     }
-                    // Difficulty
+                    // Difficulty 1-10
                     DayInfoRow(
                         icon = "💪",
-                        label = "Difficulty",
-                        value = difficulty
+                        label = "Workout Difficulty",
+                        value = difficultyDisplay,
+                        valueColor = difficultyColor
                     )
                     // Goal
                     if (!plan?.goal.isNullOrBlank()) {
@@ -1459,7 +1419,7 @@ private fun DayInfoDialog(
 }
 
 @Composable
-private fun DayInfoRow(icon: String, label: String, value: String) {
+private fun DayInfoRow(icon: String, label: String, value: String, valueColor: Color = Color.White) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1473,7 +1433,7 @@ private fun DayInfoRow(icon: String, label: String, value: String) {
             Spacer(Modifier.width(8.dp))
             Text(label, fontSize = 13.sp, color = Color(0xFF94A3B8))
         }
-        Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
     }
 }
 
@@ -1490,207 +1450,332 @@ fun PlanPathVisualizer(
     swapSourceDay: Int? = null,
     onNodeClick: (Int) -> Unit,
     onNodeLongClick: ((Int) -> Unit)? = null,
+    onDragSwap: ((Int, Int) -> Unit)? = null,   // (fromDay, toDay) — drag&drop zamenjava
     footerContent: @Composable () -> Unit
 ) {
     val totalNodes = totalDays
     val scrollState = rememberScrollState()
+    val density = LocalDensity.current
 
-    // Calculate which week the user is currently "in" — zdaj 7 dni na teden
     val currentWeek = ((currentDayGlobal - 1) / 7) + 1
 
-    // Zgradi lookup map: dayNumber → DayPlan za hiter dostop do isRestDay/focusLabel
     val dayPlanMap = remember(planWeeks) {
-        buildMap {
-            for (week in planWeeks) for (day in week.days) put(day.dayNumber, day)
-        }
+        buildMap { for (week in planWeeks) for (day in week.days) put(day.dayNumber, day) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-    ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-        ) {
-        val containerWidth = this@BoxWithConstraints.maxWidth
+    // ── Drag state ──────────────────────────────────────────────────────
+    var draggedDay by remember { mutableIntStateOf(-1) }
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var dropTargetDay by remember { mutableIntStateOf(-1) }
 
-        val nodeVerticalSpacing = 100f
-        val totalHeightDp = (totalNodes * (nodeVerticalSpacing / 2f)) + 650
-        val totalHeight = totalHeightDp.dp
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+            val containerWidth = this@BoxWithConstraints.maxWidth
+            val containerWidthPx = with(density) { containerWidth.toPx() }
 
-        val points = remember(totalNodes) {
-            val list = mutableListOf<Pair<Float, Float>>()
-            for (i in 0 until totalNodes) {
-                val x = 0.5f + 0.35f * kotlin.math.sin(i * 0.8).toFloat()
-                val y = 50f + (i * 80f)
-                list.add(Pair(x, y))
-            }
-            list
-        }
+            // Spacing: 80dp na node, + 200dp padding na dnu
+            val nodeSpacingDp = 80f
+            val totalHeightDp = (totalNodes * nodeSpacingDp) + 200f
+            val totalHeight = totalHeightDp.dp
 
-        // Draw Lines
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(totalHeight)) {
-            val canvasWidth = size.width
-
-            // Week separators vsakih 7 dni
-            val pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
-            for (i in 7 until totalNodes step 7) {
-                val separatorY = (50f + (i * 80f) - 40f).dp.toPx()
-                drawLine(
-                    color = if (isDarkMode) Color.DarkGray else Color.LightGray,
-                    start = androidx.compose.ui.geometry.Offset(0f, separatorY),
-                    end = androidx.compose.ui.geometry.Offset(canvasWidth, separatorY),
-                    strokeWidth = 2.dp.toPx(),
-                    pathEffect = pathEffect
-                )
-            }
-
-            if (points.size > 1) {
-                for (i in 0 until points.size - 1) {
-                    val start = points[i]; val end = points[i + 1]
-                    val startX = start.first * canvasWidth; val startY = start.second.dp.toPx()
-                    val endX = end.first * canvasWidth; val endY = end.second.dp.toPx()
-                    val globalDay = i + 1
-                    val lineColor = if (globalDay < currentDayGlobal) Color(0xFF4CAF50) else Color.Gray
-                    drawLine(color = lineColor,
-                        start = androidx.compose.ui.geometry.Offset(startX, startY),
-                        end = androidx.compose.ui.geometry.Offset(endX, endY),
-                        strokeWidth = 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            // Node pozicije (x 0..1, y dp)
+            val points = remember(totalNodes) {
+                (0 until totalNodes).map { i ->
+                    val x = 0.5f + 0.35f * kotlin.math.sin(i * 0.8).toFloat()
+                    val y = 50f + (i * nodeSpacingDp)
+                    Pair(x, y)
                 }
             }
-        }
 
-        // Draw Nodes
-        Box(modifier = Modifier.fillMaxWidth().height(totalHeight)) {
-            points.forEachIndexed { index, point ->
-                val globalDay = index + 1
-                val weekNumOfNode = ((globalDay - 1) / 7) + 1
-                val isLastDayOfWeek = (globalDay % 7) == 0
+            // Node pozicije v px za hit-test med drag
+            val nodePositionsPx = remember(points, containerWidthPx) {
+                points.mapIndexed { idx, (x, y) ->
+                    val px = x * containerWidthPx
+                    val py = with(density) { y.dp.toPx() }
+                    idx to Offset(px, py)
+                }
+            }
 
-                val dayPlan = dayPlanMap[globalDay]
-                val isRestDay = dayPlan?.isRestDay ?: false
-                val focusLabel = dayPlan?.focusLabel ?: ""
+            // ── Canvas: linije + week separatorji ────────────────────────
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier.fillMaxWidth().height(totalHeight)
+            ) {
+                val canvasWidth = size.width
+                val pathEffect = androidx.compose.ui.graphics.PathEffect
+                    .dashPathEffect(floatArrayOf(20f, 20f), 0f)
 
-                val isPast = globalDay < currentDayGlobal
-                val isToday = globalDay == currentDayGlobal
-                val isLockedToday = isToday && isTodayDone
-                val isFuture = globalDay > currentDayGlobal
-                val isFutureWeek = weekNumOfNode > currentWeek
-                val isCompleted = isPast
-
-                // Swap highlight: izbrani dan za zamenjavo
-                val isSwapSource = swapSourceDay == globalDay
-                val isSwapTarget = swapSourceDay != null && !isSwapSource &&
-                    !isRestDay && globalDay >= currentDayGlobal &&
-                    ((swapSourceDay!! - 1) / 7) == ((globalDay - 1) / 7)
-
-                // Barve: rest day = modrikasto siva; workout = zelena/rumena/siva
-                val nodeColor = when {
-                    isSwapSource -> Color(0xFF7C3AED)                             // swap izbran = vijola
-                    isSwapTarget -> Color(0xFFFF9800)                             // možni swap target = oranžna
-                    isRestDay && isCompleted -> Color(0xFF546E7A)
-                    isRestDay && isToday -> Color(0xFF78909C)
-                    isRestDay -> if (isDarkMode) Color(0xFF37474F) else Color(0xFFB0BEC5)
-                    isCompleted -> if (isLastDayOfWeek) Color(0xFFFFD700) else Color(0xFF4CAF50)
-                    isLockedToday -> if (isDarkMode) Color(0xFF424242) else Color(0xFFEEEEEE)
-                    isToday -> if (isDarkMode) Color.DarkGray else Color(0xFFE0E0E0)
-                    isFutureWeek -> if (isDarkMode) Color.DarkGray else Color.LightGray
-                    isFuture -> if (isDarkMode) Color(0xFF424242) else Color(0xFFEEEEEE)
-                    else -> Color(0xFFE0E0E0)
+                // Week separator črti
+                for (i in 7 until totalNodes step 7) {
+                    val sepY = (50f + (i * nodeSpacingDp) - 40f).dp.toPx()
+                    drawLine(
+                        color = if (isDarkMode) Color.DarkGray else Color.LightGray,
+                        start = Offset(0f, sepY), end = Offset(canvasWidth, sepY),
+                        strokeWidth = 2.dp.toPx(), pathEffect = pathEffect
+                    )
                 }
 
-                val nodeSize = if (isRestDay) 48.dp else 56.dp
-                val leftOffset = (containerWidth * point.first) - (nodeSize / 2)
-                val topOffset = point.second.dp - (nodeSize / 2)
+                // Povezave med nodi
+                if (points.size > 1) {
+                    for (i in 0 until points.size - 1) {
+                        val (sx, sy) = points[i]; val (ex, ey) = points[i + 1]
+                        val lineColor = if ((i + 1) < currentDayGlobal) Color(0xFF4CAF50) else Color.Gray
+                        drawLine(
+                            color = lineColor,
+                            start = Offset(sx * canvasWidth, sy.dp.toPx()),
+                            end = Offset(ex * canvasWidth, ey.dp.toPx()),
+                            strokeWidth = 4.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+                }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .absoluteOffset(x = leftOffset, y = topOffset)
-                        .size(nodeSize)
-                        .clip(if (isRestDay) RoundedCornerShape(8.dp) else androidx.compose.foundation.shape.CircleShape)
-                        .background(nodeColor)
-                        .combinedClickable(
-                            onClick = { onNodeClick(globalDay) },
-                            onLongClick = { onNodeLongClick?.invoke(globalDay) }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        if (isRestDay) {
-                            // Rest day node
-                            Text("💤", fontSize = if (isCompleted || isToday) 20.sp else 16.sp)
-                            if (!isFuture || isToday) {
-                                Text("REST", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else if (isCompleted) {
-                            if (isLastDayOfWeek) {
-                                Icon(Icons.Filled.Star, contentDescription = "Trophy", tint = Color.White, modifier = Modifier.size(24.dp))
-                            } else {
+            // ── Nodi ─────────────────────────────────────────────────────
+            Box(modifier = Modifier.fillMaxWidth().height(totalHeight)) {
+                points.forEachIndexed { index, (pointX, pointY) ->
+                    val globalDay = index + 1
+                    val weekNumOfNode = ((globalDay - 1) / 7) + 1
+                    val isLastDayOfWeek = (globalDay % 7) == 0
+
+                    val dayPlan = dayPlanMap[globalDay]
+                    val isRestDay = dayPlan?.isRestDay ?: false
+                    val focusLabel = dayPlan?.focusLabel ?: ""
+
+                    val isPast = globalDay < currentDayGlobal
+                    val isToday = globalDay == currentDayGlobal
+                    val isLockedToday = isToday && isTodayDone
+                    val isFuture = globalDay > currentDayGlobal
+                    val isFutureWeek = weekNumOfNode > currentWeek
+                    val isCompleted = isPast
+
+                    val isDragSource = draggedDay == globalDay
+                    val isDropTarget = dropTargetDay == globalDay && draggedDay != -1 && draggedDay != globalDay
+
+                    // Bepalen kan worden gesleept: alleen toekomstige dagen >= huidig
+                    val isDraggable = globalDay >= currentDayGlobal && onDragSwap != null
+
+                    // Barve
+                    val nodeColor = when {
+                        isDropTarget -> Color(0xFFFF9800)
+                        isDragSource -> Color(0xFF7C3AED)
+                        swapSourceDay == globalDay -> Color(0xFF7C3AED)
+                        swapSourceDay != null && !isRestDay && globalDay >= currentDayGlobal &&
+                            ((swapSourceDay - 1) / 7) == ((globalDay - 1) / 7) -> Color(0xFFFF9800)
+                        isRestDay && isCompleted -> Color(0xFF546E7A)
+                        isRestDay && isToday -> Color(0xFF78909C)
+                        isRestDay -> if (isDarkMode) Color(0xFF37474F) else Color(0xFFB0BEC5)
+                        isCompleted -> Color(0xFF4CAF50)           // Dokončan dan = zelena (ne rumena)
+                        isLockedToday -> if (isDarkMode) Color(0xFF424242) else Color(0xFFEEEEEE)
+                        isToday -> if (isDarkMode) Color.DarkGray else Color(0xFFE0E0E0)
+                        isFutureWeek -> if (isDarkMode) Color.DarkGray else Color.LightGray
+                        isFuture -> if (isDarkMode) Color(0xFF424242) else Color(0xFFEEEEEE)
+                        else -> Color(0xFFE0E0E0)
+                    }
+
+                    val baseNodeSize = if (isRestDay) 48.dp else 56.dp
+                    // Drag source se malo poveča
+                    val nodeScaleTarget = if (isDragSource) 1.2f else if (isDropTarget) 1.1f else 1f
+                    val nodeScale by animateFloatAsState(
+                        targetValue = nodeScaleTarget,
+                        animationSpec = tween(150),
+                        label = "nodeScale_$globalDay"
+                    )
+
+                    val leftOffset = (containerWidth * pointX) - (baseNodeSize / 2)
+                    val topOffset = pointY.dp - (baseNodeSize / 2)
+
+                    // Drag offset (samo za drag source)
+                    val extraOffsetX = if (isDragSource) with(density) { dragOffsetX.toDp() } else 0.dp
+                    val extraOffsetY = if (isDragSource) with(density) { dragOffsetY.toDp() } else 0.dp
+
+                    // ── Node box ──────────────────────────────────────────
+                    Box(
+                        modifier = Modifier
+                            .absoluteOffset(
+                                x = leftOffset + extraOffsetX,
+                                y = topOffset + extraOffsetY
+                            )
+                            .size(baseNodeSize * nodeScale)
+                            .zIndex(if (isDragSource) 10f else 1f)
+                            .clip(
+                                if (isRestDay) RoundedCornerShape(8.dp)
+                                else androidx.compose.foundation.shape.CircleShape
+                            )
+                            .background(nodeColor)
+                            .then(
+                                if (isDragSource) Modifier.shadow(8.dp, androidx.compose.foundation.shape.CircleShape)
+                                else Modifier
+                            )
+                            .then(
+                                if (isDraggable) {
+                                    Modifier.pointerInput(globalDay) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                draggedDay = globalDay
+                                                dragOffsetX = 0f
+                                                dragOffsetY = 0f
+                                                dropTargetDay = -1
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragOffsetX += dragAmount.x
+                                                dragOffsetY += dragAmount.y
+
+                                                // Izračunaj absolutno pozicijo vlečenega noda
+                                                val srcPx = nodePositionsPx.firstOrNull { it.first == index }?.second
+                                                    ?: return@detectDragGestures
+                                                val currentAbsX = srcPx.x + dragOffsetX
+                                                val currentAbsY = srcPx.y + dragOffsetY
+
+                                                // Poišči najbližji node (ne sam sebe, ne pretekli)
+                                                var bestDist = Float.MAX_VALUE
+                                                var bestDay = -1
+                                                nodePositionsPx.forEach { (idx, pos) ->
+                                                    val d = idx + 1
+                                                    if (d != globalDay && d >= currentDayGlobal) {
+                                                        val dist = kotlin.math.sqrt(
+                                                            (pos.x - currentAbsX) * (pos.x - currentAbsX) +
+                                                            (pos.y - currentAbsY) * (pos.y - currentAbsY)
+                                                        )
+                                                        if (dist < bestDist) {
+                                                            bestDist = dist
+                                                            bestDay = d
+                                                        }
+                                                    }
+                                                }
+                                                // Pokaži drop target samo če je blizu (< 80dp v px)
+                                                val snapThresholdPx = with(density) { 80.dp.toPx() }
+                                                dropTargetDay = if (bestDist < snapThresholdPx) bestDay else -1
+                                            },
+                                            onDragEnd = {
+                                                val from = draggedDay
+                                                val to = dropTargetDay
+                                                if (from != -1 && to != -1 && from != to) {
+                                                    onDragSwap?.invoke(from, to)
+                                                }
+                                                draggedDay = -1
+                                                dragOffsetX = 0f
+                                                dragOffsetY = 0f
+                                                dropTargetDay = -1
+                                            },
+                                            onDragCancel = {
+                                                draggedDay = -1
+                                                dragOffsetX = 0f
+                                                dragOffsetY = 0f
+                                                dropTargetDay = -1
+                                            }
+                                        )
+                                    }
+                                } else Modifier
+                            )
+                            .combinedClickable(
+                                onClick = { if (draggedDay == -1) onNodeClick(globalDay) },
+                                onLongClick = { onNodeLongClick?.invoke(globalDay) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            if (isRestDay) {
+                                Text("💤", fontSize = if (isCompleted || isToday) 20.sp else 16.sp)
+                                if (!isFuture || isToday) {
+                                    Text("REST", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else if (isCompleted) {
+                                // Dokončan dan — normalen prikaz (številka + kljukica)
                                 Text("$globalDay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
                                 Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            }
-                        } else if (isLockedToday || (isFuture && !isRestDay)) {
-                            if (isLastDayOfWeek) {
-                                Icon(Icons.Filled.Star, contentDescription = "Trophy Locked",
-                                    tint = if (isLockedToday) Color.White.copy(alpha = 0.5f) else Color.Gray,
-                                    modifier = Modifier.size(24.dp))
-                            } else if (focusLabel.isNotBlank() && !isFutureWeek) {
-                                // Prihodnji dan v istem tednu — prikaži fokus
-                                Text("$globalDay", color = if (isDarkMode) Color.White.copy(alpha=0.5f) else Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(focusLabel.take(4), color = if (isDarkMode) Color.White.copy(alpha=0.4f) else Color.Gray.copy(alpha=0.7f), fontSize = 7.sp)
+                            } else if (isLockedToday || (isFuture && !isRestDay)) {
+                                if (focusLabel.isNotBlank() && !isFutureWeek) {
+                                    Text("$globalDay", color = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(focusLabel.take(4), color = if (isDarkMode) Color.White.copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.7f), fontSize = 7.sp)
+                                } else {
+                                    Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = Color.Gray, modifier = Modifier.size(20.dp))
+                                }
                             } else {
-                                Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = Color.Gray, modifier = Modifier.size(20.dp))
-                            }
-                        } else {
-                            // Active today
-                            val txtColor = if (isDarkMode) Color.White else Color.Black
-                            Text("$globalDay", color = txtColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            if (focusLabel.isNotBlank()) {
-                                Text(focusLabel.take(5), color = txtColor.copy(alpha = 0.7f), fontSize = 8.sp)
+                                // Aktivni dan (danes)
+                                val txtColor = if (isDarkMode) Color.White else Color.Black
+                                Text("$globalDay", color = txtColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                if (focusLabel.isNotBlank()) {
+                                    Text(focusLabel.take(5), color = txtColor.copy(alpha = 0.7f), fontSize = 8.sp)
+                                }
                             }
                         }
                     }
-                }
 
-                // Week Labels — vsakih 7 dni
-                if (index % 7 == 0 && index > 0) {
-                    val weekNum = (index / 7) + 1
+                    // ── Pokalček zraven zadnjega dne v tednu ─────────────
+                    if (isLastDayOfWeek) {
+                        val trophyCompleted = isCompleted
+                        val trophyColor = if (trophyCompleted) Color(0xFFFFD700) else Color(0xFF4A5568)
 
-                    val labelLeft = if (point.first > 0.5f)
-                        (containerWidth * point.first) - 120.dp
-                    else
-                        (containerWidth * point.first) + 40.dp
+                        // Pokalček postavi desno ali levo od noda (odvisno od strani)
+                        val trophyLeft = if (pointX > 0.5f)
+                            leftOffset + extraOffsetX + baseNodeSize + 4.dp
+                        else
+                            leftOffset + extraOffsetX - 28.dp
 
-                    // Label position: below line (which is ~ topOffset - 40dp)
-                    // Move label closer to node
-                    val labelTop = topOffset + 25.dp
-
-                    Column(modifier = Modifier.absoluteOffset(x = labelLeft, y = labelTop)) {
-                        Text(
-                            text = "WEEK $weekNum",
-                            color = if (isDarkMode) Color.LightGray else Color.Gray,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            letterSpacing = 1.sp
-                        )
-                        if (weekNum > currentWeek) {
-                             Text(
-                                text = "Locked",
-                                color = if (isDarkMode) Color.DarkGray else Color.LightGray,
-                                fontSize = 10.sp
+                        Box(
+                            modifier = Modifier
+                                .absoluteOffset(x = trophyLeft, y = topOffset + extraOffsetY + 4.dp)
+                                .size(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "🏆",
+                                fontSize = if (trophyCompleted) 20.sp else 16.sp,
+                                color = trophyColor
                             )
                         }
                     }
+
+                    // ── Week Labels (vsakih 7 dni) ────────────────────────
+                    if (index % 7 == 0 && index > 0) {
+                        val weekNum = (index / 7) + 1
+                        val labelLeft = if (pointX > 0.5f)
+                            (containerWidth * pointX) - 120.dp
+                        else
+                            (containerWidth * pointX) + 40.dp
+                        val labelTop = topOffset + 25.dp
+
+                        Column(modifier = Modifier.absoluteOffset(x = labelLeft, y = labelTop)) {
+                            Text(
+                                text = "WEEK $weekNum",
+                                color = if (isDarkMode) Color.LightGray else Color.Gray,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                letterSpacing = 1.sp
+                            )
+                            if (weekNum > currentWeek) {
+                                Text(
+                                    text = "Locked",
+                                    color = if (isDarkMode) Color.DarkGray else Color.LightGray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Drag indicator: "spusti tukaj" label ─────────────
+                    if (isDropTarget) {
+                        val indicatorLeft = leftOffset + extraOffsetX - 20.dp
+                        val indicatorTop = topOffset + extraOffsetY - 28.dp
+                        Box(
+                            modifier = Modifier
+                                .absoluteOffset(x = indicatorLeft, y = indicatorTop)
+                                .background(Color(0xFFFF9800), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text("↔ swap", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
+            footerContent()
         }
-        footerContent()
     }
-}
-
 }
 
 @Composable
