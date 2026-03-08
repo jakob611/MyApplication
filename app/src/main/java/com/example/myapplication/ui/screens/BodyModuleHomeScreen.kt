@@ -413,7 +413,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     android.util.Log.w("SwapDays", "Cross-week swap not allowed: $dayA <-> $dayB")
                     withContext(Dispatchers.Main) {
                         android.widget.Toast.makeText(
-                            context,
+                            getApplication(),
                             "Swap only allowed within the same week!",
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
