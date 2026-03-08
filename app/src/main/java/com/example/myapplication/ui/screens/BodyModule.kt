@@ -973,15 +973,17 @@ fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = empty
     val restDaysPerWeek = 7 - safeTrainingDays
 
     // Določi dejanske pozicije rest dni glede na safeTrainingDays
+    // POZICIJE SO 0-BASED (0=ponedeljek, 6=nedelja)
+    // Število rest dni = 7 - safeTrainingDays
     val actualRestPositions: Set<Int> = when (safeTrainingDays) {
-        7 -> emptySet()
-        6 -> setOf(3)
-        5 -> setOf(2, 6)        // pon, tor, REST, čet, pet, sob, REST
-        4 -> setOf(2, 4, 6)     // W W R W R W R — rest po vsakem 2. treningu
-        3 -> setOf(1, 3, 5)     // W R W R W R R — vsak 2. dan rest
-        2 -> setOf(1, 3, 5, 6)  // W R W R W R R
-        1 -> (1..6).toSet()
-        else -> (0 until restDaysPerWeek).map { it + safeTrainingDays }.toSet()
+        7 -> emptySet()                          // 0 rest dni: W W W W W W W
+        6 -> setOf(3)                            // 1 rest dan:  W W W R W W W
+        5 -> setOf(3, 6)                         // 2 rest dni:  W W W R W W R
+        4 -> setOf(2, 5, 6)                      // 3 rest dni:  W W R W W R R
+        3 -> setOf(1, 3, 5, 6)                   // 4 rest dni:  W R W R W R R
+        2 -> setOf(1, 2, 4, 5, 6)               // 5 rest dni:  W R R W R R R
+        1 -> (1..6).toSet()                      // 6 rest dni:  W R R R R R R
+        else -> (safeTrainingDays until 7).toSet()
     }
 
     val weeks = mutableListOf<WeekPlan>()
@@ -1582,9 +1584,5 @@ fun generatePersonalizedTips(
     // Return the most relevant tips (limit to prevent overwhelming the user)
     return tips.distinct().take(15)
 }
-
-
-
-
 
 
