@@ -20,27 +20,36 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.theme.DrawerBlue
 import kotlinx.coroutines.launch
 
-// Data model za E-aditiv
+// Data model za E-aditiv — riskLevel se bere iz JSON-a kot String, konvertira se z getRiskLevel()
 data class EAdditive(
-    val code: String,
-    val name: String,
-    val description: String,
-    val origin: String,
-    val function: String,
+    val code: String = "",
+    val name: String = "",
+    val description: String = "",
+    val origin: String = "",
+    val function: String = "",
     val healthRisks: String = "",
     val usage: String = "",
     val adi: String = "",
     val otherDetails: String = "",
-    val riskLevel: RiskLevel = deriveRiskLevel(healthRisks)
-)
-
-private fun deriveRiskLevel(healthRisks: String): RiskLevel {
-    val txt = healthRisks.lowercase()
-    return when {
-        txt.contains("carcin") || txt.contains("tumor") || txt.contains("banned") -> RiskLevel.HIGH
-        txt.contains("hyperactivity") || txt.contains("allerg") || txt.contains("nausea") -> RiskLevel.MODERATE
-        txt.isBlank() || txt.contains("not specified") -> RiskLevel.UNKNOWN
-        else -> RiskLevel.LOW
+    val riskLevel: String = ""  // Gson prebere kot String, RiskLevel enum se pridobi z getRiskLevel()
+) {
+    fun getRiskLevel(): RiskLevel {
+        // Najprej preveri JSON vrednost
+        val fromJson = when (riskLevel.uppercase()) {
+            "LOW" -> RiskLevel.LOW
+            "MODERATE" -> RiskLevel.MODERATE
+            "HIGH" -> RiskLevel.HIGH
+            else -> null
+        }
+        if (fromJson != null) return fromJson
+        // Fallback: izpelji iz healthRisks texta
+        val txt = healthRisks.lowercase()
+        return when {
+            txt.contains("carcin") || txt.contains("tumor") || txt.contains("banned") -> RiskLevel.HIGH
+            txt.contains("hyperactivity") || txt.contains("allerg") || txt.contains("nausea") -> RiskLevel.MODERATE
+            txt.isBlank() -> RiskLevel.UNKNOWN
+            else -> RiskLevel.LOW
+        }
     }
 }
 
@@ -494,7 +503,7 @@ private fun EAdditiveCard(
             // Risk indicator
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = additive.riskLevel.color,
+                color = additive.getRiskLevel().color,
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -524,14 +533,14 @@ private fun EAdditiveCard(
                 Spacer(Modifier.height(4.dp))
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = additive.riskLevel.color.copy(alpha = 0.2f)
+                    color = additive.getRiskLevel().color.copy(alpha = 0.2f)
                 ) {
                     Text(
-                        additive.riskLevel.displayName,
+                        additive.getRiskLevel().displayName,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = additive.riskLevel.color
+                        color = additive.getRiskLevel().color
                     )
                 }
             }
@@ -562,9 +571,9 @@ private fun EAdditiveDetailDialog(
                 item { DetailSection("Acceptable daily intake (ADI)", additive.adi.ifBlank { "Not specified" }) }
                 item { DetailSection("Other details", additive.otherDetails.ifBlank { "Not specified" }) }
                 item {
-                    Surface(shape = RoundedCornerShape(8.dp), color = additive.riskLevel.color, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = additive.getRiskLevel().color, modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            additive.riskLevel.displayName,
+                            additive.getRiskLevel().displayName,
                             modifier = Modifier.padding(8.dp),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,

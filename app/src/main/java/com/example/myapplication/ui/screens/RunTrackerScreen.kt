@@ -6,8 +6,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -60,6 +62,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
     var myLocationOverlay by remember { mutableStateOf<MyLocationNewOverlay?>(null) }
     var hasLocationPermission by remember { mutableStateOf(false) }
     var hasNotificationPermission by remember { mutableStateOf(true) }
+    var showGpsDialog by remember { mutableStateOf(false) }
     var showSummary by remember { mutableStateOf(false) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
     var finalDistance by remember { mutableStateOf(0.0) }
@@ -198,7 +201,16 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                 !hasLocationPermission -> locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                 !hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                else -> context.startForegroundService(Intent(context, RunTrackingService::class.java).apply { action = RunTrackingService.ACTION_START })
+                                else -> {
+                                    // Preveri ali je GPS dejansko vklopljen na napravi
+                                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                                    val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                                    if (!isGpsEnabled) {
+                                        showGpsDialog = true
+                                    } else {
+                                        context.startForegroundService(Intent(context, RunTrackingService::class.java).apply { action = RunTrackingService.ACTION_START })
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier.weight(1f).height(56.dp),
@@ -307,6 +319,24 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                 }
             }
         }
+    }
+
+    // GPS ni vklopljen — pokaži dialog z možnostjo odpiranja nastavitev
+    if (showGpsDialog) {
+        AlertDialog(
+            onDismissRequest = { showGpsDialog = false },
+            title = { Text("GPS ni vklopljen", fontWeight = FontWeight.Bold) },
+            text = { Text("Za sledenje teku potrebuješ vklopljeno lokacijo (GPS). Prosimo vklopi lokacijo v nastavitvah naprave.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showGpsDialog = false
+                    context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }) { Text("Odpri nastavitve") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGpsDialog = false }) { Text("Prekliči") }
+            }
+        )
     }
 }
 

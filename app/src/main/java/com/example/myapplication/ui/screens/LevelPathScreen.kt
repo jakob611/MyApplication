@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -313,31 +314,36 @@ fun LevelPathScreen(
                             fontSize = 14.sp,
                             color = Color.Gray
                         )
-
                         Spacer(Modifier.height(16.dp))
 
-                        // Read activityLevel from SharedPreferences (synced from Firestore on app startup)
                         val bmPrefs = androidx.compose.ui.platform.LocalContext.current
                             .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
                         val localActivityDays = bmPrefs.getInt("weekly_target", 0)
-
-                        // Priority: SharedPrefs weekly_target > plan.trainingDays > default 4
-                        val trainingDaysPerWeek = when {
+                        val safeGoal = when {
                             localActivityDays > 0 -> localActivityDays
                             activePlan.trainingDays > 0 -> activePlan.trainingDays
                             else -> 4
                         }
-                        val totalWeeks = 4
-                        val totalDays = trainingDaysPerWeek * totalWeeks
+                        // Plan: 4 tedne × 7 dni = 28 (vključno z rest dnevi)
+                        val totalDays = 28
+                        val lastWorkoutEpoch = bmPrefs.getLong("last_workout_epoch", 0L)
+                        val isTodayDone = if (lastWorkoutEpoch == 0L) false
+                            else java.time.LocalDate.ofEpochDay(lastWorkoutEpoch) == java.time.LocalDate.now()
 
-                        PlanPathVisualization(
-                            currentDay = currentPlanDay,
-                            totalDays = totalDays,
-                            daysPerWeek = trainingDaysPerWeek,
-                            primaryColor = PrimaryBlue,
-                            successColor = GreenSuccess,
-                            lockedColor = GrayLocked
-                        )
+                        val pathHeight = ((totalDays * 80) + 200).dp
+                        Box(modifier = Modifier.fillMaxWidth().height(pathHeight)) {
+                            PlanPathVisualizer(
+                                currentDayGlobal = currentPlanDay,
+                                isTodayDone = isTodayDone,
+                                weeklyGoal = safeGoal,
+                                totalDays = totalDays,
+                                startWeek = 1,
+                                isDarkMode = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+                                planWeeks = activePlan.weeks,
+                                onNodeClick = { /* read-only */ },
+                                footerContent = {}
+                            )
+                        }
                     }
                 }
             } else {
@@ -499,110 +505,6 @@ private fun BadgeItem(
     }
 }
 
-@Composable
-private fun PlanPathVisualization(
-    currentDay: Int,
-    totalDays: Int,
-    daysPerWeek: Int,
-    primaryColor: Color,
-    successColor: Color,
-    lockedColor: Color
-) {
-    val totalWeeks = 4
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Progress info
-        Text(
-            "Day $currentDay of $totalDays",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = primaryColor
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        // Overall progress bar
-        LinearProgressIndicator(
-            progress = { (currentDay.toFloat() / totalDays).coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            color = successColor,
-            trackColor = lockedColor.copy(alpha = 0.3f)
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // Weekly breakdown
-        for (week in 1..totalWeeks) {
-            val weekStartDay = (week - 1) * daysPerWeek + 1
-            val weekEndDay = week * daysPerWeek
-            val weekProgress = when {
-                currentDay > weekEndDay -> 1f
-                currentDay >= weekStartDay -> ((currentDay - weekStartDay + 1).toFloat() / daysPerWeek).coerceIn(0f, 1f)
-                else -> 0f
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Week $week",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.width(60.dp)
-                )
-
-                // Day indicators
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    for (day in weekStartDay..weekEndDay) {
-                        val isDone = day < currentDay
-                        val isCurrent = day == currentDay
-
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when {
-                                        isDone -> successColor
-                                        isCurrent -> primaryColor
-                                        else -> lockedColor.copy(alpha = 0.3f)
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isDone) {
-                                Icon(
-                                    Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            } else {
-                                Text(
-                                    "${day}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isCurrent) Color.White else Color.Gray
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (week < totalWeeks) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = Color.Gray.copy(alpha = 0.2f)
-                )
-            }
-        }
-    }
-}
 
 private fun getBadgeIcon(iconName: String): ImageVector {
     return when (iconName) {

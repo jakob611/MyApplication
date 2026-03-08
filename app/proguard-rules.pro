@@ -21,8 +21,15 @@
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+# Utišaj R8 warning za play-services-location interno obfuscirano kodo (zze companion object)
+-dontwarn com.google.android.gms.internal.location.**
 # Firestore model classes (data classes serialized by Firestore)
 -keep class com.example.myapplication.data.** { *; }
+
+# E-Additives screen models (Gson deserializira JSON v te razrede)
+-keep class com.example.myapplication.ui.screens.EAdditive { *; }
+-keep class com.example.myapplication.ui.screens.RiskLevel { *; }
+-keep class com.example.myapplication.ui.screens.EAdditivesScreenKt { *; }
 
 # ---- Gson / JSON ----
 -keep class com.google.gson.** { *; }

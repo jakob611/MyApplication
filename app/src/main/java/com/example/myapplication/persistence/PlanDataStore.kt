@@ -171,13 +171,16 @@ object PlanDataStore {
                     "trainingLocation" to plan.trainingLocation,
                     "experience" to (plan.experience ?: ""),
                     "goal" to (plan.goal ?: ""),
+                    "startDate" to plan.startDate,
                     "weeks" to plan.weeks.map { week ->
                         hashMapOf<String, Any>(
                             "weekNumber" to week.weekNumber,
                             "days" to week.days.map { day ->
                                 hashMapOf<String, Any>(
                                     "dayNumber" to day.dayNumber,
-                                    "exercises" to day.exercises
+                                    "exercises" to day.exercises,
+                                    "isRestDay" to day.isRestDay,
+                                    "focusLabel" to day.focusLabel
                                 )
                             }
                         )
@@ -299,7 +302,9 @@ object PlanDataStore {
                 val days = (weekMap["days"] as? List<Map<String, Any>>)?.map { dayMap ->
                     val dayNumber = (dayMap["dayNumber"] as? Number)?.toInt() ?: 1
                     val exercises = dayMap["exercises"] as? List<String> ?: emptyList()
-                    DayPlan(dayNumber, exercises)
+                    val isRestDay = dayMap["isRestDay"] as? Boolean ?: false
+                    val focusLabel = dayMap["focusLabel"] as? String ?: ""
+                    DayPlan(dayNumber, exercises, isRestDay, focusLabel)
                 } ?: emptyList()
                 WeekPlan(weekNumber, days)
             } ?: emptyList()
@@ -320,6 +325,7 @@ object PlanDataStore {
                 experience = planMap["experience"] as? String,
                 goal = planMap["goal"] as? String,
                 weeks = weeks,
+                startDate = planMap["startDate"] as? String ?: java.time.LocalDate.now().toString(),
                 focusAreas = when (val fa = planMap["focusAreas"]) {
                     is List<*> -> fa.filterIsInstance<String>()
                     is String -> if (fa.isBlank()) emptyList() else fa.split(",").map { it.trim() }
@@ -489,12 +495,14 @@ object PlanDataStore {
             for (j in 0 until daysJson.length()) {
                 val dayObj = daysJson.getJSONObject(j)
                 val dayNumber = dayObj.getInt("dayNumber")
-                val exercisesJson = dayObj.getJSONArray("exercises")
+                val exercisesJson = dayObj.optJSONArray("exercises") ?: org.json.JSONArray()
                 val exercises = mutableListOf<String>()
                 for (k in 0 until exercisesJson.length()) {
                     exercises.add(exercisesJson.getString(k))
                 }
-                days.add(DayPlan(dayNumber, exercises))
+                val isRestDay = dayObj.optBoolean("isRestDay", false)
+                val focusLabel = dayObj.optString("focusLabel", "")
+                days.add(DayPlan(dayNumber, exercises, isRestDay, focusLabel))
             }
             weeks.add(WeekPlan(weekNumber, days))
         }

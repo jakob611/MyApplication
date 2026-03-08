@@ -958,15 +958,58 @@ private fun PlanResultStep(
 
 // --- PLAN STRUCTURE GENERATION ---
 
-fun generatePlanWeeks(trainingDaysPerWeek: Int): List<WeekPlan> {
+/**
+ * Generira 4-teden plan kot 28 DayPlan objektov (7 dni na teden, vključno z rest dnevi).
+ * Rest dni so pametno razporejeni med workout dni — ne skupaj na koncu tedna.
+ *
+ * Primer za 5x/teden: W W R W W W R  (po 2. in 7. dnevu) → "enakomerno razporejeni"
+ * Primer za 3x/teden: W R W R W R R  (čim bolj enakomerno)
+ * Primer za 6x/teden: W W W R W W W  (1 rest na sredi)
+ *
+ * focusAreas se rotirajo po workout dnevih.
+ */
+fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = emptyList()): List<WeekPlan> {
+    val safeTrainingDays = trainingDaysPerWeek.coerceIn(1, 7)
+    val restDaysPerWeek = 7 - safeTrainingDays
+
+    // Določi dejanske pozicije rest dni glede na safeTrainingDays
+    val actualRestPositions: Set<Int> = when (safeTrainingDays) {
+        7 -> emptySet()
+        6 -> setOf(3)
+        5 -> setOf(2, 6)        // pon, tor, REST, čet, pet, sob, REST
+        4 -> setOf(2, 4, 6)     // W W R W R W R — rest po vsakem 2. treningu
+        3 -> setOf(1, 3, 5)     // W R W R W R R — vsak 2. dan rest
+        2 -> setOf(1, 3, 5, 6)  // W R W R W R R
+        1 -> (1..6).toSet()
+        else -> (0 until restDaysPerWeek).map { it + safeTrainingDays }.toSet()
+    }
+
     val weeks = mutableListOf<WeekPlan>()
     val totalWeeks = 4
+    var globalDayCounter = 1
+    var workoutDayIndex = 0 // za rotacijo focusAreas
+
+    // Pripravi fokus labele za workout dni
+    val focuses = if (focusAreas.isNotEmpty()) focusAreas else listOf("Full Body")
 
     for (weekNum in 1..totalWeeks) {
         val days = mutableListOf<DayPlan>()
-        for (dayNum in 1..trainingDaysPerWeek) {
-            // Each day is empty - exercises are generated dynamically when user starts workout
-            days.add(DayPlan(dayNumber = dayNum, exercises = emptyList()))
+        for (dayInWeek in 0 until 7) { // 0 = ponedeljek, 6 = nedelja
+            val isRest = dayInWeek in actualRestPositions
+            val focus = if (isRest) "Rest" else {
+                focuses[workoutDayIndex % focuses.size]
+            }
+            if (!isRest) workoutDayIndex++
+
+            days.add(
+                DayPlan(
+                    dayNumber = globalDayCounter,
+                    exercises = emptyList(),
+                    isRestDay = isRest,
+                    focusLabel = focus
+                )
+            )
+            globalDayCounter++
         }
         weeks.add(WeekPlan(weekNumber = weekNum, days = days))
     }
@@ -1028,8 +1071,8 @@ fun generateAdvancedCustomPlan(
         bodyFatPercent, targetCalories, tdee
     )
 
-    // Generate actual plan structure: 4 weeks with training days based on frequency
-    val weeksStructure = generatePlanWeeks(trainingDays)
+    // Generate actual plan structure: 4 weeks × 7 days (workout + rest) based on frequency
+    val weeksStructure = generatePlanWeeks(trainingDays, focusAreas)
 
     return PlanResult(
         weeks = weeksStructure,
@@ -1048,7 +1091,8 @@ fun generateAdvancedCustomPlan(
         experience = experience,
         goal = goal,
         equipment = equipment,
-        focusAreas = focusAreas
+        focusAreas = focusAreas,
+        startDate = java.time.LocalDate.now().toString()
     )
 }
 

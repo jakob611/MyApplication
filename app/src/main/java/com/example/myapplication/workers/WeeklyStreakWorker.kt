@@ -10,26 +10,28 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.data.AlgorithmPreferences
-import com.example.myapplication.data.UserPreferences
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.temporal.TemporalAdjusters
 import java.util.concurrent.TimeUnit
 
 /**
- * WorkManager Worker ki se sproži ob polnoči zadnjega dne v tednu.
- * Preveri ali je uporabnik opravil vse workoutou tega tedna:
- *   - DA  → streak + 1, Firestore update
- *   - NE  → streak = 0, aktiviraj recovery mode, Firestore update
+ * DailyStreakWorker — zažene se ob polnoči vsakega dne.
  *
- * Načrtuje naslednji Workerji vsakič ko se zažene (enkrat tedensko).
+ * Logika:
+ *  - Prebere plan iz SharedPrefs: kateri je bil danes "plan dan" (workout ali rest)
+ *  - Če je bil REST dan → streak +1 avtomatično (ni treba nič narediti)
+ *  - Če je bil WORKOUT dan in je bil opravljen → streak je že bil povečan v completeWorkoutSession()
+ *  - Če je bil WORKOUT dan in NI bil opravljen → streak = 0, recovery mode
+ *  - Načrtuje naslednji Worker (za naslednjo polnoč)
+ *
+ * STREAK se povečuje TAKOJ ob zaključku vadbe (v completeWorkoutSession).
+ * Ta Worker skrbi samo za rest-day avtomatski streak in za reset ob zamujeni vadbi.
  */
 class WeeklyStreakWorker(
     private val context: Context,
@@ -38,109 +40,126 @@ class WeeklyStreakWorker(
 
     override suspend fun doWork(): Result {
         val email = Firebase.auth.currentUser?.email ?: return Result.success()
-        Log.d("WeeklyStreakWorker", "Running weekly streak check for $email")
+        Log.d(TAG, "Daily streak check running for $email")
 
         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-        val weeklyDone = prefs.getInt("weekly_done", 0)
-        val weeklyTarget = prefs.getInt("weekly_target", 3)
+
+        // Kateri dan v planu je bil VČERAJ (Worker se zažene ob polnoči = začetek novega dne)
+        // "yesterday_was_rest" je boolean ki ga nastavimo zjutraj ko Worker načrtuje naslednji dan
+        val yesterdayWasRest = prefs.getBoolean("yesterday_was_rest", false)
+        val workoutDoneYesterday = prefs.getBoolean("workout_done_yesterday", false)
         val currentStreak = prefs.getInt("streak_days", 0)
         val planDayBeforeCheck = prefs.getInt("plan_day", 1)
 
-        // Preberi start of week iz Firestore profila
-        val userProfile = UserPreferences.loadProfileFromFirestore(email)
-        val startDayOfWeek = when (userProfile?.startOfWeek) {
-            "Sunday" -> DayOfWeek.SUNDAY
-            "Saturday" -> DayOfWeek.SATURDAY
-            else -> DayOfWeek.MONDAY
-        }
+        Log.d(TAG, "yesterdayWasRest=$yesterdayWasRest, workoutDoneYesterday=$workoutDoneYesterday, streak=$currentStreak")
 
-        val today = LocalDate.now()
+        when {
+            yesterdayWasRest -> {
+                // Rest day → streak +1 avtomatično
+                val newStreak = currentStreak + 1
+                prefs.edit()
+                    .putInt("streak_days", newStreak)
+                    .putBoolean("workout_done_yesterday", false)
+                    .apply()
+                saveStreakToFirestore(newStreak)
+                Log.d(TAG, "✅ Rest day passed. Streak: $currentStreak → $newStreak")
 
-        val weekCompleted = weeklyDone >= weeklyTarget
-
-        if (weekCompleted) {
-            // ─── TEDEN USPEŠNO ZAKLJUČEN ─────────────────────────────────
-            val newStreak = currentStreak + 1
-            prefs.edit()
-                .putInt("streak_days", newStreak)
-                .putLong("last_completed_week", today.toEpochDay())
-                .putInt("weekly_done", 0) // Reset za naslednji teden
-                .apply()
-
-            AlgorithmPreferences.incrementWeeklyDifficulty(context)
-            if (AlgorithmPreferences.isRecoveryMode(context)) {
-                AlgorithmPreferences.endRecoveryMode(context)
+                // Povečaj težavnost (recovery konec)
+                if (AlgorithmPreferences.isRecoveryMode(context)) {
+                    AlgorithmPreferences.endRecoveryMode(context)
+                }
             }
+            workoutDoneYesterday -> {
+                // Workout dan in je bil opravljen → streak je bil že povečan takoj ob zaključku vadbe
+                // Samo reset flag
+                prefs.edit()
+                    .putBoolean("workout_done_yesterday", false)
+                    .apply()
+                Log.d(TAG, "✅ Workout day completed. Streak stays at $currentStreak (already incremented)")
+            }
+            else -> {
+                // Workout dan in NI bil opravljen → reset streaka
+                prefs.edit()
+                    .putInt("streak_days", 0)
+                    .putBoolean("workout_done_yesterday", false)
+                    .apply()
 
-            saveStreakToFirestore(newStreak, weeklyDone, weekCompleted = true)
-            Log.d("WeeklyStreakWorker", "✅ Week complete! New streak: $newStreak")
-
-        } else {
-            // ─── TEDEN NI BIL ZAKLJUČEN — RESET ──────────────────────────
-            val missedDays = weeklyTarget - weeklyDone
-            prefs.edit()
-                .putInt("streak_days", 0)
-                .putInt("weekly_done", 0) // Reset za naslednji teden
-                .apply()
-
-            AlgorithmPreferences.startRecoveryMode(
-                context,
-                missedDays = missedDays,
-                planDayBeforeBreak = planDayBeforeCheck
-            )
-
-            saveStreakToFirestore(0, weeklyDone, weekCompleted = false)
-            Log.d("WeeklyStreakWorker", "❌ Streak reset. Missed $missedDays days. Recovery mode activated.")
+                AlgorithmPreferences.startRecoveryMode(
+                    context,
+                    missedDays = 1,
+                    planDayBeforeBreak = planDayBeforeCheck
+                )
+                saveStreakToFirestore(0)
+                Log.d(TAG, "❌ Workout missed! Streak reset to 0. Recovery mode activated.")
+            }
         }
 
-        // Načrtuj naslednji Worker (za konec naslednjega tedna)
-        scheduleNext(context, startDayOfWeek)
+        // Nastavi flag za danes (ali je danes rest day)
+        // Plan day je bil že povečan ob zaključku vadbe ali ostaja isti
+        val todayPlanDay = prefs.getInt("plan_day", 1)
+        scheduleTomorrowFlags(context, prefs, todayPlanDay)
+
+        // Načrtuj Worker za jutri ob polnoči
+        scheduleNext(context)
 
         return Result.success()
     }
 
-    private suspend fun saveStreakToFirestore(
-        streak: Int,
-        weeklyDone: Int,
-        weekCompleted: Boolean
-    ) {
+    private suspend fun saveStreakToFirestore(streak: Int) {
         try {
-            // KRITIČNO: piši pod email dokumentom (ne uid)
             val email = Firebase.auth.currentUser?.email ?: return
             Firebase.firestore.collection("users").document(email)
                 .set(
                     mapOf(
-                        "streak_days" to streak,        // bere StreakWidget + BodyModuleHome
-                        "login_streak" to streak,       // bere loadProfileFromFirestore + MainActivity listener
-                        "weekly_done" to weeklyDone,
-                        "week_completed" to weekCompleted,
-                        "is_recovery_week" to !weekCompleted
+                        "streak_days" to streak,
+                        "login_streak" to streak
                     ),
                     SetOptions.merge()
                 ).await()
         } catch (e: Exception) {
-            Log.e("WeeklyStreakWorker", "Firestore update failed: ${e.message}")
+            Log.e(TAG, "Firestore update failed: ${e.message}")
         }
     }
 
     companion object {
-        private const val WORK_NAME = "weekly_streak_check"
+        private const val TAG = "DailyStreakWorker"
+        private const val WORK_NAME = "daily_streak_check"
 
         /**
-         * Načrtuje Worker da se zažene ob polnoči zadnjega dne v tednu.
-         * Kliče se enkrat ob zagonu aplikacije in po vsakem izvajanju Workerja.
+         * Nastavi flag "yesterday_was_rest" za jutri glede na plan.
+         * Kliče se iz completeWorkoutSession in ob zagonu Workerja.
          */
-        fun scheduleNext(context: Context, startDayOfWeek: DayOfWeek = DayOfWeek.MONDAY) {
+        fun scheduleTomorrowFlags(
+            context: Context,
+            prefs: android.content.SharedPreferences,
+            currentPlanDay: Int
+        ) {
+            // Preberi plan iz DataStore (sinhrono — samo prefs cache)
+            // Plan dan je 1-based, plan.weeks[0].days[0] je dan 1
+            // Preprosta logika: "today_is_rest" se nastavi v completeWorkoutSession
+            // Tukaj samo prenesemo "today" → "yesterday"
+            val todayIsRest = prefs.getBoolean("today_is_rest", false)
+            val workoutDoneToday = run {
+                val lastWorkoutEpoch = prefs.getLong("last_workout_epoch", 0L)
+                if (lastWorkoutEpoch == 0L) false
+                else java.time.LocalDate.ofEpochDay(lastWorkoutEpoch) == java.time.LocalDate.now()
+            }
+
+            prefs.edit()
+                .putBoolean("yesterday_was_rest", todayIsRest)
+                .putBoolean("workout_done_yesterday", workoutDoneToday)
+                .apply()
+
+            Log.d(TAG, "Tomorrow flags set: yesterdayWillBeRest=$todayIsRest, workoutDoneToday=$workoutDoneToday")
+        }
+
+        /**
+         * Načrtuje Worker za naslednjo polnoč (00:01).
+         */
+        fun scheduleNext(context: Context) {
             val now = LocalDateTime.now()
-            val today = now.toLocalDate()
-
-            // Zadnji dan tega tedna = dan pred začetkom naslednjega tedna
-            val weekStart = today.with(TemporalAdjusters.previousOrSame(startDayOfWeek))
-            val weekEnd = weekStart.plusDays(6) // 6 dni po začetku = zadnji dan
-
-            // Čas izvajanja: polnoč (00:00) zadnjega dne tedna
-            // Dejansko: konec tedna (23:59 + 1min = naslednji dan 00:00)
-            val targetDateTime = LocalDateTime.of(weekEnd.plusDays(1), LocalTime.of(0, 1))
+            val tomorrow = now.toLocalDate().plusDays(1)
+            val targetDateTime = LocalDateTime.of(tomorrow, LocalTime.of(0, 1))
 
             val delayMs = java.time.Duration.between(now, targetDateTime).toMillis()
             val delayMinutes = if (delayMs > 0) delayMs / 60000 else 1L
@@ -157,17 +176,31 @@ class WeeklyStreakWorker(
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
 
-            Log.d("WeeklyStreakWorker", "Scheduled next check in ${delayMinutes}min (at $targetDateTime)")
+            Log.d(TAG, "Scheduled next daily check in ${delayMinutes}min (at $targetDateTime)")
         }
 
         /** Kliči ob login — zagotovi da je Worker vedno načrtovan */
         fun ensureScheduled(context: Context, startOfWeek: String = "Monday") {
-            val dayOfWeek = when (startOfWeek) {
-                "Sunday" -> DayOfWeek.SUNDAY
-                "Saturday" -> DayOfWeek.SATURDAY
-                else -> DayOfWeek.MONDAY
-            }
-            scheduleNext(context, dayOfWeek)
+            scheduleNext(context)
+        }
+
+        /**
+         * Za testiranje — takoj požene Worker simulacijo polnoči.
+         * Kliči iz DeveloperSettingsScreen.
+         */
+        fun simulateDayPass(context: Context) {
+            val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+            val currentPlanDay = prefs.getInt("plan_day", 1)
+            scheduleTomorrowFlags(context, prefs, currentPlanDay)
+
+            val request = OneTimeWorkRequestBuilder<WeeklyStreakWorker>()
+                .setInitialDelay(0, TimeUnit.SECONDS)
+                .build()
+
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork("simulate_day_pass", ExistingWorkPolicy.REPLACE, request)
+
+            Log.d(TAG, "🧪 Simulating day pass for testing")
         }
     }
 }

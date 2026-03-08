@@ -363,7 +363,6 @@ fun AchievementsScreen(
 
             // PLAN PATH Section - same visualizer as PlanPathDialog
             if (activePlan != null) {
-                // Read activityLevel from SharedPreferences (synced from Firestore on app startup)
                 val bmPrefs = androidx.compose.ui.platform.LocalContext.current
                     .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
                 val localActivityDays = bmPrefs.getInt("weekly_target", 0)
@@ -373,11 +372,11 @@ fun AchievementsScreen(
                     activePlan.trainingDays > 0 -> activePlan.trainingDays
                     else -> 4
                 }
-                val totalPlanDays = 4 * safeGoal
-                val currentWeekGlobal = ((currentPlanDay - 1) / safeGoal) + 1
-                val blockStartWeek = ((currentWeekGlobal - 1) / 4) * 4 + 1
+                // Plan ima 4 tedne × 7 dni = 28 dni (vključno z rest dnevi)
+                val totalPlanDays = 28
+                val currentWeekGlobal = ((currentPlanDay - 1) / 7) + 1
+                val blockStartWeek = 1
 
-                // Read if today's workout is done
                 val prefs = androidx.compose.ui.platform.LocalContext.current
                     .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
                 val lastWorkoutEpoch = prefs.getLong("last_workout_epoch", 0L)
@@ -418,9 +417,7 @@ fun AchievementsScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // Same PlanPathVisualizer from BodyModuleHomeScreen
-                        // Wrap in fixed-height Box to avoid nested verticalScroll crash
-                        val pathHeight = ((totalPlanDays * 50) + 700).dp
+                        val pathHeight = ((totalPlanDays * 80) + 200).dp
                         Box(modifier = Modifier.fillMaxWidth().height(pathHeight)) {
                             PlanPathVisualizer(
                                 currentDayGlobal = currentPlanDay,
@@ -428,7 +425,8 @@ fun AchievementsScreen(
                                 weeklyGoal = safeGoal,
                                 totalDays = totalPlanDays,
                                 startWeek = blockStartWeek,
-                                isDarkMode = true, // Achievements is always dark
+                                isDarkMode = true,
+                                planWeeks = activePlan.weeks,
                                 onNodeClick = { /* read-only in achievements */ },
                                 footerContent = {}
                             )
