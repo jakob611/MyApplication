@@ -393,8 +393,8 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Zamenja dva dneva (isRestDay + focusLabel) — dovoljeno med VSEMI tedni, tudi prihodnjimi.
-     * Pattern se razširi: isti relativni položaj v nadaljnjih tednih se prav tako zamenja.
+     * Zamenja dva dneva ZNOTRAJ ISTEGA TEDNA (isRestDay + focusLabel).
+     * Enako zamenjavo nato kopira na vse nadaljnje tedne (enak relativni položaj).
      * Shrani posodobljeni plan v Firestore.
      */
     fun swapDaysInPlan(
@@ -405,39 +405,43 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // dayInWeek: položaj znotraj tedna (0-based, 0=pon, 6=ned)
+                val weekA = (dayA - 1) / 7
+                val weekB = (dayB - 1) / 7
+
+                // Dovoli samo zamenjavo znotraj istega tedna
+                if (weekA != weekB) {
+                    android.util.Log.w("SwapDays", "Cross-week swap not allowed: $dayA <-> $dayB")
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Swap only allowed within the same week!",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return@launch
+                }
+
+                // Relativni položaj znotraj tedna (0-based)
                 val posA = (dayA - 1) % 7
                 val posB = (dayB - 1) % 7
 
-                // Zamenjaj v vseh 4 tednih na istih relativnih pozicijah
                 val allDays = currentPlan.weeks.flatMap { it.days }.toMutableList()
 
-                // Najprej zamenjamo konkretna dayA in dayB
-                val idxA = allDays.indexOfFirst { it.dayNumber == dayA }
-                val idxB = allDays.indexOfFirst { it.dayNumber == dayB }
-                if (idxA >= 0 && idxB >= 0) {
-                    val restA = allDays[idxA].isRestDay; val focusA = allDays[idxA].focusLabel
-                    val restB = allDays[idxB].isRestDay; val focusB = allDays[idxB].focusLabel
-                    allDays[idxA] = allDays[idxA].copy(isRestDay = restB, focusLabel = focusB)
-                    allDays[idxB] = allDays[idxB].copy(isRestDay = restA, focusLabel = focusA)
-                }
-
-                // Nato razširi pattern na vse nadaljnje tedne (tedni ki so > teden dayA in dayB)
-                val startWeek = maxOf((dayA - 1) / 7, (dayB - 1) / 7) + 1 // začni od naslednjega tedna
-                for (weekIdx in startWeek until 4) {
-                    val futureA = weekIdx * 7 + posA + 1
-                    val futureB = weekIdx * 7 + posB + 1
-                    val fIdxA = allDays.indexOfFirst { it.dayNumber == futureA }
-                    val fIdxB = allDays.indexOfFirst { it.dayNumber == futureB }
-                    if (fIdxA >= 0 && fIdxB >= 0) {
-                        val rA = allDays[fIdxA].isRestDay; val fA = allDays[fIdxA].focusLabel
-                        val rB = allDays[fIdxB].isRestDay; val fB = allDays[fIdxB].focusLabel
-                        allDays[fIdxA] = allDays[fIdxA].copy(isRestDay = rB, focusLabel = fB)
-                        allDays[fIdxB] = allDays[fIdxB].copy(isRestDay = rA, focusLabel = fA)
+                // Zamenjaj v VSEH 4 tednih (od tedna kjer je zamenjava, naprej)
+                for (weekIdx in weekA until 4) {
+                    val dayNumA = weekIdx * 7 + posA + 1
+                    val dayNumB = weekIdx * 7 + posB + 1
+                    val iA = allDays.indexOfFirst { it.dayNumber == dayNumA }
+                    val iB = allDays.indexOfFirst { it.dayNumber == dayNumB }
+                    if (iA >= 0 && iB >= 0) {
+                        val rA = allDays[iA].isRestDay; val fA = allDays[iA].focusLabel
+                        val rB = allDays[iB].isRestDay; val fB = allDays[iB].focusLabel
+                        allDays[iA] = allDays[iA].copy(isRestDay = rB, focusLabel = fB)
+                        allDays[iB] = allDays[iB].copy(isRestDay = rA, focusLabel = fA)
                     }
                 }
 
-                // Rekonstruiraj weeks
+                // Rekonstruiraj weeks iz posodobljenih dni
                 val updatedWeeks = currentPlan.weeks.map { week ->
                     week.copy(days = allDays.filter { (it.dayNumber - 1) / 7 == week.weekNumber - 1 })
                 }
@@ -1243,18 +1247,18 @@ private fun DayInfoDialog(
     val isFuture = dayNumber > currentDay
 
     // Difficulty kot 1-10 (to je tista vrednost ki jo dejansko WorkoutGenerator uporablja)
-    val difficultyLevel = remember(context) {
-        com.example.myapplication.data.AlgorithmPreferences.getCurrentDifficulty(context).roundToInt()
-            .coerceIn(1, 10)
+    val difficultyLevel: Int = remember(context) {
+        val raw = com.example.myapplication.data.AlgorithmPreferences.getCurrentDifficulty(context)
+        Math.round(raw).coerceIn(1, 10)
     }
-    val difficultyLabel = when {
+    val difficultyLabel: String = when {
         difficultyLevel <= 2 -> "Very Easy"
         difficultyLevel <= 4 -> "Easy"
         difficultyLevel <= 6 -> "Moderate"
         difficultyLevel <= 8 -> "Hard"
         else -> "Very Hard"
     }
-    val difficultyColor = when {
+    val difficultyColor: Color = when {
         difficultyLevel <= 2 -> Color(0xFF4CAF50)
         difficultyLevel <= 4 -> Color(0xFF8BC34A)
         difficultyLevel <= 6 -> Color(0xFFFFEB3B)
@@ -1628,25 +1632,28 @@ fun PlanPathVisualizer(
                                                 val currentAbsX = srcPx.x + dragOffsetX
                                                 val currentAbsY = srcPx.y + dragOffsetY
 
-                                                // Poišči najbližji node (ne sam sebe, ne pretekli)
-                                                var bestDist = Float.MAX_VALUE
-                                                var bestDay = -1
-                                                nodePositionsPx.forEach { (idx, pos) ->
-                                                    val d = idx + 1
-                                                    if (d != globalDay && d >= currentDayGlobal) {
-                                                        val dist = kotlin.math.sqrt(
-                                                            (pos.x - currentAbsX) * (pos.x - currentAbsX) +
-                                                            (pos.y - currentAbsY) * (pos.y - currentAbsY)
-                                                        )
-                                                        if (dist < bestDist) {
-                                                            bestDist = dist
-                                                            bestDay = d
-                                                        }
-                                                    }
-                                                }
-                                                // Pokaži drop target samo če je blizu (< 80dp v px)
-                                                val snapThresholdPx = with(density) { 80.dp.toPx() }
-                                                dropTargetDay = if (bestDist < snapThresholdPx) bestDay else -1
+                                // Poišči najbližji node (ne sam sebe, ne pretekli, SAMO isti teden)
+                                val draggedWeek = (globalDay - 1) / 7
+                                var bestDist = Float.MAX_VALUE
+                                var bestDay = -1
+                                nodePositionsPx.forEach { (idx, pos) ->
+                                    val d = idx + 1
+                                    val dWeek = (d - 1) / 7
+                                    // Samo isti teden, ne sam sebe, ne pretekli
+                                    if (d != globalDay && d >= currentDayGlobal && dWeek == draggedWeek) {
+                                        val dist = kotlin.math.sqrt(
+                                            (pos.x - currentAbsX) * (pos.x - currentAbsX) +
+                                            (pos.y - currentAbsY) * (pos.y - currentAbsY)
+                                        )
+                                        if (dist < bestDist) {
+                                            bestDist = dist
+                                            bestDay = d
+                                        }
+                                    }
+                                }
+                                // Pokaži drop target samo če je blizu (< 80dp v px)
+                                val snapThresholdPx = with(density) { 80.dp.toPx() }
+                                dropTargetDay = if (bestDist < snapThresholdPx) bestDay else -1
                                             },
                                             onDragEnd = {
                                                 val from = draggedDay
