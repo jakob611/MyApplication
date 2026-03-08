@@ -708,9 +708,26 @@ class MainActivity : ComponentActivity() {
                                                     com.example.myapplication.persistence.NutritionPlanStore.saveNutritionPlan(uid, nutritionPlan)
                                                 }
                                                 val bodyPrefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                                val actParsed = userProfile.activityLevel?.replace("x", "")?.toIntOrNull()
-                                                if (actParsed != null && actParsed > 0) bodyPrefs.edit().putInt("weekly_target", actParsed).apply()
-                                                else if (plan.trainingDays > 0) bodyPrefs.edit().putInt("weekly_target", plan.trainingDays).apply()
+                                                val actParsed = userProfile.activityLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
+                                                if (actParsed != null && actParsed > 0) {
+                                                    bodyPrefs.edit().putInt("weekly_target", actParsed).apply()
+                                                    // Shrani tudi v Firestore stats da se ne povozi z staro vrednostjo
+                                                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                                    if (uid != null) {
+                                                        com.google.firebase.ktx.Firebase.firestore
+                                                            .collection("users").document(uid)
+                                                            .set(mapOf("weekly_target" to actParsed), com.google.firebase.firestore.SetOptions.merge())
+                                                    }
+                                                }
+                                                else if (plan.trainingDays > 0) {
+                                                    bodyPrefs.edit().putInt("weekly_target", plan.trainingDays).apply()
+                                                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                                    if (uid != null) {
+                                                        com.google.firebase.ktx.Firebase.firestore
+                                                            .collection("users").document(uid)
+                                                            .set(mapOf("weekly_target" to plan.trainingDays), com.google.firebase.firestore.SetOptions.merge())
+                                                    }
+                                                }
                                                 bodyOverviewViewModel.refreshPlans()
                                                 currentScreen = Screen.BodyOverview
                                             }
