@@ -89,16 +89,29 @@ class WorkoutGenerator {
             exercise to calculateScore(exercise, params)
         }
 
-        // Ohrani samo vaje s score > 1.0 (eliminira popolnoma neskladne)
-        val validExercises = scoredExercises.filter { it.second > 1.0 }
+        // Ohrani samo vaje s score > 0 (fokus ujemanje)
+        // NIKOLI ne vzemi vaj s score 0 — to pomeni da so izven fokusa
+        val focusMatchExercises = scoredExercises.filter { it.second > 0.0 }
+
+        // Če ni nobene vaje v fokusu (npr. fokus ključi ne ujemajo exercises.json),
+        // logiraj napako in vzemi vaje s katerokoli score > 0
+        val pool = if (focusMatchExercises.isNotEmpty()) {
+            // Vzemi samo tiste z score > 1.0 (dobro ujemanje), ali vse s score > 0 kot fallback
+            val goodMatches = focusMatchExercises.filter { it.second > 1.0 }
+            if (goodMatches.isNotEmpty()) goodMatches else focusMatchExercises
+        } else {
+            // Absolutni fallback: fokus ni bil prepoznan → Full Body
+            android.util.Log.w("WorkoutGenerator",
+                "WARNING: No exercises matched focus ${params.focusAreas} — falling back to all exercises")
+            scoredExercises.filter { it.second > 0.0 }.ifEmpty { scoredExercises }
+        }
 
         // Log top 5
-        validExercises.sortedByDescending { it.second }.take(5).forEach { (ex, score) ->
+        pool.sortedByDescending { it.second }.take(5).forEach { (ex, score) ->
             android.util.Log.d("WorkoutGenerator",
                 "  TOP: ${ex.name} score=${"%.2f".format(score)} diff=${ex.difficulty} muscles=${ex.muscleIntensities.keys}")
         }
 
-        val pool = if (validExercises.isNotEmpty()) validExercises else scoredExercises
         val count = params.exerciseCount.coerceAtMost(15)
 
         return selectExercisesWeighted(pool, count)
@@ -113,7 +126,7 @@ class WorkoutGenerator {
         score *= diffMultiplier
 
         // B. Fokus ujemanje — s pravilnim mapiranjem na JSON ključe
-        var focusMultiplier = 0.1  // default: vaja ni v fokusu
+        var focusMultiplier = 0.0  // default: vaja NI v fokusu → score 0 → ne bo izbrana
 
         if (isFullBodyFocus(params.focusAreas)) {
             // Full Body / Balance → vse vaje so primerne, bonus za tiste s PRIMARY mišico
@@ -199,10 +212,9 @@ class WorkoutGenerator {
             // Seštej vse pozitivne score-e
             val totalScore = pool.sumOf { (_, s) -> s.coerceAtLeast(0.0) }
             if (totalScore <= 0.0) {
-                // Fallback: uniform random
-                val picked = pool.random()
-                selected.add(picked.first)
-                pool.remove(picked)
+                // Ne bi se smelo zgoditi — pool ne sme vsebovati vaj s score 0
+                // Logiraj napako in preskoči to iteracijo
+                android.util.Log.e("WorkoutGenerator", "ERROR: totalScore=0 in pool of ${pool.size} exercises — skipping")
                 return@repeat
             }
 
