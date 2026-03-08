@@ -110,28 +110,29 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun refreshFromPrefs() {
-        // Premaknjeno na IO dispatcher - ne blokira UI thread
         withContext(Dispatchers.IO) {
-            // Load from Firestore to sync
+            // Sinciraj iz Firestore
             if (userEmail.isNotEmpty()) {
                 try {
                     val remoteStats = com.example.myapplication.data.UserPreferences.getWorkoutStats(userEmail)
                     if (remoteStats != null) {
-                        val remoteStreak = remoteStats["streak_days"] as Int
-                        val remoteTotal = remoteStats["total_workouts_completed"] as Int
-                        val remoteWeekly = remoteStats["weekly_done"] as Int
-                        val remoteLastEpoch = remoteStats["last_workout_epoch"] as Long
-                        val remotePlanDay = (remoteStats["plan_day"] as? Number)?.toInt() ?: 1 // Read planDay
+                        val remoteStreak = (remoteStats["streak_days"] as? Number)?.toInt() ?: 0
+                        val remoteTotal = (remoteStats["total_workouts_completed"] as? Number)?.toInt() ?: 0
+                        val remoteWeekly = (remoteStats["weekly_done"] as? Number)?.toInt() ?: 0
+                        val remoteLastEpoch = (remoteStats["last_workout_epoch"] as? Number)?.toLong() ?: 0L
+                        val remotePlanDay = (remoteStats["plan_day"] as? Number)?.toInt() ?: 1
 
-                        // Determine if remote is newer or better?
-                        // Generally, we want to maximize progress or trust the latest sync.
                         val currentLocalTotal = prefs.getInt("total_workouts_completed", 0)
                         val currentLocalPlanDay = prefs.getInt("plan_day", 1)
 
-                        // Sinciraj če: Firestore ima več workoutov, ali če je lokalni planDay še na 1
-                        // (npr. po reinstall-u) in Firestore ima napredek
-                        val shouldSyncFromRemote = remoteTotal > currentLocalTotal ||
+                        // Sinciraj samo če Firestore ima DEJANSKO podatke (total > 0 ali planDay > 1)
+                        // Ne sinciraj če je Firestore prazen (po delete/fresh start) — da ne prepiše
+                        // praznih vrednosti z lokalnimi vrednostmi ki so prav tako prazne
+                        val remoteHasData = remoteTotal > 0 || remotePlanDay > 1 || remoteLastEpoch > 0L
+                        val shouldSyncFromRemote = remoteHasData && (
+                            remoteTotal > currentLocalTotal ||
                             (currentLocalPlanDay <= 1 && remotePlanDay > 1)
+                        )
 
                         if (shouldSyncFromRemote) {
                             prefs.edit {
@@ -143,8 +144,6 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
 
-                        // Sinciraj weeklyTarget iz Firestorea — local prefs ga nastavi samo ob
-                        // kreiranju plana, ampak po reinstall-u ali zamenjavi plana bi bil napačen
                         val remoteWeeklyTarget = (remoteStats["weekly_target"] as? Number)?.toInt()
                         if (remoteWeeklyTarget != null && remoteWeeklyTarget > 0) {
                             val localTarget = prefs.getInt("weekly_target", 0)
@@ -156,6 +155,14 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
+            }
+
+            // Reset workouts_today če zadnji workout ni bil danes
+            val lastWorkoutEpochForReset = prefs.getLong("last_workout_epoch", 0L)
+            val todayForReset = LocalDate.now()
+            val lastWorkoutDate = if (lastWorkoutEpochForReset > 0L) LocalDate.ofEpochDay(lastWorkoutEpochForReset) else null
+            if (lastWorkoutDate != todayForReset) {
+                prefs.edit { putInt("workouts_today", 0) }
             }
 
             val day = prefs.getInt("plan_day", 1) // Default to 1 if not set

@@ -528,6 +528,9 @@ object UserPreferences {
         for (name in prefNames) {
             context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().apply()
         }
-        Log.d("UserPreferences", "✅ All local SharedPreferences cleared")
+        // Nastavi flag da bo ob naslednji prijavi aplikacija vedela da gre za "fresh start"
+        context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+            .edit().putBoolean("fresh_start_on_login", true).apply()
+        Log.d("UserPreferences", "✅ All local SharedPreferences cleared + fresh_start flag set")
     }
 }

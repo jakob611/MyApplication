@@ -155,6 +155,20 @@ class MainActivity : ComponentActivity() {
                 if (user != null && (user.isEmailVerified || user.providerData.any { it.providerId == "google.com" })) {
                     isLoggedIn = true
                     userEmail = user.email ?: ""
+
+                    // Preveri fresh_start flag (nastavljen ob delete data/account)
+                    val appFlags = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+                    if (appFlags.getBoolean("fresh_start_on_login", false)) {
+                        // Pobriši vse bm_prefs na čisto — novo začetno stanje
+                        context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                            .edit().clear().apply()
+                        context.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE)
+                            .edit().clear().apply()
+                        // Počisti flag
+                        appFlags.edit().remove("fresh_start_on_login").apply()
+                        Log.d("MainActivity", "✅ Fresh start: bm_prefs reset")
+                    }
+
                     userProfile = UserPreferences.loadProfile(context, userEmail)
                     isDarkMode = UserPreferences.isDarkMode(userEmail)
                     currentScreen = if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard
