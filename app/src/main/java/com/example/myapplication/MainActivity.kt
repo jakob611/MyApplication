@@ -289,6 +289,16 @@ class MainActivity : ComponentActivity() {
                 isCheckingAuth = false
             }
 
+            // ----- Workers scheduling ob loginu (email, Google, auto-login) -----
+            LaunchedEffect(isLoggedIn) {
+                if (isLoggedIn) {
+                    try {
+                        com.example.myapplication.workers.StreakReminderWorker.createNotificationChannel(context)
+                        com.example.myapplication.workers.StreakReminderWorker.scheduleForToday(context)
+                    } catch (e: Exception) { Log.e("MainActivity", "StreakReminderWorker schedule error: ${e.message}") }
+                }
+            }
+
             // ----- Widget intent handling -----
             var showWeightInputDialog by remember { mutableStateOf(false) }
             var openBarcodeScan by remember { mutableStateOf(false) }

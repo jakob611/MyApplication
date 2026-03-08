@@ -223,6 +223,95 @@ fun DeveloperSettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
+            // ─── STREAK TESTER ────────────────────────────────────────────
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+            Text("🧪 Streak / Plan Testing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(8.dp))
+
+            // Prikaži trenutni streak status
+            val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
+            val currentStreak = prefs.getInt("streak_days", 0)
+            val currentPlanDay = prefs.getInt("plan_day", 1)
+            val todayIsRest = prefs.getBoolean("today_is_rest", false)
+            val workoutDoneToday = run {
+                val epoch = prefs.getLong("last_workout_epoch", 0L)
+                if (epoch == 0L) false else java.time.LocalDate.ofEpochDay(epoch) == java.time.LocalDate.now()
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("🔥 Streak: $currentStreak dni", fontWeight = FontWeight.Bold)
+                    Text("📅 Plan day: $currentPlanDay")
+                    Text("💤 Danes je rest day: $todayIsRest")
+                    Text("✅ Vadba danes opravljena: $workoutDoneToday")
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    com.example.myapplication.workers.WeeklyStreakWorker.simulateDayPass(context)
+                    android.widget.Toast.makeText(
+                        context,
+                        "🧪 Simuliran prehod dneva — Worker bo preveril streak",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF7C3AED))
+            ) {
+                Text("🌙 Simuliraj prehod polnoči (test streak)")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Reset streak za testiranje
+            OutlinedButton(
+                onClick = {
+                    prefs.edit()
+                        .putInt("streak_days", 0)
+                        .putInt("plan_day", 1)
+                        .putBoolean("today_is_rest", false)
+                        .putBoolean("workout_done_yesterday", false)
+                        .putBoolean("yesterday_was_rest", false)
+                        .putLong("last_workout_epoch", 0L)
+                        .apply()
+                    android.widget.Toast.makeText(context, "🔄 Streak in plan day resetirani na 0/1", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("🔄 Reset streak + plan day (test)")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Test streak reminder notifikacija
+            Button(
+                onClick = {
+                    com.example.myapplication.workers.StreakReminderWorker.createNotificationChannel(context)
+                    // Pošlji notifikacijo takoj (zamuda 0 sekund)
+                    val request = androidx.work.OneTimeWorkRequestBuilder<com.example.myapplication.workers.StreakReminderWorker>()
+                        .setInitialDelay(0, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    androidx.work.WorkManager.getInstance(context)
+                        .enqueue(request)
+                    android.widget.Toast.makeText(context, "🔔 Test streak reminder bo prikazana v ~5s", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF0F766E))
+            ) {
+                Text("🔔 Test streak reminder (20:00 opomnik)")
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             // Generate Button
             Button(
                 onClick = {
