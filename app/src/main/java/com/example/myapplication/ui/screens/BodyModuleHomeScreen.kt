@@ -94,9 +94,15 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<BodyHomeUiState> = _ui
 
     init {
-        // OPTIMIZED: Launch only once, and combine both operations into single launch
         viewModelScope.launch {
             updateStreak()
+            // Počakaj da Firebase Auth postane dostopen (max 3 sekunde)
+            var waited = 0
+            while (userEmail.isEmpty() && waited < 3000) {
+                kotlinx.coroutines.delay(100)
+                waited += 100
+            }
+            android.util.Log.d("BodyModuleHomeVM", "init: userEmail='$userEmail' after ${waited}ms wait")
             refreshFromPrefs()
         }
     }
@@ -104,6 +110,13 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     // Call this after animation finishes
     fun onCompletionAnimationShown() {
         _ui.value = _ui.value.copy(showCompletionAnimation = false)
+    }
+
+    // Kliči ob vsakem prikazu zaslona — zagotovi da je weekly_target vedno svež
+    fun refreshStats() {
+        viewModelScope.launch {
+            refreshFromPrefs()
+        }
     }
 
     private suspend fun refreshFromPrefs() {
@@ -144,39 +157,34 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                             prefs.edit { putInt("weekly_target", remoteWeeklyTarget) }
                             android.util.Log.d("BodyModuleHomeVM", "weekly_target from Firestore stats: $remoteWeeklyTarget")
                         } else {
-                            // Fallback: beri activityLevel iz profila (npr. "3x" → 3)
-                            val localTarget = prefs.getInt("weekly_target", 0)
-                            if (localTarget == 0) {
-                                try {
-                                    val profile = com.example.myapplication.data.UserPreferences.loadProfileFromFirestore(userEmail)
-                                    val actParsed = profile?.activityLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
-                                    if (actParsed != null && actParsed > 0) {
-                                        prefs.edit { putInt("weekly_target", actParsed) }
-                                        android.util.Log.d("BodyModuleHomeVM", "weekly_target from activityLevel: $actParsed")
-                                    } else {
-                                        // Zadnji fallback: beri trainingDays iz Firestore user_plans
-                                        try {
-                                            val userId = com.example.myapplication.persistence.PlanDataStore.getResolvedUserId()
-                                            if (userId != null) {
-                                                val snap = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                    .collection("user_plans").document(userId).get()
-                                                    .await()
-                                                @Suppress("UNCHECKED_CAST")
-                                                val plans = snap.get("plans") as? List<Map<String, Any>>
-                                                val firstPlan = plans?.firstOrNull()
-                                                val td = (firstPlan?.get("trainingDays") as? Number)?.toInt()
-                                                if (td != null && td > 0) {
-                                                    prefs.edit { putInt("weekly_target", td) }
-                                                    android.util.Log.d("BodyModuleHomeVM", "weekly_target from Firestore plan.trainingDays: $td")
-                                                }
-                                            }
-                                        } catch (e2: Exception) {
-                                            android.util.Log.e("BodyModuleHomeVM", "Cannot load trainingDays fallback: ${e2.message}")
+                            // weekly_target ni v stats — vedno beri iz profila (activityLevel)
+                            // Ne preverjaj localTarget ker je lahko napačna stara vrednost (npr. 4)
+                            try {
+                                val profile = com.example.myapplication.data.UserPreferences.loadProfileFromFirestore(userEmail)
+                                val actParsed = profile?.activityLevel
+                                    ?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
+                                if (actParsed != null && actParsed > 0) {
+                                    prefs.edit { putInt("weekly_target", actParsed) }
+                                    android.util.Log.d("BodyModuleHomeVM", "weekly_target from activityLevel: $actParsed (activityLevel=${profile.activityLevel})")
+                                } else {
+                                    // Zadnji fallback: beri trainingDays iz Firestore user_plans
+                                    val userId = com.example.myapplication.persistence.PlanDataStore.getResolvedUserId()
+                                    if (userId != null) {
+                                        val snap = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                            .collection("user_plans").document(userId).get().await()
+                                        @Suppress("UNCHECKED_CAST")
+                                        val plans = snap.get("plans") as? List<Map<String, Any>>
+                                        val td = (plans?.firstOrNull()?.get("trainingDays") as? Number)?.toInt()
+                                        if (td != null && td > 0) {
+                                            prefs.edit { putInt("weekly_target", td) }
+                                            android.util.Log.d("BodyModuleHomeVM", "weekly_target from plan.trainingDays: $td")
+                                        } else {
+                                            android.util.Log.w("BodyModuleHomeVM", "weekly_target: ni najdeno nikjer! activityLevel=${profile?.activityLevel}, trainingDays=$td")
                                         }
                                     }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("BodyModuleHomeVM", "Cannot load activityLevel fallback: ${e.message}")
                                 }
+                            } catch (e: Exception) {
+                                android.util.Log.e("BodyModuleHomeVM", "weekly_target fallback error: ${e.message}")
                             }
                         }
                     }
@@ -552,6 +560,11 @@ fun BodyModuleHomeScreen(
         )
     )
     val ui by vm.ui.collectAsState()
+
+    // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
+    LaunchedEffect(Unit) {
+        vm.refreshStats()
+    }
 
     val showKnowledge = remember { mutableStateOf(false) }
     val showPlanPath = remember { mutableStateOf(false) } // State for Plan Path Dialog
@@ -1090,9 +1103,16 @@ fun PlanPathDialog(
     var selectedDayNumber by remember { mutableStateOf(0) }
 
     val bmPrefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-    val localActivityDays = bmPrefs.getInt("weekly_target", 0)
 
-    // Priority: 1) SharedPrefs weekly_target (synced from Firestore), 2) plan.trainingDays, 3) weeklyGoal param
+    // Beri kot State — posodobi se ko refreshFromPrefs dokonča async Firestore klic
+    var localActivityDays by remember { mutableIntStateOf(bmPrefs.getInt("weekly_target", 0)) }
+    LaunchedEffect(Unit) {
+        // Počakaj da ViewModel refreshFromPrefs dokonča (async Firestore klic traja ~200-500ms)
+        kotlinx.coroutines.delay(600)
+        localActivityDays = bmPrefs.getInt("weekly_target", 0)
+    }
+
+    // Priority: 1) SharedPrefs weekly_target, 2) plan.trainingDays, 3) weeklyGoal param
     val planFrequency = when {
         localActivityDays > 0 -> localActivityDays
         currentPlan?.trainingDays != null && currentPlan.trainingDays > 0 -> currentPlan.trainingDays

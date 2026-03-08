@@ -317,7 +317,7 @@ object PlanDataStore {
                 carbs = (planMap["carbs"] as? Number)?.toInt() ?: 0,
                 fat = (planMap["fat"] as? Number)?.toInt() ?: 0,
                 trainingPlan = planMap["trainingPlan"] as? String ?: "",
-                trainingDays = (planMap["trainingDays"] as? Number)?.toInt()?.takeIf { it > 0 } ?: 4,
+                trainingDays = (planMap["trainingDays"] as? Number)?.toInt()?.takeIf { it > 0 } ?: 3,
                 sessionLength = (planMap["sessionLength"] as? Number)?.toInt() ?: 0,
                 tips = planMap["tips"] as? List<String> ?: emptyList(),
                 createdAt = (planMap["createdAt"] as? Number)?.toLong() ?: 0L,
