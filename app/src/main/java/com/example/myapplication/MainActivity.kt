@@ -708,25 +708,23 @@ class MainActivity : ComponentActivity() {
                                                     com.example.myapplication.persistence.NutritionPlanStore.saveNutritionPlan(uid, nutritionPlan)
                                                 }
                                                 val bodyPrefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                                // Vzemi frequency direktno iz plana — ne iz userProfile ki se morda ni pravilno naložil
+                                                val freqFromPlan = plan.trainingDays.takeIf { it > 0 }
                                                 val actParsed = userProfile.activityLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
-                                                if (actParsed != null && actParsed > 0) {
-                                                    bodyPrefs.edit().putInt("weekly_target", actParsed).apply()
-                                                    // Shrani tudi v Firestore stats da se ne povozi z staro vrednostjo
-                                                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                                                    if (uid != null) {
-                                                        com.google.firebase.ktx.Firebase.firestore
-                                                            .collection("users").document(uid)
-                                                            .set(mapOf("weekly_target" to actParsed), com.google.firebase.firestore.SetOptions.merge())
-                                                    }
-                                                }
-                                                else if (plan.trainingDays > 0) {
-                                                    bodyPrefs.edit().putInt("weekly_target", plan.trainingDays).apply()
-                                                    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                                                    if (uid != null) {
-                                                        com.google.firebase.ktx.Firebase.firestore
-                                                            .collection("users").document(uid)
-                                                            .set(mapOf("weekly_target" to plan.trainingDays), com.google.firebase.firestore.SetOptions.merge())
-                                                    }
+                                                val weeklyTargetToSave = actParsed?.takeIf { it > 0 } ?: freqFromPlan ?: 3
+                                                bodyPrefs.edit().putInt("weekly_target", weeklyTargetToSave).apply()
+                                                // Shrani v Firestore POD EMAIL (ne UID) — ker getWorkoutStats bere users/{email}
+                                                if (userEmail.isNotBlank()) {
+                                                    com.example.myapplication.data.UserPreferences.saveWorkoutStats(
+                                                        email = userEmail,
+                                                        streak = bodyPrefs.getInt("streak_days", 0),
+                                                        totalWorkouts = bodyPrefs.getInt("total_workouts_completed", 0),
+                                                        weeklyDone = bodyPrefs.getInt("weekly_done", 0),
+                                                        lastWorkoutEpoch = bodyPrefs.getLong("last_workout_epoch", 0L),
+                                                        planDay = bodyPrefs.getInt("plan_day", 1),
+                                                        weeklyTarget = weeklyTargetToSave
+                                                    )
+                                                    android.util.Log.d("MainActivity", "✅ weekly_target saved to Firestore users/$userEmail: $weeklyTargetToSave")
                                                 }
                                                 bodyOverviewViewModel.refreshPlans()
                                                 currentScreen = Screen.BodyOverview

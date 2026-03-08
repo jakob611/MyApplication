@@ -70,12 +70,13 @@ data class Challenge(
 data class BodyHomeUiState(
     val streakDays: Int = 0,
     val weeklyDone: Int = 0,
-    val weeklyTarget: Int = 3,  // Default 3 (ne 4) — pravilna vrednost se naloži iz Firestore/prefs
+    val weeklyTarget: Int = 3,
     val planDay: Int = 1,
-    val totalWorkoutsCompleted: Int = 0, // Skupno število workoutov
-    val workoutsToday: Int = 0, // Deprecated but kept for compatibility
-    val isWorkoutDoneToday: Boolean = false, // Added for plan view logic
-    val showCompletionAnimation: Boolean = false, // Flag for triggering animation once
+    val totalWorkoutsCompleted: Int = 0,
+    val workoutsToday: Int = 0,
+    val isWorkoutDoneToday: Boolean = false,
+    val showCompletionAnimation: Boolean = false,
+    val todayIsRest: Boolean = false,   // ← NOVO: ali je danes rest day
     val challenges: List<Challenge> = listOf(
         Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Short description here..."),
         Challenge("c2", "30 days pushups", "Improve your pushups in 30 days."),
@@ -254,7 +255,8 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     workoutsToday = workoutsToday,
                     streakDays = streak,
                     totalWorkoutsCompleted = totalWorkouts,
-                    isWorkoutDoneToday = isWorkoutDoneToday
+                    isWorkoutDoneToday = isWorkoutDoneToday,
+                    todayIsRest = prefs.getBoolean("today_is_rest", false)
                 )
 
                 // ─── Inicializiraj today_is_rest flag ob zagonu ───────────
@@ -322,8 +324,9 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 val extraCount = prefs.getInt("total_extra_workouts", 0) + 1
                 prefs.edit { putInt("total_workouts_completed", newTotal); putInt("total_extra_workouts", extraCount) }
                 _ui.value = _ui.value.copy(totalWorkoutsCompleted = newTotal)
+                // Extra workout na REST DAY ne poveča streaka!
+                // (streak raste samo na workout dnevih)
                 // XP za extra workout skrbi AchievementStore.recordWorkoutCompletion v WorkoutSessionScreen
-                // (enako kot regular workout) — tukaj ga ne prištejemo, da ni dvojni XP
                 return@launch
             }
 
@@ -1120,6 +1123,14 @@ fun PlanPathDialog(
     val textColor = if (isDark) MaterialTheme.colorScheme.onBackground else Color.Black
     val subtitleColor = if (isDark) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f) else Color.Gray
 
+    // Preveri ali je današnji dan (currentDay) rest day v planu
+    val todayIsRestDay = remember(localPlan, currentDay) {
+        localPlan?.weeks
+            ?.flatMap { it.days }
+            ?.firstOrNull { it.dayNumber == currentDay }
+            ?.isRestDay ?: false
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = bgColor
@@ -1224,6 +1235,7 @@ fun PlanPathDialog(
 
             // Floating footer vedno na dnu zaslona
             if (isTodayDone) {
+                // Workout dan — že opravljen
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1257,7 +1269,50 @@ fun PlanPathDialog(
                         }
                     }
                 }
+            } else if (todayIsRestDay) {
+                // REST DAY — prikaži počitek info + opcija za extra workout
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .align(Alignment.BottomCenter),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) Color(0xFF1E2A3A) else Color.White
+                    ),
+                    elevation = CardDefaults.cardElevation(8.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("😴", fontSize = 24.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "REST DAY",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6366F1),
+                                fontSize = 18.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Recovery is just as important as training! Focus on sleep, hydration and light stretching.",
+                            color = if (isDark) Color(0xFF94A3B8) else Color.Gray,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = onStartAdditional,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF374151)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Extra workout (optional)", color = Color(0xFF94A3B8), fontSize = 14.sp)
+                        }
+                    }
+                }
             } else {
+                // Navaden workout dan — prikaži START DAY gumb
                 Button(
                     onClick = onStartToday,
                     modifier = Modifier

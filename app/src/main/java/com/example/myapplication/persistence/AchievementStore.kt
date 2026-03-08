@@ -326,9 +326,31 @@ object AchievementStore {
         email: String
     ) = withContext(Dispatchers.IO) {
         try {
-            // Beri iz Firestorea — da ne prepiše height/age/gender z null vrednostmi iz lokalnega cache-a
-            val profile = UserPreferences.loadProfileFromFirestore(email)
-                ?: UserPreferences.loadProfile(context, email)
+            // Preveri fresh_start flag — če je postavljen, je bil račun nedavno izbrisan
+            // V tem primeru začnemo streak od 0 (ta login bo nastavil na 1)
+            val appFlags = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+            val isFreshStart = appFlags.getBoolean("fresh_start_on_login", false)
+
+            val profile = if (isFreshStart) {
+                // Fresh start — ignoriraj Firestore podatke, začni na novo
+                Log.d("AchievementStore", "🔄 Fresh start detected — resetting streak to 1")
+                appFlags.edit().putBoolean("fresh_start_on_login", false).apply()
+                // Pobriši tudi Firestore streak podatke
+                try {
+                    val resolvedRef = FirestoreHelper.getCurrentUserDocRef()
+                    resolvedRef.update(mapOf(
+                        "streak_days" to 0,
+                        "login_streak" to 0,
+                        "last_login_date" to "",
+                        KEY_LAST_LOGIN to ""
+                    )).await()
+                } catch (_: Exception) {}
+                UserPreferences.loadProfile(context, email).copy(currentLoginStreak = 0, lastLoginDate = null)
+            } else {
+                UserPreferences.loadProfileFromFirestore(email)
+                    ?: UserPreferences.loadProfile(context, email)
+            }
+
             val today = LocalDate.now().toString()
             val yesterday = LocalDate.now().minusDays(1).toString()
 
@@ -348,13 +370,14 @@ object AchievementStore {
 
             if (profile.lastLoginDate != today) {
                 awardXP(context, email, 10, XPSource.DAILY_LOGIN, "Daily login")
-                // checkAndUnlockBadges se pokliče znotraj awardXP — ne kličemo ga dvakrat
             }
 
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error updating login streak: ${e.message}")
         }
     }
+
+    private const val KEY_LAST_LOGIN = "last_login_date"
 
     /**
      * Log XP activity to Firestore
