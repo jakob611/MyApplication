@@ -34,6 +34,7 @@ sealed class Screen {
     object ExerciseHistory : Screen()
     object ManualExerciseLog : Screen()
     object RunTracker : Screen()
+    object ActivityLog : Screen()  // Vse aktivnosti na enem mestu (mapa + barvne kartice)
 
     // Napredek
     object Progress : Screen()
@@ -93,7 +94,8 @@ fun screenToIndex(screen: Screen): Int {
     val index = when (screen) {
         is Screen.Dashboard, is Screen.BodyModule, is Screen.BodyModuleHome,
         is Screen.BodyOverview, is Screen.FaceModule, is Screen.HairModule,
-        is Screen.Shop, is Screen.ExerciseHistory, is Screen.RunTracker -> 0
+        is Screen.Shop, is Screen.ExerciseHistory, is Screen.RunTracker,
+        is Screen.ActivityLog -> 0
         is Screen.Progress, is Screen.MyPlans -> 1
         is Screen.Nutrition -> 2
         is Screen.Community, is Screen.MyAccount -> 3

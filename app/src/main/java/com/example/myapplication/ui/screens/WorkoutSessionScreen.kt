@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.screens
 
+import com.example.myapplication.data.PlanResult
+import com.example.myapplication.data.WeekPlan
+import com.example.myapplication.data.DayPlan
 import android.content.Context
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -43,6 +46,7 @@ import com.example.myapplication.data.RefinedExercise
 import com.example.myapplication.domain.WorkoutGenerator
 import com.example.myapplication.data.AlgorithmPreferences
 import com.example.myapplication.domain.WorkoutGoal
+import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -148,17 +152,17 @@ fun WorkoutSessionScreen(
     var userWeightKg by remember { mutableStateOf(70.0) }
     // uid v remember{} — ne kliči ob vsakem recomposition
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
-    LaunchedEffect(uid) {
-        if (uid != null) {
-            try {
-                Firebase.firestore.collection("users").document(uid).collection("weightLogs")
-                    .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(1).get()
-                    .addOnSuccessListener {
-                        val w = it.documents.firstOrNull()?.get("weightKg") as? Number
-                        if (w != null) userWeightKg = w.toDouble()
-                    }
-            } catch(e: Exception) {}
-        }
+    LaunchedEffect(Unit) {
+        try {
+            // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
+            val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            ref.collection("weightLogs")
+                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(1).get()
+                .addOnSuccessListener {
+                    val w = it.documents.firstOrNull()?.get("weightKg") as? Number
+                    if (w != null) userWeightKg = w.toDouble()
+                }
+        } catch(e: Exception) {}
     }
 
     var currentSessionExercises by remember { mutableStateOf<List<ExerciseData>>(emptyList()) }
@@ -409,32 +413,9 @@ fun WorkoutSessionScreen(
                     if (uid != null) {
                        val totalKcal = results.sumOf { it.caloriesKcal }
 
-                       // SAMO AchievementStore skrbi za XP in badge preverjanje
-                       scope.launch {
-                           val currentHour = java.time.LocalTime.now().hour
-                           val email = Firebase.auth.currentUser?.email ?: ""
-                           com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
-                               context = context,
-                               email = email,
-                               caloriesBurned = totalKcal.toDouble(),
-                               hour = currentHour
-                           )
-
-                           // Preveri badge-e enkrat — recordWorkoutCompletion je že posodobil profil
-                           val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
-                           val newBadges = com.example.myapplication.persistence.AchievementStore.checkAndUnlockBadges(context, updatedProfile)
-
-                           // Prikaži animacijo za prvi odklenjen badge
-                           newBadges.firstOrNull()?.let { badge ->
-                               kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                   onBadgeUnlocked(badge)
-                               }
-                           }
-
-                           kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                               onXPAdded()
-                           }
-                       }
+                        // SAMO AchievementStore skrbi za XP in badge preverjanje
+                       // Logic moved to ViewModel to prevent double-counting and ensure transactional safety
+                       // scope.launch { ... } removed
 
                        results.forEach { r ->
                            AlgorithmPreferences.saveExerciseFeedback(context, r.name, r.difficultyRating)
@@ -453,9 +434,16 @@ fun WorkoutSessionScreen(
                             )
                         },
                         totalKcal = results.sumOf { it.caloriesKcal },
-                        totalTimeMin = results.sumOf { it.activeMinutes + it.restMinutes }
+                        totalTimeMin = results.sumOf { it.activeMinutes + it.restMinutes },
+                        onCompletion = { result ->
+                            // Handle badges and navigation only AFTER save is complete
+                            if (result != null) {
+                                result.unlockedBadges.firstOrNull()?.let { badge -> onBadgeUnlocked(badge) }
+                            }
+                            onXPAdded()
+                            onFinished()
+                        }
                     )
-                    onFinished()
                 }
             }
         }

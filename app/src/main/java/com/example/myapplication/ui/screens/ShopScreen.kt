@@ -7,9 +7,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,59 +21,152 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.R
+import com.example.myapplication.viewmodels.ShopViewModel
 
 @Composable
 fun ShopScreen(
     onBack: () -> Unit
 ) {
+    val vm: ShopViewModel = viewModel()
+    val state by vm.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        vm.refreshData()
+    }
+
     val PrimaryBlue = Color(0xFF2563EB)
     val products = remember {
         listOf(
-            ShopItem("Microneedling Roller", "Enhances topical absorption and stimulates scalp circulation.", "$19.99", R.drawable.ic_nutrition),
-            ShopItem("Growth Serum", "Peptide + caffeine complex for supporting follicle vitality.", "$39.99", R.drawable.ic_progress),
-            ShopItem("Biotin Complex", "Advanced blend with biotin, zinc, and essential B vitamins.", "$24.99", R.drawable.ic_home),
-            ShopItem("Silk Pillowcase", "Reduces friction to minimize breakage and frizz overnight.", "$29.99", R.drawable.ic_community)
+            ShopItem("Microneedling Roller", "Promote collagen production.", "$19.99", R.drawable.ic_nutrition),
+            ShopItem("Growth Serum", "Peptide complex for fuller hair.", "$39.99", R.drawable.ic_progress),
+            ShopItem("Biotin Complex", "Essential vitamins for hair & skin.", "$24.99", R.drawable.ic_home),
+            ShopItem("Silk Pillowcase", "Reduce friction while sleeping.", "$29.99", R.drawable.ic_community)
         )
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            // Inline header with back button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+    Scaffold(
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = { Text("Shop", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    Surface(
+                        color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(end = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = "XP", tint = Color(0xFFF57C00), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("${state.userXP} XP", color = Color(0xFFE65100), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
                 }
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "Shop",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        }
-
-        item {
-            Text(
-                "Recommended Tools",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.ExtraBold
             )
         }
-        items(products) { p -> ProductCard(p, PrimaryBlue) }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Text(
+                    "Spend Your XP",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+
+            item {
+                UpgradeItem(
+                    title = "Streak Freeze ❄️",
+                    desc = "Maintain your streak on missed days. (Max 3)",
+                    cost = "300 XP",
+                    owned = "${state.streakFreezes}/3",
+                    canAfford = state.userXP >= 300 && state.streakFreezes < 3,
+                    onClick = { vm.buyStreakFreeze() }
+                )
+            }
+
+            item {
+                UpgradeItem(
+                    title = "10% Coupon \uD83C\uDF9F️",
+                    desc = "Get 10% off any item in the store.",
+                    cost = "500 XP",
+                    owned = "",
+                    canAfford = state.userXP >= 500,
+                    onClick = { vm.buyCoupon() }
+                )
+            }
+
+            item {
+                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                 Text(
+                    "Recommended Tools",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+
+            items(products) { p -> ProductCard(p, PrimaryBlue) }
+        }
     }
 }
+
+@Composable
+fun UpgradeItem(
+    title: String,
+    desc: String,
+    cost: String,
+    owned: String,
+    canAfford: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(desc, fontSize = 13.sp, color = Color.Gray, lineHeight = 16.sp)
+                if (owned.isNotEmpty()) {
+                    Text("Owned: $owned", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            Button(
+                onClick = onClick,
+                enabled = canAfford,
+                colors = ButtonDefaults.buttonColors(containerColor = if (canAfford) MaterialTheme.colorScheme.primary else Color.Gray)
+            ) {
+                Text(cost)
+            }
+        }
+    }
+}
+
 
 data class ShopItem(
     val name: String,
@@ -97,23 +194,43 @@ private fun ProductCard(item: ShopItem, accent: Color) {
                 modifier = Modifier.size(64.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        painter = painterResource(id = item.iconRes),
-                        contentDescription = item.name,
-                        tint = accent,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    // Placeholder icon since we don't have real product images yet
+                    Text("🛍️", fontSize = 24.sp)
                 }
             }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
-                Text(item.price, color = accent, fontWeight = FontWeight.ExtraBold)
-            }
-            Button(onClick = { /* TODO: Add to cart */ }, colors = ButtonDefaults.buttonColors(containerColor = accent)) {
-                Text("Buy", color = Color.White)
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    item.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    item.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        item.price,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                    // TODO: Add to cart functionality
+                    Text(
+                        "ADD",
+                        fontWeight = FontWeight.Bold,
+                        color = accent,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
         }
     }

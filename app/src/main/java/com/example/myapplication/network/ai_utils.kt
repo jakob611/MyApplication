@@ -1,9 +1,9 @@
 package com.example.myapplication.network
 
 import com.example.myapplication.BuildConfig
-import com.example.myapplication.ui.screens.PlanResult
-import com.example.myapplication.ui.screens.WeekPlan
-import com.example.myapplication.ui.screens.DayPlan
+import com.example.myapplication.data.PlanResult
+import com.example.myapplication.data.WeekPlan
+import com.example.myapplication.data.DayPlan
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import org.json.JSONArray

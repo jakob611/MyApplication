@@ -61,6 +61,7 @@
 
     <application
         android:allowBackup="true"
+        android:extractNativeLibs="true"
         android:icon="@drawable/ic_glow_upp_icon"
         android:roundIcon="@drawable/ic_glow_upp_icon"
         android:label="@string/app_name"
@@ -156,8 +157,22 @@
                 android:resource="@xml/streak_widget_info" />
         </receiver>
 
-        <activity android:name=".smartwatch.SmartwatchConnectActivity" />
-        <activity android:name=".smartwatch.SmartwatchDashboardActivity" />
+        <receiver
+            android:name="com.example.myapplication.widget.PlanDayWidgetProvider"
+            android:exported="true"
+            android:label="Plan Day &amp; Focus">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="android.intent.action.DATE_CHANGED"/>
+                <action android:name="com.example.myapplication.widget.PLAN_DAY_REFRESH"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/plan_day_widget_info" />
+        </receiver>
+
+        <!-- <activity android:name=".smartwatch.SmartwatchConnectActivity" /> -->
+        <!-- <activity android:name=".smartwatch.SmartwatchDashboardActivity" /> -->
 
         <!-- Run Tracking Foreground Service -->
         <service

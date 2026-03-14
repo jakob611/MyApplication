@@ -31,11 +31,9 @@ object UserPreferences {
     private const val KEY_SHOW_CHALLENGES = "show_challenges"
     private const val KEY_SHOW_FOLLOWERS = "show_followers"
     // Achievement tracking keys
-    private const val KEY_TOTAL_WORKOUTS = "total_workouts"
     private const val KEY_TOTAL_CALORIES = "total_calories"
     private const val KEY_EARLY_BIRD = "early_bird_workouts"
     private const val KEY_NIGHT_OWL = "night_owl_workouts"
-    private const val KEY_LOGIN_STREAK = "login_streak"
     private const val KEY_LAST_LOGIN = "last_login_date"
     private const val KEY_TOTAL_PLANS = "total_plans_created"
     private const val KEY_PROFILE_PICTURE = "profile_picture_url"
@@ -61,6 +59,7 @@ object UserPreferences {
             putInt(userKey(profile.email, KEY_FOLLOWERS), profile.followers)
             putInt(userKey(profile.email, KEY_FOLLOWING), profile.following)
             putString(userKey(profile.email, KEY_BADGES), profile.badges.joinToString(","))
+            putInt(userKey(profile.email, "streak_freezes"), profile.streakFreezes) // Added streak freezes
             putString(userKey(profile.email, KEY_EQUIPMENT), profile.equipment.joinToString(","))
             putString(userKey(profile.email, KEY_WEIGHT_UNIT), profile.weightUnit)
             putString(userKey(profile.email, KEY_SPEED_UNIT), profile.speedUnit)
@@ -75,11 +74,11 @@ object UserPreferences {
             putBoolean(userKey(profile.email, KEY_SHOW_CHALLENGES), profile.showChallenges)
             putBoolean(userKey(profile.email, KEY_SHOW_FOLLOWERS), profile.showFollowers)
             // Achievement tracking
-            putInt(userKey(profile.email, KEY_TOTAL_WORKOUTS), profile.totalWorkoutsCompleted)
+            putInt(userKey(profile.email, "total_workouts_completed"), profile.totalWorkoutsCompleted)
             putFloat(userKey(profile.email, KEY_TOTAL_CALORIES), profile.totalCaloriesBurned.toFloat())
             putInt(userKey(profile.email, KEY_EARLY_BIRD), profile.earlyBirdWorkouts)
             putInt(userKey(profile.email, KEY_NIGHT_OWL), profile.nightOwlWorkouts)
-            putInt(userKey(profile.email, KEY_LOGIN_STREAK), profile.currentLoginStreak)
+            putInt(userKey(profile.email, "streak_days"), profile.currentLoginStreak)
             putString(userKey(profile.email, KEY_LAST_LOGIN), profile.lastLoginDate)
             putInt(userKey(profile.email, KEY_TOTAL_PLANS), profile.totalPlansCreated)
             putString(userKey(profile.email, KEY_PROFILE_PICTURE), profile.profilePictureUrl)
@@ -113,6 +112,7 @@ object UserPreferences {
             followers = prefs.getInt(userKey(email, KEY_FOLLOWERS), 0),
             following = prefs.getInt(userKey(email, KEY_FOLLOWING), 0),
             badges = prefs.getString(userKey(email, KEY_BADGES), "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+            streakFreezes = prefs.getInt(userKey(email, "streak_freezes"), 0), // Load streak freezes
             equipment = prefs.getString(userKey(email, KEY_EQUIPMENT), "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
             weightUnit = prefs.getString(userKey(email, KEY_WEIGHT_UNIT), "kg") ?: "kg",
             speedUnit = prefs.getString(userKey(email, KEY_SPEED_UNIT), "km/h") ?: "km/h",
@@ -127,11 +127,11 @@ object UserPreferences {
             showChallenges = prefs.getBoolean(userKey(email, KEY_SHOW_CHALLENGES), false),
             showFollowers = prefs.getBoolean(userKey(email, KEY_SHOW_FOLLOWERS), false),
             // Achievement tracking
-            totalWorkoutsCompleted = prefs.getInt(userKey(email, KEY_TOTAL_WORKOUTS), 0),
+            totalWorkoutsCompleted = prefs.getInt(userKey(email, "total_workouts_completed"), 0),
             totalCaloriesBurned = prefs.getFloat(userKey(email, KEY_TOTAL_CALORIES), 0f).toDouble(),
             earlyBirdWorkouts = prefs.getInt(userKey(email, KEY_EARLY_BIRD), 0),
             nightOwlWorkouts = prefs.getInt(userKey(email, KEY_NIGHT_OWL), 0),
-            currentLoginStreak = prefs.getInt(userKey(email, KEY_LOGIN_STREAK), 0),
+            currentLoginStreak = prefs.getInt(userKey(email, "streak_days"), 0),
             lastLoginDate = prefs.getString(userKey(email, KEY_LAST_LOGIN), null),
             totalPlansCreated = prefs.getInt(userKey(email, KEY_TOTAL_PLANS), 0),
             profilePictureUrl = prefs.getString(userKey(email, KEY_PROFILE_PICTURE), null),
@@ -151,48 +151,42 @@ object UserPreferences {
     }
 
 
+    /**
+     * @Deprecated Uporabi AchievementStore.awardXP() ki pravilno posodablja badge-e, beleži XP
+     * zgodovino in gre skozi FirestoreHelper. Ta metoda obstaja samo za nazaj kompatibilnost.
+     */
+    @Deprecated("Use AchievementStore.awardXP() instead")
     fun addXPWithCallback(context: Context, email: String, amount: Int, onSuccess: (Int) -> Unit) {
         val prefs = getPrefs(context)
         val currentXP = prefs.getInt(userKey(email, KEY_XP), 0)
         val newXP = currentXP + amount
         prefs.edit().putInt(userKey(email, KEY_XP), newXP).apply()
-
-        // Also save to Firestore
-        db.collection("users")
-            .document(email)
+        // Piše skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
+        com.example.myapplication.persistence.FirestoreHelper.getUserRef(email)
             .set(mapOf(KEY_XP to newXP), SetOptions.merge())
-            .addOnSuccessListener {
-                onSuccess(amount)
-            }
-            .addOnFailureListener { e ->
-                e.printStackTrace()
-            }
+            .addOnSuccessListener { onSuccess(amount) }
+            .addOnFailureListener { e -> e.printStackTrace() }
     }
 
-    // Firestore: save/load dark mode
+    // Firestore: save/load dark mode — skozi FirestoreHelper
     suspend fun setDarkMode(email: String, isDark: Boolean) {
         try {
-            db.collection("users")
-                .document(email)
+            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
                 .set(mapOf("darkMode" to isDark), SetOptions.merge())
                 .await()
         } catch (e: Exception) {
-            Log.e("UserPreferences", "❌ Error saving profile to Firestore", e)
-            e.printStackTrace()
+            Log.e("UserPreferences", "❌ Error saving dark mode to Firestore", e)
         }
     }
 
     suspend fun isDarkMode(email: String): Boolean {
-        if (email.isBlank()) return false // Logged-out users
+        if (email.isBlank()) return false
         return try {
-            val doc = db.collection("users")
-                .document(email)
-                .get()
-                .await()
-            doc.getBoolean("darkMode") ?: false // Default je FALSE (light mode)
+            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                .get().await()
+                .getBoolean("darkMode") ?: false
         } catch (e: Exception) {
-            e.printStackTrace()
-            false // Default je light mode
+            false
         }
     }
 
@@ -221,6 +215,7 @@ object UserPreferences {
             KEY_FOLLOWERS to profile.followers,
             KEY_FOLLOWING to profile.following,
             KEY_BADGES to profile.badges,
+            "streak_freezes" to profile.streakFreezes, // Save streak freezes to Firestore
             KEY_EQUIPMENT to profile.equipment,
             "focusAreas" to profile.focusAreas,
             "workoutGoal" to profile.workoutGoal,
@@ -234,13 +229,11 @@ object UserPreferences {
             KEY_SHOW_PLAN_PATH to profile.showPlanPath,
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
-            KEY_TOTAL_WORKOUTS to profile.totalWorkoutsCompleted,           // "total_workouts"
-            "total_workouts_completed" to profile.totalWorkoutsCompleted,    // alias za BodyModuleHome
+            "total_workouts_completed" to profile.totalWorkoutsCompleted,    // kanonični ključ
             KEY_TOTAL_CALORIES to profile.totalCaloriesBurned,
             KEY_EARLY_BIRD to profile.earlyBirdWorkouts,
             KEY_NIGHT_OWL to profile.nightOwlWorkouts,
-            KEY_LOGIN_STREAK to profile.currentLoginStreak,                   // "login_streak"
-            "streak_days" to profile.currentLoginStreak,                      // alias za widget + BodyModuleHome
+            "streak_days" to profile.currentLoginStreak,                      // kanonični ključ
             KEY_LAST_LOGIN to (profile.lastLoginDate ?: ""),
             KEY_TOTAL_PLANS to profile.totalPlansCreated,
             KEY_PROFILE_PICTURE to profile.profilePictureUrl,
@@ -286,121 +279,92 @@ object UserPreferences {
                 return null
             }
             Log.d("UserPreferences", "✅ loadProfileFromFirestore: Document found!")
-            val username = doc.getString(KEY_USERNAME) ?: ""
-            val firstName = doc.getString(KEY_FIRST_NAME) ?: ""
-            val lastName = doc.getString(KEY_LAST_NAME) ?: ""
-            val address = doc.getString(KEY_ADDRESS) ?: ""
-            val xp = (doc.get(KEY_XP) as? Number)?.toInt() ?: 0
-            val followers = (doc.get(KEY_FOLLOWERS) as? Number)?.toInt() ?: 0
-            val following = (doc.get(KEY_FOLLOWING) as? Number)?.toInt() ?: 0
-            val badges = when (val b = doc.get(KEY_BADGES)) {
-                is List<*> -> b.filterIsInstance<String>()
-                is String -> b.split(',').filter { it.isNotBlank() }
-                else -> emptyList()
-            }
-            val equipment = when (val eq = doc.get(KEY_EQUIPMENT)) { // Load from Firestore
-                is List<*> -> eq.filterIsInstance<String>()
-                is String -> eq.split(',').filter { it.isNotBlank() }
-                else -> emptyList()
-            }
-            val focusAreas = when (val fa = doc.get("focusAreas")) { // Load focus areas
-                is List<*> -> fa.filterIsInstance<String>()
-                is String -> fa.split(',').filter { it.isNotBlank() }
-                else -> emptyList()
-            }
-            val workoutGoal = doc.getString("workoutGoal") ?: "" // Load workout goal
-            val weightUnit = doc.getString(KEY_WEIGHT_UNIT) ?: "kg"
-            val speedUnit = doc.getString(KEY_SPEED_UNIT) ?: "km/h"
-            val startOfWeek = doc.getString(KEY_START_OF_WEEK) ?: "Monday"
-            // Display settings
-            val detailedCalories = doc.getBoolean("detailed_calories") ?: false
-            // Privacy settings
-            val isPublic = doc.getBoolean(KEY_IS_PUBLIC) ?: false
-            val showLevel = doc.getBoolean(KEY_SHOW_LEVEL) ?: false
-            val showBadges = doc.getBoolean(KEY_SHOW_BADGES) ?: false
-            val showPlanPath = doc.getBoolean(KEY_SHOW_PLAN_PATH) ?: false
-            val showChallenges = doc.getBoolean(KEY_SHOW_CHALLENGES) ?: false
-            val showFollowers = doc.getBoolean(KEY_SHOW_FOLLOWERS) ?: false
-            // Achievement tracking — beri oba ključa (legacy + novi) in vzemi večjega
-            val totalWorkouts = maxOf(
-                (doc.get(KEY_TOTAL_WORKOUTS) as? Number)?.toInt() ?: 0,         // "total_workouts"
-                (doc.get("total_workouts_completed") as? Number)?.toInt() ?: 0   // alias
-            )
-            val totalCalories = (doc.get(KEY_TOTAL_CALORIES) as? Number)?.toDouble() ?: 0.0
-            val earlyBird = (doc.get(KEY_EARLY_BIRD) as? Number)?.toInt() ?: 0
-            val nightOwl = (doc.get(KEY_NIGHT_OWL) as? Number)?.toInt() ?: 0
-            val loginStreak = maxOf(
-                (doc.get(KEY_LOGIN_STREAK) as? Number)?.toInt() ?: 0,  // "login_streak"
-                (doc.get("streak_days") as? Number)?.toInt() ?: 0       // alias
-            )
-            val lastLogin = doc.getString(KEY_LAST_LOGIN)
-            val totalPlans = (doc.get(KEY_TOTAL_PLANS) as? Number)?.toInt() ?: 0
-            val profilePictureUrl = doc.getString(KEY_PROFILE_PICTURE)
-
-            // Plan calculation parameters
-            val height = (doc.get("height") as? Number)?.toDouble()
-            val age = (doc.get("age") as? Number)?.toInt()
-            val gender = doc.getString("gender")
-            val activityLevel = doc.getString("activityLevel")
-            val experience = doc.getString("experience")
-            val bodyFat = doc.getString("bodyFat")
-            val limitations = when (val lim = doc.get("limitations")) {
-                is List<*> -> lim.filterIsInstance<String>()
-                is String -> lim.split(',').filter { it.isNotBlank() }
-                else -> emptyList()
-            }
-            val nutritionStyle = doc.getString("nutritionStyle")
-            val sleepHours = doc.getString("sleepHours")
-
-            UserProfile(
-                username = username,
-                email = email,
-                firstName = firstName,
-                lastName = lastName,
-                address = address,
-                xp = xp,
-                followers = followers,
-                following = following,
-                badges = badges,
-                equipment = equipment, // Included in returned UserProfile
-                focusAreas = focusAreas, // Included
-                workoutGoal = workoutGoal, // Included
-                weightUnit = weightUnit,
-                speedUnit = speedUnit,
-                startOfWeek = startOfWeek,
-                // Display settings
-                detailedCalories = detailedCalories,
-                // Privacy settings
-                isPublicProfile = isPublic,
-                showLevel = showLevel,
-                showBadges = showBadges,
-                showPlanPath = showPlanPath,
-                showChallenges = showChallenges,
-                showFollowers = showFollowers,
-                // Achievement tracking
-                totalWorkoutsCompleted = totalWorkouts,
-                totalCaloriesBurned = totalCalories,
-                earlyBirdWorkouts = earlyBird,
-                nightOwlWorkouts = nightOwl,
-                currentLoginStreak = loginStreak,
-                lastLoginDate = lastLogin,
-                totalPlansCreated = totalPlans,
-                profilePictureUrl = profilePictureUrl,
-                // Plan calculation parameters
-                height = height,
-                age = age,
-                gender = gender,
-                activityLevel = activityLevel,
-                experience = experience,
-                bodyFat = bodyFat,
-                limitations = limitations,
-                nutritionStyle = nutritionStyle,
-                sleepHours = sleepHours
-            )
+            documentToUserProfile(doc, email)
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
+    }
+
+    /**
+     * Mapira Firestore DocumentSnapshot v UserProfile.
+     * Kliče se iz loadProfileFromFirestore() in iz AppViewModel snapshot listenerja —
+     * ena sama logika, brez podvajanja.
+     */
+    fun documentToUserProfile(doc: com.google.firebase.firestore.DocumentSnapshot, email: String): UserProfile {
+        val username = doc.getString(KEY_USERNAME) ?: ""
+        val firstName = doc.getString(KEY_FIRST_NAME) ?: ""
+        val lastName = doc.getString(KEY_LAST_NAME) ?: ""
+        val address = doc.getString(KEY_ADDRESS) ?: ""
+        val xp = (doc.get(KEY_XP) as? Number)?.toInt() ?: 0
+        val followers = (doc.get(KEY_FOLLOWERS) as? Number)?.toInt() ?: 0
+        val following = (doc.get(KEY_FOLLOWING) as? Number)?.toInt() ?: 0
+        val badges = when (val b = doc.get(KEY_BADGES)) {
+            is List<*> -> b.filterIsInstance<String>()
+            is String -> b.split(',').filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+        val streakFreezes = (doc.get("streak_freezes") as? Number)?.toInt() ?: 0
+        val equipment = when (val eq = doc.get(KEY_EQUIPMENT)) {
+            is List<*> -> eq.filterIsInstance<String>()
+            is String -> eq.split(',').filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+        val focusAreas = when (val fa = doc.get("focusAreas")) {
+            is List<*> -> fa.filterIsInstance<String>()
+            is String -> fa.split(',').filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+        val workoutGoal = doc.getString("workoutGoal") ?: ""
+        val weightUnit = doc.getString(KEY_WEIGHT_UNIT) ?: "kg"
+        val speedUnit = doc.getString(KEY_SPEED_UNIT) ?: "km/h"
+        val startOfWeek = doc.getString(KEY_START_OF_WEEK) ?: "Monday"
+        val detailedCalories = doc.getBoolean("detailed_calories") ?: false
+        val isPublic = doc.getBoolean(KEY_IS_PUBLIC) ?: false
+        val showLevel = doc.getBoolean(KEY_SHOW_LEVEL) ?: false
+        val showBadges = doc.getBoolean(KEY_SHOW_BADGES) ?: false
+        val showPlanPath = doc.getBoolean(KEY_SHOW_PLAN_PATH) ?: false
+        val showChallenges = doc.getBoolean(KEY_SHOW_CHALLENGES) ?: false
+        val showFollowers = doc.getBoolean(KEY_SHOW_FOLLOWERS) ?: false
+        val totalWorkouts = (doc.get("total_workouts_completed") as? Number)?.toInt() ?: 0
+        val totalCalories = (doc.get(KEY_TOTAL_CALORIES) as? Number)?.toDouble() ?: 0.0
+        val earlyBird = (doc.get(KEY_EARLY_BIRD) as? Number)?.toInt() ?: 0
+        val nightOwl = (doc.get(KEY_NIGHT_OWL) as? Number)?.toInt() ?: 0
+        val loginStreak = (doc.get("streak_days") as? Number)?.toInt() ?: 0
+        val lastLogin = doc.getString(KEY_LAST_LOGIN)
+        val totalPlans = (doc.get(KEY_TOTAL_PLANS) as? Number)?.toInt() ?: 0
+        val profilePictureUrl = doc.getString(KEY_PROFILE_PICTURE)
+        val height = (doc.get("height") as? Number)?.toDouble()
+        val age = (doc.get("age") as? Number)?.toInt()
+        val gender = doc.getString("gender")
+        val activityLevel = doc.getString("activityLevel")
+        val experience = doc.getString("experience")
+        val bodyFat = doc.getString("bodyFat")
+        val limitations = when (val lim = doc.get("limitations")) {
+            is List<*> -> lim.filterIsInstance<String>()
+            is String -> lim.split(',').filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+        val nutritionStyle = doc.getString("nutritionStyle")
+        val sleepHours = doc.getString("sleepHours")
+        return UserProfile(
+            username = username, email = email,
+            firstName = firstName, lastName = lastName, address = address,
+            xp = xp, followers = followers, following = following, badges = badges,
+            streakFreezes = streakFreezes, // Load from doc
+            equipment = equipment, focusAreas = focusAreas, workoutGoal = workoutGoal,
+            weightUnit = weightUnit, speedUnit = speedUnit, startOfWeek = startOfWeek,
+            detailedCalories = detailedCalories,
+            isPublicProfile = isPublic, showLevel = showLevel, showBadges = showBadges,
+            showPlanPath = showPlanPath, showChallenges = showChallenges, showFollowers = showFollowers,
+            totalWorkoutsCompleted = totalWorkouts, totalCaloriesBurned = totalCalories,
+            earlyBirdWorkouts = earlyBird, nightOwlWorkouts = nightOwl,
+            currentLoginStreak = loginStreak, lastLoginDate = lastLogin,
+            totalPlansCreated = totalPlans, profilePictureUrl = profilePictureUrl,
+            height = height, age = age, gender = gender,
+            activityLevel = activityLevel, experience = experience, bodyFat = bodyFat,
+            limitations = limitations, nutritionStyle = nutritionStyle, sleepHours = sleepHours
+        )
     }
 
 
@@ -414,40 +378,30 @@ object UserPreferences {
         weeklyTarget: Int = 0
     ) {
         try {
+            val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
             val data = mutableMapOf<String, Any>(
-                "login_streak" to streak,
                 "streak_days" to streak,
-                "total_workouts" to totalWorkouts,
                 "total_workouts_completed" to totalWorkouts,
                 "weekly_done" to weeklyDone,
                 "last_workout_epoch" to lastWorkoutEpoch,
                 "plan_day" to planDay
             )
-            // Shrani weeklyTarget VEDNO če je > 0 — ne more biti 0 ali negativen
             if (weeklyTarget > 0) {
                 data["weekly_target"] = weeklyTarget
             } else {
-                // Če weeklyTarget ni podan, poskusi prebrati iz prefs ali activityLevel
-                // da zagotovimo da je v Firestoreu vedno pravilna vrednost
                 try {
-                    val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
                     val existingDoc = resolvedRef.get().await()
                     val existingTarget = (existingDoc.getLong("weekly_target") ?: 0L).toInt()
                     if (existingTarget > 0) {
-                        // Obdrži obstoječo vrednost — ne prepiši z 0
                         data["weekly_target"] = existingTarget
                     } else {
-                        // Preberi iz activityLevel
                         val actLevel = existingDoc.getString("activityLevel")
                         val parsed = actLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
                         if (parsed != null && parsed > 0) data["weekly_target"] = parsed
                     }
                 } catch (_: Exception) {}
             }
-            db.collection("users")
-                .document(email)
-                .set(data, SetOptions.merge())
-                .await()
+            resolvedRef.set(data, SetOptions.merge()).await()
         } catch (e: Exception) {
             Log.e("UserPreferences", "❌ Error saving workout stats to Firestore", e)
             e.printStackTrace()
@@ -456,7 +410,7 @@ object UserPreferences {
 
     suspend fun getWorkoutStats(email: String): Map<String, Any>? {
         return try {
-            val doc = db.collection("users").document(email).get().await()
+            val doc = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef().get().await()
             if (doc.exists()) {
                 mapOf(
                     "streak_days" to (doc.getLong("streak_days")?.toInt() ?: 0),

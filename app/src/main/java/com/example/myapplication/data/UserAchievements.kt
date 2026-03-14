@@ -28,7 +28,23 @@ data class PrivacySettings(
     val showBadges: Boolean = false,
     val showPlanPath: Boolean = false,
     val showChallenges: Boolean = false,
-    val showFollowers: Boolean = false
+    val showFollowers: Boolean = false,
+    val shareActivities: Boolean = false // Deli teke/aktivnosti s followerji
+)
+
+data class PublicActivity(
+    val id: String = "",
+    val activityType: String = "RUN", // ActivityType.name
+    val distanceMeters: Double = 0.0,
+    val durationSeconds: Int = 0,
+    val caloriesKcal: Int = 0,
+    val elevationGainM: Float = 0f,
+    val elevationLossM: Float = 0f,
+    val avgSpeedMps: Float = 0f,
+    val maxSpeedMps: Float = 0f,
+    val startTime: Long = 0L,
+    // Komprimirana ruta (RDP ~35 točk) — shranjeno v Firestoreu
+    val routePoints: List<Pair<Double, Double>> = emptyList()
 )
 
 data class PublicProfile(
@@ -39,7 +55,8 @@ data class PublicProfile(
     val badges: List<Badge>? = null,
     val followers: Int? = null,
     val following: Int? = null,
-    val activePlanSummary: String? = null // Basic plan info if showPlanPath is true
+    val activePlanSummary: String? = null,
+    val recentActivities: List<PublicActivity>? = null // Javne aktivnosti (samo če shareActivities=true)
 )
 
 

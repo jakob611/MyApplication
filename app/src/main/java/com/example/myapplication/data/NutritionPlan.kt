@@ -1,6 +1,6 @@
 package com.example.myapplication.data
 
-import com.example.myapplication.ui.screens.AlgorithmData
+// AlgorithmData je v istem paketu (data) — import ni potreben
 
 /**
  * NutritionPlan - Ločen plan samo za nutrition (kalorije/makroji)

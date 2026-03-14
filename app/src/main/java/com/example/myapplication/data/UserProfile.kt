@@ -10,6 +10,7 @@ data class UserProfile(
     val followers: Int = 0,
     val following: Int = 0,
     val badges: List<String> = emptyList(),
+    val streakFreezes: Int = 0, // Number of available streak freezes
     val equipment: List<String> = emptyList(), // Added equipment field
     val focusAreas: List<String> = emptyList(), // Added focus areas from plan
     val workoutGoal: String = "", // Added workout goal from plan
@@ -25,6 +26,7 @@ data class UserProfile(
     val showPlanPath: Boolean = false,
     val showChallenges: Boolean = false,
     val showFollowers: Boolean = false,
+    val shareActivities: Boolean = false, // Deli aktivnosti (teki, kolesarjenje...) s followerji
     // Achievement tracking
     val totalWorkoutsCompleted: Int = 0,
     val totalCaloriesBurned: Double = 0.0,

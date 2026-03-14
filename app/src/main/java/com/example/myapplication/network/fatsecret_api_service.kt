@@ -209,8 +209,8 @@ object FatSecretApi {
                         return FoodSummary(
                             id = obj.optString("food_id"),
                             name = obj.optString("food_name"),
-                            brand = obj.optString("brand_name", null),
-                            description = obj.optString("food_description", null),
+                            brand = obj.optString("brand_name").ifEmpty { null },
+                            description = obj.optString("food_description").ifEmpty { null },
                             imageUrl = imageUrl
                         )
                     }
@@ -348,12 +348,12 @@ object FatSecretApi {
                     return RecipeSummary(
                         id = obj.optString("recipe_id"),
                         name = obj.optString("recipe_name"),
-                        description = obj.optString("recipe_description", null),
-                        caloriesKcal = obj.optString("recipe_calories")?.toIntOrNull(),
-                        proteinG = obj.optString("recipe_protein")?.toDoubleOrNull(),
-                        carbsG = obj.optString("recipe_carbohydrate")?.toDoubleOrNull(),
-                        fatG = obj.optString("recipe_fat")?.toDoubleOrNull(),
-                        imageUrl = obj.optString("recipe_image", null)
+                        description = obj.optString("recipe_description").ifEmpty { null },
+                        caloriesKcal = obj.optString("recipe_calories").toIntOrNull(),
+                        proteinG = obj.optString("recipe_protein").toDoubleOrNull(),
+                        carbsG = obj.optString("recipe_carbohydrate").toDoubleOrNull(),
+                        fatG = obj.optString("recipe_fat").toDoubleOrNull(),
+                        imageUrl = obj.optString("recipe_image").ifEmpty { null }
                     )
                 }
 
@@ -475,18 +475,18 @@ object FatSecretApi {
 
                 RecipeDetail(
                     id = recipeId,
-                    name = recipe.optString("recipe_name", ""),
-                    description = recipe.optString("recipe_description", null),
-                    caloriesKcal = recipe.optString("recipe_calories")?.toIntOrNull(),
-                    proteinG = recipe.optString("recipe_protein")?.toDoubleOrNull(),
-                    carbsG = recipe.optString("recipe_carbohydrate")?.toDoubleOrNull(),
-                    fatG = recipe.optString("recipe_fat")?.toDoubleOrNull(),
-                    servings = recipe.optString("number_of_servings")?.toIntOrNull(),
-                    prepTimeMin = recipe.optString("preparation_time_min")?.toIntOrNull(),
-                    cookTimeMin = recipe.optString("cooking_time_min")?.toIntOrNull(),
+                    name = recipe.optString("recipe_name"),
+                    description = recipe.optString("recipe_description").ifEmpty { null },
+                    caloriesKcal = recipe.optString("recipe_calories").toIntOrNull(),
+                    proteinG = recipe.optString("recipe_protein").toDoubleOrNull(),
+                    carbsG = recipe.optString("recipe_carbohydrate").toDoubleOrNull(),
+                    fatG = recipe.optString("recipe_fat").toDoubleOrNull(),
+                    servings = recipe.optString("number_of_servings").toIntOrNull(),
+                    prepTimeMin = recipe.optString("preparation_time_min").toIntOrNull(),
+                    cookTimeMin = recipe.optString("cooking_time_min").toIntOrNull(),
                     directions = directions,
                     ingredients = ingredients,
-                    imageUrl = recipe.optString("recipe_image", null)
+                    imageUrl = recipe.optString("recipe_image").ifEmpty { null }
                 )
             }
         }

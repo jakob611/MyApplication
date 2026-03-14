@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.myapplication.data.PlanResult
 
 @Composable
 fun MyPlansScreen(

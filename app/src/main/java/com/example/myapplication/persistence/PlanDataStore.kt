@@ -6,10 +6,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.myapplication.BuildConfig
-import com.example.myapplication.ui.screens.AlgorithmData
-import com.example.myapplication.ui.screens.PlanResult
-import com.example.myapplication.ui.screens.WeekPlan
-import com.example.myapplication.ui.screens.DayPlan
+import com.example.myapplication.data.AlgorithmData
+import com.example.myapplication.data.PlanResult
+import com.example.myapplication.data.WeekPlan
+import com.example.myapplication.data.DayPlan
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -243,6 +243,23 @@ object PlanDataStore {
             val localPlans = loadLocalPlansAndSend(context).toMutableList()
             localPlans.add(newPlan)
             saveToLocalDataStore(context, localPlans)
+        }
+    }
+
+    /** Posodobi obstoječ plan po ID — brez da klicatelj pozna serializacijo. */
+    suspend fun updatePlan(context: Context, updatedPlan: PlanResult) {
+        val userId = getResolvedUserId() ?: return
+        try {
+            val snap = firestore.collection(PLANS_COLLECTION).document(userId).get().await()
+            @Suppress("UNCHECKED_CAST")
+            val currentPlans = (snap.get("plans") as? List<Map<String, Any>>)
+                ?.mapNotNull { convertMapToPlanResult(it) }
+                ?.toMutableList() ?: mutableListOf()
+            val idx = currentPlans.indexOfFirst { it.id == updatedPlan.id }
+            if (idx >= 0) currentPlans[idx] = updatedPlan else currentPlans.add(updatedPlan)
+            savePlans(context, currentPlans)
+        } catch (e: Exception) {
+            Log.e("PlanDataStore", "Error updating plan: ${e.message}")
         }
     }
 

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import com.example.myapplication.data.PlanResult
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -76,8 +77,8 @@ fun AchievementsScreen(
     val allBadges = BadgeDefinitions.ALL_BADGES
     val badgesWithStatus = allBadges.map { badge ->
         val progress = com.example.myapplication.persistence.AchievementStore.getBadgeProgress(badge.id, userProfile)
-        val req = getBadgeRequirement(badge)
-        // Badge is unlocked if: it's in the saved badges list (Firestore) OR progress meets threshold
+        // badge.requirement je definiran v BadgeDefinitions.ALL_BADGES — en sam vir resnice
+        val req = badge.requirement
         val isUnlocked = userProfile.badges.contains(badge.id) || progress >= req
         badge.copy(
             unlocked = isUnlocked,
@@ -607,31 +608,6 @@ private fun getBadgeIcon(iconName: String): ImageVector {
 }
 
 
-private fun getBadgeRequirement(badge: Badge): Int {
-    return when (badge.id) {
-        "first_workout" -> 1
-        "committed_10" -> 10
-        "committed_50" -> 50
-        "committed_100" -> 100
-        "calorie_crusher_1k" -> 1000
-        "calorie_crusher_5k" -> 5000
-        "calorie_crusher_10k" -> 10000
-        "level_5" -> 5
-        "level_10" -> 10
-        "level_25" -> 25
-        "first_follower" -> 1
-        "social_butterfly" -> 10
-        "influencer" -> 50
-        "early_bird" -> 5
-        "night_owl" -> 5
-        "week_warrior" -> 7
-        "month_master" -> 30
-        "year_champion" -> 365
-        "first_plan" -> 1
-        "plan_master" -> 5
-        else -> 1
-    }
-}
 
 // Helper funkcija za nalaganje info o uporabniku
 private suspend fun loadUserInfo(userId: String): FollowUserInfo? {

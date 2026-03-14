@@ -149,11 +149,9 @@ class StreakReminderWorker(
     private fun getReminderTitle(streak: Int): String {
         return when {
             streak == 0 -> "⚡ Start your streak today!"
-            streak >= 30 -> "🔥 Don't break your $streak day streak!"
-            streak >= 14 -> "💪 $streak days strong — don't stop now!"
-            streak >= 7 -> "🌟 $streak day streak at risk!"
-            streak >= 3 -> "🔥 Keep your $streak day streak alive!"
-            streak == 1 -> "⭐ Day 2 starts today!"
+            streak >= 30 -> "🚨 STREAK RESCUE: $streak days at risk!"
+            streak >= 7 -> "🔥 Don't break your $streak day streak!"
+            streak >= 3 -> "⏱️ Tick tock! Keep the streak alive!"
             else -> "🏋️ Time to work out!"
         }
     }
@@ -165,10 +163,10 @@ class StreakReminderWorker(
 
         return when {
             streak == 0 -> "Start your fitness journey today. Every champion starts somewhere. 🏆 ($dayContext)"
-            streak >= 30 -> "You've worked $streak days straight! Don't let tonight be the end of that. 💎 ($dayContext)"
-            streak >= 14 -> "Two weeks of consistency! Your workout for today is waiting. 🎯 ($dayContext)"
+            streak >= 30 -> "You've worked $streak days straight! Don't let 5 minutes of laziness ruin a month of hard work. 💎 ($dayContext)"
+            streak >= 14 -> "Two weeks of consistency is huge. Don't lose it now! Your workout is waiting. 🎯 ($dayContext)"
             streak >= 7 -> "One week of dedication — tonight is not the night to skip! 🔥 ($dayContext)"
-            streak >= 3 -> "3+ day streak! One workout away from making it another day. ⚡ ($dayContext)"
+            streak >= 3 -> "Streak Rescue Mode: Don't let $streak days go to waste! One workout to save it. ⚡ ($dayContext)"
             else -> "Your daily workout is waiting. Just 20-30 minutes can change your day! 💪 ($dayContext)"
         }
     }

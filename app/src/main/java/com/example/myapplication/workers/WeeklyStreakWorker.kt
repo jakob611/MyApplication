@@ -12,7 +12,6 @@ import androidx.work.WorkerParameters
 import com.example.myapplication.data.AlgorithmPreferences
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
@@ -43,6 +42,7 @@ class WeeklyStreakWorker(
         Log.d(TAG, "Daily streak check running for $email")
 
         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+        val userPrefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
 
         // Kateri dan v planu je bil VČERAJ (Worker se zažene ob polnoči = začetek novega dne)
         // "yesterday_was_rest" je boolean ki ga nastavimo zjutraj ko Worker načrtuje naslednji dan
@@ -53,16 +53,30 @@ class WeeklyStreakWorker(
 
         Log.d(TAG, "yesterdayWasRest=$yesterdayWasRest, workoutDoneYesterday=$workoutDoneYesterday, streak=$currentStreak")
 
+        // Preveri kdaj je bil streak nazadnje posodobljen
+        val keyLastUpdate = "${email}_last_streak_update_date"
+        val lastUpdate = userPrefs.getString(keyLastUpdate, "") ?: ""
+        val yesterdayDate = java.time.LocalDate.now().minusDays(1).toString()
+        val alreadyUpdatedForYesterday = (lastUpdate == yesterdayDate)
+
         when {
             yesterdayWasRest -> {
-                // Rest day → streak +1 avtomatično
-                val newStreak = currentStreak + 1
-                prefs.edit()
-                    .putInt("streak_days", newStreak)
-                    .putBoolean("workout_done_yesterday", false)
-                    .apply()
-                saveStreakToFirestore(newStreak)
-                Log.d(TAG, "✅ Rest day passed. Streak: $currentStreak → $newStreak")
+                if (alreadyUpdatedForYesterday) {
+                    Log.d(TAG, "✅ Rest day passed, streak already updated yesterday. Keeping at $currentStreak")
+                } else {
+                    // Rest day → streak +1 avtomatično (če še ni bil)
+                    val newStreak = currentStreak + 1
+                    prefs.edit()
+                        .putInt("streak_days", newStreak)
+                        .putBoolean("workout_done_yesterday", false)
+                        .apply()
+
+                    // Posodobi last_streak_update_date na včeraj (da danes šteje kot nov dan)
+                    userPrefs.edit().putString(keyLastUpdate, yesterdayDate).apply()
+
+                    saveStreakToFirestore(newStreak, yesterdayDate)
+                    Log.d(TAG, "✅ Rest day auto-complete. Streak: $currentStreak → $newStreak")
+                }
 
                 // Povečaj težavnost (recovery konec)
                 if (AlgorithmPreferences.isRecoveryMode(context)) {
@@ -89,7 +103,7 @@ class WeeklyStreakWorker(
                     missedDays = 1,
                     planDayBeforeBreak = planDayBeforeCheck
                 )
-                saveStreakToFirestore(0)
+                saveStreakToFirestore(0, null)
                 Log.d(TAG, "❌ Workout missed! Streak reset to 0. Recovery mode activated.")
             }
         }
@@ -105,17 +119,17 @@ class WeeklyStreakWorker(
         return Result.success()
     }
 
-    private suspend fun saveStreakToFirestore(streak: Int) {
+    private suspend fun saveStreakToFirestore(streak: Int, date: String?) {
         try {
-            val email = Firebase.auth.currentUser?.email ?: return
-            Firebase.firestore.collection("users").document(email)
-                .set(
-                    mapOf(
-                        "streak_days" to streak,
-                        "login_streak" to streak
-                    ),
-                    SetOptions.merge()
-                ).await()
+            val data = if (date != null) {
+                mapOf("streak_days" to streak, "last_streak_update_date" to date)
+            } else {
+                mapOf("streak_days" to streak)
+            }
+
+            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                .set(data, SetOptions.merge())
+                .await()
         } catch (e: Exception) {
             Log.e(TAG, "Firestore update failed: ${e.message}")
         }

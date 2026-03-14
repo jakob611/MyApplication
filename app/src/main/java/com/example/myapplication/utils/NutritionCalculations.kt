@@ -174,6 +174,43 @@ fun calculateSmartCalories(tdee: Double, goal: String?, experience: String?, bmi
     }
 }
 
+fun calculateDailyWaterMl(weightKg: Double, isMale: Boolean, activityLevel: String, isWorkoutDay: Boolean): Float {
+    // Base: 35ml per kg
+    var water = weightKg * 35.0
+
+    // Gender adjustment
+    if (isMale) water *= 1.1
+
+    // Activity level adjustment
+    water += when (activityLevel) {
+        "Sedentary" -> 0.0
+        "Lightly active" -> 250.0
+        "Moderately active" -> 500.0
+        "Very active" -> 750.0
+        else -> 250.0
+    }
+
+    // Workout day bonus
+    if (isWorkoutDay) water += 500.0
+
+    // Clamp between realistic bounds (1.5L - 5L)
+    return water.coerceIn(1500.0, 5000.0).toFloat()
+}
+
+fun calculateRestDayCalories(tdee: Double, goal: String?, isMale: Boolean): Int {
+    // Rest day calibration based on goal
+    val adjustment = when (goal) {
+        "Lose fat" -> -250
+        "Build muscle" -> 100 // Slight surplus even on rest days for recovery
+        "Recomposition" -> -150
+        else -> 0
+    }
+
+    val target = tdee + adjustment
+    val minCalories = if (isMale) 1500 else 1200
+    return target.coerceAtLeast(minCalories.toDouble()).toInt()
+}
+
 fun calculateOptimalMacros(calories: Double, weight: Double, goal: String?, experience: String?, age: Int, isMale: Boolean, bodyFat: Double?, nutrition: String?, limitations: List<String>): Triple<Int, Int, Int> {
 
     // Protein calculation with multiple factors

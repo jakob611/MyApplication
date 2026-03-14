@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.screens
 
+import com.example.myapplication.data.PlanResult
+import com.example.myapplication.data.WeekPlan
+import com.example.myapplication.data.DayPlan
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

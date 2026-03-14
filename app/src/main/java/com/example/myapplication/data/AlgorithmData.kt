@@ -1,5 +1,4 @@
-package com.example.myapplication.ui.screens
-
+package com.example.myapplication.data
 data class AlgorithmData(
     val bmi: Double? = null,
     val bmr: Double? = null,

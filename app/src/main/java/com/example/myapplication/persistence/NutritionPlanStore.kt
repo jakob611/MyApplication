@@ -2,7 +2,7 @@ package com.example.myapplication.persistence
 
 import android.util.Log
 import com.example.myapplication.data.NutritionPlan
-import com.example.myapplication.ui.screens.AlgorithmData
+import com.example.myapplication.data.AlgorithmData
 import com.example.myapplication.utils.calculateAdvancedBMR
 import com.example.myapplication.utils.calculateEnhancedTDEE
 import com.example.myapplication.utils.calculateSmartCalories

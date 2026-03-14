@@ -1,4 +1,4 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.myapplication.ui.screens
 
@@ -14,6 +14,7 @@ package com.example.myapplication.ui.screens
 
 import android.content.Context
 import android.util.Log
+import com.example.myapplication.data.PlanResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -460,7 +461,7 @@ fun NutritionScreen(
             Log.e("NutritionLocal", "Failed to save foods locally", e)
         }
 
-        // Preverimo XP nagrado lokalno (ne ÄŤakamo na Firestore)
+        // XP nagrada za dosežen kalorični cilj (anti-farming: enkrat na dan)
         val targetCal = targetCalories
         val consumedCal = consumedKcal
         val difference = kotlin.math.abs(targetCal - consumedCal)
@@ -472,9 +473,14 @@ fun NutritionScreen(
                 val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
                 if (userEmail != null) {
                     prefs.edit().putBoolean(xpKey, true).apply()
-                    com.example.myapplication.data.UserPreferences.addXPWithCallback(context, userEmail, 100) { _ ->
-                        onXPAdded()
-                    }
+                    // AchievementStore.awardXP: pravilna pot — skozi FirestoreHelper, beleži xp_history, preveri badge-e
+                    // LaunchedEffect je suspend context, klic je direkten (brez scope.launch)
+                    com.example.myapplication.persistence.AchievementStore.awardXP(
+                        context, userEmail, 100,
+                        com.example.myapplication.data.XPSource.NUTRITION_GOAL,
+                        "Hit daily calorie goal"
+                    )
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onXPAdded() }
                 }
             }
         }
@@ -500,8 +506,49 @@ fun NutritionScreen(
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val textPrimary = MaterialTheme.colorScheme.onBackground
 
-    // Water tracking (2000ml target)
-    val waterTarget = 2000f
+    // Ugotovi ali je danes workout day ali rest day (glede na aktiven plan)
+    val todayDayOfWeek = remember { java.time.LocalDate.now().dayOfWeek.value } // 1=Mon, 7=Sun
+    val isWorkoutDayToday = remember(plan) {
+        if (plan == null) false
+        else {
+            // Preveri pri tekočem planu ali je danes trening ali počitek
+            val startDate = try { java.time.LocalDate.parse(plan.startDate) } catch (_: Exception) { java.time.LocalDate.now() }
+            val daysSinceStart = java.time.temporal.ChronoUnit.DAYS.between(startDate, java.time.LocalDate.now()).toInt()
+            val allDays = plan.weeks.flatMap { it.days }
+            val todayDayInPlan = allDays.getOrNull(daysSinceStart)
+            // Če ni podatka o dnevu, predpostavi workout day
+            todayDayInPlan?.isRestDay?.not() ?: true
+        }
+    }
+
+    // Prilagojeni cilj za vodo — glede na profil in dan
+    val adjustedWaterTarget = remember(userProfile, plan, isWorkoutDayToday) {
+        // Teža: vzamemo iz algorithmData (kalorij/kg * skupne kalorije) ali fallback 70 kg
+        val wKg: Double = run {
+            val caloriesPerKg = plan?.algorithmData?.caloriesPerKg
+            val calories = plan?.calories
+            if (caloriesPerKg != null && caloriesPerKg > 0.0 && calories != null && calories > 0) {
+                calories.toDouble() / caloriesPerKg
+            } else 70.0
+        }
+        val isMale = userProfile.gender == "Male"
+        val actLevel = userProfile.activityLevel ?: "Sedentary"
+        com.example.myapplication.utils.calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDayToday)
+    }
+
+    // Prilagojene kalorije — workout day vs rest day
+    val adjustedTargetCalories = remember(targetCalories, isWorkoutDayToday, userProfile) {
+        if (isWorkoutDayToday) {
+            targetCalories
+        } else {
+            val isMale = userProfile.gender == "Male"
+            val goal = userProfile.workoutGoal.ifBlank { null }
+            com.example.myapplication.utils.calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
+        }
+    }
+
+    // Water tracking — prilagojen cilj
+    val waterTarget = adjustedWaterTarget.toFloat()
     val waterProgress = (waterConsumedMl.toFloat() / waterTarget).coerceIn(0f, 1f)
 
     // Calculate macro calories
@@ -532,58 +579,77 @@ fun NutritionScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        DonutProgressView(ctx).apply {
-                            // Simple mode = !detailedCalories (privzeto enostaven)
-                            simpleMode = !userProfile.detailedCalories
-                            fatProportion = fatProp
-                            proteinProportion = proteinProp
-                            carbsProportion = carbsProp
-                            this.fatCalories = fatCals
-                            this.proteinCalories = proteinCals
-                            this.carbsCalories = carbsCals
-                            this.consumedCalories = consumedKcal
-                            this.targetCalories = targetCalories
-                            innerProgress = waterProgress
-                            textColor = textPrimary.toArgb()
-                            waterColor = textPrimary.toArgb()
-                            innerValue = waterConsumedMl.toString()
-                            innerLabel = "ml"
-                            weightUnit = userProfile.weightUnit // Pass unit
-                            centerValue = "$consumedKcal/$targetCalories"
-                            centerLabel = "kcal"
-                            startAngle = 135f
-                            sweepAngle = 270f
-                            onSegmentClick = { segment -> Log.d("DonutRing", "Clicked: $segment") }
-                        }
-                    },
-                    modifier = Modifier.size(240.dp),
-                    update = { view ->
-                        // Update simpleMode when setting changes
-                        view.simpleMode = !userProfile.detailedCalories
-                        view.fatProportion = fatProp
-                        view.proteinProportion = proteinProp
-                        view.carbsProportion = carbsProp
-                        view.fatCalories = fatCals
-                        view.proteinCalories = proteinCals
-                        view.carbsCalories = carbsCals
-                        view.consumedCalories = consumedKcal
-                        view.targetCalories = targetCalories
-                        view.innerProgress = waterProgress
-                        view.textColor = textPrimary.toArgb()
-                        view.waterColor = textPrimary.toArgb()
-                        view.innerValue = waterConsumedMl.toString()
-                        view.weightUnit = userProfile.weightUnit // Update unit
-                        view.centerValue = "$consumedKcal/$targetCalories"
-
-                        // Update click listener to use correct units for tooltip
-                        view.onSegmentClick = { clicked ->
-                            view.clickedSegment = clicked
-                            view.invalidate()
-                        }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Workout / Rest day oznaka
+                    if (plan != null) {
+                        val dayLabel = if (isWorkoutDayToday) "🏋️ Workout day" else "😴 Rest day"
+                        val labelColor = if (isWorkoutDayToday) Color(0xFF6366F1) else Color(0xFF9CA3AF)
+                        Text(
+                            text = dayLabel,
+                            color = labelColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                     }
-                )
+                    AndroidView(
+                        factory = { ctx ->
+                            DonutProgressView(ctx).apply {
+                                simpleMode = !userProfile.detailedCalories
+                                fatProportion = fatProp
+                                proteinProportion = proteinProp
+                                carbsProportion = carbsProp
+                                this.fatCalories = fatCals
+                                this.proteinCalories = proteinCals
+                                this.carbsCalories = carbsCals
+                                this.consumedCalories = consumedKcal
+                                this.targetCalories = adjustedTargetCalories
+                                innerProgress = waterProgress
+                                textColor = textPrimary.toArgb()
+                                waterColor = textPrimary.toArgb()
+                                innerValue = waterConsumedMl.toString()
+                                innerLabel = "ml"
+                                weightUnit = userProfile.weightUnit
+                                centerValue = "$consumedKcal/$adjustedTargetCalories"
+                                centerLabel = "kcal"
+                                startAngle = 135f
+                                sweepAngle = 270f
+                                onSegmentClick = { segment -> Log.d("DonutRing", "Clicked: $segment") }
+                            }
+                        },
+                        modifier = Modifier.size(240.dp),
+                        update = { view ->
+                            view.simpleMode = !userProfile.detailedCalories
+                            view.fatProportion = fatProp
+                            view.proteinProportion = proteinProp
+                            view.carbsProportion = carbsProp
+                            view.fatCalories = fatCals
+                            view.proteinCalories = proteinCals
+                            view.carbsCalories = carbsCals
+                            view.consumedCalories = consumedKcal
+                            view.targetCalories = adjustedTargetCalories
+                            view.innerProgress = waterProgress
+                            view.textColor = textPrimary.toArgb()
+                            view.waterColor = textPrimary.toArgb()
+                            view.innerValue = waterConsumedMl.toString()
+                            view.weightUnit = userProfile.weightUnit
+                            view.centerValue = "$consumedKcal/$adjustedTargetCalories"
+                            view.onSegmentClick = { clicked ->
+                                view.clickedSegment = clicked
+                                view.invalidate()
+                            }
+                        }
+                    )
+                    // Prilagojena voda pod grafom
+                    if (userProfile.activityLevel != null || userProfile.gender != null) {
+                        Text(
+                            text = "💧 Cilj: ${adjustedWaterTarget} ml",
+                            color = Color(0xFF3B82F6),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(16.dp))
 

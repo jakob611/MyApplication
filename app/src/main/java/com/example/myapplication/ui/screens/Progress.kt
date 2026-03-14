@@ -89,7 +89,7 @@ fun ProgressScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope() // DODANO: Proper coroutine scope namesto GlobalScope
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     var dailyLogs by remember { mutableStateOf<List<DailyLogSummary>>(emptyList()) }
     var weightLogs by remember { mutableStateOf<List<WeightLog>>(emptyList()) }
     var burnedByDay by remember { mutableStateOf<List<Pair<LocalDate, Double>>>(emptyList()) } // ADDED

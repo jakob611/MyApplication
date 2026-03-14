@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.example.myapplication.persistence.PlanDataStore
+import com.example.myapplication.data.PlanResult
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose

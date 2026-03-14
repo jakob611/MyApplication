@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.myapplication.data.AdvancedExerciseRepository
 import com.example.myapplication.data.RefinedExercise
 import com.example.myapplication.data.UserProfile
+import com.example.myapplication.data.PlanResult
 import com.example.myapplication.domain.WorkoutGenerationParams
 import com.example.myapplication.domain.WorkoutGenerator
 import com.example.myapplication.domain.WorkoutGoal

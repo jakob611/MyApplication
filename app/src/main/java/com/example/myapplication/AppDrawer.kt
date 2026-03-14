@@ -17,7 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HealthAndSafety
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -120,6 +120,7 @@ fun FigmaDrawerContent(
     var showPlanPathPrivacy by remember { mutableStateOf(userProfile.showPlanPath) }
     var showChallengesPrivacy by remember { mutableStateOf(userProfile.showChallenges) }
     var showFollowersPrivacy by remember { mutableStateOf(userProfile.showFollowers) }
+    var shareActivitiesPrivacy by remember { mutableStateOf(userProfile.shareActivities) }
 
     LaunchedEffect(userProfile) {
         editedProfile = userProfile
@@ -129,6 +130,7 @@ fun FigmaDrawerContent(
         showPlanPathPrivacy = userProfile.showPlanPath
         showChallengesPrivacy = userProfile.showChallenges
         showFollowersPrivacy = userProfile.showFollowers
+        shareActivitiesPrivacy = userProfile.shareActivities
     }
 
     Surface(
@@ -373,7 +375,8 @@ fun FigmaDrawerContent(
                             "Show Badges" to showBadgesPrivacy,
                             "Show Plan Path" to showPlanPathPrivacy,
                             "Show Challenges" to showChallengesPrivacy,
-                            "Show Followers" to showFollowersPrivacy
+                            "Show Followers" to showFollowersPrivacy,
+                            "Share Activities 🗺️" to shareActivitiesPrivacy
                         )
                         privacyToggles.forEachIndexed { index, (label, checked) ->
                             Row(
@@ -391,6 +394,7 @@ fun FigmaDrawerContent(
                                             2 -> { showPlanPathPrivacy = newValue; onProfileUpdate(userProfile.copy(isPublicProfile = true, showPlanPath = newValue)) }
                                             3 -> { showChallengesPrivacy = newValue; onProfileUpdate(userProfile.copy(isPublicProfile = true, showChallenges = newValue)) }
                                             4 -> { showFollowersPrivacy = newValue; onProfileUpdate(userProfile.copy(isPublicProfile = true, showFollowers = newValue)) }
+                                            5 -> { shareActivitiesPrivacy = newValue; onProfileUpdate(userProfile.copy(isPublicProfile = true, shareActivities = newValue)) }
                                         }
                                     }
                                 )
@@ -419,7 +423,7 @@ fun FigmaDrawerContent(
                             if (userProfile.equipment.isEmpty()) "None" else "${userProfile.equipment.size} items",
                             style = MaterialTheme.typography.bodyMedium, color = TextPrimary.copy(alpha = 0.7f)
                         )
-                        Icon(Icons.Filled.KeyboardArrowRight, null, tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = TextPrimary)
                     }
                 }
             }
@@ -649,7 +653,7 @@ fun NavigationRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = textColor)
-        Icon(Icons.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.primary)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -700,48 +704,15 @@ fun SettingsDropdownRow(
 // -----------------------------------------------------------------------
 // POMOŽNA FUNKCIJA: izračuna avtomatsko odklenjene badge-e iz userProfile
 // Vrne Pair(Set<String> odklenjenih ID-jev, Int skupaj)
+// Badge zahteve so definirane SAMO v BadgeDefinitions.ALL_BADGES (badge.requirement).
 // -----------------------------------------------------------------------
 fun calculateAutoUnlockedBadgeCount(userProfile: UserProfile): Pair<Set<String>, Int> {
-    val ids = mutableSetOf<String>()
-
-    // Treningi
-    if (userProfile.totalWorkoutsCompleted >= 1)   ids.add("first_workout")
-    if (userProfile.totalWorkoutsCompleted >= 10)  ids.add("committed_10")
-    if (userProfile.totalWorkoutsCompleted >= 50)  ids.add("committed_50")
-    if (userProfile.totalWorkoutsCompleted >= 100) ids.add("committed_100")
-    if (userProfile.totalWorkoutsCompleted >= 250) ids.add("committed_250")
-    if (userProfile.totalWorkoutsCompleted >= 500) ids.add("committed_500")
-
-    // Kalorije
-    if (userProfile.totalCaloriesBurned >= 1000)  ids.add("calorie_crusher_1k")
-    if (userProfile.totalCaloriesBurned >= 5000)  ids.add("calorie_crusher_5k")
-    if (userProfile.totalCaloriesBurned >= 10000) ids.add("calorie_crusher_10k")
-
-    // Nivoji
-    if (userProfile.level >= 5)  ids.add("level_5")
-    if (userProfile.level >= 10) ids.add("level_10")
-    if (userProfile.level >= 25) ids.add("level_25")
-    if (userProfile.level >= 50) ids.add("level_50")
-
-    // Sledilci
-    if (userProfile.followers >= 1)   ids.add("first_follower")
-    if (userProfile.followers >= 10)  ids.add("social_butterfly")
-    if (userProfile.followers >= 50)  ids.add("influencer")
-    if (userProfile.followers >= 100) ids.add("celebrity")
-
-    // Čas vadbe
-    if (userProfile.earlyBirdWorkouts >= 5) ids.add("early_bird")
-    if (userProfile.nightOwlWorkouts >= 5)  ids.add("night_owl")
-
-    // Streak
-    if (userProfile.currentLoginStreak >= 7)   ids.add("week_warrior")
-    if (userProfile.currentLoginStreak >= 30)  ids.add("month_master")
-    if (userProfile.currentLoginStreak >= 365) ids.add("year_champion")
-
-    // Plani
-    if (userProfile.totalPlansCreated >= 1) ids.add("first_plan")
-    if (userProfile.totalPlansCreated >= 5) ids.add("plan_master")
-
+    val ids = com.example.myapplication.data.BadgeDefinitions.ALL_BADGES
+        .filter { badge ->
+            com.example.myapplication.persistence.AchievementStore.getBadgeProgress(badge.id, userProfile) >= badge.requirement
+        }
+        .map { it.id }
+        .toSet()
     return Pair(ids, ids.size)
 }
 

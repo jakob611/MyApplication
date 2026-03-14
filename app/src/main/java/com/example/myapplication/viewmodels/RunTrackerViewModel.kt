@@ -1,6 +1,7 @@
 package com.example.myapplication.viewmodels
 
 import androidx.lifecycle.ViewModel
+import com.example.myapplication.data.ActivityType
 import com.example.myapplication.data.RunSession
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -38,7 +39,10 @@ class RunTrackerViewModel : ViewModel() {
                             avgSpeedMps = (data["avgSpeedMps"] as? Number)?.toFloat() ?: 0.0f,
                             polylinePoints = emptyList(),
                             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
-                            caloriesKcal = (data["caloriesKcal"] as? Number)?.toInt() ?: 0
+                            caloriesKcal = (data["caloriesKcal"] as? Number)?.toInt() ?: 0,
+                            elevationGainM = (data["elevationGainM"] as? Number)?.toFloat() ?: 0f,
+                            elevationLossM = (data["elevationLossM"] as? Number)?.toFloat() ?: 0f,
+                            activityType = ActivityType.fromString(data["activityType"] as? String)
                         )
                     } catch (e: Exception) {
                         e.printStackTrace()

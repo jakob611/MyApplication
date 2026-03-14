@@ -35,6 +35,7 @@ import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.persistence.PlanDataStore
 import com.example.myapplication.ui.home.CommunityScreen
 import com.example.myapplication.ui.screens.*
+import com.example.myapplication.data.PlanResult
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.example.myapplication.utils.HapticFeedback
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -43,7 +44,6 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -88,21 +88,23 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val bodyOverviewViewModel: BodyOverviewViewmodel =
                 viewModel(factory = MyViewModelFactory())
-            val plans by bodyOverviewViewModel.plans.collectAsState()
+            val plans: List<com.example.myapplication.data.PlanResult> by bodyOverviewViewModel.plans.collectAsState()
+
+            val appViewModel: AppViewModel =
+                viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application))
+            val userProfile by appViewModel.userProfile.collectAsState()
+
+            val navViewModel: NavigationViewModel = viewModel()
+            val currentScreen by navViewModel.currentScreen.collectAsState()
+            val previousScreen by navViewModel.previousScreen.collectAsState()
 
             var isCheckingAuth by remember { mutableStateOf(true) }
-
-            // ----- Navigacijski stack -----
-            val navigationStack = remember { mutableStateListOf<Screen>(Screen.Index) }
-            var currentScreen by remember { mutableStateOf<Screen>(Screen.Index) }
-            var previousScreen by remember { mutableStateOf<Screen>(Screen.Index) }
 
             // ----- Auth stanje -----
             var isLoggedIn by remember { mutableStateOf(false) }
             var userEmail by remember { mutableStateOf("") }
             var errorMessage by remember { mutableStateOf<String?>(null) }
             var isDarkMode by remember { mutableStateOf(false) }
-            var userProfile by remember { mutableStateOf(com.example.myapplication.data.UserProfile(email = userEmail)) }
 
             // ----- Vadba stanje -----
             var selectedPlan by remember { mutableStateOf<PlanResult?>(null) }
@@ -137,10 +139,10 @@ class MainActivity : ComponentActivity() {
                         onSuccess = {
                             isLoggedIn = true
                             userEmail = account?.email ?: ""
-                            userProfile = UserPreferences.loadProfile(context, userEmail)
+                            appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                             scope.launch { isDarkMode = UserPreferences.isDarkMode(userEmail) }
-                            navigationStack.clear()
-                            currentScreen = Screen.Dashboard
+                            navViewModel.clearStack()
+                            navViewModel.navigateTo(Screen.Dashboard)
                         },
                         onError = { errorMessage = it }
                     )
@@ -169,12 +171,12 @@ class MainActivity : ComponentActivity() {
                         Log.d("MainActivity", "✅ Fresh start: bm_prefs reset")
                     }
 
-                    userProfile = UserPreferences.loadProfile(context, userEmail)
+                    appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                     isDarkMode = UserPreferences.isDarkMode(userEmail)
-                    currentScreen = if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard
+                    navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
                     scope.launch(Dispatchers.IO) {
-                        try { com.example.myapplication.persistence.AchievementStore.updateLoginStreak(context, userEmail) }
+                        try { com.example.myapplication.persistence.AchievementStore.recordLoginOnly(context, userEmail) }
                         catch (e: Exception) { Log.e("MainActivity", "Login streak error: ${e.message}") }
                     }
                     scope.launch(Dispatchers.IO) {
@@ -195,7 +197,7 @@ class MainActivity : ComponentActivity() {
                                     context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                         .edit().putInt("weekly_target", actParsed).apply()
                                 }
-                                withContext(Dispatchers.Main) { userProfile = remote }
+                                withContext(Dispatchers.Main) { appViewModel.setProfile(remote) }
                             }
                         } catch (_: Exception) {}
                     }
@@ -208,97 +210,17 @@ class MainActivity : ComponentActivity() {
                         try { PlanDataStore.migrateLocalPlansToFirestore(context) } catch (_: Exception) {}
                         bodyOverviewViewModel.refreshPlans()
                         try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
+                        try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                         val syncUid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                         if (syncUid != null) {
                             try { com.example.myapplication.persistence.DailySyncManager.syncOnAppOpen(context, syncUid) } catch (_: Exception) {}
                         }
                     }
 
-                    // Real-time Firestore listener za userProfile
-                    scope.launch {
-                        val userRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-                        userRef.addSnapshotListener { snap, _ ->
-                            if (snap?.exists() == true) {
-                                try {
-                                    val username = snap.getString("username") ?: ""
-                                    val firstName = snap.getString("first_name") ?: ""
-                                    val lastName = snap.getString("last_name") ?: ""
-                                    val address = snap.getString("address") ?: ""
-                                    val xp = (snap.get("xp") as? Number)?.toInt() ?: 0
-                                    val followers = (snap.get("followers") as? Number)?.toInt() ?: 0
-                                    val badges = when (val b = snap.get("badges")) {
-                                        is List<*> -> b.filterIsInstance<String>()
-                                        is String -> b.split(',').filter { it.isNotBlank() }
-                                        else -> emptyList()
-                                    }
-                                    val weightUnit = snap.getString("weight_unit") ?: "kg"
-                                    val speedUnit = snap.getString("speed_unit") ?: "km/h"
-                                    val startOfWeek = snap.getString("start_of_week") ?: "Monday"
-                                    val following = (snap.get("following") as? Number)?.toInt() ?: 0
-                                    val detailedCalories = snap.getBoolean("detailed_calories") ?: false
-                                    val totalWorkoutsCompleted = (snap.get("total_workouts") as? Number)?.toInt() ?: 0
-                                    val totalCaloriesBurned = (snap.get("total_calories") as? Number)?.toDouble() ?: 0.0
-                                    val currentLoginStreak = (snap.get("login_streak") as? Number)?.toInt() ?: 0
-                                    val totalPlansCreated = (snap.get("total_plans_created") as? Number)?.toInt() ?: 0
-                                    val isPublic = snap.getBoolean("is_public_profile") ?: false
-                                    val showLevel = snap.getBoolean("show_level") ?: false
-                                    val showBadges = snap.getBoolean("show_badges") ?: false
-                                    val showPlanPath = snap.getBoolean("show_plan_path") ?: false
-                                    val showChallenges = snap.getBoolean("show_challenges") ?: false
-                                    val showFollowers = snap.getBoolean("show_followers") ?: false
-                                    val profilePictureUrl = snap.getString("profile_picture_url")
-                                    val height = (snap.get("height") as? Number)?.toDouble()
-                                    val age = (snap.get("age") as? Number)?.toInt()
-                                    val gender = snap.getString("gender")
-                                    val activityLevel = snap.getString("activityLevel")
-                                    val experience = snap.getString("experience")
-                                    val bodyFat = snap.getString("bodyFat")
-                                    val workoutGoal = snap.getString("workoutGoal") ?: ""
-                                    val limitations = when (val lim = snap.get("limitations")) {
-                                        is List<*> -> lim.filterIsInstance<String>()
-                                        is String -> lim.split(',').filter { it.isNotBlank() }
-                                        else -> emptyList()
-                                    }
-                                    val nutritionStyle = snap.getString("nutritionStyle")
-                                    val sleepHours = snap.getString("sleepHours")
-                                    val equipment = when (val eq = snap.get("equipment")) {
-                                        is List<*> -> eq.filterIsInstance<String>()
-                                        else -> emptyList()
-                                    }
-                                    val focusAreas = when (val fa = snap.get("focusAreas")) {
-                                        is List<*> -> fa.filterIsInstance<String>()
-                                        else -> emptyList()
-                                    }
-                                    userProfile = com.example.myapplication.data.UserProfile(
-                                        username = username, email = userEmail,
-                                        firstName = firstName, lastName = lastName, address = address,
-                                        xp = xp, followers = followers, following = following, badges = badges,
-                                        weightUnit = weightUnit, speedUnit = speedUnit, startOfWeek = startOfWeek,
-                                        detailedCalories = detailedCalories,
-                                        isPublicProfile = isPublic, showLevel = showLevel, showBadges = showBadges,
-                                        showPlanPath = showPlanPath, showChallenges = showChallenges, showFollowers = showFollowers,
-                                        profilePictureUrl = profilePictureUrl,
-                                        height = height, age = age, gender = gender,
-                                        activityLevel = activityLevel, experience = experience, bodyFat = bodyFat,
-                                        workoutGoal = workoutGoal, limitations = limitations,
-                                        nutritionStyle = nutritionStyle, sleepHours = sleepHours,
-                                        equipment = equipment, focusAreas = focusAreas,
-                                        totalWorkoutsCompleted = totalWorkoutsCompleted,
-                                        totalCaloriesBurned = totalCaloriesBurned,
-                                        currentLoginStreak = currentLoginStreak,
-                                        totalPlansCreated = totalPlansCreated
-                                    )
-                                    val actParsed = activityLevel?.replace("x", "")?.toIntOrNull()
-                                    if (actParsed != null && actParsed > 0) {
-                                        context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                            .edit().putInt("weekly_target", actParsed).apply()
-                                    }
-                                } catch (e: Exception) { e.printStackTrace() }
-                            }
-                        }
-                    }
+                    // Real-time Firestore listener — kliče loadProfileFromFirestore() (ni ročnega gradnje UserProfile)
+                    appViewModel.startListening(userEmail)
                 } else {
-                    currentScreen = Screen.Index
+                    navViewModel.navigateTo(Screen.Index)
                 }
                 isCheckingAuth = false
             }
@@ -317,19 +239,20 @@ class MainActivity : ComponentActivity() {
             var showWeightInputDialog by remember { mutableStateOf(false) }
             var openBarcodeScan by remember { mutableStateOf(false) }
             var openFoodSearch by remember { mutableStateOf(false) }
+            var pendingNavigateToBodyModule by remember { mutableStateOf(false) }
 
             LaunchedEffect(intentExtras.value) {
                 val extras = intentExtras.value ?: return@LaunchedEffect
                 Log.d("MainActivity", "Intent extras: NAVIGATE_TO=${extras.getString("NAVIGATE_TO")}")
                 if (extras.getBoolean("OPEN_WEIGHT_INPUT", false)) {
                     showWeightInputDialog = true
-                    if (isLoggedIn) currentScreen = Screen.Progress
+                    if (isLoggedIn) navViewModel.navigateTo(Screen.Progress)
                 }
                 if (extras.getString("NAVIGATE_TO") == "nutrition") {
                     val wantsScan = extras.getBoolean("OPEN_BARCODE_SCAN", false)
                     val wantsSearch = extras.getBoolean("OPEN_FOOD_SEARCH", false)
                     if (isLoggedIn && !isCheckingAuth) {
-                        currentScreen = Screen.Nutrition
+                        navViewModel.navigateTo(Screen.Nutrition)
                         delay(150)
                         if (wantsScan) openBarcodeScan = true
                         if (wantsSearch) openFoodSearch = true
@@ -339,11 +262,25 @@ class MainActivity : ComponentActivity() {
                         pendingOpenFoodSearch = wantsSearch
                     }
                 }
+                if (extras.getString("NAVIGATE_TO") == "body_module") {
+                    if (isLoggedIn && !isCheckingAuth) {
+                        navViewModel.navigateTo(Screen.BodyModuleHome)
+                    } else {
+                        pendingNavigateToBodyModule = true
+                    }
+                }
+            }
+
+            LaunchedEffect(isCheckingAuth, isLoggedIn, pendingNavigateToBodyModule) {
+                if (!isCheckingAuth && isLoggedIn && pendingNavigateToBodyModule) {
+                    navViewModel.navigateTo(Screen.BodyModuleHome)
+                    pendingNavigateToBodyModule = false
+                }
             }
 
             LaunchedEffect(isCheckingAuth, isLoggedIn, pendingNavigateToNutrition, pendingOpenBarcodeScan, pendingOpenFoodSearch) {
                 if (!isCheckingAuth && isLoggedIn && pendingNavigateToNutrition) {
-                    currentScreen = Screen.Nutrition
+                    navViewModel.navigateTo(Screen.Nutrition)
                     delay(150)
                     if (pendingOpenBarcodeScan) openBarcodeScan = true
                     if (pendingOpenFoodSearch) openFoodSearch = true
@@ -352,36 +289,15 @@ class MainActivity : ComponentActivity() {
             }
 
             // ----- Navigacijski pomočniki -----
-            fun navigateTo(screen: Screen) {
-                if (currentScreen != screen) {
-                    navigationStack.add(currentScreen)
-                    previousScreen = currentScreen
-                    currentScreen = screen
-                }
-            }
+            fun navigateTo(screen: Screen) = navViewModel.navigateTo(screen)
 
-            fun navigateBack() {
-                when {
-                    selectedPlan != null -> selectedPlan = null
-                    currentScreen is Screen.LevelPath || currentScreen is Screen.BadgesScreen ||
-                    currentScreen is Screen.MyAccount || currentScreen is Screen.Achievements -> {
-                        val previous = navigationStack.removeLastOrNull()
-                        if (previous != null) { previousScreen = currentScreen; currentScreen = previous }
-                        else currentScreen = if (isLoggedIn) Screen.Dashboard else Screen.Index
-                    }
-                    currentScreen is Screen.ProFeatures -> { errorMessage = null; currentScreen = previousScreen }
-                    currentScreen is Screen.ProSubscription -> { errorMessage = null; currentScreen = Screen.ProFeatures }
-                    currentScreen is Screen.Login -> { errorMessage = null; currentScreen = Screen.Index }
-                    navigationStack.isNotEmpty() -> {
-                        val previous = navigationStack.removeLastOrNull()
-                        if (previous != null) { previousScreen = currentScreen; currentScreen = previous }
-                        else currentScreen = if (isLoggedIn) Screen.Dashboard else Screen.Index
-                    }
-                    currentScreen is Screen.Dashboard -> if (!isLoggedIn) currentScreen = Screen.Index else finish()
-                    isLoggedIn -> currentScreen = Screen.Dashboard
-                    else -> currentScreen = Screen.Index
-                }
-            }
+            fun navigateBack() = navViewModel.navigateBack(
+                isLoggedIn = isLoggedIn,
+                hasSelectedPlan = selectedPlan != null,
+                onClearSelectedPlan = { selectedPlan = null },
+                onClearError = { errorMessage = null },
+                onFinish = { finish() }
+            )
 
             BackHandler { navigateBack() }
 
@@ -415,17 +331,16 @@ class MainActivity : ComponentActivity() {
                                     com.example.myapplication.persistence.FirestoreHelper.clearCache()
                                     Firebase.auth.signOut()
                                     isLoggedIn = false; userEmail = ""
-                                    userProfile = com.example.myapplication.data.UserProfile(email = "")
-                                    navigationStack.clear()
-                                    currentScreen = Screen.Index
+                                    appViewModel.setProfile(com.example.myapplication.data.UserProfile(email = ""))
+                                    navViewModel.clearStack(); navViewModel.navigateTo(Screen.Index)
                                     scope.launch { drawerState.close() }
                                 },
-                                onProfileUpdate = { updatedProfile ->
-                                    userProfile = updatedProfile
-                                    UserPreferences.saveProfile(context, updatedProfile)
-                                    scope.launch { UserPreferences.saveProfileFirestore(updatedProfile) }
-                                },
-                                isDarkMode = isDarkMode,
+                                                onProfileUpdate = { updatedProfile ->
+                                                    appViewModel.setProfile(updatedProfile)
+                                                    UserPreferences.saveProfile(context, updatedProfile)
+                                                    scope.launch { UserPreferences.saveProfileFirestore(updatedProfile) }
+                                                },
+                                                isDarkMode = isDarkMode,
                                 onDarkModeToggle = {
                                     isDarkMode = !isDarkMode
                                     scope.launch { UserPreferences.setDarkMode(userEmail, isDarkMode) }
@@ -463,8 +378,8 @@ class MainActivity : ComponentActivity() {
                                             scope.launch { drawerState.open() }
                                         },
                                         onProClick = {
-                                            errorMessage = null; previousScreen = currentScreen
-                                            currentScreen = Screen.ProFeatures
+                                            errorMessage = null
+                                            navViewModel.navigateTo(Screen.ProFeatures)
                                         }
                                     )
                                 }
@@ -529,7 +444,12 @@ class MainActivity : ComponentActivity() {
                                         currentPlan = plans.maxByOrNull { it.createdAt },
                                         onOpenHistory = { navigateTo(Screen.ExerciseHistory) },
                                         onOpenManualLog = { navigateTo(Screen.ManualExerciseLog) },
-                                        onStartRun = { navigateTo(Screen.RunTracker) }
+                                        onStartRun = { navigateTo(Screen.RunTracker) },
+                                        onOpenActivityLog = { navigateTo(Screen.ActivityLog) },
+                                        onOpenShop = { navigateTo(Screen.Shop) }
+                                    )
+                                    currentScreen is Screen.ActivityLog -> ActivityLogScreen(
+                                        onBack = { navigateBack() }
                                     )
                                     currentScreen is Screen.WorkoutSession -> {
                                         val frozenPlan = remember(currentScreen) { selectedPlan ?: plans.maxByOrNull { it.createdAt } }
@@ -541,17 +461,20 @@ class MainActivity : ComponentActivity() {
                                             onBack = {
                                                 selectedPlan = null; isExtraWorkoutSession = false
                                                 extraFocusAreas = emptyList(); extraEquipment = emptySet()
-                                                currentScreen = Screen.BodyModuleHome
+                                                navViewModel.navigateTo(Screen.BodyModuleHome)
                                             },
                                             onFinished = {
                                                 selectedPlan = null; isExtraWorkoutSession = false
                                                 extraFocusAreas = emptyList(); extraEquipment = emptySet()
-                                                currentScreen = Screen.BodyModuleHome
+                                                navViewModel.navigateTo(Screen.BodyModuleHome)
+                                                // Posodobi Plan Day widget takoj po končani vadbi
+                                                try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
+                                                try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                                             },
-                                            onXPAdded = { userProfile = UserPreferences.loadProfile(context, userEmail) },
+                                            onXPAdded = { appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail)) },
                                             onBadgeUnlocked = { badge ->
                                                 unlockedBadge = badge
-                                                userProfile = UserPreferences.loadProfile(context, userEmail)
+                                                appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                                             }
                                         )
                                     }
@@ -575,7 +498,7 @@ class MainActivity : ComponentActivity() {
                                             onProductConsumed = { scannedProduct = null },
                                             openBarcodeScan = openBarcodeScan,
                                             openFoodSearch = openFoodSearch,
-                                            onXPAdded = { userProfile = UserPreferences.loadProfile(context, userEmail) },
+                                            onXPAdded = { appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail)) },
                                             snackbarHostState = nutritionSnackbarHostState,
                                             userProfile = userProfile
                                         )
@@ -615,7 +538,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     currentScreen is Screen.Dashboard -> DashboardScreen(
                                         userEmail = userEmail,
-                                        onLogout = { Firebase.auth.signOut(); isLoggedIn = false; userEmail = ""; currentScreen = Screen.Index },
+                                        onLogout = { Firebase.auth.signOut(); isLoggedIn = false; userEmail = ""; navViewModel.navigateTo(Screen.Index) },
                                         onModuleClick = { moduleTitle ->
                                             when (moduleTitle) {
                                                 "Body" -> navigateTo(Screen.BodyModuleHome)
@@ -625,7 +548,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onAccountClick = { navigateTo(Screen.MyAccount) },
-                                        onProClick = { errorMessage = null; previousScreen = currentScreen; navigateTo(Screen.ProFeatures) },
+                                        onProClick = { errorMessage = null; navigateTo(Screen.ProFeatures) },
                                         onOpenMenu = {
                                             HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN)
                                             scope.launch { drawerState.open() }
@@ -647,7 +570,7 @@ class MainActivity : ComponentActivity() {
                                             val newHeight = (quizData["height"] as? Number)?.toDouble() ?: (quizData["height"] as? String)?.toDoubleOrNull()
                                             val newAge = (quizData["age"] as? Number)?.toInt() ?: (quizData["age"] as? String)?.toIntOrNull()
                                             val newGender = quizData["gender"] as? String
-                                            userProfile = userProfile.copy(
+                                            val updatedFromQuiz = userProfile.copy(
                                                 height = newHeight, age = newAge, gender = newGender,
                                                 activityLevel = quizData["frequency"] as? String,
                                                 experience = quizData["experience"] as? String,
@@ -657,8 +580,8 @@ class MainActivity : ComponentActivity() {
                                                 nutritionStyle = quizData["nutrition"] as? String,
                                                 sleepHours = quizData["sleep"] as? String
                                             )
-                                            UserPreferences.saveProfile(context, userProfile)
-                                            // Takoj nastavi weekly_target iz activityLevel — ne čakaj na onFinish
+                                            appViewModel.setProfile(updatedFromQuiz)
+                                            UserPreferences.saveProfile(context, updatedFromQuiz)
                                             val freqStr = quizData["frequency"] as? String
                                             val freqParsed = freqStr?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
                                             if (freqParsed != null && freqParsed > 0) {
@@ -694,9 +617,9 @@ class MainActivity : ComponentActivity() {
                                                 val finalProfile = currentProfile.copy(equipment = plan.equipment, focusAreas = plan.focusAreas)
                                                 UserPreferences.saveProfileFirestore(finalProfile)
                                                 UserPreferences.saveProfile(context, finalProfile)
-                                                userProfile = finalProfile
+                                                appViewModel.setProfile(finalProfile)
                                                 com.example.myapplication.persistence.AchievementStore.recordPlanCreation(context, userEmail)
-                                                userProfile = UserPreferences.loadProfile(context, userEmail)
+                                                appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                                                 val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                                                 if (uid != null) {
                                                     val nutritionPlan = com.example.myapplication.data.NutritionPlan(
@@ -727,7 +650,7 @@ class MainActivity : ComponentActivity() {
                                                     android.util.Log.d("MainActivity", "✅ weekly_target saved to Firestore users/$userEmail: $weeklyTargetToSave")
                                                 }
                                                 bodyOverviewViewModel.refreshPlans()
-                                                currentScreen = Screen.BodyOverview
+                                                navViewModel.navigateTo(Screen.BodyOverview)
                                             }
                                         }
                                     )
@@ -744,7 +667,7 @@ class MainActivity : ComponentActivity() {
                                         userProfile = userProfile,
                                         onNavigateToDevSettings = { navigateTo(Screen.DeveloperSettings) },
                                         onProfileUpdate = { updatedProfile ->
-                                            userProfile = updatedProfile
+                                            appViewModel.setProfile(updatedProfile)
                                             UserPreferences.saveProfile(context, updatedProfile)
                                             scope.launch { UserPreferences.saveProfileFirestore(updatedProfile) }
                                         },
@@ -769,8 +692,8 @@ class MainActivity : ComponentActivity() {
                                                         errorMessage = "Account data deleted. Please sign in again and retry to fully delete account."
                                                     }
                                                     bodyOverviewViewModel.clearPlans(); isLoggedIn = false; userEmail = ""
-                                                    userProfile = com.example.myapplication.data.UserProfile(email = "")
-                                                    navigationStack.clear(); currentScreen = Screen.Index
+                                                    appViewModel.setProfile(com.example.myapplication.data.UserProfile(email = ""))
+                                                    navViewModel.clearStack(); navViewModel.navigateTo(Screen.Index)
                                                     scope.launch { drawerState.close() }
                                                 } catch (e: Exception) { errorMessage = "Account deletion failed: ${e.localizedMessage}" }
                                             }
@@ -825,12 +748,13 @@ class MainActivity : ComponentActivity() {
                                 currentScreen is Screen.Index -> IndexScreen(
                                     onLoginClick = { errorMessage = null; navigateTo(Screen.Login(startInSignUp = false)) },
                                     onSignUpClick = { errorMessage = null; navigateTo(Screen.Login(startInSignUp = true)) },
-                                    onViewProFeatures = { errorMessage = null; previousScreen = Screen.Index; navigateTo(Screen.ProFeatures) }
+                                    onViewProFeatures = { errorMessage = null; navigateTo(Screen.ProFeatures) }
                                 )
                                 currentScreen is Screen.Login -> LoginScreen(
                                     startInSignUp = (currentScreen as Screen.Login).startInSignUp,
                                     onForgotPassword = { email ->
                                         errorMessage = null
+                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
                                         Firebase.auth.sendPasswordResetEmail(email).addOnCompleteListener { task ->
                                             errorMessage = if (task.isSuccessful) "Password reset email sent to $email"
                                             else task.exception?.localizedMessage ?: "Failed to send reset email"
@@ -838,14 +762,16 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onLogin = { email, password ->
                                         errorMessage = null
+                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
+                                        if (password.isBlank()) { errorMessage = "Please enter your password."; return@LoginScreen }
                                         Firebase.auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
                                                 val user = Firebase.auth.currentUser
                                                 if (user != null && user.isEmailVerified) {
                                                     isLoggedIn = true; userEmail = email
-                                                    userProfile = UserPreferences.loadProfile(context, userEmail)
+                                                    appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                                                     scope.launch { isDarkMode = UserPreferences.isDarkMode(userEmail) }
-                                                    navigationStack.clear(); currentScreen = Screen.Dashboard
+                                                    navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
                                                 } else if (user != null) { errorMessage = "Please verify your email first!"; Firebase.auth.signOut() }
                                                 else errorMessage = "Error: no user."
                                             } else errorMessage = task.exception?.localizedMessage ?: "Login failed."
@@ -853,6 +779,8 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onSignup = { email, password, confirmPassword ->
                                         errorMessage = null
+                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
+                                        if (password.isBlank()) { errorMessage = "Please enter your password."; return@LoginScreen }
                                         if (password != confirmPassword) { errorMessage = "Passwords do not match."; return@LoginScreen }
                                         Firebase.auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
@@ -862,7 +790,7 @@ class MainActivity : ComponentActivity() {
                                             } else errorMessage = task.exception?.localizedMessage ?: "Sign-up failed."
                                         }
                                     },
-                                    onBackToHome = { errorMessage = null; currentScreen = Screen.Index },
+                                    onBackToHome = { errorMessage = null; navViewModel.navigateTo(Screen.Index) },
                                     errorMessage = errorMessage,
                                     onGoogleSignInClick = { errorMessage = null; googleSignInLauncher.launch(googleSignInClient.signInIntent) },
                                     onTermsClick = { navigateTo(Screen.TermsOfService) },

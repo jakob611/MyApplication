@@ -6,17 +6,19 @@ import com.example.myapplication.data.BadgeDefinitions
 import com.example.myapplication.data.UserPreferences
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.XPSource
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
 object AchievementStore {
-    private val firestore = Firebase.firestore
+
+    data class WorkoutCompletionResult(
+        val unlockedBadges: List<com.example.myapplication.data.Badge>,
+        val xpAwarded: Int,
+        val isCritical: Boolean
+    )
 
     /**
      * Interno: samo shrani XP + level up bonus, brez badge preverjanja.
@@ -79,13 +81,14 @@ object AchievementStore {
      */
     fun getBadgeProgress(badgeId: String, profile: UserProfile): Int {
         return when (badgeId) {
-            "first_workout", "committed_10", "committed_50", "committed_100" ->
+            "first_workout", "committed_10", "committed_50", "committed_100",
+            "committed_250", "committed_500" ->
                 profile.totalWorkoutsCompleted
             "calorie_crusher_1k", "calorie_crusher_5k", "calorie_crusher_10k" ->
                 profile.totalCaloriesBurned.toInt()
-            "level_5", "level_10", "level_25" ->
+            "level_5", "level_10", "level_25", "level_50" ->
                 profile.level
-            "first_follower", "social_butterfly", "influencer" ->
+            "first_follower", "social_butterfly", "influencer", "celebrity" ->
                 profile.followers
             "early_bird" -> profile.earlyBirdWorkouts
             "night_owl" -> profile.nightOwlWorkouts
@@ -122,29 +125,8 @@ object AchievementStore {
             allBadges.forEach { badge ->
                 if (!currentUnlocked.contains(badge.id)) {
                     val progress = getBadgeProgress(badge.id, freshProfile)
-                    val requirement = when (badge.id) {
-                        "first_workout" -> 1
-                        "committed_10" -> 10
-                        "committed_50" -> 50
-                        "committed_100" -> 100
-                        "calorie_crusher_1k" -> 1000
-                        "calorie_crusher_5k" -> 5000
-                        "calorie_crusher_10k" -> 10000
-                        "level_5" -> 5
-                        "level_10" -> 10
-                        "level_25" -> 25
-                        "first_follower" -> 1
-                        "social_butterfly" -> 10
-                        "influencer" -> 50
-                        "early_bird" -> 5
-                        "night_owl" -> 5
-                        "week_warrior" -> 7
-                        "month_master" -> 30
-                        "year_champion" -> 365
-                        "first_plan" -> 1
-                        "plan_master" -> 5
-                        else -> Int.MAX_VALUE
-                    }
+                    // badge.requirement je definiran v BadgeDefinitions.ALL_BADGES — en sam vir resnice
+                    val requirement = badge.requirement
 
                     if (progress >= requirement) {
                         Log.d("AchievementStore", "Unlocking badge: ${badge.id} (progress=$progress, req=$requirement)")
@@ -228,16 +210,16 @@ object AchievementStore {
     }
 
     /**
-     * Record workout completion — updates stats then checks badges
+     * Record workout completion — updates stats then checks badges.
+     * Vrne rezultat z badge-i in XP info.
      */
     suspend fun recordWorkoutCompletion(
         context: Context,
         email: String,
         caloriesBurned: Double,
         hour: Int
-    ) = withContext(Dispatchers.IO) {
+    ): WorkoutCompletionResult = withContext(Dispatchers.IO) {
         try {
-            // Beri iz Firestorea — da ne prepiše height/age/gender z null vrednostmi iz lokalnega cache-a
             val profile = UserPreferences.loadProfileFromFirestore(email)
                 ?: UserPreferences.loadProfile(context, email)
 
@@ -251,16 +233,27 @@ object AchievementStore {
             UserPreferences.saveProfile(context, updatedProfile)
             UserPreferences.saveProfileFirestore(updatedProfile)
 
-            awardXP(context, email, 50, XPSource.WORKOUT_COMPLETE, "Completed workout")
+            // awardXP → awardXPInternal + checkAndUnlockBadges (enkrat, ne dvakrat)
+            val isCritical = kotlin.random.Random.nextFloat() < 0.1f // 10% chance
+            val baseXP = 50
+            val awardedXP = if (isCritical) baseXP * 2 else baseXP
+            val desc = if (isCritical) "Completed workout (CRITICAL HIT!)" else "Completed workout"
+            
+            awardXPInternal(context, email, awardedXP, XPSource.WORKOUT_COMPLETE, desc)
 
             val calorieXP = (caloriesBurned / 8).toInt()
             if (calorieXP > 0) {
-                // awardXPInternal — badge preverjanje je že bilo v awardXP zgoraj, ne kličemo dvakrat
                 awardXPInternal(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal")
             }
 
+            val unlockedBadges = checkAndUnlockBadges(context, updatedProfile)
+            
+            WorkoutCompletionResult(unlockedBadges, awardedXP, isCritical)
+
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error recording workout: ${e.message}")
+            // Fallback: return empty result so app doesn't crash
+            WorkoutCompletionResult(emptyList(), 0, false)
         }
     }
 
@@ -274,17 +267,16 @@ object AchievementStore {
         email: String
     ) = withContext(Dispatchers.IO) {
         try {
-            // Beri iz Firestorea — edini zanesljiv vir vrednosti totalPlansCreated
             val profile = UserPreferences.loadProfileFromFirestore(email)
                 ?: UserPreferences.loadProfile(context, email)
 
             val today = LocalDate.now().toString()
 
             // Anti-farming: ločeno polje "lastPlanCreatedDate" — lastLoginDate se ne dotika
-            val uid = FirestoreHelper.getCurrentUserDocId() ?: return@withContext
+            // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
             val lastPlanDate = try {
-                val doc = firestore.collection("users").document(uid).get().await()
-                doc.getString("lastPlanCreatedDate") ?: ""
+                docRef.get().await().getString("lastPlanCreatedDate") ?: ""
             } catch (e: Exception) { "" }
 
             if (lastPlanDate == today) {
@@ -293,18 +285,13 @@ object AchievementStore {
                 return@withContext
             }
 
-            val updatedProfile = profile.copy(
-                totalPlansCreated = profile.totalPlansCreated + 1
-            )
-
+            val updatedProfile = profile.copy(totalPlansCreated = profile.totalPlansCreated + 1)
             UserPreferences.saveProfile(context, updatedProfile)
             UserPreferences.saveProfileFirestore(updatedProfile)
 
             // Shrani datum atomično — ločeno od profila, da ne povozi sočasnih sprememb
             try {
-                firestore.collection("users").document(uid)
-                    .update("lastPlanCreatedDate", today)
-                    .await()
+                docRef.update("lastPlanCreatedDate", today).await()
             } catch (e: Exception) {
                 Log.w("AchievementStore", "Ne morem shraniti lastPlanCreatedDate: ${e.message}")
             }
@@ -319,65 +306,157 @@ object AchievementStore {
     }
 
     /**
-     * Update login streak — also triggers badge check
+     * Update logina — SAMO posodobi lastLoginDate, NE streaka.
+     * Streak se posodobi le ob 'checkAndUpdatePlanStreak' (ko je rest day ali workout).
      */
-    suspend fun updateLoginStreak(
+    suspend fun recordLoginOnly(
         context: Context,
         email: String
     ) = withContext(Dispatchers.IO) {
         try {
-            // Preveri fresh_start flag — če je postavljen, je bil račun nedavno izbrisan
-            // V tem primeru začnemo streak od 0 (ta login bo nastavil na 1)
-            val appFlags = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
-            val isFreshStart = appFlags.getBoolean("fresh_start_on_login", false)
-
-            val profile = if (isFreshStart) {
-                // Fresh start — ignoriraj Firestore podatke, začni na novo
-                Log.d("AchievementStore", "🔄 Fresh start detected — resetting streak to 1")
-                appFlags.edit().putBoolean("fresh_start_on_login", false).apply()
-                // Pobriši tudi Firestore streak podatke
-                try {
-                    val resolvedRef = FirestoreHelper.getCurrentUserDocRef()
-                    resolvedRef.update(mapOf(
-                        "streak_days" to 0,
-                        "login_streak" to 0,
-                        "last_login_date" to "",
-                        KEY_LAST_LOGIN to ""
-                    )).await()
-                } catch (_: Exception) {}
-                UserPreferences.loadProfile(context, email).copy(currentLoginStreak = 0, lastLoginDate = null)
-            } else {
-                UserPreferences.loadProfileFromFirestore(email)
-                    ?: UserPreferences.loadProfile(context, email)
-            }
-
+            val profile = UserPreferences.loadProfileFromFirestore(email)
+                ?: UserPreferences.loadProfile(context, email)
             val today = LocalDate.now().toString()
-            val yesterday = LocalDate.now().minusDays(1).toString()
-
-            val newStreak = when (profile.lastLoginDate) {
-                today -> profile.currentLoginStreak
-                yesterday -> profile.currentLoginStreak + 1
-                else -> 1
-            }
-
-            val updatedProfile = profile.copy(
-                currentLoginStreak = newStreak,
-                lastLoginDate = today
-            )
-
-            UserPreferences.saveProfile(context, updatedProfile)
-            UserPreferences.saveProfileFirestore(updatedProfile)
 
             if (profile.lastLoginDate != today) {
+                val updatedProfile = profile.copy(lastLoginDate = today)
+                UserPreferences.saveProfile(context, updatedProfile)
+                // Firestore shranimo asinhrono da ne blokira UI
+                try {
+                    val ref = FirestoreHelper.getCurrentUserDocRef()
+                    ref.update("last_login_date", today).await()
+                } catch (_: Exception) {}
                 awardXP(context, email, 10, XPSource.DAILY_LOGIN, "Daily login")
             }
-
         } catch (e: Exception) {
-            Log.e("AchievementStore", "Error updating login streak: ${e.message}")
+            Log.e("AchievementStore", "Error recording login: ${e.message}")
         }
     }
 
-    private const val KEY_LAST_LOGIN = "last_login_date"
+    /**
+     * Varna metoda za posodobitev streaka.
+     * Preveri 'last_streak_update_date' da prepreči dvojno štetje.
+     * isRestDaySuccess: če je danes Rest Day in je uporabnik prišel v app (ali pa smo to avtomatsko zaznali)
+     * isWorkoutSuccess: če je uporabnik opravil trening
+     */
+    suspend fun checkAndUpdatePlanStreak(
+        context: Context,
+        email: String,
+        isRestDaySuccess: Boolean = false,
+        isWorkoutSuccess: Boolean = false
+    ) = withContext(Dispatchers.IO) {
+        if (!isRestDaySuccess && !isWorkoutSuccess) return@withContext
+
+        try {
+            val today = LocalDate.now()
+            val todayStr = today.toString()
+            val yesterdayStr = today.minusDays(1).toString()
+
+            // 1. Check if we already have a log for today in Firestore
+            // This is the "mapica" user requested — a subcollection of completed days
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
+            val todayLogRef = docRef.collection("daily_logs").document(todayStr)
+            
+            val todayLogSnap = todayLogRef.get().await()
+            if (todayLogSnap.exists()) {
+                Log.d("AchievementStore", "Streak already recorded for today ($todayStr) in daily_logs.")
+                return@withContext
+            }
+
+            // 2. Load profile
+            val profile = UserPreferences.loadProfileFromFirestore(email)
+                ?: UserPreferences.loadProfile(context, email)
+
+            // 3. Determine consecutive status using daily_logs or fallback to profile
+            // We check if yesterday was completed
+            val yesterdayLogRef = docRef.collection("daily_logs").document(yesterdayStr)
+            val yesterdayExists = yesterdayLogRef.get().await().exists()
+
+            var effectiveStreak = profile.currentLoginStreak
+            var consumedFreezes = 0
+            
+            // If yesterday is missing AND we think we have a streak > 0, we must check if it's broken or frozen
+            // NOTE: If this is the FIRST time using daily_logs, yesterday might be missing even if streak is valid.
+            // So we only penalize if daily_logs implies we missed it, OR if last_streak_update_date is old.
+            
+            // Legacy check
+            val keyLastUpdate = "${email}_last_streak_update_date"
+            val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+            var lastUpdateLegacy = prefs.getString(keyLastUpdate, "") ?: ""
+            
+            // If legacy date is empty, fetch from Firestore
+            if (lastUpdateLegacy.isEmpty()) {
+                val fsDoc = docRef.get().await()
+                lastUpdateLegacy = fsDoc.getString("last_streak_update_date") ?: ""
+            }
+            
+            val lastUpdateDate = if (lastUpdateLegacy.isNotEmpty()) LocalDate.parse(lastUpdateLegacy) else null
+            val daysBetween = if (lastUpdateDate != null) java.time.temporal.ChronoUnit.DAYS.between(lastUpdateDate, today) else 0L
+
+            if (daysBetween > 1) {
+                // Missed day(s) detected via legacy date
+                val missedDays = (daysBetween - 1).toInt()
+                if (profile.streakFreezes >= missedDays) {
+                     consumedFreezes = missedDays
+                     Log.d("AchievementStore", "❄️ Rescuing streak! Consuming $consumedFreezes freezes.")
+                     withContext(Dispatchers.Main) {
+                         try {
+                             android.widget.Toast.makeText(context, "❄️ Streak Freeze Used ($consumedFreezes)!", android.widget.Toast.LENGTH_LONG).show()
+                         } catch (_: Exception) {}
+                     }
+                } else {
+                    effectiveStreak = 0
+                }
+            } else if (!yesterdayExists && daysBetween > 1) {
+                 // Double confirm: if yesterday log is missing and legacy says we missed days -> break streak
+                 // (We prioritize legacy check for now until daily_logs helps build history)
+            } else {
+                 // Streak is safe (either daysBetween <= 1 or it's a new install/first run)
+            }
+            
+            // 4. Calculate new values
+            val newStreak = effectiveStreak + 1
+            // Ensure we don't consume more freezes than we have
+            val newFreezes = (profile.streakFreezes - consumedFreezes).coerceAtLeast(0)
+
+            // 5. Save to "daily_logs" (The Map/Collection user requested)
+            val logData = mapOf(
+                "date" to todayStr,
+                "completed" to true,
+                "type" to if (isWorkoutSuccess) "workout" else "rest_activity",
+                "streak_at_this_point" to newStreak,
+                "timestamp" to FieldValue.serverTimestamp()
+            )
+            todayLogRef.set(logData).await()
+
+            // 6. Update Profile
+            val updatedProfile = profile.copy(
+                currentLoginStreak = newStreak,
+                streakFreezes = newFreezes
+            )
+            UserPreferences.saveProfile(context, updatedProfile)
+
+            // 7. Update Firestore user document
+            try {
+                val updates = mapOf(
+                    "streak_days" to newStreak,
+                    "streak_freezes" to newFreezes,
+                    "last_streak_update_date" to todayStr
+                )
+                docRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+            } catch (e: Exception) {
+                Log.e("AchievementStore", "Error saving streak to Firestore: ${e.message}")
+            }
+
+            // 8. Update local legacy pref
+            prefs.edit().putString(keyLastUpdate, todayStr).apply()
+
+            Log.d("AchievementStore", "Streak updated consistently: $newStreak")
+
+        } catch (e: Exception) {
+            Log.e("AchievementStore", "Error updating plan streak: ${e.message}")
+        }
+    }
 
     /**
      * Log XP activity to Firestore
@@ -389,19 +468,14 @@ object AchievementStore {
         description: String
     ) = withContext(Dispatchers.IO) {
         try {
-            val uid = FirestoreHelper.getCurrentUserDocId() ?: return@withContext
-            val timestamp = System.currentTimeMillis()
-
             val data = mapOf(
                 "xp" to xpAmount,
                 "source" to source,
                 "description" to description,
-                "timestamp" to timestamp
+                "timestamp" to System.currentTimeMillis()
             )
-
-            firestore
-                .collection("users")
-                .document(uid)
+            // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
+            FirestoreHelper.getCurrentUserDocRef()
                 .collection("xp_history")
                 .add(data)
                 .await()

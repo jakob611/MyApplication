@@ -2,17 +2,6 @@ package com.example.myapplication.data
 
 object BadgeDefinitions {
 
-    // Badge unlock condition types
-    sealed class UnlockCondition {
-        data class WorkoutCount(val required: Int) : UnlockCondition()
-        data class CaloriesBurned(val required: Double) : UnlockCondition()
-        data class ReachLevel(val required: Int) : UnlockCondition()
-        data class FollowerCount(val required: Int) : UnlockCondition()
-        data class StreakDays(val required: Int) : UnlockCondition()
-        data class WorkoutTime(val hour: Int, val count: Int) : UnlockCondition() // Workout at specific time
-        data class PlanCount(val required: Int) : UnlockCondition()
-        object FirstLogin : UnlockCondition()
-    }
 
     val ALL_BADGES = listOf(
         // Workout Badges
@@ -47,6 +36,22 @@ object BadgeDefinitions {
             iconName = "EmojiEvents",
             category = BadgeCategory.WORKOUT,
             requirement = 100
+        ),
+        Badge(
+            id = "committed_250",
+            name = "Veteran",
+            description = "Complete 250 workouts",
+            iconName = "EmojiEvents",
+            category = BadgeCategory.WORKOUT,
+            requirement = 250
+        ),
+        Badge(
+            id = "committed_500",
+            name = "Legend",
+            description = "Complete 500 workouts",
+            iconName = "EmojiEvents",
+            category = BadgeCategory.WORKOUT,
+            requirement = 500
         ),
 
         // Calorie Badges
@@ -100,6 +105,14 @@ object BadgeDefinitions {
             category = BadgeCategory.ACHIEVEMENT,
             requirement = 25
         ),
+        Badge(
+            id = "level_50",
+            name = "Level 50",
+            description = "Reach level 50",
+            iconName = "Star",
+            category = BadgeCategory.ACHIEVEMENT,
+            requirement = 50
+        ),
 
         // Social Badges
         Badge(
@@ -125,6 +138,14 @@ object BadgeDefinitions {
             iconName = "Group",
             category = BadgeCategory.SOCIAL,
             requirement = 50
+        ),
+        Badge(
+            id = "celebrity",
+            name = "Celebrity",
+            description = "Get 100 followers",
+            iconName = "Group",
+            category = BadgeCategory.SOCIAL,
+            requirement = 100
         ),
 
         // Time-based Badges
@@ -191,7 +212,4 @@ object BadgeDefinitions {
     )
 
     fun getBadgeById(id: String): Badge? = ALL_BADGES.find { it.id == id }
-
-    fun getBadgesByCategory(category: BadgeCategory): List<Badge> =
-        ALL_BADGES.filter { it.category == category }
 }

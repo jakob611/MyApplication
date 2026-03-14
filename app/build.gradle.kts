@@ -48,20 +48,21 @@ android {
         compose = true
         buildConfig = true
     }
-    // Pakiriaj samo arm64-v8a in armeabi-v7a - izpusti x86/x86_64 (samo emulatorji)
-    // To zmanjsa APK za ~10MB (libbarhopper_v3.so je 5MB za vsak x86 ABI)
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a")
-            isUniversalApk = true  // en APK za distribucijo
-        }
-    }
+    // Pakiriaj samo navedene ABI v APK (ne ustvari locenih APK)
+    // splits {
+    //    abi {
+    //        isEnable = true
+    //        reset()
+    //        include("arm64-v8a", "armeabi-v7a")
+    //        isUniversalApk = true  // en APK za distribucijo
+    //    }
+    // }
     // Pakiriaj samo navedene ABI v APK (ne ustvari locenih APK)
     packaging {
         jniLibs {
             excludes += listOf("lib/x86/**", "lib/x86_64/**")
+            // Forced extraction for 16KB compatibility
+            useLegacyPackaging = true
         }
     }
 }
@@ -110,11 +111,13 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
     // ML Kit Barcode Scanning
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // ML Kit Face Detection
+    implementation("com.google.mlkit:face-detection:16.1.6")
     // Location services
     implementation("com.google.android.gms:play-services-location:21.3.0")
     // OpenStreetMap za RunTracker
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
     // Health Connect API
     implementation("androidx.health.connect:connect-client:1.1.0-alpha08")
     // ExoPlayer

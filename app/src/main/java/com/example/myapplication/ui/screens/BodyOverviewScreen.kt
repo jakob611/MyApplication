@@ -23,6 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import com.example.myapplication.data.PlanResult
+import com.example.myapplication.data.WeekPlan
+import com.example.myapplication.data.DayPlan
+import com.example.myapplication.data.AlgorithmData
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

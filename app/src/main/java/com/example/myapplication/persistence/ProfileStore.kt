@@ -1,6 +1,7 @@
 package com.example.myapplication.persistence
 
 import android.util.Log
+import com.example.myapplication.data.PublicActivity
 import com.example.myapplication.data.PrivacySettings
 import com.example.myapplication.data.PublicProfile
 import com.example.myapplication.data.UserProfile
@@ -29,7 +30,8 @@ object ProfileStore {
                 "show_badges" to settings.showBadges,
                 "show_plan_path" to settings.showPlanPath,
                 "show_challenges" to settings.showChallenges,
-                "show_followers" to settings.showFollowers
+                "show_followers" to settings.showFollowers,
+                "share_activities" to settings.shareActivities
             )
 
             userRef.update(data).await()
@@ -62,10 +64,47 @@ object ProfileStore {
             val showBadges = doc.getBoolean("show_badges") ?: false
             val showPlanPath = doc.getBoolean("show_plan_path") ?: false
             val showFollowers = doc.getBoolean("show_followers") ?: false
+            val shareActivities = doc.getBoolean("share_activities") ?: false
 
             // Get basic data
             val username = doc.getString("username") ?: ""
             val displayName = doc.getString("first_name") ?: ""
+
+            // Naloži javne aktivnosti (komprimirane rute) samo če je shareActivities=true
+            val recentActivities: List<PublicActivity>? = if (shareActivities) {
+                try {
+                    val actSnap = firestore.collection("users").document(userId)
+                        .collection("publicActivities")
+                        .orderBy("startTime", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                        .limit(10)
+                        .get()
+                        .await()
+                    actSnap.documents.mapNotNull { d ->
+                        try {
+                            @Suppress("UNCHECKED_CAST")
+                            val rawPts = d.get("routePoints") as? List<Map<String, Any>> ?: emptyList()
+                            val pts = rawPts.mapNotNull { pt ->
+                                val lat = (pt["lat"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                val lng = (pt["lng"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                Pair(lat, lng)
+                            }
+                            PublicActivity(
+                                id = d.id,
+                                activityType = d.getString("activityType") ?: "RUN",
+                                distanceMeters = (d.get("distanceMeters") as? Number)?.toDouble() ?: 0.0,
+                                durationSeconds = (d.get("durationSeconds") as? Number)?.toInt() ?: 0,
+                                caloriesKcal = (d.get("caloriesKcal") as? Number)?.toInt() ?: 0,
+                                elevationGainM = (d.get("elevationGainM") as? Number)?.toFloat() ?: 0f,
+                                elevationLossM = (d.get("elevationLossM") as? Number)?.toFloat() ?: 0f,
+                                avgSpeedMps = (d.get("avgSpeedMps") as? Number)?.toFloat() ?: 0f,
+                                maxSpeedMps = (d.get("maxSpeedMps") as? Number)?.toFloat() ?: 0f,
+                                startTime = (d.get("startTime") as? Number)?.toLong() ?: 0L,
+                                routePoints = pts
+                            )
+                        } catch (_: Exception) { null }
+                    }
+                } catch (_: Exception) { null }
+            } else null
 
             // Filter data based on privacy settings
             PublicProfile(
@@ -86,10 +125,8 @@ object ProfileStore {
                 } else null,
                 followers = if (showFollowers) (doc.get("followers") as? Number)?.toInt() else null,
                 following = if (showFollowers) (doc.get("following") as? Number)?.toInt() else null,
-                activePlanSummary = if (showPlanPath) {
-                    // TODO: Get active plan summary if available
-                    null
-                } else null
+                activePlanSummary = if (showPlanPath) null else null,
+                recentActivities = recentActivities
             )
         } catch (e: Exception) {
             Log.e("ProfileStore", "Error getting public profile: ${e.message}")

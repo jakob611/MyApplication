@@ -1,7 +1,33 @@
 package com.example.myapplication.data
 
-import com.google.firebase.firestore.GeoPoint
-import java.time.LocalDateTime
+/**
+ * Tip aktivnosti — vpliva na prikaz statistik in izračun kalorij.
+ * MET vrednosti (Metabolic Equivalent of Task) iz standardnih tabel.
+ */
+enum class ActivityType(
+    val label: String,
+    val emoji: String,
+    val metValue: Double,       // osnova pri zmerni intenzivnosti
+    val showElevation: Boolean, // prikaži vzpon/spust
+    val showPace: Boolean,      // prikaži tempo (min/km)
+    val showSpeed: Boolean,     // prikaži hitrost (km/h)
+    val unitLabel: String       // "km", "km" ali "m" za smučanje
+) {
+    RUN(       "Run",        "🏃", 8.0,   true,  true,  true,  "km"),
+    WALK(      "Walk",       "🚶", 3.5,   false, true,  true,  "km"),
+    HIKE(      "Hike",       "🥾", 5.3,   true,  false, false, "km"),
+    SPRINT(    "Sprint",     "⚡", 14.0,  false, true,  true,  "km"),
+    CYCLING(   "Cycling",    "🚴", 6.8,   true,  false, true,  "km"),
+    SKIING(    "Skiing",     "⛷️", 7.0,   true,  false, true,  "km"),
+    SNOWBOARD( "Snowboard",  "🏂", 5.5,   true,  false, true,  "km"),
+    SKATING(   "Skating",    "⛸️", 7.5,   false, false, true,  "km"),
+    NORDIC(    "Nordic Walk","🎿", 4.8,   true,  true,  false, "km");
+
+    companion object {
+        fun fromString(s: String?): ActivityType =
+            entries.firstOrNull { it.name.equals(s, ignoreCase = true) } ?: RUN
+    }
+}
 
 /**
  * Data class for a single GPS location point during a run.
@@ -10,26 +36,29 @@ data class LocationPoint(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val altitude: Double = 0.0,
-    val speed: Float = 0.0f,  // in m/s
+    val speed: Float = 0.0f,
     val accuracy: Float = 0.0f,
     val timestamp: Long = 0L
 )
 
 /**
- * Data class for a complete run session.
+ * Data class for a complete run/activity session.
  */
 data class RunSession(
     val id: String = "",
     val userId: String = "",
-    val startTime: Long = 0L,  // timestamp in ms
-    val endTime: Long = 0L,    // timestamp in ms
+    val startTime: Long = 0L,
+    val endTime: Long = 0L,
     val durationSeconds: Int = 0,
     val distanceMeters: Double = 0.0,
-    val maxSpeedMps: Float = 0.0f,  // max speed in m/s
-    val avgSpeedMps: Float = 0.0f,  // avg speed in m/s
+    val maxSpeedMps: Float = 0.0f,
+    val avgSpeedMps: Float = 0.0f,
     val polylinePoints: List<LocationPoint> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
-    val caloriesKcal: Int = 0 // NEW: total calories for this run
+    val caloriesKcal: Int = 0,
+    val elevationGainM: Float = 0f,
+    val elevationLossM: Float = 0f,
+    val activityType: ActivityType = ActivityType.RUN
 ) {
     /**
      * Calculate average speed from distance and duration.
@@ -91,6 +120,9 @@ data class RunSession(
             )
         },
         "createdAt" to createdAt,
-        "caloriesKcal" to caloriesKcal // NEW
+        "caloriesKcal" to caloriesKcal,
+        "elevationGainM" to elevationGainM,
+        "elevationLossM" to elevationLossM,
+        "activityType" to activityType.name
     )
 }

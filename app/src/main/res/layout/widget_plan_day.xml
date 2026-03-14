@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootPlanDay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:gravity="center"
+    android:padding="12dp">
+
+    <!-- Streak -->
+    <TextView
+        android:id="@+id/txtPlanStreak"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔥 0"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:textColor="@android:color/white" />
+
+    <!-- Dan v planu (Week X Day Y) -->
+    <TextView
+        android:id="@+id/txtPlanDayLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Week 1 Day 1"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginTop="2dp"
+        android:textColor="#CCFFFFFF" />
+
+    <!-- Focus area ali Rest -->
+    <TextView
+        android:id="@+id/txtFocusArea"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="—"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginTop="4dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
+        android:background="@drawable/widget_chip_bg"
+        android:textColor="#FEE440" />
+
+</LinearLayout>
+
