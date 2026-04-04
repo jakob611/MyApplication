@@ -56,9 +56,11 @@ object MapboxMapMatcher {
                     "?geometries=geojson&tidy=true&overview=full&access_token=$token"
 
             // Dodamo 'Referer' glavo, sicer Mapbox ne registrira URL restrikcij iz Android klica!
+            // Mapbox dashboard zahteva obliko standardne domene (https://...), zato uporabimo to obliko:
             val request = Request.Builder()
                 .url(url)
-                .header("Referer", "android-app://com.example.myapplication/")
+                // Uporabite https://com.example.myapplication/ v Mapbox nadzorni plošči kot URL restrikcijo
+                .header("Referer", "https://com.example.myapplication/")
                 .build()
 
             try {

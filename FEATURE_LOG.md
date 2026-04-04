@@ -275,4 +275,5 @@ U p d a t e d   m a p   p r o c e s s i n g   a l g o r i t h m   f o r   s m o 
  -   A d d e d   r e a l - t i m e   m a p   m a t c h i n g   p o s t - w o r k o u t   s p e c i f i c a l l y   f o r   H i k i n g   a n d   C y c l i n g   a c t i v i t i e s   s o   t h e y   g e t   t h e   s a m e   s m o o t h e d   s p e e d s .  
  -   A u t o m a t i c   B a c k g r o u n d   S n a p s h o t t i n g :   R u n   s y n c   n o w   a u t o m a t i c a l l y   d o w n l o a d s   M a p b o x   s n a p p e d   r o u t e s   f o r   a n y   p r e v i o u s l y   f a i l e d   o f f l i n e   t r a c k i n g   s e s s i o n   m e r e l y   b y   o p e n i n g   t h e   A c t i v i t y   L o g .  
  -   O p e n W e a t h e r   S e c u r i t y :   A P I   k e y   h a s   b e e n   r e m o v e d   f r o m   c o d e b a s e   a n d   i s   n o w   m a n a g e d   s e c u r e l y   v i a   l o c a l   p r o p e r t i e s .  
+ -   A d d e d   O p e n W e a t h e r   A P I   b a c k   t o   l o c a l . p r o p e r t i e s  
  
