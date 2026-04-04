@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +56,7 @@ fun PlanPathDialog(
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val bgColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFF5F5F5)
     val textColor = if (isDark) MaterialTheme.colorScheme.onBackground else Color.Black
-    val subtitleColor = if (isDark) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f) else Color.Gray
+    val subtitleColor = if (isDark) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     val todayIsRestDay = remember(localPlan, currentDay) {
         localPlan?.weeks
@@ -63,6 +64,9 @@ fun PlanPathDialog(
             ?.firstOrNull { it.dayNumber == currentDay }
             ?.isRestDay ?: false
     }
+
+    // State for swap confirmation
+    var pendingSwap by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = bgColor) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -111,11 +115,7 @@ fun PlanPathDialog(
                                 context,
                                 com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
                             )
-                            vm.swapDaysInPlan(plan, fromDay, toDay) { updated ->
-                                localPlan = updated
-                                onPlanUpdated?.invoke(updated)
-                                android.widget.Toast.makeText(context, "✅ Swapped + all future weeks updated!", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                            pendingSwap = Pair(fromDay, toDay)
                         }
                     },
                     footerContent = {}
@@ -135,6 +135,45 @@ fun PlanPathDialog(
                 }
             }
 
+            if (pendingSwap != null) {
+                val (fromDay, toDay) = pendingSwap!!
+                AlertDialog(
+                    onDismissRequest = { pendingSwap = null },
+                    title = { Text("Swap Days?") },
+                    text = {
+                        Column {
+                            Text("You are about to swap day $fromDay and day $toDay.")
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "⚠️ Warning: Swapping days may affect your weekly recovery flow, current streak sequence, and daily focus targets.",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 14.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val plan = localPlan
+                            if (plan != null && vm != null) {
+                                vm.swapDaysInPlan(plan, fromDay, toDay) { updated ->
+                                    localPlan = updated
+                                    onPlanUpdated?.invoke(updated)
+                                    com.example.myapplication.utils.AppToast.showSuccess(context, "Swapped + all future weeks updated!")
+                                }
+                            }
+                            pendingSwap = null
+                        }) {
+                            Text("Confirm")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingSwap = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             if (isTodayDone) {
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(16.dp).align(Alignment.BottomCenter),
@@ -152,13 +191,13 @@ fun PlanPathDialog(
                         )
                         Text(
                             "Locked for next day. Want to do more?",
-                            color = if (isDark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else Color.Gray,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                         Button(
                             onClick = onStartAdditional,
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Extra Workout", color = Color.White)
                         }
@@ -180,7 +219,7 @@ fun PlanPathDialog(
                             Text(
                                 "REST DAY",
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF6366F1),
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 18.sp,
                                 letterSpacing = 1.sp
                             )
@@ -188,7 +227,7 @@ fun PlanPathDialog(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Recovery is just as important as training! Focus on sleep, hydration and light stretching.",
-                            color = if (isDark) Color(0xFF94A3B8) else Color.Gray,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
                         Spacer(Modifier.height(12.dp))
@@ -198,7 +237,7 @@ fun PlanPathDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF374151)),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("Extra workout (optional)", color = Color(0xFF94A3B8), fontSize = 14.sp)
+                            Text("Extra workout (optional)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                         }
                     }
                 }
@@ -210,7 +249,7 @@ fun PlanPathDialog(
                         .padding(16.dp)
                         .align(Alignment.BottomCenter)
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(28.dp)
                 ) {
                     Text("START DAY $currentDay", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -252,7 +291,7 @@ private fun DayInfoDialog(
         difficultyLevel <= 2 -> Color(0xFF4CAF50)
         difficultyLevel <= 4 -> Color(0xFF8BC34A)
         difficultyLevel <= 6 -> Color(0xFFFFEB3B)
-        difficultyLevel <= 8 -> Color(0xFFFF9800)
+        difficultyLevel <= 8 -> MaterialTheme.colorScheme.tertiary
         else -> Color(0xFFF44336)
     }
     val difficultyDisplay = "$difficultyLevel/10 — $difficultyLabel"
@@ -275,7 +314,7 @@ private fun DayInfoDialog(
     val headerColor = when {
         dayPlan.isRestDay -> Color(0xFF546E7A)
         isPast -> Color(0xFF2E7D32)
-        isToday -> Color(0xFF6366F1)
+        isToday -> MaterialTheme.colorScheme.primary
         else -> Color(0xFF374151)
     }
 
@@ -291,7 +330,7 @@ private fun DayInfoDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Week $week • Day $dayInWeek", fontSize = 13.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Medium)
+                        Text("Week $week • Day $dayInWeek", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
                         Text("Day $dayNumber", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                     Surface(color = headerColor.copy(alpha = 0.25f), shape = RoundedCornerShape(20.dp)) {
@@ -320,12 +359,12 @@ private fun DayInfoDialog(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("Rest Day", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Recovery & regeneration", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                            Text("Recovery & regeneration", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Text(
                         "Rest days are an essential part of your training. Your muscles recover and grow stronger during rest.",
-                        fontSize = 13.sp, color = Color(0xFF94A3B8), lineHeight = 18.sp
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp
                     )
                 } else {
                     if (dayPlan.focusLabel.isNotBlank() && dayPlan.focusLabel != "Rest") {
@@ -345,19 +384,19 @@ private fun DayInfoDialog(
             if (isToday && !isTodayDone && !dayPlan.isRestDay) {
                 Button(
                     onClick = onStartToday,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("▶️ Start Today's Workout", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             } else {
-                TextButton(onClick = onDismiss) { Text("Close", color = Color(0xFF6366F1)) }
+                TextButton(onClick = onDismiss) { Text("Close", color = MaterialTheme.colorScheme.primary) }
             }
         },
         dismissButton = {
             if (isToday && !isTodayDone && !dayPlan.isRestDay) {
-                TextButton(onClick = onDismiss) { Text("Close", color = Color(0xFF94A3B8)) }
+                TextButton(onClick = onDismiss) { Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     )
@@ -376,9 +415,8 @@ private fun DayInfoRow(icon: String, label: String, value: String, valueColor: C
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(icon, fontSize = 16.sp)
             Spacer(Modifier.width(8.dp))
-            Text(label, fontSize = 13.sp, color = Color(0xFF94A3B8))
+            Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
     }
 }
-

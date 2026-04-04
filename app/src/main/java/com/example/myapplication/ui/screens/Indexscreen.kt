@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,14 +65,14 @@ fun IndexScreen(
             OutlinedButton(
                 onClick = onLoginClick,
                 shape = RoundedCornerShape(30),
-                border = BorderStroke(1.5.dp, Color(0xFF2563EB))
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
             ) {
-                Text("Login", color = Color(0xFF2563EB))
+                Text("Login", color = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSignUpClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(30)
             ) {
                 Text("Sign Up")
@@ -121,7 +122,7 @@ fun IndexScreen(
             ) {
                 Button(
                     onClick = onLoginClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(30),
                     modifier = Modifier.height(60.dp)
                 ) {
@@ -131,10 +132,10 @@ fun IndexScreen(
                 OutlinedButton(
                     onClick = onViewProFeatures,
                     shape = RoundedCornerShape(30),
-                    border = BorderStroke(2.dp, Color(0xFF2563EB)),
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
                     modifier = Modifier.height(60.dp)
                 ) {
-                    Text("View Pro Features", fontSize = 17.sp, color = Color(0xFF2563EB))
+                    Text("View Pro Features", fontSize = 17.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

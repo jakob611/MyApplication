@@ -13,6 +13,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.MainActivity
+import com.example.myapplication.data.UserPreferences
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import java.time.LocalDate
@@ -37,6 +38,16 @@ class StreakReminderWorker(
     private val context: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
+
+    private data class ReminderContext(
+        val streak: Int,
+        val planDay: Int,
+        val waterMl: Int,
+        val consumedCalories: Int,
+        val burnedCalories: Int,
+        val streakFreezes: Int,
+        val currentHour: Int
+    )
 
     companion object {
         private const val TAG = "StreakReminderWorker"
@@ -88,10 +99,46 @@ class StreakReminderWorker(
 
     override suspend fun doWork(): Result {
         // Preveri ali je uporabnik prijavljen
-        if (Firebase.auth.currentUser == null) {
+        val currentUser = Firebase.auth.currentUser
+        if (currentUser == null || currentUser.email == null) {
             Log.d(TAG, "No user logged in — skipping reminder")
             scheduleForTomorrow()
             return Result.success()
+        }
+
+        // Dodano: Preveri nastavitve obvestil (Quiet Hours & Mute)
+        val email = currentUser.email.orEmpty()
+        val userProfile = UserPreferences.loadProfile(context, email)
+        
+        if (userProfile.muteStreakReminders) {
+            Log.d(TAG, "User muted streak reminders — skipping")
+            scheduleForTomorrow()
+            return Result.success()
+        }
+        
+        // Preveri Quiet hours
+        try {
+            val now = LocalTime.now()
+            val startParts = userProfile.quietHoursStart.split(":")
+            val endParts = userProfile.quietHoursEnd.split(":")
+            if (startParts.size == 2 && endParts.size == 2) {
+                val start = LocalTime.of(startParts[0].toInt(), startParts[1].toInt())
+                val end = LocalTime.of(endParts[0].toInt(), endParts[1].toInt())
+                
+                val inQuietHours = if (start.isBefore(end)) {
+                    now.isAfter(start) && now.isBefore(end)
+                } else {
+                    now.isAfter(start) || now.isBefore(end)
+                }
+                
+                if (inQuietHours) {
+                    Log.d(TAG, "Current time is within quiet hours (${userProfile.quietHoursStart}-${userProfile.quietHoursEnd}) — skipping reminder")
+                    scheduleForTomorrow()
+                    return Result.success()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing quiet hours: ${e.message}")
         }
 
         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
@@ -101,6 +148,7 @@ class StreakReminderWorker(
             else LocalDate.ofEpochDay(lastWorkoutEpoch) == LocalDate.now()
         val currentStreak = prefs.getInt("streak_days", 0)
         val planDay = prefs.getInt("plan_day", 1)
+        val reminderContext = loadReminderContext(currentStreak, planDay)
 
         Log.d(TAG, "Reminder check: todayIsRest=$todayIsRest, workoutDone=$workoutDoneToday, streak=$currentStreak")
 
@@ -111,11 +159,11 @@ class StreakReminderWorker(
             }
             workoutDoneToday -> {
                 // Vadba že opravljena — pošlji čestitko
-                sendCongratulationsNotification(currentStreak)
+                sendCongratulationsNotification(reminderContext)
             }
             else -> {
                 // Vadba še ni opravljena — pošlji opomnik
-                sendReminderNotification(currentStreak, planDay)
+                sendReminderNotification(reminderContext)
             }
         }
 
@@ -125,49 +173,147 @@ class StreakReminderWorker(
         return Result.success()
     }
 
-    private fun sendReminderNotification(streak: Int, planDay: Int) {
-        val title = getReminderTitle(streak)
-        val message = getReminderMessage(streak, planDay)
+    private fun loadReminderContext(streak: Int, planDay: Int): ReminderContext {
+        val dateKey = LocalDate.now().toString()
+        val waterMl = context.getSharedPreferences("water_cache", Context.MODE_PRIVATE)
+            .getInt("water_$dateKey", 0)
+        val consumedCalories = context.getSharedPreferences("calories_cache", Context.MODE_PRIVATE)
+            .getInt("calories_$dateKey", 0)
+        val burnedCalories = context.getSharedPreferences("burned_cache", Context.MODE_PRIVATE)
+            .getInt("burned_$dateKey", 0)
+
+        val email = Firebase.auth.currentUser?.email
+        val streakFreezes = if (!email.isNullOrBlank()) {
+            runCatching { UserPreferences.loadProfile(context, email).streakFreezes }.getOrDefault(0)
+        } else {
+            0
+        }
+
+        return ReminderContext(
+            streak = streak,
+            planDay = planDay,
+            waterMl = waterMl,
+            consumedCalories = consumedCalories,
+            burnedCalories = burnedCalories,
+            streakFreezes = streakFreezes,
+            currentHour = LocalDateTime.now().hour
+        )
+    }
+
+    private fun sendReminderNotification(ctx: ReminderContext) {
+        // A/B test determination based on simple hash of user ID or device time if no user
+        val uid = Firebase.auth.currentUser?.uid ?: ""
+        val toneVariant = if (uid.isNotEmpty()) Math.abs(uid.hashCode()) % 3 else 0
+        Log.d(TAG, "Notification Tone Variant selected: $toneVariant")
+        
+        val title = getReminderTitle(ctx, toneVariant)
+        val message = getReminderMessage(ctx, toneVariant)
 
         sendNotification(title, message, isReminder = true)
-        Log.d(TAG, "Sent reminder notification: streak=$streak")
+        Log.d(
+            TAG,
+            "Sent contextual reminder: streak=${ctx.streak}, water=${ctx.waterMl}, calories=${ctx.consumedCalories}, burned=${ctx.burnedCalories}, freezes=${ctx.streakFreezes}"
+        )
     }
 
-    private fun sendCongratulationsNotification(streak: Int) {
+    private fun sendCongratulationsNotification(ctx: ReminderContext) {
+        val uid = Firebase.auth.currentUser?.uid ?: ""
+        val toneVariant = if (uid.isNotEmpty()) Math.abs(uid.hashCode()) % 3 else 0
+        
         val title = "🔥 Great job today!"
-        val message = when {
-            streak >= 30 -> "You're on a $streak day streak — absolutely unstoppable! 💪"
-            streak >= 14 -> "Two weeks strong! $streak day streak. You're building an amazing habit! 🏆"
-            streak >= 7 -> "One week done! $streak day streak. Keep pushing! ⭐"
-            streak >= 3 -> "Day $streak streak! You're getting into the rhythm. Keep it up! 🌟"
-            else -> "Workout done! Great start to building your streak. 💪"
+        val message = when (toneVariant) {
+            0 -> when { // Encouraging & Soft
+                ctx.streak >= 30 -> "You're on a ${ctx.streak} day streak. So proud of your discipline! 🌟"
+                ctx.streak >= 14 -> "Two weeks straight (${ctx.streak} days). You're doing amazing! ✨"
+                ctx.streak >= 7 -> "One week down (${ctx.streak} days). Keep up the fantastic work! 🌻"
+                ctx.waterMl < 1200 -> "You did great. Just remember to drink some water to recover better! 💧"
+                else -> "Workout done. Pat yourself on the back! 👏"
+            }
+            1 -> when { // Strict & Coach
+                ctx.streak >= 30 -> "Hit ${ctx.streak} days. Elite discipline. No excuses tomorrow. 💪"
+                ctx.streak >= 14 -> "14+ days (${ctx.streak}). Don't lose the momentum now. 💯"
+                ctx.streak >= 7 -> "7 days down. The real test starts now. Keep pushing. 🔥"
+                ctx.waterMl < 1200 -> "Mission accomplished, but hydration is weak. Drink water. 🚰"
+                else -> "Session logged. Get ready for the next one. 🏋️‍♂️"
+            }
+            else -> when { // Default / Data driven
+                ctx.streak >= 30 -> "You're on a ${ctx.streak} day streak and still consistent. Elite discipline. 💪"
+                ctx.streak >= 14 -> "Two weeks+ consistency (${ctx.streak} days). Keep this momentum! 🏆"
+                ctx.streak >= 7 -> "Week streak secured (${ctx.streak} days). Nice execution today. ⭐"
+                ctx.waterMl < 1200 -> "Workout done. Add some hydration before sleep to recover better. 💧"
+                else -> "Workout done and streak alive. Great finish for today. 💪"
+            }
         }
+        
         sendNotification(title, message, isReminder = false)
-        Log.d(TAG, "Sent congratulations notification: streak=$streak")
+        Log.d(TAG, "Sent congratulations notification: streak=${ctx.streak}")
     }
 
-    private fun getReminderTitle(streak: Int): String {
-        return when {
-            streak == 0 -> "⚡ Start your streak today!"
-            streak >= 30 -> "🚨 STREAK RESCUE: $streak days at risk!"
-            streak >= 7 -> "🔥 Don't break your $streak day streak!"
-            streak >= 3 -> "⏱️ Tick tock! Keep the streak alive!"
-            else -> "🏋️ Time to work out!"
+    private fun getReminderTitle(ctx: ReminderContext, toneVariant: Int): String {
+        val isLate = ctx.currentHour >= 21
+        return when (toneVariant) {
+            0 -> when { // Encouraging
+                 ctx.streak >= 14 && ctx.streakFreezes == 0 -> "Don't break your ${ctx.streak}-day streak! 🥺"
+                 ctx.waterMl < 600 -> "Let's drink some water! 💧"
+                 ctx.consumedCalories < 600 && isLate -> "Time for a small meal! 🍎"
+                 ctx.streak == 0 -> "Ready to start a new streak? ✨"
+                 ctx.streak >= 7 -> "Your ${ctx.streak}-day streak is beautiful! 🌟"
+                 ctx.streak >= 3 -> "Keep your momentum going! 🏁"
+                 else -> "You can do this workout! ❤️"
+            }
+            1 -> when { // Strict Coach
+                 ctx.streak >= 14 && ctx.streakFreezes == 0 -> "🚨 ${ctx.streak} days at risk. Move!"
+                 ctx.waterMl < 600 -> "Hydrate immediately. 💧"
+                 ctx.consumedCalories < 600 && isLate -> "Fuel up. No excuses. 🥩"
+                 ctx.streak == 0 -> "Zero streak. Change that now. ⚡"
+                 ctx.streak >= 7 -> "Protect your ${ctx.streak}-day streak or lose it. 🔥"
+                 ctx.streak >= 3 -> "Don't get lazy now. ⏱️"
+                 else -> "Time to work out! Go! 🏋️"
+            }
+            else -> when { // Default
+                ctx.streak >= 14 && ctx.streakFreezes == 0 -> "🚨 ${ctx.streak}-day streak at risk"
+                ctx.waterMl < 600 -> "💧 Hydrate + train"
+                ctx.consumedCalories < 600 && isLate -> "🍽️ Fuel up and finish your workout"
+                ctx.streak == 0 -> "⚡ Start your streak today"
+                ctx.streak >= 7 -> "🔥 Protect your ${ctx.streak}-day streak"
+                ctx.streak >= 3 -> "⏱️ Keep the streak alive"
+                else -> "🏋️ Time to work out!"
+            }
         }
     }
 
-    private fun getReminderMessage(streak: Int, planDay: Int): String {
-        val week = ((planDay - 1) / 7) + 1
-        val dayInWeek = ((planDay - 1) % 7) + 1
+    private fun getReminderMessage(ctx: ReminderContext, toneVariant: Int): String {
+        val week = ((ctx.planDay - 1) / 7) + 1
+        val dayInWeek = ((ctx.planDay - 1) % 7) + 1
         val dayContext = "Week $week, Day $dayInWeek"
+        
+        val freezeContext = if (ctx.streakFreezes > 0) {
+            "You still have ${ctx.streakFreezes} streak freeze${if (ctx.streakFreezes == 1) "" else "s"}, but use it only when necessary."
+        } else {
+            "No streak freeze available today, so this session matters."
+        }
 
-        return when {
-            streak == 0 -> "Start your fitness journey today. Every champion starts somewhere. 🏆 ($dayContext)"
-            streak >= 30 -> "You've worked $streak days straight! Don't let 5 minutes of laziness ruin a month of hard work. 💎 ($dayContext)"
-            streak >= 14 -> "Two weeks of consistency is huge. Don't lose it now! Your workout is waiting. 🎯 ($dayContext)"
-            streak >= 7 -> "One week of dedication — tonight is not the night to skip! 🔥 ($dayContext)"
-            streak >= 3 -> "Streak Rescue Mode: Don't let $streak days go to waste! One workout to save it. ⚡ ($dayContext)"
-            else -> "Your daily workout is waiting. Just 20-30 minutes can change your day! 💪 ($dayContext)"
+        return when (toneVariant) {
+            0 -> when { // Extrinsic / Friendly
+                ctx.waterMl < 600 -> "Your water intake is quite low (${ctx.waterMl} ml). Please hydrate and then try a quick workout. $freezeContext ($dayContext)"
+                ctx.streak == 0 -> "Today is the perfect day to start a new streak. Even 15 min is enough! ($dayContext)"
+                else -> "Take some time for yourself today. Your daily workout awaits. ($dayContext)"
+            }
+            1 -> when { // Intrinsic / Aggressive
+                ctx.waterMl < 600 -> "Low hydration (${ctx.waterMl} ml) ruins performance. Drink up and get the work done. $freezeContext ($dayContext)"
+                ctx.streak == 0 -> "A streak of 0 isn't progress. Put the work in today. ($dayContext)"
+                else -> "Discipline over motivation. Go finish your session. ($dayContext)"
+            }
+            else -> when { // Default
+                ctx.waterMl < 600 -> "Hydration is low (${ctx.waterMl} ml). Drink water first, then finish a short workout. $freezeContext ($dayContext)"
+                ctx.consumedCalories < 600 && ctx.currentHour >= 21 -> "You logged only ${ctx.consumedCalories} kcal so far. Add a light meal and complete your session to recover well. $freezeContext ($dayContext)"
+                ctx.burnedCalories >= 700 -> "You already burned ${ctx.burnedCalories} kcal today. Great activity - complete the planned workout to lock the streak. $freezeContext ($dayContext)"
+                ctx.streak == 0 -> "Start your first streak day now. Even 20 minutes is enough to build momentum. ($dayContext)"
+                ctx.streak >= 14 && ctx.streakFreezes == 0 -> "${ctx.streak} days of consistency are on the line. Complete today's workout to protect your run. ($dayContext)"
+                ctx.streak >= 7 -> "One week+ streak in progress (${ctx.streak} days). Stay consistent tonight. ($dayContext)"
+                ctx.streak >= 3 -> "Good rhythm so far (${ctx.streak} days). One more session keeps the chain going. ($dayContext)"
+                else -> "Your daily workout is waiting. Quick session now makes tomorrow easier. ($dayContext)"
+            }
         }
     }
 
@@ -230,9 +376,3 @@ class StreakReminderWorker(
         Log.d(TAG, "Scheduled next reminder in ${delayMinutes}min (at $targetDateTime)")
     }
 }
-
-
-
-
-
-

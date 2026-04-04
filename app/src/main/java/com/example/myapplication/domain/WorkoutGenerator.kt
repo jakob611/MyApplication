@@ -24,24 +24,25 @@ class WorkoutGenerator {
 
     /**
      * Mapa: fokus iz kviza → seznam ključev mišic točno kot so v exercises.json.
-     * Lowercase primerjava — JSON ključi so npr. "Trebuh / Core", "Noge – Quads" itd.
-     * Vrnemo lowercase različice ki jih primerjamo z lowercase imeni mišic.
+     * UPDATED to English keys (2026-03-15) because exercises.json was replaced with English version.
+     * Keys in JSON are e.g. "muscle_intensity_Abs / Core", "muscle_intensity_Legs – Quads".
+     * Returns lowercase keys for comparison.
      */
     private fun focusToMuscleKeys(focus: String): List<String> = when (focus.lowercase().trim()) {
-        // Kviz fokusi (slovensko orientirani)
-        "upper body"  -> listOf("prsni", "hrbet", "ramena", "biceps", "triceps", "prednje podlakti")
-        "lower body"  -> listOf("noge – quads", "noge – hamstrings", "zadnjica", "meča")
-        "core"        -> listOf("trebuh / core")
-        "cardio"      -> listOf("kardio")
-        "flexibility" -> listOf("raztezanje")
+        // Kviz fokusi (English categories)
+        "upper body"  -> listOf("chest", "back", "shoulders", "biceps", "triceps", "forearms (front)")
+        "lower body"  -> listOf("legs – quads", "legs – hamstrings", "glutes", "calves")
+        "core"        -> listOf("abs / core")
+        "cardio"      -> listOf("cardio")
+        "flexibility" -> listOf("stretching")
 
-        // GenerateWorkoutScreen fokusi (angleško)
-        "legs"        -> listOf("noge – quads", "noge – hamstrings", "zadnjica", "meča")
-        "arms"        -> listOf("biceps", "triceps", "prednje podlakti")
-        "chest"       -> listOf("prsni")
-        "back"        -> listOf("hrbet")
-        "abs"         -> listOf("trebuh / core")
-        "shoulders"   -> listOf("ramena")
+        // GenerateWorkoutScreen fokusi (English target areas)
+        "legs"        -> listOf("legs – quads", "legs – hamstrings", "glutes", "calves")
+        "arms"        -> listOf("biceps", "triceps", "forearms (front)")
+        "chest"       -> listOf("chest")
+        "back"        -> listOf("back")
+        "abs"         -> listOf("abs / core")
+        "shoulders"   -> listOf("shoulders")
 
         // Balance / Full Body → posebna obravnava (prazno = vse vaje OK)
         "balance", "full body" -> emptyList()
@@ -62,19 +63,38 @@ class WorkoutGenerator {
         android.util.Log.d("WorkoutGenerator",
             "Generating: focusAreas=${params.focusAreas}, equipment=${params.availableEquipment}, goal=${params.goal}, difficulty=${params.targetDifficultyLevel}")
 
-        // 1. Filter po opremi
+        // 1. Filter po opremi (znatno razširjen z fallback opcijami in aliasi)
         val userEquipment = params.availableEquipment.map { it.trim().lowercase() }.toSet()
 
-        val availableExercises = allExercises.filter { exercise ->
+        var availableExercises = allExercises.filter { exercise ->
             val requiredList = exercise.equipment.split(",").map { it.trim().lowercase() }
             requiredList.all { req ->
-                if (req == "bodyweight" || req == "none" || req.isBlank()) return@all true
+                if (req == "bodyweight" || req == "none" || req.isBlank() || req == "body" || req == "body weight" || req == "assisted") return@all true
+
                 userEquipment.any { userEq ->
+                    // Direkten match ali startsWith
                     userEq == req || userEq.startsWith(req) || req.startsWith(userEq) ||
+                    // Aliases
                     (userEq.contains("dumbbell") && req.contains("dumbbell")) ||
                     (userEq.contains("kettlebell") && req.contains("kettlebell")) ||
                     (userEq.contains("barbell") && req.contains("barbell")) ||
-                    (userEq.contains("band") && req.contains("band"))
+                    (userEq.contains("band") && req.contains("band")) ||
+                    (userEq.contains("machine") && req.contains("machine")) ||
+                    (userEq.contains("cable") && (req.contains("cable") || req.contains("machine"))) ||
+                    (userEq.contains("bench") && req.contains("bench")) ||
+                    (userEq.contains("plate") && req.contains("plate")) ||
+                    (userEq.contains("ball") && (req.contains("medicine ball") || req.contains("bosu ball") || req.contains("ball")))
+                }
+            }
+        }
+
+        if (availableExercises.isEmpty()) {
+            android.util.Log.w("WorkoutGenerator", "No exercises match equipment ${params.availableEquipment}, falling back to bodyweight.")
+            // Fallback na bodyweight vaje
+            availableExercises = allExercises.filter { exercise ->
+                val requiredList = exercise.equipment.split(",").map { it.trim().lowercase() }
+                requiredList.all { req ->
+                    req == "bodyweight" || req == "none" || req.isBlank() || req == "body" || req == "body weight"
                 }
             }
         }
@@ -100,9 +120,9 @@ class WorkoutGenerator {
             val goodMatches = focusMatchExercises.filter { it.second > 1.0 }
             if (goodMatches.isNotEmpty()) goodMatches else focusMatchExercises
         } else {
-            // Absolutni fallback: fokus ni bil prepoznan → Full Body
+            // Absolutni fallback: če izbrana bodyweight fallback opcija ali originalna nima pravih mišic
             android.util.Log.w("WorkoutGenerator",
-                "WARNING: No exercises matched focus ${params.focusAreas} — falling back to all exercises")
+                "WARNING: No exercises matched focus ${params.focusAreas} — falling back to all available exercises")
             scoredExercises.filter { it.second > 0.0 }.ifEmpty { scoredExercises }
         }
 
@@ -114,7 +134,68 @@ class WorkoutGenerator {
 
         val count = params.exerciseCount.coerceAtMost(15)
 
-        return selectExercisesWeighted(pool, count)
+        val selected = selectExercisesWeighted(pool, count)
+
+        // 3. APPLY PROGRESSION (Intensity & Level scaling)
+        return selected.map { exercise ->
+            applyProgression(exercise, params)
+        }
+    }
+
+    private fun applyProgression(exercise: RefinedExercise, params: WorkoutGenerationParams): RefinedExercise {
+        // Base values from model
+        var sets = exercise.parsedSets.coerceAtLeast(1)
+        var reps = exercise.parsedReps.coerceAtLeast(1)
+
+        // Compute float delta between target desired difficulty and the base exercise difficulty
+        val difficultyDelta = params.targetDifficultyLevel - exercise.difficulty
+
+        if (difficultyDelta > 0) {
+            // Uporabnik je na višjem nivoju kot vaja -> povečaj volumen
+
+            // Reps: Dodamo približno 1-3 reps na stopnjo razlike (max +8 reps)
+            val addedReps = (difficultyDelta * 1.5f).toInt().coerceIn(0, 8)
+            reps += addedReps
+
+            // Sets: Dodamo 1 set če je razlika med 3.0 in 6.0, ali 2 seta če je > 6.0
+            if (difficultyDelta >= 3.0f && sets < 5) sets += 1
+            if (difficultyDelta >= 6.0f && sets < 6) sets += 1
+
+            // Max limits based on goals
+            val (maxSets, maxReps) = when(params.goal) {
+                WorkoutGoal.STRENGTH -> Pair(6, 12)
+                WorkoutGoal.MUSCLE_GAIN -> Pair(5, 15)
+                WorkoutGoal.ENDURANCE -> Pair(4, 30)
+                WorkoutGoal.WEIGHT_LOSS -> Pair(5, 20)
+                WorkoutGoal.GENERAL_FITNESS -> Pair(4, 15)
+            }
+
+            if (reps > maxReps) {
+                // Če smo prekoračili reps limit, poskusimo dodati 1 set na račun volumnske pretvorbe (če dovoljeno)
+                if (sets < maxSets) sets += 1
+                reps = maxReps
+            }
+
+            sets = sets.coerceAtMost(maxSets)
+        } else if (difficultyDelta < -2.0f) {
+            // Uporabnik je nižjega nivoja kot zahteva vaja (zelo težka vaja)
+            // Znižaj volumen
+            reps = (reps - 2).coerceAtLeast(1)
+            if (sets > 2 && difficultyDelta < -4.0f) sets -= 1
+        }
+
+        // Formiramo nov display string za reps
+        val repsDisplay = if (reps == exercise.parsedReps) {
+            exercise.repsDisplay // Ohranimo original če nespremenjen (npr. "10-12")
+        } else {
+            reps.toString()
+        }
+
+        return exercise.copy(
+            parsedSets = sets,
+            parsedReps = reps,
+            repsDisplay = repsDisplay
+        )
     }
 
     private fun calculateScore(exercise: RefinedExercise, params: WorkoutGenerationParams): Double {

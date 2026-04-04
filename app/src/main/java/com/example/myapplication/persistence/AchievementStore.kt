@@ -29,7 +29,8 @@ object AchievementStore {
         email: String,
         amount: Int,
         source: XPSource,
-        description: String = ""
+        description: String = "",
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val currentProfile = UserPreferences.loadProfileFromFirestore(email)
@@ -39,13 +40,13 @@ object AchievementStore {
             val updatedProfile = currentProfile.copy(xp = newXP)
             val newLevel = updatedProfile.level
             UserPreferences.saveProfile(context, updatedProfile)
-            UserPreferences.saveProfileFirestore(updatedProfile)
+            UserPreferences.saveProfileFirestore(updatedProfile, batch)
             logXPActivity(email, amount, source.name, description)
             if (newLevel > oldLevel) {
                 val bonusXP = 200
                 val profileWithBonus = updatedProfile.copy(xp = newXP + bonusXP)
                 UserPreferences.saveProfile(context, profileWithBonus)
-                UserPreferences.saveProfileFirestore(profileWithBonus)
+                UserPreferences.saveProfileFirestore(profileWithBonus, batch)
                 logXPActivity(email, bonusXP, "LEVEL_UP_BONUS", "Reached level $newLevel")
             }
             Log.d("AchievementStore", "awardXPInternal: $amount XP for $source: $description")
@@ -63,13 +64,14 @@ object AchievementStore {
         email: String,
         amount: Int,
         source: XPSource,
-        description: String = ""
+        description: String = "",
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            awardXPInternal(context, email, amount, source, description)
+            awardXPInternal(context, email, amount, source, description, batch)
             val updatedProfile = UserPreferences.loadProfileFromFirestore(email)
                 ?: UserPreferences.loadProfile(context, email)
-            checkAndUnlockBadges(context, updatedProfile)
+            checkAndUnlockBadges(context, updatedProfile, batch)
             Log.d("AchievementStore", "Awarded $amount XP for $source: $description")
         } catch (e: Exception) {
             Log.e("AchievementStore", "Error awarding XP: ${e.message}")
@@ -107,7 +109,8 @@ object AchievementStore {
      */
     suspend fun checkAndUnlockBadges(
         context: Context,
-        userProfile: UserProfile
+        userProfile: UserProfile,
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ): List<com.example.myapplication.data.Badge> = withContext(Dispatchers.IO) {
         val newlyUnlocked = mutableListOf<com.example.myapplication.data.Badge>()
 
@@ -130,11 +133,11 @@ object AchievementStore {
 
                     if (progress >= requirement) {
                         Log.d("AchievementStore", "Unlocking badge: ${badge.id} (progress=$progress, req=$requirement)")
-                        unlockBadge(context, freshProfile, badge.id)
+                        unlockBadge(context, freshProfile, badge.id, batch)
                         newlyUnlocked.add(badge.copy(unlocked = true, unlockedAt = System.currentTimeMillis()))
                         // Uporabi awardXPInternal (ne awardXP) — prepreči rekurzijo badge→awardXP→checkBadge→...
                         if (!badge.id.startsWith("level_")) {
-                            awardXPInternal(context, freshProfile.email, 100, XPSource.BADGE_UNLOCKED, "Unlocked: ${badge.name}")
+                            awardXPInternal(context, freshProfile.email, 100, XPSource.BADGE_UNLOCKED, "Unlocked: ${badge.name}", batch)
                         }
                     }
                 }
@@ -178,13 +181,18 @@ object AchievementStore {
     private suspend fun unlockBadge(
         context: Context,
         userProfile: UserProfile,
-        badgeId: String
+        badgeId: String,
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val docRef = FirestoreHelper.getCurrentUserDocRef()
 
             // Use Firestore arrayUnion for atomic update — avoids overwriting concurrent changes
-            docRef.update("badges", FieldValue.arrayUnion(badgeId)).await()
+            if (batch != null) {
+                batch.update(docRef, "badges", FieldValue.arrayUnion(badgeId))
+            } else {
+                docRef.update("badges", FieldValue.arrayUnion(badgeId)).await()
+            }
             Log.d("AchievementStore", "Unlocked badge via arrayUnion: $badgeId")
 
             // Also update local cache
@@ -198,13 +206,11 @@ object AchievementStore {
             // Fallback: full profile save
             try {
                 val freshProfile = UserPreferences.loadProfile(context, userProfile.email)
-                if (!freshProfile.badges.contains(badgeId)) {
-                    val updatedProfile = freshProfile.copy(badges = freshProfile.badges + badgeId)
-                    UserPreferences.saveProfile(context, updatedProfile)
-                    UserPreferences.saveProfileFirestore(updatedProfile)
-                }
-            } catch (e2: Exception) {
-                Log.e("AchievementStore", "Fallback badge unlock also failed: ${e2.message}")
+                val newProfile = freshProfile.copy(badges = freshProfile.badges + badgeId)
+                UserPreferences.saveProfile(context, newProfile)
+                UserPreferences.saveProfileFirestore(newProfile, batch)
+            } catch (ex: Exception) {
+                Log.e("AchievementStore", "Fallback badge unlock also failed: ${ex.message}")
             }
         }
     }
@@ -217,7 +223,8 @@ object AchievementStore {
         context: Context,
         email: String,
         caloriesBurned: Double,
-        hour: Int
+        hour: Int,
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ): WorkoutCompletionResult = withContext(Dispatchers.IO) {
         try {
             val profile = UserPreferences.loadProfileFromFirestore(email)
@@ -231,7 +238,7 @@ object AchievementStore {
             )
 
             UserPreferences.saveProfile(context, updatedProfile)
-            UserPreferences.saveProfileFirestore(updatedProfile)
+            UserPreferences.saveProfileFirestore(updatedProfile, batch)
 
             // awardXP → awardXPInternal + checkAndUnlockBadges (enkrat, ne dvakrat)
             val isCritical = kotlin.random.Random.nextFloat() < 0.1f // 10% chance
@@ -239,15 +246,15 @@ object AchievementStore {
             val awardedXP = if (isCritical) baseXP * 2 else baseXP
             val desc = if (isCritical) "Completed workout (CRITICAL HIT!)" else "Completed workout"
             
-            awardXPInternal(context, email, awardedXP, XPSource.WORKOUT_COMPLETE, desc)
+            awardXPInternal(context, email, awardedXP, XPSource.WORKOUT_COMPLETE, desc, batch)
 
             val calorieXP = (caloriesBurned / 8).toInt()
             if (calorieXP > 0) {
-                awardXPInternal(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal")
+                awardXPInternal(context, email, calorieXP, XPSource.CALORIES_BURNED, "Burned $caloriesBurned kcal", batch)
             }
 
-            val unlockedBadges = checkAndUnlockBadges(context, updatedProfile)
-            
+            val unlockedBadges = checkAndUnlockBadges(context, updatedProfile, batch)
+
             WorkoutCompletionResult(unlockedBadges, awardedXP, isCritical)
 
         } catch (e: Exception) {
@@ -343,7 +350,8 @@ object AchievementStore {
         context: Context,
         email: String,
         isRestDaySuccess: Boolean = false,
-        isWorkoutSuccess: Boolean = false
+        isWorkoutSuccess: Boolean = false,
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ) = withContext(Dispatchers.IO) {
         if (!isRestDaySuccess && !isWorkoutSuccess) return@withContext
 
@@ -394,24 +402,55 @@ object AchievementStore {
             val daysBetween = if (lastUpdateDate != null) java.time.temporal.ChronoUnit.DAYS.between(lastUpdateDate, today) else 0L
 
             if (daysBetween > 1) {
-                // Missed day(s) detected via legacy date
-                val missedDays = (daysBetween - 1).toInt()
-                if (profile.streakFreezes >= missedDays) {
-                     consumedFreezes = missedDays
-                     Log.d("AchievementStore", "❄️ Rescuing streak! Consuming $consumedFreezes freezes.")
-                     withContext(Dispatchers.Main) {
-                         try {
-                             android.widget.Toast.makeText(context, "❄️ Streak Freeze Used ($consumedFreezes)!", android.widget.Toast.LENGTH_LONG).show()
-                         } catch (_: Exception) {}
+                // Check daily_logs for missed days before declaring them missed
+                // This makes the streak robust against stale "last_streak_update_date" (e.g. after crash or restore)
+                var actuallyMissedDays = 0
+                val missedDates = mutableListOf<LocalDate>()
+                
+                var checkDate = lastUpdateDate!!.plusDays(1)
+                while (checkDate.isBefore(today)) {
+                     val logRef = docRef.collection("daily_logs").document(checkDate.toString())
+                     // We must await to be sure. This might be slow if many days, but usually it's 1-2 days.
+                     val logSnap = logRef.get().await()
+                     if (!logSnap.exists()) {
+                         actuallyMissedDays++
+                         missedDates.add(checkDate)
                      }
-                } else {
-                    effectiveStreak = 0
+                     checkDate = checkDate.plusDays(1)
                 }
-            } else if (!yesterdayExists && daysBetween > 1) {
-                 // Double confirm: if yesterday log is missing and legacy says we missed days -> break streak
-                 // (We prioritize legacy check for now until daily_logs helps build history)
-            } else {
-                 // Streak is safe (either daysBetween <= 1 or it's a new install/first run)
+
+                if (actuallyMissedDays > 0) {
+                    // We truly missed some days. Check for freezes.
+                    if (profile.streakFreezes >= actuallyMissedDays) {
+                         consumedFreezes = actuallyMissedDays
+                         Log.d("AchievementStore", "❄️ Rescuing streak! Consuming $consumedFreezes freezes.")
+                         
+                         // Create 'frozen' logs for missed days -> matches user request for "map filled"
+                         for (missedDate in missedDates) {
+                             val frozenLog = mapOf(
+                                "date" to missedDate.toString(),
+                                "completed" to true,
+                                "type" to "frozen",
+                                "streak_at_this_point" to effectiveStreak, // Maintain level
+                                "timestamp" to FieldValue.serverTimestamp()
+                             )
+                             docRef.collection("daily_logs").document(missedDate.toString()).set(frozenLog).await()
+                         }
+
+                         withContext(Dispatchers.Main) {
+                             try {
+                                 android.widget.Toast.makeText(context, "❄️ Streak Freeze Used ($consumedFreezes)!", android.widget.Toast.LENGTH_LONG).show()
+                             } catch (_: Exception) {}
+                         }
+                    } else {
+                        // Not enough freezes -> Streak Reset 💀
+                        effectiveStreak = 0 
+                    }
+                } else {
+                    // All intermediate days were actually found in daily_logs! 
+                    // Legacy date was stale, but user was active. Streak continues.
+                    Log.d("AchievementStore", "Streak intact: All intermediate days found in logs.")
+                }
             }
             
             // 4. Calculate new values
@@ -427,7 +466,11 @@ object AchievementStore {
                 "streak_at_this_point" to newStreak,
                 "timestamp" to FieldValue.serverTimestamp()
             )
-            todayLogRef.set(logData).await()
+            if (batch != null) {
+                batch.set(todayLogRef, logData)
+            } else {
+                todayLogRef.set(logData).await()
+            }
 
             // 6. Update Profile
             val updatedProfile = profile.copy(
@@ -443,7 +486,11 @@ object AchievementStore {
                     "streak_freezes" to newFreezes,
                     "last_streak_update_date" to todayStr
                 )
-                docRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+                if (batch != null) {
+                    batch.set(docRef, updates, com.google.firebase.firestore.SetOptions.merge())
+                } else {
+                    docRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+                }
             } catch (e: Exception) {
                 Log.e("AchievementStore", "Error saving streak to Firestore: ${e.message}")
             }
@@ -463,24 +510,26 @@ object AchievementStore {
      */
     private suspend fun logXPActivity(
         email: String,
-        xpAmount: Int,
+        amount: Int,
         source: String,
-        description: String
-    ) = withContext(Dispatchers.IO) {
+        description: String,
+        batch: com.google.firebase.firestore.WriteBatch? = null
+    ) {
         try {
-            val data = mapOf(
-                "xp" to xpAmount,
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val collection = FirestoreHelper.getCurrentUserDocRef().collection("xp_history")
+
+            val data = hashMapOf(
+                "date" to FieldValue.serverTimestamp(),
+                "amount" to amount,
                 "source" to source,
-                "description" to description,
-                "timestamp" to System.currentTimeMillis()
+                "description" to description
             )
-            // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
-            FirestoreHelper.getCurrentUserDocRef()
-                .collection("xp_history")
-                .add(data)
-                .await()
-        } catch (e: Exception) {
-            Log.e("AchievementStore", "Error logging XP activity: ${e.message}")
-        }
+            if (batch != null) {
+                batch.set(collection.document(), data)
+            } else {
+                collection.add(data).await()
+            }
+        } catch (_: Exception) {}
     }
 }

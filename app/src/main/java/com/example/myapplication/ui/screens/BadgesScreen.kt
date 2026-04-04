@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -186,9 +187,9 @@ fun BadgesScreenContent(
     userProfile: com.example.myapplication.data.UserProfile,
     onBack: () -> Unit
 ) {
-    val PrimaryBlue = Color(0xFF2563EB)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
     val GreenSuccess = Color(0xFF10B981)
-    val GrayLocked = Color(0xFF9CA3AF)
+    val GrayLocked = MaterialTheme.colorScheme.onSurfaceVariant
 
     val earnedBadges = userProfile.badges
     val earnedCount = earnedBadges.size
@@ -271,7 +272,7 @@ fun BadgesScreenContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(allBadges) { badge ->
+                items(items = allBadges, key = { it.id }) { badge ->
                     val isEarned = earnedBadges.contains(badge.id)
                     BadgeCard(
                         badge = badge,

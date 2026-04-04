@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -29,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +43,7 @@ import com.example.myapplication.service.RunTrackingService
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
@@ -63,32 +66,51 @@ private fun calculateCaloriesMet(
     elevationGainM: Float,
     avgSpeedKmh: Float
 ): Int {
-    // Prilagodi MET glede na hitrost (teče hitreje = višji MET)
+    // 1. Omejimo nerealne hitrosti do 35 km/h za tek (GPS skoki)
+    val safeSpeed = avgSpeedKmh.coerceIn(0f, 35f)
+
+    // Prilagodi MET glede na hitrost z linearno interpolacijo,
+    // da preprečimo stopničaste "GPS skoke" ki umetno dvignejo MET.
     val met = when (activityType) {
         ActivityType.RUN -> when {
-            avgSpeedKmh < 8f  -> 6.0
-            avgSpeedKmh < 10f -> 8.0
-            avgSpeedKmh < 12f -> 10.0
-            avgSpeedKmh < 14f -> 11.5
-            else              -> 13.5
+            safeSpeed < 4f  -> safeSpeed // Linearno od 0 do 4
+            safeSpeed < 8f  -> 4.0 + (safeSpeed - 4f) * 0.5 // 4 do 6
+            safeSpeed < 10f -> 6.0 + (safeSpeed - 8f) * 1.0 // 6 do 8
+            safeSpeed < 12f -> 8.0 + (safeSpeed - 10f) * 1.0 // 8 do 10
+            safeSpeed < 14f -> 10.0 + (safeSpeed - 12f) * 0.75 // 10 do 11.5
+            else            -> 11.5 + (safeSpeed - 14f) * 0.4
         }
         ActivityType.WALK -> when {
-            avgSpeedKmh < 3f -> 2.5
-            avgSpeedKmh < 5f -> 3.5
-            else             -> 4.5
+            safeSpeed < 3f -> 2.0 + (safeSpeed / 3f) * 0.5 // do 2.5
+            safeSpeed < 5f -> 2.5 + (safeSpeed - 3f) * 0.5 // 2.5 do 3.5
+            safeSpeed < 7f -> 3.5 + (safeSpeed - 5f) * 0.5 // 3.5 do 4.5
+            else           -> 4.5 + (safeSpeed - 7f) * 0.3
         }
         ActivityType.SPRINT -> when {
-            avgSpeedKmh < 16f -> 13.0
-            avgSpeedKmh < 20f -> 16.0
-            else              -> 19.0
+            safeSpeed < 10f -> 8.0
+            safeSpeed < 16f -> 8.0 + (safeSpeed - 10f) * 0.83 // 8 do 13
+            safeSpeed < 20f -> 13.0 + (safeSpeed - 16f) * 0.75 // 13 do 16
+            else            -> 16.0 + (safeSpeed - 20f) * 0.5
         }
-        else -> activityType.metValue
-    }
+        ActivityType.HIKE -> 6.0 + (elevationGainM / 100f) * 0.5 // Base 6.0 + gain
+        ActivityType.CYCLING -> when {
+            safeSpeed < 15f -> 4.0
+            safeSpeed < 20f -> 6.0
+            safeSpeed < 25f -> 8.0
+            else            -> 10.0
+        }
+        else -> 5.0
+    }.toDouble()
 
-    val durationHours = durationSeconds / 3600.0
-    val base = met * weightKg * durationHours
-    // Vzpon: ~0.8 kcal/m za povprečno težo 70 kg, skalira z dejansko težo
-    val elevBonus = elevationGainM * 0.8 * (weightKg / 70.0)
+    // 2. Trajanje v urah
+    val hours = durationSeconds / 3600.0
+    // 3. Težo omejimo med 30kg in 200kg zaradi napak v profilu
+    val safeWeight = weightKg.coerceIn(30.0, 200.0)
+
+    val base = met * safeWeight * hours
+    // Vzpon: ~0.8 kcal/m za povprečno težo 70 kg, skalira z dejansko težo. Omejen poskok GPS baz (max 2000m na log).
+    val safeElevation = elevationGainM.coerceIn(0f, 2000f)
+    val elevBonus = safeElevation * 0.8 * (safeWeight / 70.0)
     return (base + elevBonus).toInt().coerceAtLeast(0)
 }
 
@@ -119,7 +141,9 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
     var hasNotificationPermission by remember { mutableStateOf(true) }
     var showGpsDialog by remember { mutableStateOf(false) }
     var showSummary by remember { mutableStateOf(false) }
+    var isSavingActivity by remember { mutableStateOf(false) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
+    var isMapFollowingTarget by remember { mutableStateOf(true) }
     var finalDistance by remember { mutableStateOf(0.0) }
     var finalTime by remember { mutableStateOf(0L) }
     var finalMaxSpeed by remember { mutableStateOf(0f) }
@@ -179,6 +203,9 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasLocationPermission = it }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasNotificationPermission = it }
 
+    val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    var routeSmoothingEnabled by remember { mutableStateOf(prefs.getBoolean("route_smoothing", true)) }
+
     // Live kcal (prikazano med sledenjem)
     val liveCalories = remember(elapsedSeconds, avgSpeed, elevationGain, selectedActivity, actualWeightKg) {
         calculateCaloriesMet(selectedActivity, elapsedSeconds, actualWeightKg, elevationGain, avgSpeed * 3.6f)
@@ -196,11 +223,19 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                     setPoints(locationPoints.map { GeoPoint(it.latitude, it.longitude) })
                 }
                 map.overlays.add(polyline); routePolyline = polyline
-                map.controller.animateTo(GeoPoint(locationPoints.last().latitude, locationPoints.last().longitude))
+                
+                if (isMapFollowingTarget) {
+                    map.controller.animateTo(GeoPoint(locationPoints.last().latitude, locationPoints.last().longitude))
+                }
+                
                 if (map.zoomLevelDouble < 16.0) map.controller.setZoom(17.0)
                 map.invalidate()
             }
         }
+    }
+
+    val onMapTouch = {
+        if (isMapFollowingTarget) isMapFollowingTarget = false
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -216,11 +251,40 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                     controller.setCenter(GeoPoint(46.0569, 14.5058))
                     overlay.runOnFirstFix { post { overlay.myLocation?.let { controller.animateTo(it) } } }
                     mapView = this
+
+                    setOnTouchListener { v, event ->
+                        if (event.action == android.view.MotionEvent.ACTION_DOWN || event.action == android.view.MotionEvent.ACTION_MOVE) {
+                            onMapTouch()
+                            overlay.disableFollowLocation()
+                        }
+                        v.performClick()
+                        false
+                    }
                 }
             },
             modifier = Modifier.fillMaxSize(),
             update = { it.onResume() }
         )
+
+        // Re-center button (desno zgoraj)
+        if (!isMapFollowingTarget) {
+            SmallFloatingActionButton(
+                onClick = {
+                    isMapFollowingTarget = true
+                    myLocationOverlay?.enableFollowLocation()
+                    locationPoints.lastOrNull()?.let {
+                        mapView?.controller?.animateTo(GeoPoint(it.latitude, it.longitude))
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Filled.MyLocation, contentDescription = "Re-center map")
+            }
+        }
 
         // Stats card (levo zgoraj)
         Card(
@@ -234,12 +298,35 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                 }
 
                 // Tip aktivnosti oznaka (med sledenjem — ne gumb)
-                Text(
-                    "${selectedActivity.emoji} ${selectedActivity.label}",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF6366F1)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${selectedActivity.emoji} ${selectedActivity.label}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (isTracking) {
+                        Spacer(Modifier.width(8.dp))
+                        val (gpsProfile, gpsColor) = when (selectedActivity) {
+                            ActivityType.SPRINT, ActivityType.RUN -> "High accuracy" to Color(0xFF4CAF50)
+                            ActivityType.CYCLING, ActivityType.SKIING, ActivityType.SNOWBOARD, ActivityType.SKATING -> "Balanced" to MaterialTheme.colorScheme.tertiary
+                            ActivityType.WALK, ActivityType.HIKE, ActivityType.NORDIC -> "Battery saver" to Color(0xFF9E9E9E)
+                        }
+                        Surface(
+                            color = gpsColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(4.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, gpsColor.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "GPS: $gpsProfile",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = gpsColor,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Text("${"%.2f".format(distanceMeters / 1000.0)} km", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(fmtTime(elapsedSeconds), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -256,11 +343,11 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                     Text("↑ ${"%.0f".format(elevationGain)} m  ↓ ${"%.0f".format(elevationLoss)} m", fontSize = 13.sp, color = Color(0xFF4CAF50))
                 }
                 if (isTracking) {
-                    Text("🔥 $liveCalories kcal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFFFF9800))
+                    Text("🔥 $liveCalories kcal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.tertiary)
                     Text(
                         if (isPaused) "Paused" else "Tracking...",
                         fontSize = 12.sp,
-                        color = if (isPaused) Color(0xFFFF9800) else Color(0xFF4CAF50),
+                        color = if (isPaused) MaterialTheme.colorScheme.tertiary else Color(0xFF4CAF50),
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -292,7 +379,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
-                        Icon(Icons.Filled.ArrowDropDown, "Izberi aktivnost", tint = Color(0xFF6366F1))
+                        Icon(Icons.Filled.ArrowDropDown, "Izberi aktivnost", tint = MaterialTheme.colorScheme.primary)
                     }
 
                     // Picker lista — horizontalni scroll
@@ -302,11 +389,11 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(horizontal = 2.dp)
                         ) {
-                            items(ActivityType.entries) { type ->
+                            items(items = ActivityType.entries, key = { it.name }) { type ->
                                 val isSelected = type == selectedActivity
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (isSelected) Color(0xFF6366F1) else MaterialTheme.colorScheme.surfaceVariant,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                     modifier = Modifier.clickable {
                                         selectedActivity = type
                                         showActivityPicker = false
@@ -364,7 +451,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                             Button(
                                 onClick = { context.startService(Intent(context, RunTrackingService::class.java).apply { action = if (isPaused) RunTrackingService.ACTION_RESUME else RunTrackingService.ACTION_PAUSE }) },
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) Color(0xFF4CAF50) else Color(0xFFFF9800)),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) Color(0xFF4CAF50) else MaterialTheme.colorScheme.tertiary),
                                 shape = RoundedCornerShape(12.dp)
                             ) { Icon(if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null); Spacer(Modifier.width(8.dp)); Text(if (isPaused) "Resume" else "Pause", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
 
@@ -373,7 +460,27 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                     finalDistance = distanceMeters; finalTime = elapsedSeconds
                                     finalMaxSpeed = maxSpeed; finalAvgSpeed = avgSpeed
                                     finalElevationGain = elevationGain; finalElevationLoss = elevationLoss
+                                    
+                                    // ADDED: Samodejni predlog aktivnosti na podlagi hitrosti
+                                    val currentAvgKmh = avgSpeed * 3.6f
+                                    if (finalDistance > 100 && currentAvgKmh > 0) {
+                                        if (selectedActivity == ActivityType.RUN && currentAvgKmh < 6.0f) {
+                                            selectedActivity = ActivityType.WALK
+                                            com.example.myapplication.utils.AppToast.showSuccess(context, "Activity changed to Walk based on speed (${String.format(java.util.Locale.US, "%.1f", currentAvgKmh)} km/h)")
+                                        } else if (selectedActivity == ActivityType.WALK && currentAvgKmh > 7.5f) {
+                                            selectedActivity = ActivityType.RUN
+                                            com.example.myapplication.utils.AppToast.showSuccess(context, "Activity changed to Run based on speed (${String.format(java.util.Locale.US, "%.1f", currentAvgKmh)} km/h)")
+                                        }
+                                    }
+
                                     context.startService(Intent(context, RunTrackingService::class.java).apply { action = RunTrackingService.ACTION_STOP })
+
+                                    if (finalDistance < 20.0) {
+                                        com.example.myapplication.utils.AppToast.showError(context, "Prevodeno manj kot 20m. Aktivnost ne bo shranjena.")
+                                        onBackPressed()
+                                        return@Button
+                                    }
+
                                     showSummary = true
                                 },
                                 modifier = Modifier.weight(1f).height(56.dp),
@@ -382,95 +489,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                             ) { Icon(Icons.Filled.Stop, null); Spacer(Modifier.width(8.dp)); Text("Stop", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                         }
 
-                        showSummary -> Button(
-                            onClick = {
-                                val sessionId = java.util.UUID.randomUUID().toString()
-                                val avgKmh = finalAvgSpeed * 3.6f
-                                val calories = calculateCaloriesMet(selectedActivity, finalTime, actualWeightKg, finalElevationGain, avgKmh)
-
-                                if (uid != null) {
-                                    val avgSpeedMps = if (finalTime > 0) (finalDistance / finalTime).toFloat() else 0f
-                                    val runMap = hashMapOf<String, Any>(
-                                        "id" to sessionId, "userId" to uid,
-                                        "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
-                                        "endTime" to System.currentTimeMillis(),
-                                        "durationSeconds" to finalTime.toInt(),
-                                        "distanceMeters" to finalDistance,
-                                        "maxSpeedMps" to finalMaxSpeed,
-                                        "avgSpeedMps" to avgSpeedMps,
-                                        "caloriesKcal" to calories,
-                                        "elevationGainM" to finalElevationGain,
-                                        "elevationLossM" to finalElevationLoss,
-                                        "activityType" to selectedActivity.name,
-                                        "createdAt" to System.currentTimeMillis(),
-                                        "polylinePoints" to emptyList<Any>()
-                                    )
-                                    Firebase.firestore
-                                        .collection("users").document(uid)
-                                        .collection("runSessions").document(sessionId)
-                                        .set(runMap)
-
-                                    // Shrani komprimirano ruto v publicActivities (za deljenje s followerji)
-                                    // Samo če ima uporabnik shareActivities=true
-                                    val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
-                                    if (email != null) {
-                                        Firebase.firestore.collection("users").document(uid)
-                                            .get()
-                                            .addOnSuccessListener { userDoc ->
-                                                val shareAct = userDoc.getBoolean("share_activities") ?: false
-                                                if (shareAct && locationPoints.isNotEmpty()) {
-                                                    val rawPts = locationPoints.map { Pair(it.latitude, it.longitude) }
-                                                    // RDP kompresija: ~450 točk → ~35 točk
-                                                    val compressed = com.example.myapplication.utils.RouteCompressor.compress(rawPts)
-                                                    val routeList = compressed.map { (lat, lng) ->
-                                                        mapOf("lat" to lat, "lng" to lng)
-                                                    }
-                                                    val pubMap = hashMapOf<String, Any>(
-                                                        "activityType" to selectedActivity.name,
-                                                        "distanceMeters" to finalDistance,
-                                                        "durationSeconds" to finalTime.toInt(),
-                                                        "caloriesKcal" to calories,
-                                                        "elevationGainM" to finalElevationGain,
-                                                        "elevationLossM" to finalElevationLoss,
-                                                        "avgSpeedMps" to avgSpeedMps,
-                                                        "maxSpeedMps" to finalMaxSpeed,
-                                                        "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
-                                                        "routePoints" to routeList
-                                                    )
-                                                    Firebase.firestore
-                                                        .collection("users").document(uid)
-                                                        .collection("publicActivities").document(sessionId)
-                                                        .set(pubMap)
-                                                }
-                                            }
-                                    }
-                                }
-
-                                val routePoints = locationPoints.map { loc -> Pair(loc.latitude, loc.longitude) }
-                                if (routePoints.isNotEmpty()) {
-                                    com.example.myapplication.persistence.RunRouteStore.saveRoute(context, sessionId, routePoints)
-                                }
-
-                                val xp = ((finalDistance / 100) + (finalTime / 60)).toInt().coerceAtLeast(10)
-                                val runEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
-                                if (runEmail != null) {
-                                    scope.launch {
-                                        com.example.myapplication.persistence.AchievementStore.awardXP(
-                                            context, runEmail, xp,
-                                            com.example.myapplication.data.XPSource.RUN_COMPLETED,
-                                            "Completed ${selectedActivity.label}: ${finalDistance.toInt()}m"
-                                        )
-                                        withContext(Dispatchers.Main) {
-                                            android.widget.Toast.makeText(context, "+$xp XP!", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                                showSummary = false; onBackPressed()
-                            },
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text("Done", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                        showSummary -> Spacer(Modifier.height(56.dp))
                     }
                 }
             }
@@ -495,7 +514,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                         Text(
                             "${selectedActivity.emoji} ${selectedActivity.label} Complete!",
                             fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2196F3)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         HorizontalDivider()
 
@@ -516,8 +535,153 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                         }
 
                         HorizontalDivider()
-                        SummaryRow("🔥 Calories", "$summaryCalories kcal", highlight = true)
-                        Text("+$xpEarned XP", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = routeSmoothingEnabled,
+                                onCheckedChange = {
+                                    routeSmoothingEnabled = it
+                                    prefs.edit().putBoolean("route_smoothing", it).apply()
+                                }
+                            )
+                            Text("Route smoothing (Snap-to-road)", fontSize = 14.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (isSavingActivity) return@Button
+                                isSavingActivity = true
+                                val sessionId = java.util.UUID.randomUUID().toString()
+                                val avgKmh = finalAvgSpeed * 3.6f
+                                val calories = calculateCaloriesMet(selectedActivity, finalTime, actualWeightKg, finalElevationGain, avgKmh)
+
+                                scope.launch(Dispatchers.IO) {
+                                    val mappedLocationPoints = locationPoints.map { loc ->
+                                        com.example.myapplication.data.LocationPoint(
+                                            latitude = loc.latitude,
+                                            longitude = loc.longitude,
+                                            altitude = loc.altitude,
+                                            speed = loc.speed,
+                                            accuracy = loc.accuracy,
+                                            timestamp = loc.time
+                                        )
+                                    }
+
+                                    var finalLocationPoints = mappedLocationPoints
+                                    var successfullySmoothed = false
+                                      if (routeSmoothingEnabled) {
+                                          val isWalkingProfile = selectedActivity == ActivityType.RUN || selectedActivity == ActivityType.WALK || selectedActivity == ActivityType.HIKE
+                                          // Opravimo glajenje poti za vgrajene tipe
+                                          if (isWalkingProfile || selectedActivity == ActivityType.CYCLING || selectedActivity == ActivityType.SPRINT) {
+                                              finalLocationPoints = com.example.myapplication.map.MapboxMapMatcher.matchRoute(mappedLocationPoints, isWalkingProfile)
+                                              if (finalLocationPoints !== mappedLocationPoints) {
+                                                  successfullySmoothed = true
+                                              }
+                                          }
+                                      }
+
+                                    if (uid != null) {
+                                        val avgSpeedMps = if (finalTime > 0) (finalDistance / finalTime).toFloat() else 0f
+                                        val runMap = hashMapOf<String, Any>(
+                                            "id" to sessionId, "userId" to uid,
+                                            "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
+                                            "endTime" to System.currentTimeMillis(),
+                                            "durationSeconds" to finalTime.toInt(),
+                                            "distanceMeters" to finalDistance,
+                                            "maxSpeedMps" to finalMaxSpeed,
+                                            "avgSpeedMps" to avgSpeedMps,
+                                            "caloriesKcal" to calories,
+                                            "elevationGainM" to finalElevationGain,
+                                            "elevationLossM" to finalElevationLoss,
+                                            "activityType" to selectedActivity.name,
+                                            "createdAt" to System.currentTimeMillis(),
+                                            "polylinePoints" to emptyList<Any>(),
+                                            "isSmoothed" to successfullySmoothed
+                                        )
+                                        Firebase.firestore
+                                            .collection("users").document(uid)
+                                            .collection("runSessions").document(sessionId)
+                                            .set(runMap)
+
+                                        val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                                        if (email != null) {
+                                            val shareActSnap = Firebase.firestore.collection("users").document(uid).get().await()
+                                            val shareAct = shareActSnap.getBoolean("share_activities") ?: false
+                                            if (shareAct && finalLocationPoints.isNotEmpty()) {
+                                                val rawPts = finalLocationPoints.map { Pair(it.latitude, it.longitude) }
+                                                val compressed = com.example.myapplication.utils.RouteCompressor.compress(rawPts)
+                                                val routeList = compressed.map { (lat, lng) -> mapOf("lat" to lat, "lng" to lng) }
+                                                val pubMap = hashMapOf<String, Any>(
+                                                    "activityType" to selectedActivity.name,
+                                                    "distanceMeters" to finalDistance,
+                                                    "elevationGainM" to finalElevationGain,
+                                                    "elevationLossM" to finalElevationLoss,
+                                                    "avgSpeedMps" to avgSpeedMps,
+                                                    "maxSpeedMps" to finalMaxSpeed,
+                                                    "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
+                                                    "routePoints" to routeList
+                                                )
+                                                Firebase.firestore
+                                                    .collection("users").document(uid)
+                                                    .collection("publicActivities").document(sessionId)
+                                                    .set(pubMap)
+                                            }
+                                        }
+                                    }
+
+                                    // VEDNO shranimo originalne (raw) točke, da ohranimo pravilen hitrostni graf in meritve!
+                                    if (mappedLocationPoints.isNotEmpty()) {
+                                        com.example.myapplication.persistence.RunRouteStore.saveRoute(context, sessionId, mappedLocationPoints)
+                                    }
+                                    // Če je glajenje uspelo, shranimo dodaten file samo za risanje čudovite poti na mapi
+                                    if (successfullySmoothed && finalLocationPoints.isNotEmpty()) {
+                                        com.example.myapplication.persistence.RunRouteStore.saveRoute(context, sessionId + "_smoothed", finalLocationPoints)
+                                    }
+
+                                    val xp = ((finalDistance / 100) + (finalTime / 60)).toInt().coerceAtLeast(10)
+                                    val runEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                                    if (runEmail != null) {
+                                        com.example.myapplication.persistence.AchievementStore.awardXP(
+                                            context, runEmail, xp,
+                                            com.example.myapplication.data.XPSource.RUN_COMPLETED,
+                                            "Completed ${selectedActivity.label}: ${finalDistance.toInt()}m"
+                                        )
+
+                                        val app = context.applicationContext as android.app.Application
+                                        val bodyVm = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+                                            .create(com.example.myapplication.viewmodels.BodyModuleHomeViewModel::class.java)
+                                        val uiState = bodyVm.ui.value
+                                        val currentDay = uiState.planDay
+                                        if (!uiState.isWorkoutDoneToday && !uiState.todayIsRest && finalDistance > 1000) {
+                                            bodyVm.completeWorkoutSession(
+                                                isExtraWorkout = false,
+                                                totalKcal = calories,
+                                                totalTimeMin = finalTime / 60.0
+                                            )
+                                            withContext(Dispatchers.Main) {
+                                                com.example.myapplication.utils.AppToast.showSuccess(context, "Workout Day $currentDay Complete! +$xp XP!")
+                                            }
+                                        } else {
+                                            withContext(Dispatchers.Main) {
+                                                com.example.myapplication.utils.AppToast.showSuccess(context, "+$xp XP!")
+                                            }
+                                        }
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        showSummary = false; onBackPressed()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
+                            enabled = !isSavingActivity,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isSavingActivity) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                            } else {
+                                Text("Done", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -552,7 +716,7 @@ private fun SummaryRow(label: String, value: String, highlight: Boolean = false)
             value,
             fontSize = if (highlight) 17.sp else 15.sp,
             fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium,
-            color = if (highlight) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurface
+            color = if (highlight) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
         )
     }
 }

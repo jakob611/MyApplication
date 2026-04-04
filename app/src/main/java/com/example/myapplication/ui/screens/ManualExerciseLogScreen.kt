@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.screens
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -31,8 +32,6 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -114,49 +113,50 @@ object GenderCache {
             onDone(cached)
             return
         }
-        // POPRAVLJENO: beri iz email dokumenta, ne UID
-        val docRef = try {
-            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()?.let { id ->
-                Firebase.firestore.collection("users").document(id)
+        
+        CoroutineScope(Dispatchers.IO).launch {
+            val docRef = try {
+                com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            } catch (_: Exception) { null }
+
+            if (docRef == null) { 
+                kotlinx.coroutines.withContext(Dispatchers.Main) { onDone(null) }
+                return@launch 
             }
-        } catch (_: Exception) { null }
 
-        if (docRef == null) { onDone(null); return }
-
-        docRef.get()
-            .addOnSuccessListener { doc ->
-                val g = doc.getString("gender")
-                @Suppress("UNCHECKED_CAST")
-                val eqList = (doc.get("equipment") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-                val eqSet = (eqList.map { it.lowercase() } + listOf("bodyweight")).toSet()
-                // focusAreas
-                @Suppress("UNCHECKED_CAST")
-                val focusList = (doc.get("focusAreas") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-                val userScore = (doc.get("currentDifficulty") as? Number)?.toFloat()
-                    ?: (doc.get("experienceScore") as? Number)?.toFloat()
-                    ?: run {
-                        // Fallback iz experience stringa
-                        when (doc.getString("experience")) {
-                            "Beginner" -> 4f
-                            "Intermediate" -> 7f
-                            "Advanced" -> 9f
-                            else -> 5f
+            docRef.get()
+                .addOnSuccessListener { doc ->
+                    val g = doc.getString("gender")
+                    @Suppress("UNCHECKED_CAST")
+                    val eqList = (doc.get("equipment") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                    val eqSet = (eqList.map { it.lowercase() } + listOf("bodyweight")).toSet()
+                    @Suppress("UNCHECKED_CAST")
+                    val focusList = (doc.get("focusAreas") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                    val userScore = (doc.get("currentDifficulty") as? Number)?.toFloat()
+                        ?: (doc.get("experienceScore") as? Number)?.toFloat()
+                        ?: run {
+                            when (doc.getString("experience")) {
+                                "Beginner" -> 4f
+                                "Intermediate" -> 7f
+                                "Advanced" -> 9f
+                                else -> 5f
+                            }
                         }
+                    prefs.edit {
+                        putString(KEY_GENDER, g)
+                        putStringSet(KEY_EQUIPMENT, eqSet)
+                        putFloat(KEY_USER_SCORE, userScore)
+                        putString(KEY_FOCUS_AREAS, focusList.joinToString(","))
+                        putBoolean(KEY_LOADED, true)
                     }
-                prefs.edit()
-                    .putString(KEY_GENDER, g)
-                    .putStringSet(KEY_EQUIPMENT, eqSet)
-                    .putFloat(KEY_USER_SCORE, userScore)
-                    .putString(KEY_FOCUS_AREAS, focusList.joinToString(","))
-                    .putBoolean(KEY_LOADED, true)
-                    .apply()
-                cached = g
-                cachedEquipment = eqSet
-                cachedUserScore = userScore
-                cachedFocusAreas = focusList
-                onDone(g)
-            }
-            .addOnFailureListener { onDone(null) }
+                    cached = g
+                    cachedEquipment = eqSet
+                    cachedUserScore = userScore
+                    cachedFocusAreas = focusList
+                    onDone(g)
+                }
+                .addOnFailureListener { onDone(null) }
+        }
     }
 
     /** Pokliči pri odjavi za brisanje cache-a */
@@ -165,7 +165,7 @@ object GenderCache {
         cachedEquipment = null
         cachedUserScore = 5f
         cachedFocusAreas = null
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { clear() }
     }
 }
 
@@ -180,14 +180,6 @@ object ExerciseRepository {
         val loaded = loadAllExercisesInternal(context)
         exercises = loaded
         return loaded
-    }
-
-    internal fun getFiltered(context: Context, gender: String?): List<ExerciseInfo> {
-        val all = getExercises(context)
-        return if (gender == null) all
-        else all.filter { ex ->
-            ex.gender == "universal" || ex.gender == gender.lowercase()
-        }
     }
 
     /**
@@ -400,7 +392,7 @@ private object VideoUrlManager {
                 }
             }
             normalizedToOriginalMap = map
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             normalizedToOriginalMap = emptyMap()
         }
     }
@@ -484,7 +476,6 @@ fun ManualExerciseLogScreen(onBack: () -> Unit) {
             detailExercise != null -> ExerciseDetailScreen(
                 exercise = detailExercise!!,
                 onLog = { selectedExercise = detailExercise; detailExercise = null },
-                onDismiss = { detailExercise = null },
                 modifier = Modifier.padding(padding)
             )
             selectedExercise != null -> ExerciseEntryScreen(
@@ -541,7 +532,7 @@ private fun ExerciseListView(
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(exercises) { exercise ->
+                items(items = exercises, key = { it.name }) { exercise ->
                     ExerciseListItem(exercise = exercise, onClick = { onExerciseClick(exercise) })
                 }
             }
@@ -598,7 +589,6 @@ private fun ExerciseListItem(exercise: ExerciseInfo, onClick: () -> Unit) {
 private fun ExerciseDetailScreen(
     exercise: ExerciseInfo,
     onLog: () -> Unit,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -610,10 +600,10 @@ private fun ExerciseDetailScreen(
         else {
             isVideoLoading = true
             ExoPlayer.Builder(context).build().apply {
-                addListener(object : androidx.media3.common.Player.Listener {
+                addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
-                        if (state == androidx.media3.common.Player.STATE_READY ||
-                            state == androidx.media3.common.Player.STATE_ENDED) {
+                        if (state == Player.STATE_READY ||
+                            state == Player.STATE_ENDED) {
                             isVideoLoading = false
                         }
                     }
@@ -766,11 +756,12 @@ private fun ExerciseEntryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var isSaving by remember { mutableStateOf(false) }
+    var useReps by remember { mutableStateOf(true) }
     var sets by remember { mutableStateOf(exercise.defaultSets.toString()) }
     var reps by remember { mutableStateOf(exercise.defaultReps.toString()) }
     var durationMinutes by remember { mutableStateOf(if (exercise.defaultDuration != null) (exercise.defaultDuration / 60).toString() else "") }
     var durationSeconds by remember { mutableStateOf(if (exercise.defaultDuration != null) (exercise.defaultDuration % 60).toString() else "") }
-    var useReps by remember { mutableStateOf(exercise.defaultDuration == null) }
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())
@@ -832,6 +823,8 @@ private fun ExerciseEntryScreen(
             ) { Text("Cancel") }
             Button(
                 onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.HEAVY_CLICK)
                     val setsInt = sets.toIntOrNull() ?: 3
                     val repsInt = reps.toIntOrNull() ?: 12
@@ -842,11 +835,14 @@ private fun ExerciseEntryScreen(
                     }
                     onSave(setsInt, repsInt, durSec)
                 },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add")
+                modifier = Modifier.weight(1f),
+                enabled = !isSaving
+            ) { 
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Save")
+                }
             }
         }
     }
@@ -855,61 +851,55 @@ private fun ExerciseEntryScreen(
 // ─── Firestore logging ────────────────────────────────────────────────────────
 
 private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, sets: Int, reps: Int, durationSeconds: Int?) {
-    val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: return
-    Firebase.firestore.collection("users").document(uid).collection("weightLogs")
-        .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
-        .limit(1)
-        .get()
-        .addOnSuccessListener { snapshot ->
-            val userWeightKg = (snapshot.documents.firstOrNull()?.get("weightKg") as? Number)?.toDouble() ?: 70.0
-            val activeMinutes: Double
-            val restMinutes: Double
-            if (durationSeconds != null) {
-                activeMinutes = (sets * durationSeconds) / 60.0
-                restMinutes = 0.0
-            } else {
-                val secondsPerRep = 3.0
-                activeMinutes = (sets * reps * secondsPerRep) / 60.0
-                restMinutes = ((sets - 1) * 60.0) / 60.0
-            }
-            val activeRate = exercise.caloriesPerMinPerKg * userWeightKg
-            val restRate = 0.0167 * userWeightKg
-            val totalCalories = (activeMinutes * activeRate) + (restMinutes * restRate)
-            val caloriesRounded = kotlin.math.round(totalCalories).toInt()
-            val log = hashMapOf(
-                "name" to exercise.name,
-                "date" to com.google.firebase.Timestamp.now(),
-                "caloriesKcal" to caloriesRounded,
-                "sets" to sets,
-                "reps" to reps,
-                "durationSeconds" to durationSeconds
-            )
-            Firebase.firestore.collection("users").document(uid)
-                .collection("exerciseLogs")
-                .add(log)
-                .addOnSuccessListener {
-                    // Pokliči AchievementStore za posodobitev statistik in XP (enako kot v WorkoutSessionScreen)
-                    val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                    val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                    CoroutineScope(Dispatchers.IO).launch {
-                        com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
-                            context = context,
-                            email = userEmail,
-                            caloriesBurned = caloriesRounded.toDouble(),
-                            hour = currentHour
-                        )
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            docRef.collection("weightLogs")
+                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val userWeightKg = (snapshot.documents.firstOrNull()?.get("weightKg") as? Number)?.toDouble() ?: 70.0
+                    val activeMinutes: Double
+                    val restMinutes: Double
+                    if (durationSeconds != null) {
+                        activeMinutes = (sets * durationSeconds) / 60.0
+                        restMinutes = 0.0
+                    } else {
+                        val secondsPerRep = 3.0
+                        activeMinutes = (sets * reps * secondsPerRep) / 60.0
+                        restMinutes = ((sets - 1) * 60.0) / 60.0
                     }
+                    val activeRate = exercise.caloriesPerMinPerKg * userWeightKg
+                    val restRate = 0.0167 * userWeightKg
+                    val totalCalories = (activeMinutes * activeRate) + (restMinutes * restRate)
+                    val caloriesRounded = kotlin.math.round(totalCalories).toInt()
+                    val log = hashMapOf(
+                        "name" to exercise.name,
+                        "date" to com.google.firebase.Timestamp.now(),
+                        "caloriesKcal" to caloriesRounded,
+                        "sets" to sets,
+                        "reps" to reps,
+                        "durationSeconds" to durationSeconds
+                    )
+                    docRef.collection("exerciseLogs")
+                        .add(log)
+                        .addOnSuccessListener {
+                            val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
+                            val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            CoroutineScope(Dispatchers.IO).launch {
+                                com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
+                                    context = context,
+                                    email = userEmail,
+                                    caloriesBurned = caloriesRounded.toDouble(),
+                                    hour = currentHour
+                                )
+                            }
+                        }
                 }
-        }
+        } catch (_: Exception) {}
+    }
 }
 
-// Stara pomožna funkcija za nazaj-kompatibilnost z ostalimi klici
-private fun parseCaloriesPerMinutePerKg(raw: String): Double {
-    val numberRegex = Regex("[0-9]+(?:\\.[0-9]+)?")
-    val match = numberRegex.find(raw)
-    val base = match?.value?.toDoubleOrNull() ?: return 0.07
-    val lower = raw.lowercase()
-    return if (lower.contains("per hour") || lower.contains("/hour") || lower.contains("hour")) {
-        base / 60.0
-    } else base
-}
+
+

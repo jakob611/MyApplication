@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -58,11 +59,11 @@ fun LevelPathScreen(
     currentPlanDay: Int = 1,
     onBack: () -> Unit
 ) {
-    val PrimaryBlue = Color(0xFF2563EB)
-    val Yellow = Color(0xFFFEE440)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
+    val Yellow = MaterialTheme.colorScheme.secondary
     val GreenSuccess = Color(0xFF10B981)
     val GrayLocked = Color(0xFF6B7280)
-    val GoldBadge = Color(0xFFFFD700)
+    val GoldBadge = MaterialTheme.colorScheme.secondary
 
     var selectedBadge by remember { mutableStateOf<Badge?>(null) }
 
@@ -159,7 +160,7 @@ fun LevelPathScreen(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("LEVEL", fontSize = 14.sp, color = Color.Gray)
+                    Text("LEVEL", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         "${userProfile.level}",
                         fontSize = 56.sp,
@@ -180,7 +181,7 @@ fun LevelPathScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Progress to Level ${userProfile.level + 1}", fontSize = 12.sp, color = Color.Gray)
+                            Text("Progress to Level ${userProfile.level + 1}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("${(userProfile.progressToNextLevel * 100).toInt()}%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
                         }
                         Spacer(Modifier.height(8.dp))
@@ -194,14 +195,14 @@ fun LevelPathScreen(
                         Text(
                             "${userProfile.xp - userProfile.xpForCurrentLevel} / ${userProfile.xpForNextLevel - userProfile.xpForCurrentLevel} XP",
                             fontSize = 11.sp,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.End)
                         )
                     }
 
                     // Followers/Following row
                     Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                     Spacer(Modifier.height(12.dp))
 
                     Row(
@@ -227,14 +228,14 @@ fun LevelPathScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = GreenSuccess
                             )
-                            Text("Followers", fontSize = 12.sp, color = Color.Gray)
+                            Text("Followers", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Box(
                             modifier = Modifier
                                 .width(1.dp)
                                 .height(40.dp)
-                                .background(Color.Gray.copy(alpha = 0.3f))
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                         )
 
                         // Following - klikabilno
@@ -256,7 +257,7 @@ fun LevelPathScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = PrimaryBlue
                             )
-                            Text("Following", fontSize = 12.sp, color = Color.Gray)
+                            Text("Following", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -277,7 +278,7 @@ fun LevelPathScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("BADGES", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("$unlockedCount / ${allBadges.size}", fontSize = 14.sp, color = Color.Gray)
+                        Text("$unlockedCount / ${allBadges.size}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -289,7 +290,7 @@ fun LevelPathScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(sortedBadges) { badge ->
+                        items(items = sortedBadges, key = { it.id }) { badge ->
                             BadgeItem(
                                 badge = badge,
                                 goldColor = GoldBadge,
@@ -315,7 +316,7 @@ fun LevelPathScreen(
                         Text(
                             activePlan.name,
                             fontSize = 14.sp,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(16.dp))
 
@@ -364,7 +365,7 @@ fun LevelPathScreen(
                             Icons.Filled.FitnessCenter,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
-                            tint = Color.Gray
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -375,7 +376,7 @@ fun LevelPathScreen(
                         Text(
                             "Create a workout plan to track your progress",
                             fontSize = 14.sp,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -442,7 +443,7 @@ fun LevelPathScreen(
                             progress = { (badge.progress.toFloat() / badge.requirement.toFloat()).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
                             color = PrimaryBlue,
-                            trackColor = Color.Gray.copy(alpha = 0.3f)
+                            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         )
                     } else {
                         Text("✓ Unlocked", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = GreenSuccess)
@@ -587,8 +588,12 @@ private suspend fun loadFollowUserInfo(userId: String): FollowUserInfo? {
 
         if (!doc.exists()) return null
 
-        val username = doc.getString("username") ?: doc.getString("first_name") ?: userId.take(8)
-        val displayName = doc.getString("first_name")
+        val usernameStr = doc.getString("username")
+        val firstNameStr = doc.getString("first_name")
+        val username = usernameStr?.takeIf { it.isNotBlank() } 
+            ?: firstNameStr?.takeIf { it.isNotBlank() } 
+            ?: userId.take(8)
+        val displayName = firstNameStr?.takeIf { it.isNotBlank() }
 
         FollowUserInfo(
             uid = userId,
@@ -615,7 +620,7 @@ fun FollowListDialog(
                 .fillMaxWidth()
                 .heightIn(min = 200.dp, max = 400.dp),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF25304A))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)
@@ -642,7 +647,7 @@ fun FollowListDialog(
                     ) {
                         Text(
                             "No users yet",
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 16.sp
                         )
                     }
@@ -651,7 +656,7 @@ fun FollowListDialog(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(users) { user ->
+                        items(items = users, key = { it.uid }) { user ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -687,7 +692,7 @@ fun FollowListDialog(
                                     user.displayName?.let {
                                         Text(
                                             it,
-                                            color = Color.Gray,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 12.sp
                                         )
                                     }

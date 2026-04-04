@@ -99,7 +99,7 @@ fun BarcodeScannerScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = Color.Gray
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Top Bar
@@ -205,13 +205,13 @@ fun BarcodeScannerScreen(
                         Spacer(Modifier.height(16.dp))
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
+                                containerColor = Color.Gray
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 error,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                color = Color.Gray,
                                 modifier = Modifier.padding(16.dp)
                             )
                         }
@@ -424,7 +424,7 @@ private fun ProductDetailsCard(
             Text(
                 brands,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.Gray,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -438,7 +438,7 @@ private fun ProductDetailsCard(
         ) {
             // Barcode badge
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = Color.Gray,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
@@ -554,7 +554,7 @@ private fun ProductDetailsCard(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = Color.Gray
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -597,7 +597,7 @@ private fun ProductDetailsCard(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
+                    containerColor = Color.Gray
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -605,14 +605,14 @@ private fun ProductDetailsCard(
                         "⚠️ Allergens",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = Color.Gray
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
                         product.allergens ?: product.allergensTags?.joinToString(", ") {
                             it.replace("en:", "").replace("-", " ").replaceFirstChar { c -> c.uppercase() }
                         } ?: "None",
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = Color.Gray
                     )
                 }
             }
@@ -625,7 +625,7 @@ private fun ProductDetailsCard(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = Color.Gray
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {

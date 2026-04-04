@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -73,10 +74,10 @@ fun StatCard(
             )
             Spacer(Modifier.height(8.dp))
             Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(title, fontSize = 12.sp, color = Color(0xFFB0B8C4))
+            Text(title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             LinearProgressIndicator(
-                progress = progress.coerceIn(0f, 1f),
+                progress = { progress.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().height(6.dp),
                 color = progressColor,
                 trackColor = Color(0xFF1F2231)
@@ -98,12 +99,12 @@ fun WeightCard(weight: com.example.myapplication.health.WeightData) {
             Icon(
                 imageVector = Icons.Filled.Scale,
                 contentDescription = null,
-                tint = Color(0xFF6366F1),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )
             Spacer(Modifier.width(16.dp))
             Column {
-                Text(weight.date, fontSize = 14.sp, color = Color(0xFFB0B8C4))
+                Text(weight.date, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     "%.1f kg".format(weight.weightKg),
                     fontSize = 18.sp,
@@ -267,7 +268,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
     }
 
     val backgroundGradient = Brush.verticalGradient(
-        listOf(Color(0xFF17223B), Color(0xFF25304A), Color(0xFF193446))
+        listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant, Color(0xFF193446))
     )
 
     Scaffold(
@@ -299,7 +300,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF17223B),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -312,7 +313,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
             when {
                 isLoading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFF6366F1))
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 !isAvailable -> {
@@ -321,13 +322,13 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFEE440), modifier = Modifier.size(64.dp))
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Health Connect Not Available", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
-                        Text("Requires Android 14+ or install from Play Store.", fontSize = 14.sp, color = Color(0xFFB0B8C4), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("Requires Android 14+ or install from Play Store.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(Modifier.height(24.dp))
-                        Button(onClick = { healthManager.openHealthConnectSettings() }, colors = ButtonDefaults.buttonColors(Color(0xFF6366F1))) {
+                        Button(onClick = { healthManager.openHealthConnectSettings() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary)) {
                             Text("Install Health Connect")
                         }
                     }
@@ -338,15 +339,15 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Filled.HealthAndSafety, contentDescription = null, tint = Color(0xFFFEE440), modifier = Modifier.size(64.dp))
+                        Icon(Icons.Filled.HealthAndSafety, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Permissions Required", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
-                        Text("Grant at least one permission.", fontSize = 14.sp, color = Color(0xFFB0B8C4), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("Grant at least one permission.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(Modifier.height(24.dp))
                         Button(
                             onClick = { permissionLauncher.launch(healthManager.allPermissions) },
-                            colors = ButtonDefaults.buttonColors(Color(0xFF6366F1)),
+                            colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Grant Permissions", fontSize = 16.sp) }
                         Spacer(Modifier.height(12.dp))
@@ -411,7 +412,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                                         title = "Distance",
                                         value = if (todayDistanceKm > 0.01) "${"%.2f".format(todayDistanceKm)} km" else "–",
                                         progress = (todayDistanceKm / 5.0).toFloat(),
-                                        progressColor = Color(0xFFFF9800),
+                                        progressColor = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -431,20 +432,20 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                     Text("$minBpm", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                                                    Text("Min bpm", fontSize = 12.sp, color = Color(0xFFB0B8C4))
+                                                    Text("Min bpm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                     val avg = todayHeartRate.map { it.bpm }.average().toInt()
-                                                    Text("$avg", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9800))
-                                                    Text("Avg bpm", fontSize = 12.sp, color = Color(0xFFB0B8C4))
+                                                    Text("$avg", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                                                    Text("Avg bpm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                     Text("$maxBpm", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE91E63))
-                                                    Text("Max bpm", fontSize = 12.sp, color = Color(0xFFB0B8C4))
+                                                    Text("Max bpm", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                             }
                                             Spacer(Modifier.height(4.dp))
-                                            Text("${todayHeartRate.size} measurements today", fontSize = 12.sp, color = Color(0xFFB0B8C4))
+                                            Text("${todayHeartRate.size} measurements today", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -457,14 +458,14 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                             state = pullRefreshState,
                             modifier = Modifier.align(Alignment.TopCenter),
                             backgroundColor = Color(0xFF2A2D3E),
-                            contentColor = Color(0xFF6366F1)
+                            contentColor = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
                 else -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Color(0xFF6366F1))
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.height(16.dp))
                             Text("Loading health data...", color = Color.White, fontSize = 16.sp)
                         }
@@ -550,7 +551,7 @@ fun SetGoalDialog(
                         )
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) { Text("Save") }
         },
         dismissButton = {
@@ -573,7 +574,7 @@ fun HealthHistoryScreen(onBack: () -> Unit) {
     }
 
     val backgroundGradient = Brush.verticalGradient(
-        listOf(Color(0xFF17223B), Color(0xFF25304A), Color(0xFF193446))
+        listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant, Color(0xFF193446))
     )
 
     Scaffold(
@@ -586,7 +587,7 @@ fun HealthHistoryScreen(onBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF17223B),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -602,16 +603,16 @@ fun HealthHistoryScreen(onBack: () -> Unit) {
             when {
                 loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFF6366F1))
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 history.isEmpty() -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Filled.History, contentDescription = null, tint = Color(0xFFB0B8C4), modifier = Modifier.size(56.dp))
+                            Icon(Icons.Filled.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(56.dp))
                             Spacer(Modifier.height(12.dp))
                             Text("No history yet.", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Data will appear here once Health Connect syncs.", color = Color(0xFFB0B8C4), fontSize = 13.sp, textAlign = TextAlign.Center)
+                            Text("Data will appear here once Health Connect syncs.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -631,7 +632,7 @@ fun HealthHistoryScreen(onBack: () -> Unit) {
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
-                        items(history) { stat ->
+                        items(items = history, key = { it.date }) { stat ->
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2D3E)),
                                 shape = RoundedCornerShape(12.dp)
@@ -655,17 +656,17 @@ fun HealthHistoryScreen(onBack: () -> Unit) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text("👟", fontSize = 20.sp)
                                             Text("${stat.steps}", color = Color(0xFF4CAF50), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                            Text("steps", color = Color(0xFFB0B8C4), fontSize = 11.sp)
+                                            Text("steps", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         }
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text("🔥", fontSize = 20.sp)
                                             Text("${stat.calories}", color = Color(0xFFFF5252), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                            Text("kcal", color = Color(0xFFB0B8C4), fontSize = 11.sp)
+                                            Text("kcal", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         }
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text("⏱", fontSize = 20.sp)
                                             Text("${stat.exerciseMinutes}", color = Color(0xFF448AFF), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                            Text("min", color = Color(0xFFB0B8C4), fontSize = 11.sp)
+                                            Text("min", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         }
                                     }
                                 }

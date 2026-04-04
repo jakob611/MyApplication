@@ -143,4 +143,29 @@ object FirestoreHelper {
         cachedResolvedId = null
         cachedForUid = null
     }
+
+    /**
+     * Izvede `block` z eksponentnim backoff retryjem. Uporabno za kritične write operacije.
+     * @param times Max število poskusov (privzeto 3).
+     * @param initialDelay Začetni zamik v milisekundah (privzeto 500ms).
+     * @param factor Hitrost eksponentnega naraščanja (privzeto 2.0).
+     */
+    suspend fun <T> withRetry(
+        times: Int = 3,
+        initialDelay: Long = 500,
+        factor: Double = 2.0,
+        block: suspend () -> T
+    ): T {
+        var currentDelay = initialDelay
+        repeat(times - 1) { poskus ->
+            try {
+                return block()
+            } catch (e: Exception) {
+                Log.w(TAG, "Operation failed, retrying (${poskus + 1}/$times). Error: ${e.message}")
+                kotlinx.coroutines.delay(currentDelay)
+                currentDelay = (currentDelay * factor).toLong()
+            }
+        }
+        return block() // Zadnji poskus proži exception, če ne uspe
+    }
 }

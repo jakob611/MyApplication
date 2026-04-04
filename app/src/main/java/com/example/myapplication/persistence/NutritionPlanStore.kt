@@ -82,7 +82,7 @@ object NutritionPlanStore {
                     proteinPerKg = (it["proteinPerKg"] as? Number)?.toDouble(),
                     caloriesPerKg = (it["caloriesPerKg"] as? Number)?.toDouble(),
                     caloricStrategy = it["caloricStrategy"] as? String,
-                    detailedTips = it["detailedTips"] as? List<String> ?: emptyList(),
+                    detailedTips = (it["detailedTips"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                     macroBreakdown = it["macroBreakdown"] as? String,
                     trainingStrategy = it["trainingStrategy"] as? String
                 )

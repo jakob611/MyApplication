@@ -82,7 +82,7 @@
 | Datoteka | Kaj prikaže | Kaj popravljaš tu |
 |----------|------------|-------------------|
 | `RunTrackerScreen.kt` | GPS tek tracker z **živim OSMDroid zemljevidom**, timer, razdalja, hitrost, višinska razlika. Izbira tipa aktivnosti (Run/Walk/Hike/Sprint/Cycling/Skiing/Snowboard/Skating/Nordic). Shranjuje komprimirano ruto v `publicActivities` če ima `shareActivities=true`. | Tek UI, GPS logika, mapa, shranjevanje teka, tip aktivnosti |
-| `ActivityLogScreen.kt` | **Nova datoteka** — vse aktivnosti na enem mestu z barvnimi karticami po tipu. Klikni kartico → razpre mini OSM mapa z barvno linijo. Dostopen z gumbom 🗺️ na BodyModuleHome. | Activity log UI, barvne kartice, mini mapa |
+| `ActivityLogScreen.kt` | **Celozaslonski zemljevid vseh aktivnosti** — pregled vseh poti hkrati. Klik na pot odpre podrobnosti spodaj. Dostopen z gumbom 🗺️ na BodyModuleHome. | Zemljevid, overlay detajlov |
 
 ### Profil in socialno
 | Datoteka | Kaj prikaže | Kaj popravljaš tu |

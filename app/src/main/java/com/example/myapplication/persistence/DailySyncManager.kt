@@ -26,6 +26,7 @@ object DailySyncManager {
     const val PREFS_FOOD = "food_cache"
     const val PREFS_WATER = "water_cache"
     const val PREFS_BURNED = "burned_cache"
+    const val PREFS_CALORIES = "calories_cache" // NEW
 
     private fun todayStr() = dateStr(Date())
     private fun dateStr(d: Date) = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(d)
@@ -59,6 +60,12 @@ object DailySyncManager {
     fun saveBurnedLocally(context: Context, burnedKcal: Int, date: String = todayStr()) {
         context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
             .edit().putInt("burned_$date", burnedKcal).apply()
+    }
+
+    /** Shrani vnesene (consumed) kalorije lokalno. */
+    fun saveCaloriesLocally(context: Context, calories: Int, date: String = todayStr()) {
+        context.getSharedPreferences(PREFS_CALORIES, Context.MODE_PRIVATE)
+            .edit().putInt("calories_$date", calories).apply()
     }
 
     // ───── Sync logika ──────────────────────────────────────────────────────
@@ -96,9 +103,14 @@ object DailySyncManager {
             .getInt("water_$date", 0)
         val burned = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
             .getInt("burned_$date", 0)
+        // Check calories as well (optional, but consistent)
+        val cals = context.getSharedPreferences(PREFS_CALORIES, Context.MODE_PRIVATE)
+           .getInt("calories_$date", 0)
+
         val foods = context.getSharedPreferences(PREFS_FOOD, Context.MODE_PRIVATE)
             .getString("foods_$date", null)
-        return water > 0 || burned > 0 || !foods.isNullOrBlank()
+        
+        return water > 0 || burned > 0 || cals > 0 || (foods != null && foods != "[]")
     }
 
     /**

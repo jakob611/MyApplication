@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.ui.theme.DrawerBlue
 import kotlinx.coroutines.launch
 
 // Data model za E-aditiv — riskLevel se bere iz JSON-a kot String, konvertira se z getRiskLevel()
@@ -168,8 +167,8 @@ fun EAdditivesScreen(
                         unfocusedTextColor = textColor,
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        cursorColor = DrawerBlue,
-                        focusedBorderColor = DrawerBlue,
+                        cursorColor = MaterialTheme.colorScheme.tertiary,
+                        focusedBorderColor = MaterialTheme.colorScheme.tertiary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     )
                 )
@@ -177,7 +176,7 @@ fun EAdditivesScreen(
                 Button(
                     onClick = { performSearch() },
                     modifier = Modifier.height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = DrawerBlue),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("Search", fontWeight = FontWeight.Bold)
@@ -190,7 +189,7 @@ fun EAdditivesScreen(
             if (searching) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
-                    color = DrawerBlue
+                    color = MaterialTheme.colorScheme.tertiary
                 )
                 Spacer(Modifier.height(16.dp))
             }
@@ -249,7 +248,7 @@ fun EAdditivesScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(searchResults) { additive ->
+                items(items = searchResults, key = { it.code }) { additive ->
                     EAdditiveCard(
                         additive = additive,
                         onClick = { selectedAdditive = additive }
@@ -274,7 +273,7 @@ fun EAdditivesScreen(
                                     "ℹ️ What Are Food Additives?",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = DrawerBlue
+                                    color = MaterialTheme.colorScheme.tertiary
                                 )
                                 Spacer(Modifier.height(12.dp))
                                 Text(
@@ -302,7 +301,7 @@ fun EAdditivesScreen(
                                     "📋 Common Categories",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = DrawerBlue
+                                    color = MaterialTheme.colorScheme.tertiary
                                 )
                                 Spacer(Modifier.height(12.dp))
 
@@ -360,7 +359,7 @@ fun EAdditivesScreen(
                                     "❓ Why Are Additives Added?",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = DrawerBlue
+                                    color = MaterialTheme.colorScheme.tertiary
                                 )
                                 Spacer(Modifier.height(12.dp))
                                 Text(
@@ -420,7 +419,7 @@ fun EAdditivesScreen(
                                     "🧬 How Are They Produced?",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = DrawerBlue
+                                    color = MaterialTheme.colorScheme.tertiary
                                 )
                                 Spacer(Modifier.height(12.dp))
                                 Text(
@@ -593,7 +592,7 @@ private fun DetailSection(title: String, content: String) {
             title,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = DrawerBlue
+            color = MaterialTheme.colorScheme.tertiary
         )
         Spacer(Modifier.height(4.dp))
         Text(

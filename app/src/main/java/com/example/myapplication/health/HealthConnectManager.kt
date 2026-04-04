@@ -23,12 +23,14 @@ import java.time.temporal.ChronoUnit
  * Health Connect Manager - upravlja povezavo s Samsung Health in drugimi health aplikacijami
  * preko Android Health Connect API-ja
  */
-class HealthConnectManager(private val context: Context) {
+class HealthConnectManager(ctx: Context) {
+    private val context = ctx.applicationContext
 
     // Singleton pattern
     companion object {
         private const val TAG = "HealthConnectManager"
 
+        @android.annotation.SuppressLint("StaticFieldLeak")
         @Volatile
         private var INSTANCE: HealthConnectManager? = null
 
@@ -136,7 +138,7 @@ class HealthConnectManager(private val context: Context) {
             // Če Health Connect ni nameščen, odpri Play Store
             try {
                 val playStoreIntent = Intent(Intent.ACTION_VIEW).apply {
-                    data = Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
+                    data = android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
                     setPackage("com.android.vending")
                 }
                 context.startActivity(playStoreIntent)
@@ -155,24 +157,16 @@ class HealthConnectManager(private val context: Context) {
      */
     suspend fun readSteps(startTime: Instant, endTime: Instant): Long {
         return try {
-            var totalSteps = 0L
-            var pageToken: String? = null
-
-            do {
-                val request = ReadRecordsRequest(
-                    recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
-                    pageToken = pageToken
+            val response = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
                 )
-                val response = healthConnectClient.readRecords(request)
-                totalSteps += response.records.sumOf { (it.count) }
-                pageToken = response.pageToken
-            } while (pageToken != null)
-
-            totalSteps
+            )
+            response[StepsRecord.COUNT_TOTAL] ?: 0L
         } catch (e: Exception) {
             Log.e(TAG, "Error reading steps", e)
-            0
+            0L
         }
     }
 
@@ -195,26 +189,25 @@ class HealthConnectManager(private val context: Context) {
     suspend fun readStepsLastDays(days: Int): List<DailySteps> {
         return try {
             val now = Instant.now()
-            val startTime = now.minus(days.toLong(), ChronoUnit.DAYS)
+            val startTime = LocalDateTime.now()
+                .minusDays(days.toLong() - 1)
+                .toLocalDate()
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
 
-            val request = ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, now)
+            val request = androidx.health.connect.client.request.AggregateGroupByPeriodRequest(
+                metrics = setOf(StepsRecord.COUNT_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(startTime, now),
+                timeRangeSlicer = java.time.Period.ofDays(1)
             )
-            val response = healthConnectClient.readRecords(request)
+            val response = healthConnectClient.aggregateGroupByPeriod(request)
 
-            // Group by day
-            response.records
-                .groupBy {
-                    it.startTime.atZone(ZoneId.systemDefault()).toLocalDate()
-                }
-                .map { (date, records) ->
-                    DailySteps(
-                        date = date.toString(),
-                        steps = records.sumOf { it.count }
-                    )
-                }
-                .sortedByDescending { it.date }
+            response.map { group ->
+                DailySteps(
+                    date = group.startTime.atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+                    steps = group.result[StepsRecord.COUNT_TOTAL] ?: 0L
+                )
+            }.sortedByDescending { it.date }
         } catch (e: Exception) {
             Log.e(TAG, "Error reading daily steps", e)
             emptyList()
@@ -300,12 +293,14 @@ class HealthConnectManager(private val context: Context) {
      */
     suspend fun readDistance(startTime: Instant, endTime: Instant): Double {
         return try {
-            val request = ReadRecordsRequest(
-                recordType = DistanceRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            val response = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(DistanceRecord.DISTANCE_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-            val response = healthConnectClient.readRecords(request)
-            response.records.sumOf { it.distance.inMeters } / 1000.0 // Convert to km
+            val distanceMeters = response[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+            distanceMeters / 1000.0 // Convert to km
         } catch (e: Exception) {
             Log.e(TAG, "Error reading distance", e)
             0.0
@@ -320,23 +315,25 @@ class HealthConnectManager(private val context: Context) {
         try {
             Log.d(TAG, "readCalories: requesting data from $startTime to $endTime")
 
-            // 1. Try reading Active Calories records directly
-            val activeRequest = ReadRecordsRequest(
-                recordType = ActiveCaloriesBurnedRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            // 1. Try reading Active Calories records directly using Aggregate
+            val activeResponse = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-            val activeResponse = healthConnectClient.readRecords(activeRequest)
-            val activeSum = activeResponse.records.sumOf { it.energy.inKilocalories }
-            Log.d(TAG, "readCalories: Found ${activeResponse.records.size} Active records, sum = $activeSum kcal")
+            val activeSum = activeResponse[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+            Log.d(TAG, "readCalories: Active sum (Aggregate) = $activeSum kcal")
 
-            // 2. Try reading Total Calories records directly (just for logging/debug)
-            val totalRequest = ReadRecordsRequest(
-                recordType = TotalCaloriesBurnedRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            // 2. Try reading Total Calories records directly using Aggregate
+            val totalResponse = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-            val totalResponse = healthConnectClient.readRecords(totalRequest)
-            val totalSum = totalResponse.records.sumOf { it.energy.inKilocalories }
-            Log.d(TAG, "readCalories: Found ${totalResponse.records.size} Total records, sum = $totalSum kcal")
+            val totalSum = totalResponse[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+            Log.d(TAG, "readCalories: Total sum (Aggregate) = $totalSum kcal")
 
             // LOGIC CHANGE: User wants ONLY ACTIVE calories (like Samsung Health main screen)
             // If we have active calories explicitely, return them.
@@ -492,7 +489,7 @@ class HealthConnectManager(private val context: Context) {
             distanceKm = readDistance(startOfDay, now),
             caloriesBurned = readCalories(startOfDay, now),
             heartRateData = readHeartRate(startOfDay, now),
-            exerciseSessions = readExerciseSessions(1)
+            exerciseSessions = readTodayExerciseSessions()
         )
     }
 

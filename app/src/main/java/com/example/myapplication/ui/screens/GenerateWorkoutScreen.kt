@@ -103,7 +103,7 @@ fun GenerateWorkoutScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.Gray)
     ) {
         Column(
             modifier = Modifier
@@ -136,7 +136,7 @@ fun GenerateWorkoutScreen(
                     ) {
                         item {
                             Text("You've already worked out today!", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Create a different workout plan", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Create a different workout plan", fontSize = 12.sp, color = Color.Gray)
                         }
 
                         item {
@@ -172,15 +172,15 @@ fun GenerateWorkoutScreen(
                                     }
                                     .background(
                                         if (isSelected)
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            Color.Gray.copy(alpha = 0.2f)
                                         else
-                                            MaterialTheme.colorScheme.surface
+                                            Color.Gray
                                     ),
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    Color.Gray.copy(alpha = 0.1f)
                                 else
-                                    MaterialTheme.colorScheme.surface
+                                    Color.Gray
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -194,7 +194,7 @@ fun GenerateWorkoutScreen(
                                         Icon(
                                             Icons.Filled.CheckCircle,
                                             contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = Color.Gray
                                         )
                                     }
                                 }
@@ -203,7 +203,7 @@ fun GenerateWorkoutScreen(
 
                         item {
                             Text("Equipment (override for this workout)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text("These settings are temporary and won't affect your plan", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("These settings are temporary and won't affect your plan", fontSize = 12.sp, color = Color.Gray)
                         }
 
                         items(availableEquipmentList) { eq ->
@@ -223,15 +223,15 @@ fun GenerateWorkoutScreen(
                                     }
                                     .background(
                                         if (isSelected)
-                                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                                            Color.Gray.copy(alpha = 0.2f)
                                         else
-                                            MaterialTheme.colorScheme.surface
+                                            Color.Gray
                                     ),
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected)
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
+                                    Color.Gray.copy(alpha = 0.1f)
                                 else
-                                    MaterialTheme.colorScheme.surface
+                                    Color.Gray
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -245,7 +245,7 @@ fun GenerateWorkoutScreen(
                                         Icon(
                                             Icons.Filled.CheckCircle,
                                             contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.secondary
+                                            tint = Color.Gray
                                         )
                                     }
                                 }

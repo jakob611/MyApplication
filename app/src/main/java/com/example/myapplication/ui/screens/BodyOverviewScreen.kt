@@ -39,8 +39,8 @@ fun BodyOverviewScreen(
     var showReplaceDialog by remember { mutableStateOf(false) }
 
     val accentGreen = Color(0xFF13EF92)
-    val accentBlue = Color(0xFF2563EB)
-    val accentYellow = Color(0xFFFEE440)
+    val accentBlue = MaterialTheme.colorScheme.primary
+    val accentYellow = MaterialTheme.colorScheme.secondary
 
     Scaffold(
         topBar = {

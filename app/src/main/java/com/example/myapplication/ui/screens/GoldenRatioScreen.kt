@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -176,14 +177,14 @@ fun GoldenRatioScreen(
                         Icon(
                             Icons.Filled.Info,
                             contentDescription = "Info",
-                            tint = Color(0xFFFEE440),
+                            tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
                             "About Golden Ratio",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFFFEE440)
+                            color = MaterialTheme.colorScheme.secondary
                         )
                     }
 
@@ -207,7 +208,7 @@ fun GoldenRatioScreen(
                     label = { Text("Auto Analysis") },
                     selected = analysisMode == "auto",
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFFEE440),
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
                         selectedLabelColor = Color(0xFF2A1810)
                     )
                 )
@@ -216,7 +217,7 @@ fun GoldenRatioScreen(
                     label = { Text("Manual Calculator") },
                     selected = analysisMode == "manual",
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFFEE440),
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
                         selectedLabelColor = Color(0xFF2A1810)
                     )
                 )
@@ -260,6 +261,29 @@ fun AutoAnalysisSection() {
         }
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                val file = File(context.cacheDir, "face_analysis_${System.currentTimeMillis()}.jpg")
+                file.parentFile?.mkdirs()
+                val uri = FileProvider.getUriForFile(
+                    context.applicationContext,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                photoUri.value = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                android.util.Log.e("GoldenRatio", "Camera launch failed", e)
+                com.example.myapplication.utils.AppToast.showError(context, "Error launching camera: ${e.message}")
+            }
+        } else {
+            com.example.myapplication.utils.AppToast.showError(context, "Camera permission is required to take a photo.")
+        }
+    }
+
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             processImage(context, uri, calculatedScore, advancedAnalysis, isLoading)
@@ -271,26 +295,46 @@ fun AutoAnalysisSection() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isLoading.value) {
-            CircularProgressIndicator(color = Color(0xFFFEE440))
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
             Spacer(Modifier.height(16.dp))
             Text("Analyzing facial symmetry...", color = Color(0xFFB6C6E6))
         } else {
             Button(
                 onClick = {
-                    val file = File(context.cacheDir, "face_analysis_${System.currentTimeMillis()}.jpg")
-                    val uri = FileProvider.getUriForFile(
+                    val permissionCheck = androidx.core.content.ContextCompat.checkSelfPermission(
                         context,
-                        "${context.packageName}.fileprovider",
-                        file
+                        android.Manifest.permission.CAMERA
                     )
-                    photoUri.value = uri
-                    cameraLauncher.launch(uri)
+                    if (permissionCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        try {
+                            val file = File(context.cacheDir, "face_analysis_${System.currentTimeMillis()}.jpg")
+                            // Ensure directory exists
+                            file.parentFile?.mkdirs()
+
+                            val uri = FileProvider.getUriForFile(
+                                context.applicationContext, // Use application context to be safe
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+                            photoUri.value = uri
+                            cameraLauncher.launch(uri)
+                        } catch (e: Exception) {
+                            android.util.Log.e("GoldenRatio", "Camera launch failed", e)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Error launching camera: ${e.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } else {
+                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFEE440)
+                    containerColor = MaterialTheme.colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -318,7 +362,7 @@ fun AutoAnalysisSection() {
                     .fillMaxWidth()
                     .height(60.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFFFEE440)
+                    contentColor = MaterialTheme.colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -333,13 +377,13 @@ fun AutoAnalysisSection() {
             Spacer(Modifier.height(24.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2435))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("AI BEAUTY SCORE", color = Color(0xFFFEE440), style = MaterialTheme.typography.labelLarge)
+                    Text("AI BEAUTY SCORE", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelLarge)
                     Text(
                         "${(score * 100).toInt()}%",
                         color = Color.White,
@@ -348,7 +392,7 @@ fun AutoAnalysisSection() {
                     )
                     Text(
                         "Based on ML Kit Landmark Detection",
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -384,7 +428,7 @@ fun ManualCalculatorSection(
             Text(
                 "Manual Measurements (in mm)",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFFFEE440),
+                color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -412,7 +456,7 @@ fun ManualCalculatorSection(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFFEE440),
+                        focusedBorderColor = MaterialTheme.colorScheme.secondary,
                         unfocusedBorderColor = Color(0xFF6B7A99),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
@@ -431,7 +475,7 @@ fun ManualCalculatorSection(
                 onClick = onCalculate,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFEE440)
+                    containerColor = MaterialTheme.colorScheme.secondary
                 ),
                 enabled = validInputs >= 4
             ) {
@@ -447,7 +491,7 @@ fun ManualCalculatorSection(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF1A2435)
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Column(
@@ -457,7 +501,7 @@ fun ManualCalculatorSection(
                         Text(
                             "Beauty Score",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFFFEE440)
+                            color = MaterialTheme.colorScheme.secondary
                         )
                         Text(
                             "${(score * 100).toInt()}%",
@@ -474,7 +518,7 @@ fun ManualCalculatorSection(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF25304A)
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Column(
@@ -483,7 +527,7 @@ fun ManualCalculatorSection(
                         Text(
                             "Napredni Golden Ratio pregled",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFFFEE440),
+                            color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         Text(
@@ -532,7 +576,7 @@ fun processImage(
         detector.process(image)
             .addOnSuccessListener { faces ->
                 if (faces.isEmpty()) {
-                    android.widget.Toast.makeText(context, "No face detected!", android.widget.Toast.LENGTH_SHORT).show()
+                    com.example.myapplication.utils.AppToast.showWarning(context, "No face detected!")
                     loadingState.value = false
                     return@addOnSuccessListener
                 }
@@ -567,7 +611,7 @@ fun processImage(
                 loadingState.value = false
             }
             .addOnFailureListener { e ->
-                android.widget.Toast.makeText(context, "Detection failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                com.example.myapplication.utils.AppToast.showError(context, "Detection failed: ${e.message}")
                 loadingState.value = false
             }
 
@@ -627,6 +671,7 @@ fun calculateBeautyScore(markers: Map<Int, PointF>): Double {
 
     return if (scores.isEmpty()) 0.0 else scores.average()
 }
+
 
 
 

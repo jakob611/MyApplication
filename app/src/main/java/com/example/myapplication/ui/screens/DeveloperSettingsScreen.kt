@@ -343,10 +343,35 @@ fun DeveloperSettingsScreen(
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Text("${index + 1}. ${ex.name}", fontWeight = FontWeight.Bold)
-                            Text("Diff: ${ex.difficulty} | Equip: ${ex.equipment}", fontSize = 12.sp)
+                            Text("Diff: ${ex.difficulty}  Equip: ${ex.equipment}", fontSize = 12.sp)
                             Text("Primary: ${ex.primaryMuscle}", fontSize = 12.sp)
                             Text("Sets/Reps: ${ex.typicalSetsReps}", fontSize = 12.sp)
                         }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            // NOTIFICATION DEBUG CARD
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Notification Debug", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Settings state:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Quiet Hours: ${userProfile?.quietHoursStart} - ${userProfile?.quietHoursEnd}", fontSize = 12.sp)
+                    Text("Mute Streak: ${userProfile?.muteStreakReminders}", fontSize = 12.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.myapplication.workers.StreakReminderWorker>().build()
+                            androidx.work.WorkManager.getInstance(context).enqueue(request)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Trigger Streak Reminder Worker Now")
                     }
                 }
             }

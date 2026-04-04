@@ -1,8 +1,6 @@
 package com.example.myapplication.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -23,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,11 +30,16 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.ActivityType
 import com.example.myapplication.data.PublicProfile
 import com.example.myapplication.persistence.FollowStore
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Polyline
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.toArgb
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,11 +58,11 @@ fun PublicProfileScreen(
         isFollowing = FollowStore.isFollowing(currentUserId, profile.userId)
     }
 
-    val accentGold = Color(0xFFFFD700)
-    val accentBlue = Color(0xFF2563EB)
+    val accentGold = MaterialTheme.colorScheme.secondary
+    val accentBlue = MaterialTheme.colorScheme.primary
     val accentGreen = Color(0xFF13EF92)
-    val darkBg = Color(0xFF17223B)
-    val cardBg = Color(0xFF25304A)
+    val darkBg = MaterialTheme.colorScheme.surfaceVariant
+    val cardBg = MaterialTheme.colorScheme.surfaceVariant
 
     Scaffold(
         topBar = {
@@ -87,7 +91,7 @@ fun PublicProfileScreen(
                 .padding(padding)
                 .background(
                     Brush.verticalGradient(
-                        listOf(darkBg, Color(0xFF1A2435), Color(0xFF25304A))
+                        listOf(darkBg, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
                     )
                 )
         ) {
@@ -95,7 +99,7 @@ fun PublicProfileScreen(
                 if (hasActivities) {
                     TabRow(
                         selectedTabIndex = selectedTab,
-                        containerColor = Color(0xFF1A2435),
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = Color.White
                     ) {
                         Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Profile") })
@@ -149,7 +153,7 @@ fun PublicProfileScreen(
                                 Text(
                                     it,
                                     fontSize = 16.sp,
-                                    color = Color.Gray
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -189,50 +193,48 @@ fun PublicProfileScreen(
                             // Če je tuj profil, prikaži Follow/Unfollow gumb
                             Button(
                                 onClick = {
+                                    // Optimistični UI: takoj spremenimo stanje
+                                    val wasFollowing = isFollowing
+                                    isFollowing = !wasFollowing
+                                    followerCount += if (isFollowing) 1 else -1
+
                                     scope.launch {
-                                        isLoading = true
-                                        val success = if (isFollowing) {
+                                        isLoading = true // Za morebitne druge povratne informacije, čeprav gumb ni disablean
+                                        val success = if (wasFollowing) {
                                             FollowStore.unfollowUser(currentUserId, profile.userId)
                                         } else {
                                             FollowStore.followUser(currentUserId, profile.userId)
                                         }
 
-                                        if (success) {
-                                            isFollowing = !isFollowing
-                                            followerCount += if (isFollowing) 1 else -1
+                                        if (!success) {
+                                            // Če klic ne uspe, revertamo na prvotno stanje
+                                            isFollowing = wasFollowing
+                                            followerCount += if (wasFollowing) 1 else -1
                                         }
                                         isLoading = false
                                     }
                                 },
-                                enabled = !isLoading,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isFollowing) Color.Gray else accentBlue
+                                    containerColor = if (isFollowing) MaterialTheme.colorScheme.onSurfaceVariant else accentBlue
                                 ),
                                 modifier = Modifier.fillMaxWidth(0.8f)
                             ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White
-                                    )
-                                } else {
-                                    Icon(
-                                        if (isFollowing) Icons.Filled.PersonRemove else Icons.Filled.PersonAdd,
-                                        contentDescription = null
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        if (isFollowing) "Unfollow" else "Follow",
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Icon(
+                                    if (isFollowing) Icons.Filled.PersonRemove else Icons.Filled.PersonAdd,
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (isFollowing) "Unfollow" else "Follow",
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
                         // Stats
-                        if (profile.followers != null || profile.following != null) {
+                        if (profile.followers != null || profile.following != null || profile.streak != null) {
                             Spacer(Modifier.height(24.dp))
-                            HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                             Spacer(Modifier.height(16.dp))
 
                             Row(
@@ -242,7 +244,7 @@ fun PublicProfileScreen(
                                 profile.followers?.let {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            "$followerCount",
+                                            "$followerCount", // Uporabimo mutirano številko
                                             fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = accentGreen
@@ -250,7 +252,7 @@ fun PublicProfileScreen(
                                         Text(
                                             "Followers",
                                             fontSize = 12.sp,
-                                            color = Color.Gray
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -258,7 +260,7 @@ fun PublicProfileScreen(
                                 profile.following?.let {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            "${it}",
+                                            "$it",
                                             fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = accentBlue
@@ -266,7 +268,23 @@ fun PublicProfileScreen(
                                         Text(
                                             "Following",
                                             fontSize = 12.sp,
-                                            color = Color.Gray
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                profile.streak?.let {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            "🔥 $it",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
+                                        Text(
+                                            "Streak",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -290,7 +308,7 @@ fun PublicProfileScreen(
                             Text(
                                 "LEVEL",
                                 fontSize = 14.sp,
-                                color = Color.Gray
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 "$level",
@@ -329,7 +347,7 @@ fun PublicProfileScreen(
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     modifier = Modifier.heightIn(max = 400.dp)
                                 ) {
-                                    items(badges) { badge ->
+                                    items(items = badges, key = { it.id }) { badge ->
                                         BadgeCardSimple(badge)
                                     }
                                 }
@@ -357,8 +375,34 @@ private fun ActivitiesContent(
     val fmtDate = remember { SimpleDateFormat("EEE, dd MMM · HH:mm", Locale.ENGLISH) }
 
     if (activities.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No public activities yet", color = Color.Gray)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Filled.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "No shared activities",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "This user hasn't shared any public activities yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
         return
     }
@@ -367,12 +411,12 @@ private fun ActivitiesContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(activities) { act ->
+        items(items = activities, key = { it.id }) { act ->
             val type = ActivityType.fromString(act.activityType)
             val color = activityColor(type)
             Card(
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF25304A))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column {
                     // Header z barvno progo
@@ -388,14 +432,14 @@ private fun ActivitiesContent(
                         }
                     }
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(fmtDate.format(java.util.Date(act.startTime)), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text(fmtDate.format(java.util.Date(act.startTime)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val durationMin = act.durationSeconds / 60
                             val durationSec = act.durationSeconds % 60
                             PublicActChip("⏱️ ${durationMin}m ${durationSec}s", color)
                             if (type.showSpeed && act.avgSpeedMps > 0f)
                                 PublicActChip("${"%.1f".format(act.avgSpeedMps * 3.6f)} km/h", color)
-                            PublicActChip("🔥 ${act.caloriesKcal} kcal", Color(0xFFFF9800))
+                            PublicActChip("🔥 ${act.caloriesKcal} kcal", MaterialTheme.colorScheme.tertiary)
                         }
                         if (type.showElevation && act.elevationGainM > 0f)
                             Text("⛰️ ↑ ${"%.0f".format(act.elevationGainM)} m  ↓ ${"%.0f".format(act.elevationLossM)} m",
@@ -432,8 +476,8 @@ private fun BadgeCardSimple(badge: com.example.myapplication.data.Badge) {
     Card(
         modifier = Modifier.aspectRatio(1f),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2435)),
-        border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFFD700))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.secondary)
     ) {
         Column(
             modifier = Modifier
@@ -445,7 +489,7 @@ private fun BadgeCardSimple(badge: com.example.myapplication.data.Badge) {
             Icon(
                 imageVector = getBadgeIconSimple(badge.iconName),
                 contentDescription = badge.name,
-                tint = Color(0xFFFFD700),
+                tint = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.size(36.dp)
             )
             Spacer(Modifier.height(4.dp))
@@ -474,4 +518,67 @@ private fun getBadgeIconSimple(iconName: String): androidx.compose.ui.graphics.v
         "CalendarToday" -> Icons.Filled.CalendarToday
         else -> Icons.Filled.EmojiEvents
     }
+}
+
+@Composable
+fun RunOsmMapColored(
+    context: android.content.Context,
+    points: List<Pair<Double, Double>>,
+    lineColor: Color,
+    modifier: Modifier = Modifier
+) {
+    // Configuration check
+    val prefs = context.getSharedPreferences("osm_config", android.content.Context.MODE_PRIVATE)
+    Configuration.getInstance().load(context, prefs)
+
+    val mapView = remember {
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            isHorizontalMapRepetitionEnabled = false
+            isVerticalMapRepetitionEnabled = false
+            controller.setZoom(15.0)
+        }
+    }
+
+    // Update map content on points change
+    LaunchedEffect(points) {
+        if (points.isEmpty()) return@LaunchedEffect
+
+        mapView.overlays.clear()
+        val geoPoints = points.map { GeoPoint(it.first, it.second) }
+        
+        val polyline = Polyline(mapView)
+        polyline.setPoints(geoPoints)
+        polyline.outlinePaint.color = lineColor.toArgb()
+        polyline.outlinePaint.strokeWidth = 10f
+        
+        mapView.overlays.add(polyline)
+
+        // Zoom to bounds
+        if (geoPoints.isNotEmpty()) {
+            var minLat = 90.0
+            var maxLat = -90.0
+            var minLon = 180.0
+            var maxLon = -180.0
+            
+            geoPoints.forEach { p ->
+                if (p.latitude < minLat) minLat = p.latitude
+                if (p.latitude > maxLat) maxLat = p.latitude
+                if (p.longitude < minLon) minLon = p.longitude
+                if (p.longitude > maxLon) maxLon = p.longitude
+            }
+            
+            val boundingBox = org.osmdroid.util.BoundingBox(maxLat, maxLon, minLat, minLon)
+            mapView.post {
+                mapView.zoomToBoundingBox(boundingBox, true, 50)
+            }
+        }
+        mapView.invalidate()
+    }
+
+    AndroidView(
+        factory = { mapView },
+        modifier = modifier
+    )
 }

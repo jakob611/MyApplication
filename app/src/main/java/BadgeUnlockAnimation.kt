@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +33,7 @@ fun BadgeUnlockAnimation(
     badge: Badge,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
     var iconScale by remember { mutableFloatStateOf(0f) }
 
@@ -46,6 +50,7 @@ fun BadgeUnlockAnimation(
     // Auto-dismiss after 3 seconds
     LaunchedEffect(Unit) {
         visible = true
+        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
         delay(100)
         iconScale = 1.5f
         delay(300)
@@ -62,7 +67,8 @@ fun BadgeUnlockAnimation(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f)),
+                .background(Color.Black.copy(alpha = 0.85f))
+                .pointerInput(Unit) { detectTapGestures { } },
             contentAlignment = Alignment.Center
         ) {
             // Confetti particles

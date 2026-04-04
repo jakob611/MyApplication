@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,8 +68,8 @@ fun BodyPlanQuizScreen(
     var sleep by remember { mutableStateOf<String?>(null) }
 
     // UI colors
-    val buttonBlue = Color(0xFF2563EB)
-    val accentYellow = Color(0xFFFEE440)
+    val buttonBlue = MaterialTheme.colorScheme.primary
+    val accentYellow = MaterialTheme.colorScheme.secondary
     val softGreen = Color(0xFF13EF92)
 
     Box(
@@ -260,7 +261,7 @@ private fun BodyFatStep(
 ) {
     Text("What is your body fat percentage?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
-    Text("(Optional - leave empty if unknown)", color = Color.Gray, fontSize = 14.sp)
+    Text("(Optional - leave empty if unknown)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
     Spacer(Modifier.height(20.dp))
     OutlinedTextField(
         value = bodyFat,
@@ -409,7 +410,7 @@ private fun FrequencyStep(frequency: String?, onFrequency: (String) -> Unit, onB
 private fun WorkoutDurationStep(duration: String?, onDuration: (String) -> Unit, onBack: () -> Unit, yellow: Color, blue: Color) {
     Text("How long should each workout be?", color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(8.dp))
-    Text("Choose the time you can dedicate per session", color = Color.Gray, fontSize = 14.sp)
+    Text("Choose the time you can dedicate per session", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
     Spacer(Modifier.height(14.dp))
     Column {
         listOf(
@@ -491,7 +492,7 @@ private fun EquipmentStep(
 
     Text("What equipment do you have?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(8.dp))
-    Text("Select all that apply", color = Color.Gray, fontSize = 14.sp)
+    Text("Select all that apply", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
 
     Spacer(Modifier.height(20.dp))
 
@@ -529,7 +530,7 @@ private fun EquipmentStep(
                                 newSet.toList()
                             }
                         },
-                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = Color.Gray)
+                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                     Text(option, modifier = Modifier.padding(start = 8.dp), color = Color.White)
                 }
@@ -559,7 +560,7 @@ private fun FocusAreaStep(
 
     Text("What are your focus areas?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(8.dp))
-    Text("Select all that apply", color = Color.Gray, fontSize = 14.sp)
+    Text("Select all that apply", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
 
     Spacer(Modifier.height(20.dp))
 
@@ -597,7 +598,7 @@ private fun FocusAreaStep(
                                 newSet.toList()
                             }
                         },
-                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = Color.Gray)
+                        colors = CheckboxDefaults.colors(checkedColor = blue, uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                     Text(option, modifier = Modifier.padding(start = 8.dp), color = Color.White)
                 }
@@ -804,13 +805,13 @@ private fun PlanResultStep(
                 Spacer(Modifier.height(12.dp))
                 val proteinPerKg = (plan.protein.toFloat() / weight.toIntOrNull()!!).let { "%.1f".format(it) }
                 val caloriesPerKg = (plan.calories.toFloat() / weight.toIntOrNull()!!).let { "%.1f".format(it) }
-                Text("📊 ${proteinPerKg}g protein/kg • ${caloriesPerKg} kcal/kg", color = Color.Gray, fontSize = 13.sp)
+                Text("📊 ${proteinPerKg}g protein/kg • ${caloriesPerKg} kcal/kg", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
                 // ✅ NOVO - PRIKAŽI ALGORITHM DATA
                 algorithmData?.let { data ->
                     Spacer(Modifier.height(8.dp))
                     Text("📈 BMI: ${"%.1f".format(data.bmi ?: 0.0)} • BMR: ${data.bmr?.toInt() ?: 0} kcal • TDEE: ${data.tdee?.toInt() ?: 0} kcal",
-                        color = Color.Gray, fontSize = 12.sp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             }
         }

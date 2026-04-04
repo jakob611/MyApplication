@@ -72,7 +72,7 @@ fun KnowledgeHubFullScreen(
                     )
                 }
             } else {
-                items(filtered) { item ->
+                items(items = filtered, key = { it.title }) { item ->
                     KnowledgeCard(item)
                 }
             }

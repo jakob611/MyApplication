@@ -9,14 +9,8 @@ import com.example.myapplication.utils.calculateOptimalMacros
 // --- PLAN STRUCTURE GENERATION ---
 
 /**
- * Generira 4-teden plan kot 28 DayPlan objektov (7 dni na teden, vključno z rest dnevi).
- * Rest dni so pametno razporejeni med workout dni — ne skupaj na koncu tedna.
- *
- * Primer za 5x/teden: W W R W W W R  (po 2. in 7. dnevu) → "enakomerno razporejeni"
- * Primer za 3x/teden: W R W R W R R  (čim bolj enakomerno)
- * Primer za 6x/teden: W W W R W W W  (1 rest na sredi)
- *
- * focusAreas se rotirajo po workout dnevih.
+ * Generira plan z uvodnim tednom (Intro Week) če ne začnemo na ponedeljek.
+ * Skupaj bo 4 tedni "pravih" treningov + morebitni uvodni dnevi.
  */
 fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = emptyList()): List<WeekPlan> {
     val safeTrainingDays = trainingDaysPerWeek.coerceIn(1, 7)
@@ -43,6 +37,53 @@ fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = empty
     // Pripravi fokus labele za workout dni
     val focuses = if (focusAreas.isNotEmpty()) focusAreas else listOf("Full Body")
 
+    // --- INTRO WEEK LOGIC ---
+    val today = java.time.LocalDate.now()
+    val dayOfWeek = today.dayOfWeek.value // 1=Mon, 7=Sun
+    val isMonday = dayOfWeek == 1
+    
+    // Removed duplicate weeks declaration
+    
+    // Uvodni dnevi (Intro) - samo če NI ponedeljek
+    if (!isMonday) {
+        val daysUntilSunday = 8 - dayOfWeek // e.g. Tue(2) -> 8-2 = 6 days (Tue, Wed, Thu, Fri, Sat, Sun)
+        val introDays = mutableListOf<DayPlan>()
+        
+        // Progression of focuses: match recognized keys in WorkoutGenerator
+        // Start with lighter/mobility, move to full body/strength
+        val progression = listOf("Flexibility", "Cardio", "Balance", "Full Body", "Full Body", "Full Body")
+        
+        // Intro teden je lažji / intro
+        for (i in 0 until daysUntilSunday) {
+            val isRest = (i == daysUntilSunday - 1) // Zadnji dan (Nedelja) je vedno Rest v intru
+            
+            // Določi fokus glede na pozicijo - proti koncu tedna "več fokusa" (Full Body)
+            // Začnemo z mehkimi (Flexibility/Cardio), končamo z Rest
+            val focus = if (isRest) "Rest" else {
+                 if (daysUntilSunday <= 2) "Full Body" // Samo petek/sobota -> kar Full Body
+                 else {
+                     // Mapiramo indeks i na napredek
+                     // i=0 (prvi dan) -> Flexibility
+                     // i -> mapiraj na progression array
+                     val pIndex = (i.toDouble() / (daysUntilSunday - 1) * (progression.size - 1)).toInt().coerceIn(0, progression.size - 1)
+                     progression[pIndex]
+                 }
+            }
+            
+            introDays.add(
+                DayPlan(
+                    dayNumber = globalDayCounter,
+                    exercises = emptyList(),
+                    isRestDay = isRest,
+                    focusLabel = focus
+                )
+            )
+            globalDayCounter++
+        }
+        weeks.add(WeekPlan(weekNumber = 0, days = introDays))
+    }
+
+    // --- REGULAR WEEKS ---
     for (weekNum in 1..totalWeeks) {
         val days = mutableListOf<DayPlan>()
         for (dayInWeek in 0 until 7) { // 0 = ponedeljek, 6 = nedelja
@@ -72,7 +113,8 @@ fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = empty
 
 fun generateAdvancedCustomPlan(
     gender: String?, age: String, height: String, weight: String, bodyFat: String?,
-    goal: String?, experience: String?, location: String?, freq: String?,
+    goal: String?, experience: String?, location: String?,
+    freq: String?, // Added freq parameter
     workoutDuration: String?, // Added param
     equipment: List<String>,
     focusAreas: List<String>, // Added param
@@ -613,5 +655,9 @@ fun generatePersonalizedTips(
     // Return the most relevant tips (limit to prevent overwhelming the user)
     return tips.distinct().take(15)
 }
+
+
+
+
 
 

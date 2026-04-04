@@ -12,7 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -33,8 +38,9 @@ import androidx.compose.ui.unit.sp
 private data class DashboardModule(
     val title: String,
     val subtitle: String,
-    val accent: Color,
-    val iconType: String
+    val containerColor: Color,
+    val textColor: Color,
+    val enabled: Boolean = true
 )
 
 @Composable
@@ -49,46 +55,42 @@ fun DashboardScreen(
 ) {
     val modules = listOf(
         DashboardModule(
-            title = "Body",
-            subtitle = "Training plan & runs",
-            accent = Color(0xFF2563EB),
-            iconType = "body"
+            title = "BODY MODULE",
+            subtitle = "Unlock your full physical potential with customized workout plans, intelligent progress tracking, and complete nutrition management.",
+            containerColor = MaterialTheme.colorScheme.secondary,
+            textColor = MaterialTheme.colorScheme.onSecondary
         ),
         DashboardModule(
-            title = "Face",
-            subtitle = "Skincare & face routine",
-            accent = Color(0xFF7C3AED),
-            iconType = "face"
+            title = "HAIR MODULE",
+            subtitle = "Coming Soon: Discover specialized hair care routines, maintenance plans, and expert advice for healthier hair.",
+            containerColor = MaterialTheme.colorScheme.tertiary,
+            textColor = MaterialTheme.colorScheme.onTertiary
         ),
         DashboardModule(
-            title = "Hair",
-            subtitle = "Hair routine & tips",
-            accent = Color(0xFF0EA5E9),
-            iconType = "hair"
-        ),
-        DashboardModule(
-            title = "Shop",
-            subtitle = "Products & recommendations",
-            accent = Color(0xFF10B981),
-            iconType = "shop"
+            title = "FACE MODULE",
+            subtitle = "Analyze your facial features, monitor your skin health, and practice targeted exercises to improve your natural glow.",
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            textColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 24.dp)
+            .padding(top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         modules.forEach { m ->
             DashboardModuleCard(
                 modifier = Modifier.weight(1f),
                 title = m.title,
                 subtitle = m.subtitle,
-                accent = m.accent,
-                iconType = m.iconType,
-                onClick = { onModuleClick(m.title) }
+                containerColor = m.containerColor,
+                textColor = m.textColor,
+                enabled = m.enabled,
+                onClick = { if (m.enabled) onModuleClick(m.title.replace(" MODULE", "").lowercase().replaceFirstChar { it.uppercase() }) } // Mapping back to standard "Body", "Face"
             )
         }
     }
@@ -99,70 +101,65 @@ private fun DashboardModuleCard(
     modifier: Modifier = Modifier,
     title: String,
     subtitle: String,
-    accent: Color,
-    iconType: String,
+    containerColor: Color,
+    textColor: Color,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            .then(
+                 if (enabled) Modifier.clickable(onClick = onClick) else Modifier
+            ),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxSize() // Fill the card size
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier.size(56.dp), // bigger icon container
-                contentAlignment = Alignment.Center
-            ) {
-                val icon = when (iconType) {
-                    "body" -> Icons.Filled.FitnessCenter
-                    "face" -> Icons.Filled.Face
-                    "hair" -> Icons.Filled.Waves
-                    else -> Icons.Filled.ShoppingCart
-                }
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(32.dp) // bigger icon
-                )
-            }
-
-            Spacer(Modifier.size(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Box(
+            Text(
+                text = title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = textColor
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = subtitle,
+                fontSize = 14.sp,
+                color = textColor.copy(alpha = 0.8f),
+                lineHeight = 20.sp
+            )
+            Spacer(Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { 0.2f },
+                modifier = Modifier.fillMaxWidth(0.6f).height(6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = textColor.copy(alpha = 0.1f),
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onClick,
                 modifier = Modifier
-                    .size(width = 10.dp, height = 44.dp)
-                    .padding(start = 10.dp)
+                    .fillMaxWidth(0.6f)
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = RoundedCornerShape(100.dp)
             ) {
-                Card(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = accent),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {}
+                Text(
+                    text = "ENTER",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
             }
         }
     }

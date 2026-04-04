@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -105,7 +106,7 @@ private fun ExercisesTab() {
     else {
         val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy", Locale.ENGLISH) }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(entries) { ex ->
+            items(items = entries, key = { "${it.name}_${it.date.time}" }) { ex ->
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(ex.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -156,7 +157,7 @@ private fun WorkoutsTab() {
     
     if (loading) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
     else if (entries.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No workouts yet") } }
-    else { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(entries) { entry -> WorkoutCard(uid = uid!!, entry = entry) } } }
+    else { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(items = entries, key = { it.id }) { entry -> WorkoutCard(uid = uid!!, entry = entry) } } }
 }
 
 @Composable
@@ -169,7 +170,7 @@ private fun RunsTab() {
     
     if (loading) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
     else if (runs.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No runs yet. Start your first run!") } }
-    else { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(runs) { run -> RunCard(run) } } }
+    else { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(items = runs, key = { it.id }) { run -> RunCard(run) } } }
 }
 
 private fun formatWorkoutTime(totalMinutes: Double): String {
@@ -224,7 +225,7 @@ private fun RunCard(run: RunSession) {
     val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy HH:mm", Locale.ENGLISH) }
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
-    var routePoints by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var routePoints by remember { mutableStateOf<List<com.example.myapplication.data.LocationPoint>>(emptyList()) }
     
     LaunchedEffect(run.id, expanded) {
         if (expanded && routePoints.isEmpty() && run.id.isNotBlank()) {
@@ -269,7 +270,8 @@ private fun RunCard(run: RunSession) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("🗺️", style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(4.dp)); Text("No route available\n(GPS data not saved locally)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                     }
                 } else {
-                    RunMapView(points = routePoints, modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(8.dp)))
+                    val mapPoints = routePoints.map { Pair(it.latitude, it.longitude) }
+                    RunMapView(points = mapPoints, modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(8.dp)))
                 }
             }
         }
@@ -285,7 +287,7 @@ private fun RunStatItem(label: String, value: String) {
 private fun RunDetailRow(label: String, value: String, highlight: Boolean = false) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium, color = if (highlight) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurface)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium, color = if (highlight) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface)
     }
 }
 

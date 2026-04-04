@@ -110,6 +110,34 @@ fun MyAccountScreen(
 
         Spacer(Modifier.height(32.dp))
 
+        Text("App Preferences", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(16.dp))
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Route Smoothing (Snap-to-road)")
+                        Text("Use Mapbox to snap your runs to correct paths. Turn off for raw GPS lines.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                    val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("run_tracker_prefs", android.content.Context.MODE_PRIVATE)
+                    var mapboxEnabled by remember { mutableStateOf(prefs.getBoolean("route_smoothing", true)) }
+                    Switch(
+                        checked = mapboxEnabled,
+                        onCheckedChange = { 
+                            mapboxEnabled = it
+                            prefs.edit().putBoolean("route_smoothing", it).apply()
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
 
         Button(onClick = onNavigateToDevSettings, modifier = Modifier.fillMaxWidth()) {
             Text("DEV: Algorithm Debug")

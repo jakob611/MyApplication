@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -37,7 +38,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.myapplication.data.HealthStorage
 import com.example.myapplication.health.HealthConnectManager
 import com.example.myapplication.network.OpenFoodFactsProduct
-import com.example.myapplication.ui.theme.DrawerBlue
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -69,7 +69,7 @@ fun ActiveCaloriesBar(
                 .width(16.dp)
                 .weight(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFFE5E7EB))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(
                 modifier = Modifier
@@ -79,7 +79,7 @@ fun ActiveCaloriesBar(
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         brush = Brush.verticalGradient(
-                            colors = listOf(Color(0xFFFF5722), Color(0xFFFF9800))
+                            colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
                         )
                     )
             )
@@ -89,7 +89,7 @@ fun ActiveCaloriesBar(
             "$currentCalories",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF5722)
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }
@@ -583,7 +583,7 @@ fun NutritionScreen(
                     // Workout / Rest day oznaka
                     if (plan != null) {
                         val dayLabel = if (isWorkoutDayToday) "🏋️ Workout day" else "😴 Rest day"
-                        val labelColor = if (isWorkoutDayToday) Color(0xFF6366F1) else Color(0xFF9CA3AF)
+                        val labelColor = if (isWorkoutDayToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         Text(
                             text = dayLabel,
                             color = labelColor,
@@ -644,7 +644,7 @@ fun NutritionScreen(
                     if (userProfile.activityLevel != null || userProfile.gender != null) {
                         Text(
                             text = "💧 Cilj: ${adjustedWaterTarget} ml",
-                            color = Color(0xFF3B82F6),
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -675,10 +675,10 @@ fun NutritionScreen(
                 Icon(
                     painter = painterResource(android.R.drawable.ic_menu_info_details),
                     contentDescription = null,
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.background
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("OTHER MACROS", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("OTHER MACROS", color = MaterialTheme.colorScheme.background, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -726,10 +726,10 @@ fun NutritionScreen(
                     showMakeCustom = true
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976F6)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("MAKE CUSTOM MEALS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("MAKE CUSTOM MEALS", color = MaterialTheme.colorScheme.background, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -815,9 +815,10 @@ fun NutritionScreen(
     if (showMakeCustom) {
         MakeCustomMealsDialog(
             onDismiss = { showMakeCustom = false },
-            onSaved = { saved ->
+            onSaved = { saved, mealType ->
                 // Po shranjevanju takoj vpraĹˇamo kam dodaĹˇ; ÄŤipi se sami posodobijo prek snapshot listenerja
                 pendingCustomMeal = saved
+                chooseMealForCustom = mealType
                 showMakeCustom = false
                 askWhereToAdd = true
             }
@@ -957,7 +958,7 @@ fun NutritionScreen(
             onDismissRequest = { showOtherMacros = false },
             confirmButton = {
                 TextButton(onClick = { showOtherMacros = false }) {
-                    Text("Close", color = DrawerBlue)
+                    Text("Close", color = MaterialTheme.colorScheme.tertiary)
                 }
             },
             title = {
@@ -1021,7 +1022,7 @@ fun NutritionScreen(
                             NutritionDetailRow(
                                 "đźŤŚ Potassium",
                                 String.format(Locale.US, "%.0f mg", consumedPotassium),
-                                Color(0xFF3B82F6),
+                                MaterialTheme.colorScheme.primary,
                                 textColor // Pass textColor here
                             )
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

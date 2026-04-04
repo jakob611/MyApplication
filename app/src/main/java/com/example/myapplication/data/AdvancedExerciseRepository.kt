@@ -6,45 +6,56 @@ import com.google.gson.reflect.TypeToken
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStreamReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object AdvancedExerciseRepository {
     private var exercises: List<RefinedExercise> = emptyList()
     private var availableEquipment: Set<String> = emptySet()
 
-    // Muscle name mapping if needed (e.g. "Trebuh / Core" -> "Abs")
-    // For now we use the keys directly.
+    // Add initialization state tracking
+    var isInitialized: Boolean = false
+        private set
 
-    fun init(context: Context) {
-        if (exercises.isNotEmpty()) return // Already loaded
+    // Muscle name mapping is handled dynamically via JSON keys.
 
-        try {
-            // Updated to use the new standard JSON file
-            val inputStream = context.assets.open("exercises.json")
-            val reader = InputStreamReader(inputStream)
-            val jsonString = reader.readText()
-            reader.close()
+    suspend fun init(context: Context) {
+        if (exercises.isNotEmpty()) {
+            isInitialized = true
+            return // Already loaded
+        }
 
-            val jsonArray = JSONArray(jsonString)
-            val parsedList = mutableListOf<RefinedExercise>()
-            val equipmentSet = mutableSetOf<String>()
+        withContext(Dispatchers.IO) {
+            try {
+                // Updated to use the new standard JSON file
+                val inputStream = context.assets.open("exercises.json")
+                val reader = InputStreamReader(inputStream)
+                val jsonString = reader.readText()
+                reader.close()
 
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                parsedList.add(parseExercise(obj))
+                val jsonArray = JSONArray(jsonString)
+                val parsedList = mutableListOf<RefinedExercise>()
+                val equipmentSet = mutableSetOf<String>()
 
-                // Add equipment
-                val eqRaw = obj.optString("equipment", "bodyweight").lowercase()
-                eqRaw.split(",").map { it.trim() }.forEach {
-                    if (it.isNotEmpty()) equipmentSet.add(it)
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    parsedList.add(parseExercise(obj))
+
+                    // Add equipment
+                    val eqRaw = obj.optString("equipment", "bodyweight").lowercase()
+                    eqRaw.split(",").map { it.trim() }.forEach {
+                        if (it.isNotEmpty()) equipmentSet.add(it)
+                    }
                 }
+
+                exercises = parsedList
+                availableEquipment = equipmentSet.toSortedSet()
+                isInitialized = true
+
+                android.util.Log.d("AdvancedExerciseRepo", "Loaded ${exercises.size} exercises and ${availableEquipment.size} equipment types.")
+            } catch (e: Exception) {
+                android.util.Log.e("AdvancedExerciseRepo", "Error loading exercises: ${e.message}")
             }
-
-            exercises = parsedList
-            availableEquipment = equipmentSet.toSortedSet()
-
-            android.util.Log.d("AdvancedExerciseRepo", "Loaded ${exercises.size} exercises and ${availableEquipment.size} equipment types.")
-        } catch (e: Exception) {
-            android.util.Log.e("AdvancedExerciseRepo", "Error loading exercises: ${e.message}")
         }
     }
 

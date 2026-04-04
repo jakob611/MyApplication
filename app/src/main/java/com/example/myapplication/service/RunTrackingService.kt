@@ -21,6 +21,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.myapplication.MainActivity
 import com.example.myapplication.R
+import com.example.myapplication.data.ActivityType
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -54,6 +55,7 @@ class RunTrackingService : Service() {
         const val ACTION_STOP = "com.example.myapplication.action.STOP_TRACKING"
         const val ACTION_PAUSE = "com.example.myapplication.action.PAUSE_TRACKING"
         const val ACTION_RESUME = "com.example.myapplication.action.RESUME_TRACKING"
+        const val EXTRA_ACTIVITY_TYPE = "extra_activity_type"
 
         // Singleton instance for binding
         private var instance: RunTrackingService? = null
@@ -146,6 +148,14 @@ class RunTrackingService : Service() {
     private var lastLocation: Location? = null
     private var totalDistance = 0.0
     private var speedReadings = mutableListOf<Float>()
+    private var currentActivityType: ActivityType = ActivityType.RUN
+
+    private data class GpsProfile(
+        val intervalMs: Long,
+        val minIntervalMs: Long,
+        val maxDelayMs: Long,
+        val minDistanceM: Float
+    )
 
     override fun onCreate() {
         super.onCreate()
@@ -167,7 +177,10 @@ class RunTrackingService : Service() {
         Log.d(TAG, "Service onStartCommand: ${intent?.action}")
 
         when (intent?.action) {
-            ACTION_START -> startTracking()
+            ACTION_START -> {
+                currentActivityType = ActivityType.fromString(intent.getStringExtra(EXTRA_ACTIVITY_TYPE))
+                startTracking()
+            }
             ACTION_STOP -> stopTracking()
             ACTION_PAUSE -> pauseTracking()
             ACTION_RESUME -> resumeTracking()
@@ -303,11 +316,19 @@ class RunTrackingService : Service() {
         // Start foreground service with notification
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // Create location request - HIGH ACCURACY for running
-        val locationRequest = LocationRequest.Builder(2000) // Update every 2 seconds
+        // Activity-aware GPS profile: walk/hike manj pogosto, sprint/run bolj pogosto.
+        val gpsProfile = resolveGpsProfile(currentActivityType)
+        Log.d(
+            TAG,
+            "GPS profile for ${currentActivityType.name}: interval=${gpsProfile.intervalMs}ms, min=${gpsProfile.minIntervalMs}ms, maxDelay=${gpsProfile.maxDelayMs}ms, minDistance=${gpsProfile.minDistanceM}m"
+        )
+
+        // Create location request - high accuracy with activity-adapted cadence
+        val locationRequest = LocationRequest.Builder(gpsProfile.intervalMs)
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-            .setMinUpdateIntervalMillis(1000) // Minimum 1 second between updates
-            .setMaxUpdateDelayMillis(3000) // Max delay 3 seconds
+            .setMinUpdateIntervalMillis(gpsProfile.minIntervalMs)
+            .setMaxUpdateDelayMillis(gpsProfile.maxDelayMs)
+            .setMinUpdateDistanceMeters(gpsProfile.minDistanceM)
             .build()
 
         // Create location callback
@@ -459,6 +480,49 @@ class RunTrackingService : Service() {
             "%d:%02d:%02d".format(hours, minutes, secs)
         } else {
             "%02d:%02d".format(minutes, secs)
+        }
+    }
+
+    private fun resolveGpsProfile(activityType: ActivityType): GpsProfile {
+        return when (activityType) {
+            ActivityType.SPRINT -> GpsProfile(
+                intervalMs = 1000,
+                minIntervalMs = 500,
+                maxDelayMs = 1500,
+                minDistanceM = 0f
+            )
+
+            ActivityType.RUN -> GpsProfile(
+                intervalMs = 2000,
+                minIntervalMs = 1000,
+                maxDelayMs = 3000,
+                minDistanceM = 1.5f
+            )
+
+            ActivityType.CYCLING,
+            ActivityType.SKATING -> GpsProfile(
+                intervalMs = 3000,
+                minIntervalMs = 1500,
+                maxDelayMs = 5000,
+                minDistanceM = 3f
+            )
+
+            ActivityType.WALK,
+            ActivityType.HIKE,
+            ActivityType.NORDIC -> GpsProfile(
+                intervalMs = 6000,
+                minIntervalMs = 3000,
+                maxDelayMs = 9000,
+                minDistanceM = 6f
+            )
+
+            ActivityType.SKIING,
+            ActivityType.SNOWBOARD -> GpsProfile(
+                intervalMs = 4000,
+                minIntervalMs = 2000,
+                maxDelayMs = 6000,
+                minDistanceM = 4f
+            )
         }
     }
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,7 @@ fun ProFeaturesScreen(
     val bgColor = MaterialTheme.colorScheme.background
     val textColor = MaterialTheme.colorScheme.onBackground
     val grayPillColor = if (isSystemInDarkTheme()) Color.DarkGray else Color(0xFFE0E0E0)
-    val bluePillColor = Color(0xFF2196F3)
+    val bluePillColor = MaterialTheme.colorScheme.primary
     val bluePillTextColor = Color.White
     Column(
         modifier = modifier
@@ -145,11 +146,11 @@ fun FeatureRow(leftText: String, rightText: String, leftBgColor: Color, leftText
 }
 @Composable
 fun PlanCard(title: String, price: String, subtitle: String, isSelected: Boolean, modifier: Modifier = Modifier, badgeText: String? = null, onClick: () -> Unit) {
-    Box(modifier = modifier.height(160.dp).clip(RoundedCornerShape(16.dp)).background(if (isSelected) Color(0xFF2196F3).copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant).border(if (isSelected) 3.dp else 0.dp, if (isSelected) Color(0xFF2196F3) else Color.Transparent, RoundedCornerShape(16.dp)).clickable { onClick() }) {
+    Box(modifier = modifier.height(160.dp).clip(RoundedCornerShape(16.dp)).background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant).border(if (isSelected) 3.dp else 0.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(16.dp)).clickable { onClick() }) {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = price, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = if (isSelected) Color(0xFF2196F3) else MaterialTheme.colorScheme.onSurface)
+            Text(text = price, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (badgeText != null) {
@@ -158,7 +159,7 @@ fun PlanCard(title: String, price: String, subtitle: String, isSelected: Boolean
             }
         }
         if (isSelected) {
-            Icon(imageVector = Icons.Default.Check, contentDescription = "Selected", tint = Color(0xFF2196F3), modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(24.dp))
+            Icon(imageVector = Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(24.dp))
         }
     }
 }

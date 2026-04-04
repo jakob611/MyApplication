@@ -17,7 +17,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.ui.res.painterResource
+import com.example.myapplication.R
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -38,48 +43,53 @@ import com.example.myapplication.ui.screens.GenderCache
 // -----------------------------------------------------------------------
 @Composable
 fun GlobalHeaderBar(
+    isOnline: Boolean = true,
     onOpenMenu: () -> Unit,
     onProClick: () -> Unit
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
-            modifier = Modifier
-                .statusBarsPadding()
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ElevatedCard(
-                onClick = onOpenMenu,
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = DrawerBlue),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+        Column {
+            Row(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = "User's\nStickman",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
+                ElevatedCard(
+                    onClick = onOpenMenu,
+                    modifier = Modifier.size(56.dp),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_muscular_stickman),
+                            contentDescription = "Menu Avatar",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
-            }
 
-            Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(1f))
 
-            AssistChip(
-                onClick = onProClick,
-                label = {
-                    Text("Upgrade to Premium", color = Color.White, fontWeight = FontWeight.SemiBold)
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = DrawerBlue,
-                    labelColor = Color.White
+                AssistChip(
+                    onClick = onProClick,
+                    label = {
+                        Text("Upgrade to Premium", style = MaterialTheme.typography.labelLarge)
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary,
+                        labelColor = MaterialTheme.colorScheme.onTertiary
+                    ),
+                    shape = MaterialTheme.shapes.large
                 )
-            )
+            }
         }
     }
 }
@@ -104,11 +114,11 @@ fun FigmaDrawerContent(
     onNavigateToHealthConnect: () -> Unit = {},
     onNavigateToMyAccount: () -> Unit
 ) {
-    val PrimaryBlue = Color(0xFF2563EB)
-    val SheetBg = if (isDarkMode) Color(0xFF1F2937) else Color.White
-    val CardBg = if (isDarkMode) Color(0xFF374151) else Color(0xFFF3F4F6)
-    val TextPrimary = if (isDarkMode) Color.White else Color.Black
-    val TextSecondary = if (isDarkMode) Color(0xFFD1D5DB) else Color(0xFF6B7280)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
+    val SheetBg = MaterialTheme.colorScheme.surface
+    val CardBg = MaterialTheme.colorScheme.surfaceVariant
+    val TextPrimary = MaterialTheme.colorScheme.onSurface
+    val TextSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val context = LocalContext.current
 
     var isEditingPersonal by remember { mutableStateOf(false) }
@@ -157,18 +167,15 @@ fun FigmaDrawerContent(
             // 1. Stickman avatar
             Surface(
                 color = PrimaryBlue,
-                shape = RoundedCornerShape(28.dp),
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp).padding(vertical = 8.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = "User's\nStickman",
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        fontSize = 28.sp,
-                        lineHeight = 32.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(24.dp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_muscular_stickman),
+                        contentDescription = "Stickman Avatar",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(100.dp).padding(16.dp)
                     )
                 }
             }
@@ -178,15 +185,15 @@ fun FigmaDrawerContent(
             // 2. Stats (Level, XP, Followers, Badges)
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(16.dp)).clickable { onNavigateToLevelPath() }
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth().shadow(8.dp, MaterialTheme.shapes.large).clickable { onNavigateToLevelPath() }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // Level & XP header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(PrimaryBlue.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                            .background(PrimaryBlue.copy(alpha = 0.1f), MaterialTheme.shapes.medium)
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -196,7 +203,7 @@ fun FigmaDrawerContent(
                             Text("${userProfile.level}", color = PrimaryBlue, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                         }
                         Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                            Text("⭐ ${userProfile.xp}", color = Color(0xFFFEE440), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("⭐ ${userProfile.xp}", color = MaterialTheme.colorScheme.secondary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             Text("Total XP", color = TextSecondary, fontSize = 11.sp)
                         }
                     }
@@ -219,17 +226,15 @@ fun FigmaDrawerContent(
                         Spacer(Modifier.height(8.dp))
                         Box(
                             modifier = Modifier.fillMaxWidth().height(12.dp)
-                                .background(TextSecondary.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
-                                .clip(RoundedCornerShape(6.dp))
+                                .background(TextSecondary.copy(alpha = 0.2f), MaterialTheme.shapes.small)
+                                .clip(MaterialTheme.shapes.small)
                         ) {
                             Box(
                                 modifier = Modifier.fillMaxHeight()
                                     .fillMaxWidth(userProfile.progressToNextLevel)
                                     .background(
-                                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                            colors = listOf(PrimaryBlue, Color(0xFF60A5FA))
-                                        ),
-                                        shape = RoundedCornerShape(6.dp)
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        shape = MaterialTheme.shapes.small
                                     )
                             )
                         }
@@ -272,12 +277,15 @@ fun FigmaDrawerContent(
             Button(
                 onClick = { onNavigateToHealthConnect(); onClose() },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = MaterialTheme.shapes.large
             ) {
                 Icon(Icons.Filled.HealthAndSafety, "Health Connect", modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Connect with Health Connect", fontWeight = FontWeight.SemiBold)
+                Text("Sync health data", fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -297,7 +305,7 @@ fun FigmaDrawerContent(
             // 5. Settings & Privacy
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -409,7 +417,7 @@ fun FigmaDrawerContent(
             // 6. Equipment
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth().clickable { showEquipmentDialog = true }
             ) {
                 Row(
@@ -436,7 +444,7 @@ fun FigmaDrawerContent(
             // 7. Info & Support
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -454,7 +462,7 @@ fun FigmaDrawerContent(
             // 8. Personal Data
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -516,8 +524,11 @@ fun FigmaDrawerContent(
             Button(
                 onClick = { onNavigateToMyAccount(); onClose() },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray.copy(alpha = 0.2f), contentColor = TextPrimary),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                shape = MaterialTheme.shapes.large
             ) { Text("My Account", fontWeight = FontWeight.SemiBold) }
 
             Spacer(Modifier.height(8.dp))
@@ -527,8 +538,11 @@ fun FigmaDrawerContent(
             Button(
                 onClick = { showLogoutDialog = true },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = MaterialTheme.shapes.large
             ) { Text("Log out", fontWeight = FontWeight.SemiBold) }
 
             if (showLogoutDialog) {

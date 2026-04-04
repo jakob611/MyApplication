@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,7 +21,7 @@ import androidx.compose.ui.unit.sp
 fun HairModuleScreen(
     onBack: () -> Unit
 ) {
-    val PrimaryBlue = Color(0xFF2563EB)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier
@@ -93,7 +94,7 @@ private fun ActionBullet(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
         Surface(
             shape = RoundedCornerShape(50),
-            color = Color(0xFF2563EB),
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(10.dp)
         ) {}
         Spacer(Modifier.width(8.dp))

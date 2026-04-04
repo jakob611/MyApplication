@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Head -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:fillColor="#00000000" android:pathData="M50,15m-10,0a10,10 0,1 1,20,0a10,10 0,1 1,-20,0" />
+
+    <!-- Traps / Shoulders -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M38,22 Q50,25 62,22" />
+
+    <!-- Torso -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M28,32 C35,55 45,60 50,60 C55,60 65,55 72,32 Z" />
+
+    <!-- Left Arm Flexed (left of canvas view) -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M28,32 Q10,35 15,20 Q20,10 25,25" />
+
+    <!-- Right Arm Flexed (right of canvas view) -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M72,32 Q90,35 85,20 Q80,10 75,25" />
+
+    <!-- Left Leg -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M45,60 L38,90 L30,90" />
+
+    <!-- Right Leg -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M55,60 L62,90 L70,90" />
+
+</vector>

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,13 +85,13 @@ fun FaceModuleScreen(
                     Icon(
                         Icons.Filled.AutoAwesome,
                         contentDescription = "Golden Ratio",
-                        tint = Color(0xFFFEE440),
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(50.dp)
                     )
                 },
                 onClick = onGoldenRatioClick,
                 cardColor = MaterialTheme.colorScheme.surface,
-                borderColor = Color(0xFFFEE440)
+                borderColor = MaterialTheme.colorScheme.secondary
             )
 
             // Skincare Card
@@ -124,7 +125,7 @@ fun FaceModuleScreen(
                     )
                 },
                 onClick = { showExercises = true },
-                cardColor = Color(0xFF1A2435),
+                cardColor = MaterialTheme.colorScheme.surfaceVariant,
                 borderColor = Color(0xFF33aaff),
                 comingSoon = false
             )
@@ -244,7 +245,7 @@ fun FaceExerciseDialog(onDismiss: () -> Unit) {
      Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2435))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Jawline Sharpener", style = MaterialTheme.typography.titleLarge, color = Color(0xFF33aaff))

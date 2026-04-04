@@ -23,10 +23,15 @@ data class UserProfile(
     val isPublicProfile: Boolean = false,
     val showLevel: Boolean = false,
     val showBadges: Boolean = false,
+    val showStreak: Boolean = false, // Added showStreak
     val showPlanPath: Boolean = false,
     val showChallenges: Boolean = false,
     val showFollowers: Boolean = false,
     val shareActivities: Boolean = false, // Deli aktivnosti (teki, kolesarjenje...) s followerji
+    // Notification preferences
+    val quietHoursStart: String = "22:00",
+    val quietHoursEnd: String = "07:00",
+    val muteStreakReminders: Boolean = false,
     // Achievement tracking
     val totalWorkoutsCompleted: Int = 0,
     val totalCaloriesBurned: Double = 0.0,

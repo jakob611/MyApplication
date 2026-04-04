@@ -23,10 +23,15 @@ object UserPreferences {
     const val KEY_WEIGHT_UNIT = "weight_unit"
     const val KEY_SPEED_UNIT = "speed_unit"
     const val KEY_START_OF_WEEK = "start_of_week"
+    // Notification keys
+    private const val KEY_QUIET_HOURS_START = "quiet_hours_start"
+    private const val KEY_QUIET_HOURS_END = "quiet_hours_end"
+    private const val KEY_MUTE_STREAK = "mute_streak_reminders"
     // Privacy settings keys
     private const val KEY_IS_PUBLIC = "is_public_profile"
     private const val KEY_SHOW_LEVEL = "show_level"
     private const val KEY_SHOW_BADGES = "show_badges"
+    private const val KEY_SHOW_STREAK = "show_streak" // Added show streak
     private const val KEY_SHOW_PLAN_PATH = "show_plan_path"
     private const val KEY_SHOW_CHALLENGES = "show_challenges"
     private const val KEY_SHOW_FOLLOWERS = "show_followers"
@@ -64,12 +69,17 @@ object UserPreferences {
             putString(userKey(profile.email, KEY_WEIGHT_UNIT), profile.weightUnit)
             putString(userKey(profile.email, KEY_SPEED_UNIT), profile.speedUnit)
             putString(userKey(profile.email, KEY_START_OF_WEEK), profile.startOfWeek)
+            // Notification settings
+            putString(userKey(profile.email, KEY_QUIET_HOURS_START), profile.quietHoursStart)
+            putString(userKey(profile.email, KEY_QUIET_HOURS_END), profile.quietHoursEnd)
+            putBoolean(userKey(profile.email, KEY_MUTE_STREAK), profile.muteStreakReminders)
             // Display settings
             putBoolean(userKey(profile.email, "detailed_calories"), profile.detailedCalories)
             // Privacy settings
             putBoolean(userKey(profile.email, KEY_IS_PUBLIC), profile.isPublicProfile)
             putBoolean(userKey(profile.email, KEY_SHOW_LEVEL), profile.showLevel)
             putBoolean(userKey(profile.email, KEY_SHOW_BADGES), profile.showBadges)
+            putBoolean(userKey(profile.email, KEY_SHOW_STREAK), profile.showStreak) // Save show streak
             putBoolean(userKey(profile.email, KEY_SHOW_PLAN_PATH), profile.showPlanPath)
             putBoolean(userKey(profile.email, KEY_SHOW_CHALLENGES), profile.showChallenges)
             putBoolean(userKey(profile.email, KEY_SHOW_FOLLOWERS), profile.showFollowers)
@@ -117,12 +127,17 @@ object UserPreferences {
             weightUnit = prefs.getString(userKey(email, KEY_WEIGHT_UNIT), "kg") ?: "kg",
             speedUnit = prefs.getString(userKey(email, KEY_SPEED_UNIT), "km/h") ?: "km/h",
             startOfWeek = prefs.getString(userKey(email, KEY_START_OF_WEEK), "Monday") ?: "Monday",
+            // Notification settings
+            quietHoursStart = prefs.getString(userKey(email, KEY_QUIET_HOURS_START), "22:00") ?: "22:00",
+            quietHoursEnd = prefs.getString(userKey(email, KEY_QUIET_HOURS_END), "07:00") ?: "07:00",
+            muteStreakReminders = prefs.getBoolean(userKey(email, KEY_MUTE_STREAK), false),
             // Display settings
             detailedCalories = prefs.getBoolean(userKey(email, "detailed_calories"), false),
             // Privacy settings
             isPublicProfile = prefs.getBoolean(userKey(email, KEY_IS_PUBLIC), false),
             showLevel = prefs.getBoolean(userKey(email, KEY_SHOW_LEVEL), false),
             showBadges = prefs.getBoolean(userKey(email, KEY_SHOW_BADGES), false),
+            showStreak = prefs.getBoolean(userKey(email, KEY_SHOW_STREAK), false), // Load show streak
             showPlanPath = prefs.getBoolean(userKey(email, KEY_SHOW_PLAN_PATH), false),
             showChallenges = prefs.getBoolean(userKey(email, KEY_SHOW_CHALLENGES), false),
             showFollowers = prefs.getBoolean(userKey(email, KEY_SHOW_FOLLOWERS), false),
@@ -191,7 +206,7 @@ object UserPreferences {
     }
 
     // Firestore: save/load full user profile (remote single source of truth)
-    suspend fun saveProfileFirestore(profile: UserProfile) {
+    suspend fun saveProfileFirestore(profile: UserProfile, batch: com.google.firebase.firestore.WriteBatch? = null) {
         Log.d("UserPreferences", "🔥 saveProfileFirestore CALLED! email=${profile.email}, height=${profile.height}, age=${profile.age}, gender=${profile.gender}")
         if (profile.email.isBlank()) {
             Log.e("UserPreferences", "❌ Email is blank!")
@@ -222,10 +237,15 @@ object UserPreferences {
             KEY_WEIGHT_UNIT to profile.weightUnit,
             KEY_SPEED_UNIT to profile.speedUnit,
             KEY_START_OF_WEEK to profile.startOfWeek,
+            // Notification settings
+            KEY_QUIET_HOURS_START to profile.quietHoursStart,
+            KEY_QUIET_HOURS_END to profile.quietHoursEnd,
+            KEY_MUTE_STREAK to profile.muteStreakReminders,
             "detailed_calories" to profile.detailedCalories,
             KEY_IS_PUBLIC to profile.isPublicProfile,
             KEY_SHOW_LEVEL to profile.showLevel,
             KEY_SHOW_BADGES to profile.showBadges,
+            KEY_SHOW_STREAK to profile.showStreak, // Save show streak
             KEY_SHOW_PLAN_PATH to profile.showPlanPath,
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
@@ -253,10 +273,15 @@ object UserPreferences {
         if (!profile.sleepHours.isNullOrBlank()) data["sleepHours"] = profile.sleepHours
 
         try {
-            resolvedRef
-                .set(data, SetOptions.merge())
-                .await()
-            Log.d("UserPreferences", "✅ Profile SAVED to Firestore! doc=${resolvedRef.id}, height=${profile.height}, age=${profile.age}, gender=${profile.gender}")
+            if (batch != null) {
+                batch.set(resolvedRef, data, SetOptions.merge())
+                Log.d("UserPreferences", "✅ Profile appended to Batch! doc=${resolvedRef.id}")
+            } else {
+                com.example.myapplication.persistence.FirestoreHelper.withRetry {
+                    resolvedRef.set(data, SetOptions.merge()).await()
+                }
+                Log.d("UserPreferences", "✅ Profile SAVED to Firestore! doc=${resolvedRef.id}, height=${profile.height}, age=${profile.age}, gender=${profile.gender}")
+            }
         } catch (e: Exception) {
             Log.e("UserPreferences", "❌ Error saving profile to Firestore", e)
             e.printStackTrace()
@@ -319,10 +344,14 @@ object UserPreferences {
         val weightUnit = doc.getString(KEY_WEIGHT_UNIT) ?: "kg"
         val speedUnit = doc.getString(KEY_SPEED_UNIT) ?: "km/h"
         val startOfWeek = doc.getString(KEY_START_OF_WEEK) ?: "Monday"
+        val quietHoursStart = doc.getString(KEY_QUIET_HOURS_START) ?: "22:00"
+        val quietHoursEnd = doc.getString(KEY_QUIET_HOURS_END) ?: "07:00"
+        val muteStreakReminders = doc.getBoolean(KEY_MUTE_STREAK) ?: false
         val detailedCalories = doc.getBoolean("detailed_calories") ?: false
         val isPublic = doc.getBoolean(KEY_IS_PUBLIC) ?: false
         val showLevel = doc.getBoolean(KEY_SHOW_LEVEL) ?: false
         val showBadges = doc.getBoolean(KEY_SHOW_BADGES) ?: false
+        val showStreak = doc.getBoolean(KEY_SHOW_STREAK) ?: false // Load show streak
         val showPlanPath = doc.getBoolean(KEY_SHOW_PLAN_PATH) ?: false
         val showChallenges = doc.getBoolean(KEY_SHOW_CHALLENGES) ?: false
         val showFollowers = doc.getBoolean(KEY_SHOW_FOLLOWERS) ?: false
@@ -354,8 +383,10 @@ object UserPreferences {
             streakFreezes = streakFreezes, // Load from doc
             equipment = equipment, focusAreas = focusAreas, workoutGoal = workoutGoal,
             weightUnit = weightUnit, speedUnit = speedUnit, startOfWeek = startOfWeek,
+            quietHoursStart = quietHoursStart, quietHoursEnd = quietHoursEnd, muteStreakReminders = muteStreakReminders,
             detailedCalories = detailedCalories,
             isPublicProfile = isPublic, showLevel = showLevel, showBadges = showBadges,
+            showStreak = showStreak, // Load show streak
             showPlanPath = showPlanPath, showChallenges = showChallenges, showFollowers = showFollowers,
             totalWorkoutsCompleted = totalWorkouts, totalCaloriesBurned = totalCalories,
             earlyBirdWorkouts = earlyBird, nightOwlWorkouts = nightOwl,
@@ -375,36 +406,22 @@ object UserPreferences {
         weeklyDone: Int,
         lastWorkoutEpoch: Long,
         planDay: Int = 1,
-        weeklyTarget: Int = 0
+        weeklyTarget: Int = 0,
+        batch: com.google.firebase.firestore.WriteBatch? = null
     ) {
-        try {
-            val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            val data = mutableMapOf<String, Any>(
-                "streak_days" to streak,
-                "total_workouts_completed" to totalWorkouts,
-                "weekly_done" to weeklyDone,
-                "last_workout_epoch" to lastWorkoutEpoch,
-                "plan_day" to planDay
-            )
-            if (weeklyTarget > 0) {
-                data["weekly_target"] = weeklyTarget
-            } else {
-                try {
-                    val existingDoc = resolvedRef.get().await()
-                    val existingTarget = (existingDoc.getLong("weekly_target") ?: 0L).toInt()
-                    if (existingTarget > 0) {
-                        data["weekly_target"] = existingTarget
-                    } else {
-                        val actLevel = existingDoc.getString("activityLevel")
-                        val parsed = actLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
-                        if (parsed != null && parsed > 0) data["weekly_target"] = parsed
-                    }
-                } catch (_: Exception) {}
-            }
-            resolvedRef.set(data, SetOptions.merge()).await()
-        } catch (e: Exception) {
-            Log.e("UserPreferences", "❌ Error saving workout stats to Firestore", e)
-            e.printStackTrace()
+        val data = mapOf(
+            "streak_days" to streak,
+            "total_workouts_completed" to totalWorkouts,
+            "weekly_done" to weeklyDone,
+            "last_workout_epoch" to lastWorkoutEpoch,
+            "plan_day" to planDay,
+            "weekly_target" to weeklyTarget
+        )
+        // Set merge
+        if (batch != null) {
+            batch.set(com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef(), data, SetOptions.merge())
+        } else {
+            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef().set(data, SetOptions.merge()).await()
         }
     }
 

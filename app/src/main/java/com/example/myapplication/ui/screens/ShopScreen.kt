@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,7 +37,7 @@ fun ShopScreen(
         vm.refreshData()
     }
 
-    val PrimaryBlue = Color(0xFF2563EB)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
     val products = remember {
         listOf(
             ShopItem("Microneedling Roller", "Promote collagen production.", "$19.99", R.drawable.ic_nutrition),
@@ -58,7 +59,7 @@ fun ShopScreen(
                 },
                 actions = {
                     Surface(
-                        color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
@@ -124,7 +125,7 @@ fun ShopScreen(
                 )
             }
 
-            items(products) { p -> ProductCard(p, PrimaryBlue) }
+            items(items = products, key = { it.name }) { p -> ProductCard(p, PrimaryBlue) }
         }
     }
 }
@@ -151,7 +152,7 @@ fun UpgradeItem(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(desc, fontSize = 13.sp, color = Color.Gray, lineHeight = 16.sp)
+                Text(desc, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                 if (owned.isNotEmpty()) {
                     Text("Owned: $owned", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 }
@@ -159,7 +160,7 @@ fun UpgradeItem(
             Button(
                 onClick = onClick,
                 enabled = canAfford,
-                colors = ButtonDefaults.buttonColors(containerColor = if (canAfford) MaterialTheme.colorScheme.primary else Color.Gray)
+                colors = ButtonDefaults.buttonColors(containerColor = if (canAfford) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             ) {
                 Text(cost)
             }

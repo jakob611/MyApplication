@@ -71,10 +71,28 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {}
     }
 
+    private var isSubscribed = false
+    private var paymentStatus: String? = null
+    
+    // Performance timer
+    private var coldStartEpochMs: Long = 0L
+
+    // Push notification permission launcher
+    private val requestNotificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            Log.d("MainActivity", "Notification permission granted: $isGranted")
+        }
+
     @Suppress("DEPRECATION")
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        coldStartEpochMs = android.os.SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
+
+        // Eager load AdvancedExerciseRepository in background immediately upon app startup
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            com.example.myapplication.data.AdvancedExerciseRepository.init(applicationContext)
+        }
 
         intentExtras.value = intent.extras
 
@@ -85,6 +103,12 @@ class MainActivity : ComponentActivity() {
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         setContent {
+            // First paint measurement
+            LaunchedEffect(Unit) {
+                val timeToPaint = android.os.SystemClock.elapsedRealtime() - coldStartEpochMs
+                Log.i("AppPerf", "🚀 First paint arrived at: $timeToPaint ms")
+            }
+
             val context = LocalContext.current
             val bodyOverviewViewModel: BodyOverviewViewmodel =
                 viewModel(factory = MyViewModelFactory())
@@ -93,6 +117,9 @@ class MainActivity : ComponentActivity() {
             val appViewModel: AppViewModel =
                 viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application))
             val userProfile by appViewModel.userProfile.collectAsState()
+
+            val networkObserver = remember { com.example.myapplication.utils.NetworkObserver(context) }
+            val isOnline by networkObserver.observe().collectAsState(initial = true)
 
             val navViewModel: NavigationViewModel = viewModel()
             val currentScreen by navViewModel.currentScreen.collectAsState()
@@ -126,6 +153,27 @@ class MainActivity : ComponentActivity() {
 
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
             val scope = rememberCoroutineScope()
+
+            // Notification Permission for Android 13+
+            val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission(),
+                onResult = { isGranted ->
+                    Log.d("MainActivity", "Notification permission granted: $isGranted")
+                }
+            )
+
+            LaunchedEffect(Unit) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    val hasPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (!hasPerm) {
+                        delay(500) // Wait for activity to settle
+                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
 
             // ----- Google Sign-In launcher -----
             val googleSignInLauncher = rememberLauncherForActivityResult(
@@ -308,7 +356,7 @@ class MainActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator(color = DrawerBlue) }
+                    ) { CircularProgressIndicator(color = MaterialTheme.colorScheme.tertiary) }
                 } else if (isLoggedIn) {
                     val enableDrawerGestures = when (currentScreen) {
                         is Screen.Dashboard, is Screen.Progress, is Screen.BodyModuleHome,
@@ -316,7 +364,7 @@ class MainActivity : ComponentActivity() {
                         is Screen.GoldenRatio, is Screen.HairModule, is Screen.Shop,
                         is Screen.Community, is Screen.MyAccount, is Screen.ExerciseHistory,
                         is Screen.ManualExerciseLog, is Screen.Nutrition -> true
-                        else -> currentScreen !is Screen.RunTracker
+                        else -> currentScreen !is Screen.RunTracker && currentScreen !is Screen.ActivityLog
                     }
 
                     ModalNavigationDrawer(
@@ -373,6 +421,7 @@ class MainActivity : ComponentActivity() {
                                 if (currentScreen is Screen.Dashboard || currentScreen is Screen.Progress ||
                                     currentScreen is Screen.Nutrition || currentScreen is Screen.Community) {
                                     GlobalHeaderBar(
+                                        isOnline = isOnline,
                                         onOpenMenu = {
                                             HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN)
                                             scope.launch { drawerState.open() }

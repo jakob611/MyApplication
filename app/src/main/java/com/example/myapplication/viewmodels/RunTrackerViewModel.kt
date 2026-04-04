@@ -12,19 +12,49 @@ import com.google.firebase.firestore.FirebaseFirestore
 class RunTrackerViewModel : ViewModel() {
 
     private val firestore = FirebaseFirestore.getInstance()
+    private var lastVisibleDoc: com.google.firebase.firestore.DocumentSnapshot? = null
+    var isLastPage = false
+        private set
 
     /**
-     * Naloži pretekle teke iz Firestore.
+     * Naloži pretekle teke iz Firestore z load-more paginacijo.
      */
-    fun loadRunSessions(onResult: (List<RunSession>) -> Unit) {
-        val userId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: return
+    fun loadRunSessions(isLoadMore: Boolean = false, onResult: (List<RunSession>) -> Unit) {
+        val userId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        if (userId == null) {
+            onResult(emptyList())
+            return
+        }
 
-        firestore.collection("users")
+        if (isLoadMore && isLastPage) {
+            onResult(emptyList())
+            return
+        }
+
+        var query = firestore.collection("users")
             .document(userId)
             .collection("runSessions")
             .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            .get()
+            .limit(15)
+
+        if (isLoadMore && lastVisibleDoc != null) {
+            query = query.startAfter(lastVisibleDoc!!)
+        } else if (!isLoadMore) {
+            lastVisibleDoc = null
+            isLastPage = false
+        }
+
+        query.get()
             .addOnSuccessListener { snapshot ->
+                if (snapshot.documents.isNotEmpty()) {
+                    lastVisibleDoc = snapshot.documents.last()
+                    if (snapshot.documents.size < 15) {
+                        isLastPage = true
+                    }
+                } else {
+                    isLastPage = true
+                }
+
                 val sessions = snapshot.documents.mapNotNull { doc ->
                     try {
                         val data = doc.data ?: return@mapNotNull null
@@ -42,7 +72,8 @@ class RunTrackerViewModel : ViewModel() {
                             caloriesKcal = (data["caloriesKcal"] as? Number)?.toInt() ?: 0,
                             elevationGainM = (data["elevationGainM"] as? Number)?.toFloat() ?: 0f,
                             elevationLossM = (data["elevationLossM"] as? Number)?.toFloat() ?: 0f,
-                            activityType = ActivityType.fromString(data["activityType"] as? String)
+                            activityType = ActivityType.fromString(data["activityType"] as? String),
+                            isSmoothed = data["isSmoothed"] as? Boolean ?: false
                         )
                     } catch (e: Exception) {
                         e.printStackTrace()

@@ -1,6 +1,8 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.myapplication.ui.screens
+
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 // =====================================================================
 // NutritionDialogs.kt
@@ -12,6 +14,8 @@ package com.example.myapplication.ui.screens
 // =====================================================================
 
 import android.util.Log
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,13 +26,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.network.FatSecretApi
 import com.example.myapplication.network.FoodDetail
-import com.example.myapplication.ui.theme.DrawerBlue
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
@@ -70,7 +73,7 @@ internal fun ChooseMealDialog(
                 },
                 enabled = !loading
             ) {
-                if (showSpinner) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = DrawerBlue)
+                if (showSpinner) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.tertiary)
                 else Text("Add")
             }
         },
@@ -102,6 +105,7 @@ internal fun AmountDialog(
     detail: FoodDetail,
     meal: MealType,
     barcode: String? = null,
+    customButtonText: String? = null,
     onCancel: () -> Unit,
     isImperial: Boolean,
     onConfirm: (TrackedFood) -> Unit
@@ -109,13 +113,16 @@ internal fun AmountDialog(
     val metricUnit = detail.metricServingUnit?.lowercase(Locale.US)
         ?.let { if (it == "g" || it == "ml") it else null }
 
-    var unit by remember {
-        mutableStateOf(
-            if (isImperial && (detail.servingDescription == "g" || detail.servingDescription == "ml")) "oz"
-            else detail.servingDescription
-        )
+    // User request: Default to servings (1), set proper defaults when switching
+    var unit by remember { mutableStateOf("servings") }
+    var amount by remember { mutableStateOf("1") }
+    
+    // Auto-select defaults on init (redundant but safe)
+    LaunchedEffect(Unit) {
+        amount = "1"
+        unit = "servings"
     }
-    var amount by remember { mutableStateOf(if (unit == "servings") "1" else "100") }
+
     val amountDouble = amount.toDoubleOrNull()
     val baseServingSize = detail.metricServingAmount ?: 100.0
 
@@ -145,8 +152,10 @@ internal fun AmountDialog(
     val textColor = MaterialTheme.colorScheme.onSurface
     val availableUnits = remember(metricUnit, isImperial) {
         val list = mutableListOf<String>()
-        if (isImperial) { list.add("oz"); list.add("servings"); list.add("g") }
-        else { list.add("g"); list.add("servings"); list.add("oz") }
+        // Always include main units
+        list.add("servings")
+        list.add("g")
+        list.add("oz")
         if (metricUnit != null && metricUnit != "g" && metricUnit != "ml" && !list.contains(metricUnit))
             list.add(metricUnit)
         list
@@ -163,7 +172,7 @@ internal fun AmountDialog(
                             name = detail.name,
                             meal = meal,
                             amount = amountDouble,
-                            unit = unit ?: "servings",
+                            unit = unit, 
                             caloriesKcal = preview.caloriesKcal ?: 0.0,
                             proteinG = preview.proteinG,
                             carbsG = preview.carbsG,
@@ -179,45 +188,48 @@ internal fun AmountDialog(
                     }
                 },
                 enabled = amountDouble != null && amountDouble > 0,
-                colors = ButtonDefaults.buttonColors(containerColor = DrawerBlue, contentColor = Color.White)
-            ) { Text("Add to ${meal.title}") }
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary, contentColor = MaterialTheme.colorScheme.background)
+            ) { Text(customButtonText ?: "Add to ${meal.title}") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
-        title = { Text(detail.name, style = MaterialTheme.typography.titleLarge, color = textColor) },
+        title = {
+            Column {
+                Text(detail.name, style = MaterialTheme.typography.titleLarge, color = textColor)
+                Spacer(Modifier.height(4.dp))
+                // User request: "Naj piše le na vrhu" - showing 1 serving nutrition
+                Text("Nutrition for 1 serving", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } 
+        },
         text = {
             Column {
-                if (metricUnit != null) {
-                    Row {
-                        AssistChip(onClick = { unit = metricUnit }, label = { Text(metricUnit.uppercase()) })
-                        Spacer(Modifier.width(8.dp))
-                        AssistChip(onClick = { unit = "servings" }, label = { Text("Servings") })
-                    }
-                } else {
-                    Text("No metric weight/volume available. Using servings.", fontSize = 12.sp, color = textColor)
-                }
+                // User request: "pri količinah pri vseh živilih je zmedeno. Naj piše le na vrhu"
+                // Removed complex labels, simplified input
+                
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = {
-                        val labelUnit = when (unit) { "g" -> "g"; "ml" -> "ml"; "oz" -> "oz"; else -> "servings" }
-                        Text("Amount ($labelUnit)")
-                    },
+                    label = { Text("Amount") }, // Simplified label
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+                
+                Spacer(Modifier.height(8.dp))
+                
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     availableUnits.forEach { u ->
                         FilterChip(
                             selected = unit == u,
                             onClick = {
-                                val currentVal = amount.toDoubleOrNull() ?: 0.0
-                                if (currentVal > 0) {
-                                    if (unit == "g" && u == "oz") amount = String.format(Locale.US, "%.1f", currentVal / 28.3495)
-                                    else if (unit == "oz" && u == "g") amount = String.format(Locale.US, "%.0f", currentVal * 28.3495)
-                                }
                                 unit = u
+                                // User request: Defaults -> servings=1, g/ml=100, oz=10
+                                amount = when (u) {
+                                    "servings" -> "1"
+                                    "g", "ml" -> "100"
+                                    "oz" -> "10"
+                                    else -> "1"
+                                }
                             },
                             label = { Text(u) }
                         )
@@ -228,9 +240,9 @@ internal fun AmountDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Cal: ${preview.caloriesKcal?.roundToInt() ?: 0}")
-                    Text("P: ${String.format(Locale.US, "%.1f", preview.proteinG ?: 0.0)}g")
-                    Text("C: ${String.format(Locale.US, "%.1f", preview.carbsG ?: 0.0)}g")
-                    Text("F: ${String.format(Locale.US, "%.1f", preview.fatG ?: 0.0)}g")
+                    Text("Protein: ${String.format(Locale.US, "%.1f", preview.proteinG ?: 0.0)}g")
+                    Text("Carbs: ${String.format(Locale.US, "%.1f", preview.carbsG ?: 0.0)}g")
+                    Text("Fat: ${String.format(Locale.US, "%.1f", preview.fatG ?: 0.0)}g")
                 }
             }
         },
@@ -250,7 +262,7 @@ internal fun TrackedFoodDetailDialog(
     var isLoading by remember { mutableStateOf(true) }
     var foodDetail by remember { mutableStateOf<FoodDetail?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val PrimaryBlue = Color(0xFF2563EB)
+    val PrimaryBlue = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(trackedFood) {
         isLoading = true
@@ -332,7 +344,7 @@ internal fun TrackedFoodDetailDialog(
                                         Color(0xFF10B981), MaterialTheme.colorScheme.onSurface)
                                 }
                                 trackedFood.carbsG?.let {
-                                    NutritionDetailRow("🍞 Carbohydrates", formatMacroWeight(it, userProfile.weightUnit),
+                                    NutritionDetailRow("🍞 Carbs", formatMacroWeight(it, userProfile.weightUnit),
                                         Color(0xFFF59E0B), MaterialTheme.colorScheme.onSurface)
                                 }
                                 trackedFood.fatG?.let {
@@ -375,7 +387,7 @@ internal fun TrackedFoodDetailDialog(
                                     }
                                     trackedFood.potassiumMg?.takeIf { it > 0 }?.let {
                                         NutritionDetailRow("🍌 Potassium", String.format(Locale.US, "%.0f mg", it),
-                                            Color(0xFF3B82F6), MaterialTheme.colorScheme.onSurface)
+                                            MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onSurface)
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                                     }
                                     trackedFood.cholesterolMg?.takeIf { it > 0 }?.let {
@@ -396,14 +408,19 @@ internal fun TrackedFoodDetailDialog(
 // -----------------------------------------------------------------------
 // MakeCustomMealsDialog — ustvarjanje in shranjevanje custom obrokov
 // -----------------------------------------------------------------------
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 internal fun MakeCustomMealsDialog(
     onDismiss: () -> Unit,
-    onSaved: (SavedCustomMeal) -> Unit
+    onSaved: (SavedCustomMeal, MealType) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var step by remember { mutableStateOf(1) } // 1: Choose Meal, 2: Ingredients, 3: Name & Confirm
+    var selectedMeal by remember { mutableStateOf(MealType.Lunch) }
     var name by remember { mutableStateOf("") }
     var ingredients by remember { mutableStateOf<List<TrackedFood>>(emptyList()) }
     var showFoodSearch by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val totalKcal = ingredients.sumOf { it.caloriesKcal }
     val totalProtein = ingredients.sumOf { it.proteinG ?: 0.0 }
@@ -412,72 +429,133 @@ internal fun MakeCustomMealsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Custom Meal") },
+        title = {
+            Text(
+                when (step) {
+                    1 -> "Step 1: Choose Meal Type"
+                    2 -> "Step 2: Add Ingredients"
+                    else -> "Step 3: Save Custom Meal"
+                }
+            )
+        },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text("Meal Name") }, modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("Ingredients:", style = MaterialTheme.typography.titleMedium)
-                ingredients.forEach { item ->
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Text("${item.name} (${item.amount.toInt()} ${item.unit})",
-                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        IconButton(onClick = { ingredients = ingredients - item }) {
-                            Icon(Icons.Filled.Close, "Remove")
+            androidx.compose.animation.AnimatedContent(targetState = step, label = "wizard_step") { targetStep ->
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()).fillMaxWidth()) {
+                    when (targetStep) {
+                        1 -> {
+                            Text("Which meal are you creating this for?", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(16.dp))
+                            MealType.entries.forEach { mt ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedMeal = mt }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(selected = selectedMeal == mt, onClick = { selectedMeal = mt })
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(mt.title, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+                        2 -> {
+                            Text("Selected: ${selectedMeal.title}", fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(16.dp))
+                            ingredients.forEach { item ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text("${item.name} (${item.amount.toInt()} ${item.unit})", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                    IconButton(onClick = { ingredients = ingredients - item }) {
+                                        Icon(Icons.Filled.Close, "Remove")
+                                    }
+                                }
+                            }
+                            Button(onClick = { showFoodSearch = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                Text("Add Ingredient")
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            if (ingredients.isNotEmpty()) {
+                                Text("Total: ${totalKcal.roundToInt()} kcal", fontWeight = FontWeight.Bold)
+                                Text("Protein: ${totalProtein.roundToInt()}g, Carbs: ${totalCarbs.roundToInt()}g, Fat: ${totalFat.roundToInt()}g", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        3 -> {
+                            Text("Give your meal a name to save it for later.", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(16.dp))
+                            OutlinedTextField(
+                                value = name, onValueChange = { name = it },
+                                label = { Text("Meal Name") }, modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text("Summary: ${ingredients.size} items, ${totalKcal.roundToInt()} kcal", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                }
-                Button(onClick = { showFoodSearch = true },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Text("Add Ingredient")
-                }
-                Spacer(Modifier.height(16.dp))
-                if (ingredients.isNotEmpty()) {
-                    Text("Total: ${totalKcal.roundToInt()} kcal", fontWeight = FontWeight.Bold)
-                    Text("P: ${totalProtein.roundToInt()}g, C: ${totalCarbs.roundToInt()}g, F: ${totalFat.roundToInt()}g",
-                        style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank() && ingredients.isNotEmpty()) {
-                        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                        if (uid != null) {
-                            val itemsList = ingredients.map { tf ->
-                                mapOf(
-                                    "id" to tf.id, "name" to tf.name,
-                                    "amt" to tf.amount.toString(), "unit" to tf.unit,
-                                    "caloriesKcal" to tf.caloriesKcal,
-                                    "proteinG" to (tf.proteinG ?: 0.0), "carbsG" to (tf.carbsG ?: 0.0),
-                                    "fatG" to (tf.fatG ?: 0.0), "fiberG" to (tf.fiberG ?: 0.0),
-                                    "sugarG" to (tf.sugarG ?: 0.0), "saturatedFatG" to (tf.saturatedFatG ?: 0.0),
-                                    "sodiumMg" to (tf.sodiumMg ?: 0.0), "potassiumMg" to (tf.potassiumMg ?: 0.0),
-                                    "cholesterolMg" to (tf.cholesterolMg ?: 0.0)
-                                )
-                            }
-                            val mealData = mapOf(
-                                "name" to name, "items" to itemsList,
-                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                            )
-                            Firebase.firestore
-                                .collection("users").document(uid)
-                                .collection("customMeals").add(mealData)
-                                .addOnSuccessListener { ref: com.google.firebase.firestore.DocumentReference ->
-                                    onSaved(SavedCustomMeal(ref.id, name, itemsList))
+            when (step) {
+                1 -> Button(onClick = { step = 2 }) { Text("Next") }
+                2 -> Button(onClick = { step = 3 }, enabled = ingredients.isNotEmpty()) { Text("Next") }
+                3 -> {
+                    Button(
+                        onClick = {
+                            if (isSaving) return@Button
+                            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                            if (uid != null) {
+                                isSaving = true
+                                val itemsList = ingredients.map { tf ->
+                                    mapOf(
+                                        "id" to tf.id, "name" to tf.name,
+                                        "amt" to tf.amount.toString(), "unit" to tf.unit,
+                                        "caloriesKcal" to tf.caloriesKcal,
+                                        "proteinG" to (tf.proteinG ?: 0.0), "carbsG" to (tf.carbsG ?: 0.0),
+                                        "fatG" to (tf.fatG ?: 0.0), "fiberG" to (tf.fiberG ?: 0.0),
+                                        "sugarG" to (tf.sugarG ?: 0.0), "saturatedFatG" to (tf.saturatedFatG ?: 0.0),
+                                        "sodiumMg" to (tf.sodiumMg ?: 0.0), "potassiumMg" to (tf.potassiumMg ?: 0.0),
+                                        "cholesterolMg" to (tf.cholesterolMg ?: 0.0)
+                                    )
                                 }
+                                val mealData = mapOf(
+                                    "name" to name, "items" to itemsList,
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                                        docRef.collection("customMeals").add(mealData)
+                                            .addOnSuccessListener { ref ->
+                                                onSaved(SavedCustomMeal(ref.id, name, itemsList), selectedMeal)
+                                                isSaving = false
+                                            }
+                                            .addOnFailureListener {
+                                                isSaving = false
+                                            }
+                                    } catch (_: Exception) {
+                                        isSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = name.isNotBlank() && !isSaving
+                    ) { 
+                        if (isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text("Save & Add") 
                         }
                     }
-                },
-                enabled = name.isNotBlank() && ingredients.isNotEmpty()
-            ) { Text("Save Meal") }
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            if (step > 1) {
+                TextButton(onClick = { step -= 1 }) { Text("Back") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
     )
 
     if (showFoodSearch) {
@@ -486,16 +564,20 @@ internal fun MakeCustomMealsDialog(
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             AddFoodSheet(
-                meal = MealType.Snacks,
+                meal = selectedMeal,
+                titleOverride = "Add Ingredient",
                 onClose = { showFoodSearch = false },
-                onAddTracked = { tf -> ingredients = ingredients + tf; showFoodSearch = false }
+                onAddTracked = { tf -> 
+                    ingredients = ingredients + tf
+                    showFoodSearch = false 
+                }
             )
         }
     }
 }
 
 // -----------------------------------------------------------------------
-// NutritionDetailRow — vrstica s label + value za prikaz makrov
+// NutritionDetailRow — vrstica z label + value za prikaz makrov
 // -----------------------------------------------------------------------
 @Composable
 fun NutritionDetailRow(
@@ -513,5 +595,3 @@ fun NutritionDetailRow(
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = valueColor)
     }
 }
-
-

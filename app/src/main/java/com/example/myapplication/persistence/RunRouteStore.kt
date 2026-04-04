@@ -1,6 +1,7 @@
 package com.example.myapplication.persistence
 
 import android.content.Context
+import com.example.myapplication.data.LocationPoint
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -18,28 +19,39 @@ object RunRouteStore {
         return File(dir, "$sessionId.json")
     }
 
-    /** Shrani seznam lat/lng točk za dani sessionId */
-    fun saveRoute(context: Context, sessionId: String, points: List<Pair<Double, Double>>) {
+    /** Shrani seznam lokacij in telemetrije za dani sessionId */
+    fun saveRoute(context: Context, sessionId: String, points: List<LocationPoint>) {
         if (points.isEmpty()) return
         val arr = JSONArray()
-        points.forEach { (lat, lng) ->
+        points.forEach { pt ->
             arr.put(JSONObject().apply {
-                put("lat", lat)
-                put("lng", lng)
+                put("lat", pt.latitude)
+                put("lng", pt.longitude)
+                put("alt", pt.altitude)
+                put("spd", pt.speed.toDouble())
+                put("acc", pt.accuracy.toDouble())
+                put("ts", pt.timestamp)
             })
         }
         routeFile(context, sessionId).writeText(arr.toString())
     }
 
-    /** Naloži seznam lat/lng točk za dani sessionId (ali null če ne obstaja) */
-    fun loadRoute(context: Context, sessionId: String): List<Pair<Double, Double>>? {
+    /** Naloži seznam lokacij za dani sessionId (ali null če ne obstaja) */
+    fun loadRoute(context: Context, sessionId: String): List<LocationPoint>? {
         val f = routeFile(context, sessionId)
         if (!f.exists()) return null
         return try {
             val arr = JSONArray(f.readText())
             List(arr.length()) { i ->
                 val obj = arr.getJSONObject(i)
-                Pair(obj.getDouble("lat"), obj.getDouble("lng"))
+                LocationPoint(
+                    latitude = obj.getDouble("lat"),
+                    longitude = obj.getDouble("lng"),
+                    altitude = obj.optDouble("alt", 0.0),
+                    speed = obj.optDouble("spd", 0.0).toFloat(),
+                    accuracy = obj.optDouble("acc", 0.0).toFloat(),
+                    timestamp = obj.optLong("ts", 0L)
+                )
             }
         } catch (_: Exception) {
             null

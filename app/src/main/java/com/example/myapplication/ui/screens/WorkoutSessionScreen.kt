@@ -41,6 +41,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.activity.compose.BackHandler
 import com.example.myapplication.data.AdvancedExerciseRepository
 import com.example.myapplication.data.RefinedExercise
 import com.example.myapplication.domain.WorkoutGenerator
@@ -52,17 +53,14 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.ui.platform.LocalDensity
 
 private fun getVideoUrlForExercise(exerciseName: String): String {
     val baseUrl = "https://storage.googleapis.com/fitness-videos-glowupp/"
     val normalizedName = exerciseName.trim().replace(Regex("[\\s-]+"), "_").replace(Regex("[^a-zA-Z0-9_]"), "")
     return "${baseUrl}${normalizedName}_Female.mp4"
-}
-
-private object ExerciseCache {
-    fun initAdvancedRepo(context: Context) {
-        AdvancedExerciseRepository.init(context)
-    }
 }
 
 private sealed class WorkoutState {
@@ -145,7 +143,8 @@ fun WorkoutSessionScreen(
     onBadgeUnlocked: (com.example.myapplication.data.Badge) -> Unit = {}
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { ExerciseCache.initAdvancedRepo(context) }
+    // Replaced ExerciseCache
+    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AdvancedExerciseRepository.init(context) } }
 
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
 
@@ -167,6 +166,37 @@ fun WorkoutSessionScreen(
 
     var currentSessionExercises by remember { mutableStateOf<List<ExerciseData>>(emptyList()) }
     var state by remember { mutableStateOf<WorkoutState>(WorkoutState.Loading) }
+
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = state is WorkoutState.Exercise || state is WorkoutState.Rest || state is WorkoutState.Preview) {
+        showExitDialog = true
+    }
+
+    if (showExitDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("Exit Workout?") },
+            text = { Text("Are you sure you want to exit? Your progress will be lost.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showExitDialog = false
+                        onBack()
+                    }
+                ) {
+                    Text("Exit", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showExitDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     // Determine user experience level from plan
     val userExperienceLevel = when (currentPlan?.experience) {
@@ -215,7 +245,9 @@ fun WorkoutSessionScreen(
 
     LaunchedEffect(currentPlan, isExtra, extraFocusAreas) {
         state = WorkoutState.Loading
-        AdvancedExerciseRepository.init(context)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            AdvancedExerciseRepository.init(context)
+        }
 
         // Check if plan exists - if not, immediately go back
         if (currentPlan == null) {
@@ -401,8 +433,20 @@ fun WorkoutSessionScreen(
                 }
             }
             is WorkoutState.Celebration -> {
+                // ADDED: P1 UX Improvement - Next day preview
+                val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
+                val currentDay = prefs.getInt("plan_day", 1)
+                val nextDayNumber = currentDay + 1
+                val nextDay = currentPlan?.weeks?.flatMap { it.days }?.firstOrNull { it.dayNumber == nextDayNumber }
+                val nextDayPreview = when {
+                    nextDay == null -> null
+                    nextDay.isRestDay -> "Tomorrow: Rest Day 💤"
+                    else -> "Tomorrow: ${nextDay.focusLabel} Focus 🔥"
+                }
+
                 WorkoutCelebrationScreen(
                     isExtra = s.isExtra,
+                    nextDayPreview = nextDayPreview,
                     onContinue = { state = WorkoutState.Report(s.results, s.skipped) }
                 )
             }
@@ -486,8 +530,9 @@ private fun ExerciseScreen(
     // Calculate ESTIMATED time (for display purposes only)
     var estimatedActMin = 0.0
     var estimatedRestMin = 0.0
-    if (isTimed && exercise.durationSecondsOverride != null) {
-        estimatedActMin = (exercise.sets * exercise.durationSecondsOverride) / 60.0
+    val durOverride = exercise.durationSecondsOverride
+    if (isTimed && durOverride != null) {
+        estimatedActMin = (exercise.sets * durOverride) / 60.0
         estimatedRestMin = ((exercise.sets - 1) * exercise.restSeconds) / 60.0
     } else {
         val repSec = exercise.secondsPerRepOverride ?: 3.0
@@ -839,11 +884,33 @@ private fun PreviewExerciseCard(ex: ExerciseData, number: Int? = null) {    andr
 @Composable
 private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<String>, onDone: () -> Unit) {
     var selectedFeedback by remember { mutableStateOf<String?>(null) }
+    var isSubmitting by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Done! 🎉", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
+
+        // ADDED: Confirmation banner (P0 UX Improvement)
+        androidx.compose.material3.Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("✅", fontSize = 24.sp)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Workout Saved", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Saved to history • +XP • Streak updated", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
         val totalKcal = results.sumOf { it.caloriesKcal }
         Text("Total: $totalKcal kcal burned", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(12.dp))
@@ -864,7 +931,7 @@ private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<Str
                             else -> 0
                         }
                         AlgorithmPreferences.saveGlobalFeedback(context, adjustment)
-                        android.widget.Toast.makeText(context, "Thanks! Adjusting next workout...", android.widget.Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showSuccess(context, "Thanks! Adjusting next workout...")
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
@@ -877,13 +944,29 @@ private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<Str
         }
 
         Spacer(Modifier.weight(1f))
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Finish") }
+        Button(
+            onClick = {
+                if (!isSubmitting) {
+                    isSubmitting = true
+                    onDone()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            enabled = !isSubmitting
+        ) {
+            if (isSubmitting) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+            } else {
+                Text("Finish")
+            }
+        }
     }
 }
 
 @Composable
 private fun WorkoutCelebrationScreen(
     isExtra: Boolean,
+    nextDayPreview: String? = null,
     onContinue: () -> Unit
 ) {
     val scale = remember { Animatable(0f) }
@@ -901,9 +984,46 @@ private fun WorkoutCelebrationScreen(
     }
 
     val context = LocalContext.current
+    val density = LocalDensity.current.density
     val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-    val streak = prefs.getInt("streak_days", 0)
+    // Streak is read AFTER update, so it is the "new" streak.
+    val currentStreak = prefs.getInt("streak_days", 0)
     val planDay = prefs.getInt("plan_day", 1)
+    
+    // Animate from (current - 1) to (current)
+    val startStreak = (currentStreak - 1).coerceAtLeast(0)
+    val targetStreak = currentStreak
+    val streakAnim = remember { Animatable(startStreak.toFloat()) }
+    
+    // Firework animation state for the moment streak changes
+    val streakBump = remember { Animatable(1f) }
+
+    LaunchedEffect(Unit) {
+        delay(1000) // Wait for initial popup to settle
+        streakAnim.animateTo(
+            targetValue = targetStreak.toFloat(),
+            animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+        )
+    }
+
+    // Haptics & Bump logic
+    LaunchedEffect(streakAnim) {
+        var lastVal = startStreak
+        snapshotFlow { streakAnim.value.toInt() }
+            .collectLatest { current ->
+                if (current != lastVal) {
+                    lastVal = current
+                    // Haptic feedback
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                        context,
+                        com.example.myapplication.utils.HapticFeedback.FeedbackType.HEAVY_CLICK
+                    )
+                    // Visual bump
+                    streakBump.snapTo(1.5f)
+                    streakBump.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+                }
+            }
+    }
 
     Box(
         modifier = Modifier
@@ -915,10 +1035,11 @@ private fun WorkoutCelebrationScreen(
                     else
                         listOf(Color(0xFF1A2740), Color(0xFF0D1B2A), Color(0xFF1A3A2A))
                 )
-            ),
+            )
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.systemBars),
         contentAlignment = Alignment.Center
     ) {
-        // Confetti za regular workout
+        // Confetti for regular workout
         if (!isExtra) {
             val infiniteTransition = rememberInfiniteTransition(label = "confetti")
             val confettiOffset by infiniteTransition.animateFloat(
@@ -928,15 +1049,15 @@ private fun WorkoutCelebrationScreen(
                     repeatMode = RepeatMode.Restart
                 ), label = "confettiOff"
             )
-            val confettiColors = listOf(Color(0xFFFFD700), Color(0xFF6366F1), Color(0xFF4CAF50), Color(0xFFFF5722), Color(0xFF03A9F4))
-            repeat(12) { i ->
+            val confettiColors = listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary, Color(0xFF4CAF50), MaterialTheme.colorScheme.tertiary, Color(0xFF03A9F4))
+            repeat(30) { i -> // Increased confetti count
                 val xPos = (i * 83 % 100) / 100f
                 val startY = ((i * 47 + confettiOffset * 100) % 110) / 100f
                 Box(modifier = Modifier.fillMaxSize().graphicsLayer(alpha = confettiAlpha.value)) {
                     Box(
                         modifier = Modifier
                             .absoluteOffset(x = (xPos * 400 - 20).dp, y = (startY * 900 - 50).dp)
-                            .size(8.dp)
+                            .size(if(i % 3 == 0) 10.dp else 6.dp)
                             .background(confettiColors[i % confettiColors.size], androidx.compose.foundation.shape.CircleShape)
                     )
                 }
@@ -963,7 +1084,7 @@ private fun WorkoutCelebrationScreen(
                     modifier = Modifier.graphicsLayer(scaleX = streakScale.value, scaleY = streakScale.value)
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("You went beyond today's plan! 💥", fontSize = 16.sp, color = Color(0xFF94A3B8), textAlign = TextAlign.Center)
+                Text("You went beyond today's plan! 💥", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(24.dp))
                 val armScale = remember { Animatable(0.8f) }
                 LaunchedEffect(Unit) {
@@ -989,27 +1110,56 @@ private fun WorkoutCelebrationScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("🔥", fontSize = 36.sp)
-                            Text("$streak", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
-                            Text("Day streak", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                            
+                            // Animated streak number
+                            Text(
+                                text = "${streakAnim.value.toInt()}", 
+                                fontSize = 32.sp, 
+                                fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = streakBump.value
+                                    scaleY = streakBump.value
+                                }
+                            )
+                            Text("Day streak", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Box(modifier = Modifier.height(60.dp).width(1.dp).background(Color(0xFF2D3F55)))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("📅", fontSize = 36.sp)
-                            Text("Day $planDay", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6366F1))
-                            Text("of your plan", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                            // NO CALENDAR ICON - Just text
+                            Spacer(Modifier.height(4.dp))
+                            Text("Day $planDay", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("of your plan", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 val motivations = listOf("Keep it up! 🚀", "You're unstoppable! ⚡", "One day at a time! 🎯", "Consistency is key! 🔑", "You're crushing it! 💥")
-                Text(motivations[streak % motivations.size], fontSize = 16.sp, color = Color(0xFF4CAF50), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                Text(motivations[targetStreak % motivations.size], fontSize = 16.sp, color = Color(0xFF4CAF50), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                
+                // ADDED: P1 Next Day Preview
+                if (!isExtra && nextDayPreview != null) {
+                    Spacer(Modifier.height(24.dp))
+                    androidx.compose.material3.Surface(
+                        color = Color(0xFF1E2A3A).copy(alpha = 0.5f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = nextDayPreview,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(40.dp))
             Button(
                 onClick = onContinue,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
             ) {
                 Text("Continue", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)

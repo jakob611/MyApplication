@@ -193,6 +193,9 @@ fun calculateDailyWaterMl(weightKg: Double, isMale: Boolean, activityLevel: Stri
     // Workout day bonus
     if (isWorkoutDay) water += 500.0
 
+    // Round to nearest 100
+    water = (water / 100.0).let { kotlin.math.round(it) * 100.0 }
+
     // Clamp between realistic bounds (1.5L - 5L)
     return water.coerceIn(1500.0, 5000.0).toFloat()
 }

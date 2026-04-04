@@ -16,7 +16,7 @@ import androidx.compose.ui.res.painterResource
 import com.example.myapplication.utils.HapticFeedback
 
 // ------- Globalna barva (uporablja se v celi aplikaciji) -------
-val DrawerBlue = Color(0xFF2563EB)
+
 
 // ------- Vsi zasloni aplikacije -------
 sealed class Screen {
@@ -120,7 +120,9 @@ fun AppBottomBar(
 ) {
     val context = LocalContext.current
     val currentIndex = screenToIndex(currentScreen)
-    NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.background
+    ) {
         bottomItems.forEach { item ->
             val selected = currentIndex == item.index
             NavigationBarItem(
@@ -135,16 +137,16 @@ fun AppBottomBar(
                     Icon(
                         painter = painterResource(id = item.iconRes),
                         contentDescription = item.label,
-                        tint = Color.Unspecified
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
                 label = { Text(item.label) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             )
         }

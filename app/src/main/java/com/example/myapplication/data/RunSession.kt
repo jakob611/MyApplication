@@ -15,13 +15,13 @@ enum class ActivityType(
 ) {
     RUN(       "Run",        "🏃", 8.0,   true,  true,  true,  "km"),
     WALK(      "Walk",       "🚶", 3.5,   false, true,  true,  "km"),
-    HIKE(      "Hike",       "🥾", 5.3,   true,  false, false, "km"),
+    HIKE(      "Hike",       "🥾", 5.3,   true,  false, true, "km"),
     SPRINT(    "Sprint",     "⚡", 14.0,  false, true,  true,  "km"),
     CYCLING(   "Cycling",    "🚴", 6.8,   true,  false, true,  "km"),
     SKIING(    "Skiing",     "⛷️", 7.0,   true,  false, true,  "km"),
     SNOWBOARD( "Snowboard",  "🏂", 5.5,   true,  false, true,  "km"),
     SKATING(   "Skating",    "⛸️", 7.5,   false, false, true,  "km"),
-    NORDIC(    "Nordic Walk","🎿", 4.8,   true,  true,  false, "km");
+    NORDIC(    "Nordic Walk","🎿", 4.8,   true,  true,  true, "km");
 
     companion object {
         fun fromString(s: String?): ActivityType =
@@ -58,7 +58,8 @@ data class RunSession(
     val caloriesKcal: Int = 0,
     val elevationGainM: Float = 0f,
     val elevationLossM: Float = 0f,
-    val activityType: ActivityType = ActivityType.RUN
+    val activityType: ActivityType = ActivityType.RUN,
+    val isSmoothed: Boolean = false
 ) {
     /**
      * Calculate average speed from distance and duration.
@@ -123,6 +124,7 @@ data class RunSession(
         "caloriesKcal" to caloriesKcal,
         "elevationGainM" to elevationGainM,
         "elevationLossM" to elevationLossM,
-        "activityType" to activityType.name
+        "activityType" to activityType.name,
+        "isSmoothed" to isSmoothed
     )
 }

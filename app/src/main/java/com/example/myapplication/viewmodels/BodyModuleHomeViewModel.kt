@@ -19,7 +19,10 @@ data class Challenge(
     val id: String,
     val title: String,
     val description: String,
-    val accepted: Boolean = false
+    val xpReward: Int = 100, // Default reward
+    val accepted: Boolean = false,
+    val completed: Boolean = false,
+    val iconRes: Int? = null // Optional icon
 )
 
 data class BodyHomeUiState(
@@ -32,10 +35,11 @@ data class BodyHomeUiState(
     val isWorkoutDoneToday: Boolean = false,
     val showCompletionAnimation: Boolean = false,
     val todayIsRest: Boolean = false,
+    val outdoorSuggestion: String? = null,
     val challenges: List<Challenge> = listOf(
-        Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Short description here..."),
-        Challenge("c2", "30 days pushups", "Improve your pushups in 30 days."),
-        Challenge("c3", "Mobility week", "Increase your ROM in 7 days.")
+        Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Perform core exercises daily.", 500),
+        Challenge("c2", "30 days pushups", "Improve your pushups in 30 days. Do 50 pushups/day.", 300),
+        Challenge("c3", "Mobility week", "Increase your ROM in 7 days. Stretch every morning.", 150)
     )
 )
 
@@ -66,6 +70,31 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onCompletionAnimationShown() {
         _ui.value = _ui.value.copy(showCompletionAnimation = false)
+    }
+
+    fun acceptChallenge(challengeId: String) {
+        val updatedList = _ui.value.challenges.map { 
+            if (it.id == challengeId) it.copy(accepted = true) else it 
+        }
+        _ui.value = _ui.value.copy(challenges = updatedList)
+        // TODO: Save to persistence if needed
+    }
+
+    fun completeChallenge(challengeId: String) {
+        val updatedList = _ui.value.challenges.map {
+            if (it.id == challengeId) it.copy(completed = true) else it
+        }
+        _ui.value = _ui.value.copy(challenges = updatedList)
+        
+        // Award XP
+        val challenge = _ui.value.challenges.find { it.id == challengeId }
+        val reward = challenge?.xpReward ?: 100
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            com.example.myapplication.persistence.AchievementStore.awardXP(
+                getApplication(), userEmail, reward, com.example.myapplication.data.XPSource.BADGE_UNLOCKED, "Completed Challenge: ${challenge?.title}"
+            )
+        }
     }
 
     fun refreshStats() {
@@ -173,6 +202,46 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 isWorkoutDoneToday = isWorkoutDoneToday,
                 todayIsRest   = prefs.getBoolean("today_is_rest", false)
             )
+
+            // Check if today is cardio/endurance and weather is nice
+            if (!_ui.value.isWorkoutDoneToday && !_ui.value.todayIsRest) {
+                try {
+                    val uid = com.example.myapplication.persistence.PlanDataStore.getResolvedUserId()
+                    if (uid != null) {
+                        val snap = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("user_plans").document(uid).get().await()
+                        @Suppress("UNCHECKED_CAST")
+                        val plans = snap.get("plans") as? List<Map<String, Any>>
+                        val firstPlan = plans?.firstOrNull()
+                        @Suppress("UNCHECKED_CAST")
+                        val weeks = firstPlan?.get("weeks") as? List<Map<String, Any>>
+
+                        var todayDayPlan: Map<String, Any>? = null
+                        weeks?.forEach { weekMap ->
+                            @Suppress("UNCHECKED_CAST")
+                            val days = weekMap["days"] as? List<Map<String, Any>>
+                            days?.forEach { dayMap ->
+                                val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
+                                if (dayNum == _ui.value.planDay) {
+                                    todayDayPlan = dayMap
+                                }
+                            }
+                        }
+
+                        val focusLabel = todayDayPlan?.get("focusLabel") as? String ?: ""
+                        if (focusLabel.contains("Cardio", ignoreCase = true) || focusLabel.contains("HIIT", ignoreCase = true)) {
+                            val weather = com.example.myapplication.utils.WeatherService.checkWeatherForRunning(getApplication())
+                            if (weather.isNiceWeather) {
+                                _ui.value = _ui.value.copy(
+                                    outdoorSuggestion = "Weather is nice (${weather.tempC}°C, ${weather.description}). Perfect for an outdoor run!"
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("BodyModuleHomeVM", "Weather check failed: ${e.message}")
+                }
+            }
         }
     }
 
@@ -194,12 +263,19 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     // 2. Mark as done locally AND advance Plan Day
                     val currentPlanDay = prefs.getInt("plan_day", 1)
                     val newPlanDay = currentPlanDay + 1
-                    // Check if *tomorrow* (newPlanDay) is rest day
                     val nextDayIsRest = tryGetNextDayIsRest(newPlanDay)
-
+                    
+                    // FIX: Rest Day NE SME povečati weekly_done števca (cilj 3/5 se nanaša na treninge)
+                    // Prej: putInt("weekly_done", currentWeeklyDone + 1)
+                    // Zdaj: ohranimo currentWeeklyDone
+                    
                     prefs.edit {
                         putLong("last_workout_epoch", today.toEpochDay()) // This makes isWorkoutDoneToday true
                         putInt("plan_day", newPlanDay) // Advance plan!
+                        
+                        // FIX: Ne povečuj weekly_done za Rest Day
+                        // putInt("weekly_done", currentWeeklyDone) // Ni potrebno, ker se ne spremeni
+                        
                         putBoolean("today_is_rest", nextDayIsRest) // Set flag for next day
                     }
 
@@ -221,7 +297,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                      // Also save stats to Firestore (to persist planDay increment)
                 try {
                      val totalWorkouts = prefs.getInt("total_workouts_completed", 0)
-                     val weeklyDone = prefs.getInt("weekly_done", 0)
+                     val weeklyDone = prefs.getInt("weekly_done", 0) // Preberi aktualno (nespremenjeno) vrednost
                      com.example.myapplication.data.UserPreferences.saveWorkoutStats(
                         email = email,
                         streak = updatedStreak,
@@ -241,7 +317,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                             streakDays = updatedStreak,
                             planDay = newPlanDay
                         )
-                        android.widget.Toast.makeText(context, "Mobility Session Completed! +20 XP", android.widget.Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showSuccess(context, "Mobility Session Completed! +20 XP")
                         onXPAdded()
                     }
                 }
@@ -303,7 +379,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         // Show error on main thread
                         withContext(Dispatchers.Main) {
                             try {
-                                android.widget.Toast.makeText(getApplication(), "Failed to save to cloud! Check internet.", android.widget.Toast.LENGTH_LONG).show()
+                                com.example.myapplication.utils.AppToast.showError(getApplication(), "Failed to save to cloud! Check internet.")
                             } catch (_: Exception) {}
                         }
                     }
@@ -317,7 +393,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     
                 if (!isFirstToday) {
                     withContext(Dispatchers.Main) { 
-                        android.widget.Toast.makeText(getApplication(), "Daily workout already completed!", android.widget.Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showInfo(getApplication(), "Daily workout already completed!")
                         onCompletion(null) 
                     }
                     return@launch
@@ -326,12 +402,15 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 var completionResult: com.example.myapplication.persistence.AchievementStore.WorkoutCompletionResult? = null
     
                 try {
+                    val batch = com.google.firebase.firestore.FirebaseFirestore.getInstance().batch()
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+
                     // Determine hour for Early Bird / Night Owl stats
                     val hour = java.time.LocalTime.now().hour
                     
                     // Use AchievementStore to record stats (Early Bird, Night Owl, Total Calories)
                     val res = com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
-                        context, userEmail, totalKcal.toDouble(), hour
+                        context, userEmail, totalKcal.toDouble(), hour, batch
                     )
                     completionResult = res
                     
@@ -340,7 +419,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                             "CRITICAL HIT! Double XP! (+${res.xpAwarded} XP)" 
                         else 
                             "Workout Complete! +${res.xpAwarded} XP"
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                        com.example.myapplication.utils.AppToast.showSuccess(context, msg)
                     }
     
                     // Original logic for saving workout session to Firestore
@@ -353,13 +432,74 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         "planDay" to _ui.value.planDay,
                         "exercises" to exerciseResults
                     )
-                    com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-                        .collection("workoutSessions").add(workoutDoc).await()
+                    val sessionRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                        .collection("workoutSessions").document()
+                    batch.set(sessionRef, workoutDoc)
+
+                    // Update streak safely via AchievementStore logic
+                    val newWeeklyDone = if (shouldReset) 1 else currentWeeklyDone + 1
+                    val newPlanDay = _ui.value.planDay + 1
+                    val newTotal = _ui.value.totalWorkoutsCompleted + 1
+
+                    com.example.myapplication.persistence.AchievementStore.checkAndUpdatePlanStreak(context, userEmail, isWorkoutSuccess = true, batch = batch)
+
+                    if (userEmail.isNotEmpty()) {
+                        // We do not know authoritative streak yet (batch not committed), but local SharedPreferences handles it?
+                        // Let's rely on AchievementStore saving to local prefs inside checkAndUpdatePlanStreak.
+                        // Actually, AchievementStore has updated UserProfile locally by now!
+                        val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, userEmail)
+                        val newStreak = updatedProfile.currentLoginStreak
+
+                        com.example.myapplication.data.UserPreferences.saveWorkoutStats(
+                            email = userEmail,
+                            streak = newStreak,
+                            totalWorkouts = newTotal,
+                            weeklyDone = newWeeklyDone,
+                            lastWorkoutEpoch = today.toEpochDay(),
+                            planDay = newPlanDay,
+                            weeklyTarget = weeklyTarget,
+                            batch = batch
+                        )
+                    }
+
+                    // Commit all updates at once atomically
+                    batch.commit().await()
+
+                    // Now read the authoritative streak from updated profile
+                    val finalProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, userEmail)
+                    val newStreak = finalProfile.currentLoginStreak
+
+                    val nextDayIsRest = tryGetNextDayIsRest(newPlanDay)
+
+                    prefs.edit {
+                        putLong("last_workout_epoch", today.toEpochDay())
+                        putInt("weekly_done", newWeeklyDone)
+                        putInt("plan_day", newPlanDay)
+                        putInt("total_workouts_completed", newTotal)
+                        putInt("streak_days", newStreak)
+                        putBoolean("today_is_rest", nextDayIsRest)
+                        if (shouldReset) putLong("last_week_reset", currentWeekStart.toEpochDay())
+                    }
+
+                    val trainingDays = prefs.getInt("weekly_target", 3)
+                    val planDayLabel = com.example.myapplication.widget.StreakWidgetProvider.planDayToLabel(newPlanDay, trainingDays)
+                    com.example.myapplication.widget.StreakWidgetProvider.updateWidgetFromApp(context, newStreak, planDayLabel)
+
+                    _ui.value = _ui.value.copy(
+                        streakDays = newStreak,
+                        weeklyDone = newWeeklyDone,
+                        planDay = newPlanDay,
+                        totalWorkoutsCompleted = newTotal,
+                        todayIsRest = nextDayIsRest
+                    )
+
+                    withContext(Dispatchers.Main) { onCompletion(res) }
+
                 } catch (e: Exception) {
                     android.util.Log.e("BodyModuleHome", "Failed to save regular workout: ${e.message}")
                     withContext(Dispatchers.Main) {
                         try {
-                            android.widget.Toast.makeText(getApplication(), "Failed to save to cloud! Check internet.", android.widget.Toast.LENGTH_LONG).show()
+                            com.example.myapplication.utils.AppToast.showError(getApplication(), "Failed to save to cloud! Check internet.")
                         } catch (_: Exception) {}
                     }
                 }
@@ -467,30 +607,24 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 if (weekA != weekB) {
                     android.util.Log.w("SwapDays", "Cross-week swap not allowed: $dayA <-> $dayB")
                     withContext(Dispatchers.Main) {
-                        android.widget.Toast.makeText(
-                            getApplication(),
-                            "Swap only allowed within the same week!",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        com.example.myapplication.utils.AppToast.showError(getApplication(), "Failed to swap days")
                     }
                     return@launch
                 }
 
-                val posA = (dayA - 1) % 7
+                val posA = (dayA - 1) % 7 // Logic legacy
                 val posB = (dayB - 1) % 7
                 val allDays = currentPlan.weeks.flatMap { it.days }.toMutableList()
 
-                for (weekIdx in weekA until 4) {
-                    val dayNumA = weekIdx * 7 + posA + 1
-                    val dayNumB = weekIdx * 7 + posB + 1
-                    val iA = allDays.indexOfFirst { it.dayNumber == dayNumA }
-                    val iB = allDays.indexOfFirst { it.dayNumber == dayNumB }
-                    if (iA >= 0 && iB >= 0) {
-                        val rA = allDays[iA].isRestDay; val fA = allDays[iA].focusLabel
-                        val rB = allDays[iB].isRestDay; val fB = allDays[iB].focusLabel
-                        allDays[iA] = allDays[iA].copy(isRestDay = rB, focusLabel = fB)
-                        allDays[iB] = allDays[iB].copy(isRestDay = rA, focusLabel = fA)
-                    }
+                // Perform swap ONLY for the specific selected days (Single Swap)
+                // Mass-swap logic removed due to Support for Irregular Weeks (Intro Plan)
+                val iA = allDays.indexOfFirst { it.dayNumber == dayA }
+                val iB = allDays.indexOfFirst { it.dayNumber == dayB }
+                if (iA >= 0 && iB >= 0) {
+                     val rA = allDays[iA].isRestDay; val fA = allDays[iA].focusLabel
+                     val rB = allDays[iB].isRestDay; val fB = allDays[iB].focusLabel
+                     allDays[iA] = allDays[iA].copy(isRestDay = rB, focusLabel = fB)
+                     allDays[iB] = allDays[iB].copy(isRestDay = rA, focusLabel = fA)
                 }
 
                 val updatedWeeks = currentPlan.weeks.map { week ->
@@ -502,6 +636,15 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                 val context = getApplication<android.app.Application>().applicationContext
                 com.example.myapplication.persistence.PlanDataStore.updatePlan(context, updatedPlan)
 
+                // FIX: Takoj posodobi 'today_is_rest' status v UI in prefs, če smo zamenjali na Rest Day
+                val currentPlanDay = _ui.value.planDay
+                val currentDayPlan = updatedPlan.weeks.flatMap { it.days }.find { it.dayNumber == currentPlanDay }
+                if (currentDayPlan != null) {
+                    val isRest = currentDayPlan.isRestDay
+                    prefs.edit { putBoolean("today_is_rest", isRest) }
+                    _ui.value = _ui.value.copy(todayIsRest = isRest)
+                }
+
                 withContext(Dispatchers.Main) { onResult(updatedPlan) }
                 android.util.Log.d("SwapDays", "✅ Swapped day $dayA <-> $dayB")
             } catch (e: Exception) {
@@ -510,12 +653,6 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun acceptChallenge(id: String) {
-        val updated = _ui.value.challenges.map {
-            if (it.id == id) it.copy(accepted = true) else it
-        }
-        _ui.value = _ui.value.copy(challenges = updated)
-    }
 
     private suspend fun calculateWeeklyWorkoutsFromFirestore(email: String): Int {
         if (email.isBlank()) return -1
@@ -547,3 +684,18 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -26,6 +26,7 @@ data class PrivacySettings(
     val isPublic: Boolean = false,
     val showLevel: Boolean = false,
     val showBadges: Boolean = false,
+    val showStreak: Boolean = false, // Added showStreak
     val showPlanPath: Boolean = false,
     val showChallenges: Boolean = false,
     val showFollowers: Boolean = false,
@@ -53,6 +54,7 @@ data class PublicProfile(
     val displayName: String? = null,
     val level: Int? = null,
     val badges: List<Badge>? = null,
+    val streak: Int? = null, // Added streak
     val followers: Int? = null,
     val following: Int? = null,
     val activePlanSummary: String? = null,

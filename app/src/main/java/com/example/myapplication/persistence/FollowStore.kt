@@ -23,6 +23,9 @@ object FollowStore {
             val followerRef = FirestoreHelper.getCurrentUserDocRef()
             val resolvedFollowerId = followerRef.id
 
+            // Prevent self-following
+            if (resolvedFollowerId == followingId) return@withContext false
+
             // Check if already following
             if (isFollowing(resolvedFollowerId, followingId)) return@withContext true
 
@@ -139,7 +142,32 @@ object FollowStore {
                 .get()
                 .await()
 
-            snapshot.documents.mapNotNull { it.getString("followerId") }
+            // Popravek self-follow buga: pobriši če uporabnik sledi sam sebi
+            val validDocs = snapshot.documents.filter { doc ->
+                val follower = doc.getString("followerId")
+                if (follower == userId) {
+                    doc.reference.delete() // Izbriši invaliden zapis v ozadju
+                    false
+                } else {
+                    true
+                }
+            }
+
+            val validFollowers = validDocs.mapNotNull { it.getString("followerId") }
+            
+            // Popravi count v Firestore, če ne ustreza realnemu številu
+            try {
+                val userRef = FirestoreHelper.getUserRef(userId)
+                val userDoc = userRef.get().await()
+                val currentCount = userDoc.getLong("followers")?.toInt() ?: 0
+                if (currentCount != validFollowers.size) {
+                    userRef.update("followers", validFollowers.size).await()
+                }
+            } catch (e: Exception) {
+                Log.e("FollowStore", "Error syncing follower count: ${e.message}")
+            }
+
+            validFollowers
         } catch (e: Exception) {
             Log.e("FollowStore", "Error getting followers: ${e.message}")
             emptyList()
@@ -156,7 +184,32 @@ object FollowStore {
                 .get()
                 .await()
 
-            snapshot.documents.mapNotNull { it.getString("followingId") }
+            // Popravek self-follow buga: pobriši če uporabnik sledi sam sebi
+            val validDocs = snapshot.documents.filter { doc ->
+                val following = doc.getString("followingId")
+                if (following == userId) {
+                    doc.reference.delete()
+                    false
+                } else {
+                    true
+                }
+            }
+
+            val validFollowing = validDocs.mapNotNull { it.getString("followingId") }
+            
+            // Popravi count v Firestore, če ne ustreza realnemu številu
+            try {
+                val userRef = FirestoreHelper.getUserRef(userId)
+                val userDoc = userRef.get().await()
+                val currentCount = userDoc.getLong("following")?.toInt() ?: 0
+                if (currentCount != validFollowing.size) {
+                    userRef.update("following", validFollowing.size).await()
+                }
+            } catch (e: Exception) {
+                Log.e("FollowStore", "Error syncing following count: ${e.message}")
+            }
+
+            validFollowing
         } catch (e: Exception) {
             Log.e("FollowStore", "Error getting following: ${e.message}")
             emptyList()

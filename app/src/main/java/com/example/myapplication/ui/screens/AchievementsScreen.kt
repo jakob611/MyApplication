@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,11 +50,11 @@ fun AchievementsScreen(
     onRefresh: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
-    val accentGold = Color(0xFFFFD700)
-    val accentBlue = Color(0xFF2563EB)
+    val accentGold = MaterialTheme.colorScheme.secondary
+    val accentBlue = MaterialTheme.colorScheme.primary
     val accentGreen = Color(0xFF13EF92)
-    val darkBg = Color(0xFF17223B)
-    val cardBg = Color(0xFF25304A)
+    val darkBg = MaterialTheme.colorScheme.surfaceVariant
+    val cardBg = MaterialTheme.colorScheme.surfaceVariant
 
     val currentLevel = userProfile.level
     val totalXP = userProfile.xp
@@ -102,7 +103,7 @@ fun AchievementsScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(darkBg, Color(0xFF1A2435), Color(0xFF25304A))
+                    listOf(darkBg, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
                 )
             )
     ) {
@@ -165,7 +166,7 @@ fun AchievementsScreen(
                     Text(
                         "$unlockedCount / ${allBadges.size} unlocked",
                         fontSize = 14.sp,
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp),
@@ -179,7 +180,7 @@ fun AchievementsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.heightIn(max = 600.dp)
                     ) {
-                        items(displayedBadges) { badge ->
+                        items(items = displayedBadges, key = { it.id }) { badge ->
                             BadgeCard(
                                 badge = badge,
                                 onClick = { selectedBadge = badge }
@@ -231,7 +232,7 @@ fun AchievementsScreen(
                     Text(
                         "Current level",
                         fontSize = 14.sp,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         "Lvl $currentLevel",
@@ -257,7 +258,7 @@ fun AchievementsScreen(
                         Text(
                             "Lvl ${currentLevel + 1}",
                             fontSize = 14.sp,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -270,7 +271,7 @@ fun AchievementsScreen(
                             .height(12.dp)
                             .clip(RoundedCornerShape(6.dp)),
                         color = accentBlue,
-                        trackColor = Color(0xFF1A2435)
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -321,7 +322,7 @@ fun AchievementsScreen(
                             Text(
                                 "Followers",
                                 fontSize = 14.sp,
-                                color = Color.Gray
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -329,7 +330,7 @@ fun AchievementsScreen(
                             modifier = Modifier
                                 .width(1.dp)
                                 .height(50.dp)
-                                .background(Color.Gray)
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant)
                         )
 
                         Column(
@@ -353,7 +354,7 @@ fun AchievementsScreen(
                             Text(
                                 "Following",
                                 fontSize = 14.sp,
-                                color = Color.Gray
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -405,7 +406,7 @@ fun AchievementsScreen(
                         Text(
                             activePlan.name,
                             fontSize = 14.sp,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Spacer(Modifier.height(8.dp))
@@ -470,7 +471,7 @@ fun AchievementsScreen(
                 Icon(
                     imageVector = getBadgeIcon(badge.iconName),
                     contentDescription = badge.name,
-                    tint = if (badge.unlocked) accentGold else Color.Gray,
+                    tint = if (badge.unlocked) accentGold else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(64.dp)
                 )
             },
@@ -511,13 +512,13 @@ fun AchievementsScreen(
                                 .height(10.dp)
                                 .clip(RoundedCornerShape(5.dp)),
                             color = accentBlue,
-                            trackColor = Color.Gray.copy(alpha = 0.3f)
+                            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "$progressPercent% complete",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -541,10 +542,10 @@ private fun BadgeCard(badge: Badge, onClick: () -> Unit = {}) {
         modifier = Modifier.aspectRatio(0.8f),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isUnlocked) Color(0xFF1A2435) else Color(0xFF0F1419)
+            containerColor = if (isUnlocked) MaterialTheme.colorScheme.surfaceVariant else Color(0xFF0F1419)
         ),
         border = if (isUnlocked) {
-            androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFFD700))
+            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.secondary)
         } else null
     ) {
         Column(
@@ -557,7 +558,7 @@ private fun BadgeCard(badge: Badge, onClick: () -> Unit = {}) {
             Icon(
                 imageVector = icon,
                 contentDescription = badge.name,
-                tint = if (isUnlocked) Color(0xFFFFD700) else Color(0xFF445566),
+                tint = if (isUnlocked) MaterialTheme.colorScheme.secondary else Color(0xFF445566),
                 modifier = Modifier.size(32.dp)
             )
 
@@ -619,8 +620,12 @@ private suspend fun loadUserInfo(userId: String): FollowUserInfo? {
 
         if (!doc.exists()) return null
 
-        val username = doc.getString("username") ?: doc.getString("first_name") ?: userId.take(8)
-        val displayName = doc.getString("first_name")
+        val usernameStr = doc.getString("username")
+        val firstNameStr = doc.getString("first_name")
+        val username = usernameStr?.takeIf { it.isNotBlank() } 
+            ?: firstNameStr?.takeIf { it.isNotBlank() } 
+            ?: userId.take(8)
+        val displayName = firstNameStr?.takeIf { it.isNotBlank() }
 
         FollowUserInfo(
             uid = userId,

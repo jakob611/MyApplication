@@ -72,14 +72,14 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
                 if (profile.streakFreezes >= MAX_FREEZES) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Max 3 Streak Freezes allowed!", Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showWarning(context, "Max 3 Streak Freezes allowed!")
                     }
                     return@launch
                 }
 
                 if (profile.xp < PRICE) {
                     withContext(Dispatchers.Main) {
-                         Toast.makeText(context, "Not enough XP! Need $PRICE XP.", Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need \$PRICE XP.")
                     }
                     return@launch
                 }
@@ -110,7 +110,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {}
 
                 withContext(Dispatchers.Main) {
-                     Toast.makeText(context, "❄️ Streak Freeze Purchased!", Toast.LENGTH_SHORT).show()
+                     com.example.myapplication.utils.AppToast.showSuccess(context, "Streak Freeze Purchased!")
                 }
                 
                 // Refresh local state
@@ -121,7 +121,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Purchase failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed: \${e.message}")
                 }
             } finally {
                 _state.value = _state.value.copy(isLoading = false)
@@ -143,7 +143,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
                 val PRICE = 500
                 if (profile.xp < PRICE) {
                     withContext(Dispatchers.Main) {
-                         Toast.makeText(context, "Not enough XP! Need $PRICE XP.", Toast.LENGTH_SHORT).show()
+                        com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need \$PRICE XP.")
                     }
                     return@launch
                 }
@@ -157,14 +157,14 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
                 // In real app, save coupon to database. Here just a toast.
                  withContext(Dispatchers.Main) {
-                     Toast.makeText(context, "🎟️ Coupon 'PRO10' Unlocked!", Toast.LENGTH_LONG).show()
+                     com.example.myapplication.utils.AppToast.showSuccess(context, "Coupon 'PRO10' Unlocked!")
                 }
                 
                 _state.value = _state.value.copy(userXP = newXP)
 
             } catch (e: Exception) {
                  withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Purchase failed", Toast.LENGTH_SHORT).show()
+                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed")
                 }
             } finally {
                 _state.value = _state.value.copy(isLoading = false)
