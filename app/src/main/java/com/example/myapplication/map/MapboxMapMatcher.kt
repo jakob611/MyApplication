@@ -27,9 +27,10 @@ object MapboxMapMatcher {
         if (points.size < 2) return@withContext points
 
         val profile = if (isRunning) "walking" else "cycling"
-        val token = BuildConfig.MAPBOX_SECRET_KEY
+        // Uporabimo JAVNI ključ namesto skrivnega za klicence iz strank (Android apk)
+        val token = BuildConfig.MAPBOX_PUBLIC_KEY
         if (token.isBlank()) {
-            Log.e(TAG, "Mapbox secret ključ manjka!")
+            Log.e(TAG, "Mapbox public ključ manjka!")
             return@withContext points
         }
 
@@ -54,7 +55,11 @@ object MapboxMapMatcher {
             val url = "https://api.mapbox.com/matching/v5/mapbox/$profile/$coordinatesStr" +
                     "?geometries=geojson&tidy=true&overview=full&access_token=$token"
 
-            val request = Request.Builder().url(url).build()
+            // Dodamo 'Referer' glavo, sicer Mapbox ne registrira URL restrikcij iz Android klica!
+            val request = Request.Builder()
+                .url(url)
+                .header("Referer", "android-app://com.example.myapplication/")
+                .build()
 
             try {
                 val response = client.newCall(request).execute()
