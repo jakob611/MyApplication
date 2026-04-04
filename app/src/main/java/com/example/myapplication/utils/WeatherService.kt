@@ -7,10 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
+import com.example.myapplication.BuildConfig
 
 object WeatherService {
 
-    private const val API_KEY = "dfa77e988e72a4c99bbe858df40921a5"
+    private val API_KEY = BuildConfig.OPEN_WEATHER_API_KEY
 
     data class WeatherResult(
         val isNiceWeather: Boolean,

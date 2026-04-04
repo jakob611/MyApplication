@@ -14,6 +14,8 @@ val fitnessApiBaseUrl = (localProps.getProperty("FITNESS_API_BASE_URL") ?: "").r
 val backendKey = localProps.getProperty("BACKEND_API_KEY") ?: ""
 val mapboxPublicKey = localProps.getProperty("MAPBOX_PUBLIC_KEY") ?: ""
 val mapboxSecretKey = localProps.getProperty("MAPBOX_SECRET_KEY") ?: ""
+val openWeatherKey = localProps.getProperty("OPEN_WEATHER_API_KEY") ?: ""
+
 android {
     namespace = "com.example.myapplication"
     compileSdk = 36
@@ -28,6 +30,8 @@ android {
         buildConfigField("String", "BACKEND_API_KEY", "\"$backendKey\"")
         buildConfigField("String", "MAPBOX_PUBLIC_KEY", "\"$mapboxPublicKey\"")
         buildConfigField("String", "MAPBOX_SECRET_KEY", "\"$mapboxSecretKey\"")
+        buildConfigField("String", "OPEN_WEATHER_API_KEY", "\"$openWeatherKey\"")
+
         // Ohrani samo slovenščino in angleščino - zmanjša velikost res/ map
         resourceConfigurations += listOf("sl", "en")
     }

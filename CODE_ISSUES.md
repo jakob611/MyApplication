@@ -148,4 +148,5 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  -   M a p b o x M a p M a t c h e r :   a p p l i e d   ' w a l k i n g '   p r o f i l e   i n s t e a d   o f   ' c y c l i n g '   d e f a u l t   c o n s t r a i n t   t o   m a p - m a t c h i n g   d u r i n g   H I K E   t r a c k i n g   p h a s e .  
  -   R u n T r a c k e r S c r e e n :   a u t o m a t i c a l l y   d i s p a t c h   M a p b o x   r o u t e   m a t c h i n g   a t   e n d   o f   w o r k o u t   f o r   H I K E   a s   w e l l .  
  -   A d d e d   a u t o m a t i c   b a c k g r o u n d   j o b   i n   A c t i v i t y L o g S c r e e n   t o   p r o c e s s   a l l   p e n d i n g   u n s m o o t h e d   a c t i v i t i e s   r e c u r s i v e l y   o v e r   t h e   i n t e r n e t .  
+ -   S e c u r i t y   F i x :   R e f a c t o r e d   h a r d c o d e d   O p e n W e a t h e r   A P I   k e y   o u t   o f   W e a t h e r S e r v i c e   a n d   m i g r a t e d   i t   i n t o   l o c a l . p r o p e r t i e s   v i a   B u i l d C o n f i g   t o   f i x   G i t H u b   s e c r e t   l e a k   a l e r t .  
  
