@@ -198,36 +198,35 @@ class DonutProgressView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val consumedFraction = (consumedCalories / targetCalories.toFloat()).coerceIn(0f, 1f)
+
+        // Draw outer background track
+        canvas.drawArc(outerArcRect, startAngle, sweepAngle, false, outerBasePaint)
+
+        // Calculate active sweep
         val availableSweep = sweepAngle * consumedFraction
 
-        if (availableSweep > 0.5f) {
-            canvas.drawArc(outerArcRect, startAngle, availableSweep, false, outerBasePaint)
-        }
+        // Zaokroževanje in barve (če ni doseženo -> SIVO, če je preseženo -> RDEČE)
+        val isExceeded = consumedCalories >= targetCalories
+
+        // Dinamična barva za navadni progres - sivo ali rdeče (po navodilih "če dnevna norma še ni zaužita naj bo sivo...")
+        val activeColor = if (isExceeded) 0xFFEF4444.toInt() else 0xFF9CA3AF.toInt() // Red or Gray
 
         if (simpleMode) {
-            if (availableSweep > 0.5f)
-                canvas.drawArc(outerArcRect, startAngle, availableSweep, false, outerCarbsPaint)
-        } else {
-            var remainingSweep = availableSweep
-            var currentAngle = startAngle
-
-            fun drawSegment(segmentCalories: Int, paint: Paint, isClicked: Boolean = false) {
-                if (remainingSweep <= 0f || segmentCalories <= 0) return
-                val segSweep = (sweepAngle * (segmentCalories / targetCalories.toFloat())).coerceAtMost(remainingSweep)
-                if (segSweep > 0.5f) {
-                    val drawPaint = if (isClicked) highlightPaint.apply { color = paint.color } else paint
-                    canvas.drawArc(outerArcRect, currentAngle, segSweep, false, drawPaint)
-                    currentAngle += segSweep
-                    remainingSweep -= segSweep
-                }
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+                strokeWidth = outerThicknessPx; color = activeColor
             }
-
-            drawSegment(fatCalories, outerFatPaint, clickedSegment == "fat")
-            drawSegment(proteinCalories, outerProteinPaint, clickedSegment == "protein")
-            drawSegment(carbsCalories, outerCarbsPaint, clickedSegment == "carbs")
-
-            if (consumedFraction >= 1f && (fatCalories + proteinCalories + carbsCalories) > targetCalories)
-                canvas.drawArc(outerArcRect, startAngle, sweepAngle, false, overPaint)
+            if (availableSweep > 0.5f) {
+                canvas.drawArc(outerArcRect, startAngle, availableSweep, false, paint)
+            }
+        } else {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+                strokeWidth = outerThicknessPx; color = activeColor
+            }
+            if (availableSweep > 0.5f) {
+                canvas.drawArc(outerArcRect, startAngle, availableSweep, false, paint)
+            }
         }
 
         // Notranji krog (voda)
@@ -243,17 +242,17 @@ class DonutProgressView @JvmOverloads constructor(
             val details = when (clickedSegment) {
                 "fat" -> {
                     val g = fatCalories / 9.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
                     SegmentDetails("$value $unitLabel", "Fat", 0xFFEF4444.toInt(), fatCalories)
                 }
                 "protein" -> {
                     val g = proteinCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
                     SegmentDetails("$value $unitLabel", "Protein", 0xFF10B981.toInt(), proteinCalories)
                 }
                 "carbs" -> {
                     val g = carbsCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
                     SegmentDetails("$value $unitLabel", "Carbs", 0xFF3B82F6.toInt(), carbsCalories)
                 }
                 else -> SegmentDetails(centerValue, centerLabel, textColor, 0)
@@ -279,4 +278,3 @@ class DonutProgressView @JvmOverloads constructor(
     private data class SegmentDetails(val value: String, val label: String, val color: Int, val calories: Int)
     private fun dp(v: Float) = v * resources.displayMetrics.density
 }
-

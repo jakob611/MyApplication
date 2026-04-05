@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -82,10 +83,14 @@ private fun boundaryNeighbors(full: List<Pair<LocalDate, Double>>, filtered: Lis
     return NeighborEdges(prev, next)
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProgressScreen(
     openWeightInput: Boolean = false,
-    userProfile: UserProfile = UserProfile()
+    userProfile: UserProfile = UserProfile(),
+    isOnline: Boolean = true,
+    onOpenMenu: () -> Unit = {},
+    onProClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope() // DODANO: Proper coroutine scope namesto GlobalScope
@@ -163,13 +168,13 @@ fun ProgressScreen(
     val waterPairs = remember(dailyLogs) { dailyLogs.sortedBy { it.date }.map { it.date to it.waterMl.toDouble() } }
     val burnedPairs = remember(burnedByDay) { burnedByDay.sortedBy { it.first } }
 
-    val filteredDaily = remember(dailyLogs, range) { filterRange(dailyLogs, range) }
-    val filteredWeight = remember(weightLogs, range) { filterRange(weightLogs, range) }
-    val filteredBurned = remember(burnedByDay, range) {
+    val filteredDaily: List<DailyLogSummary> = remember(dailyLogs, range) { filterRange(dailyLogs, range) }
+    val filteredWeight: List<WeightLog> = remember(weightLogs, range) { filterRange(weightLogs, range) }
+    val filteredBurned: List<Pair<LocalDate, Double>> = remember(burnedByDay, range) {
         val list = burnedByDay.map { Pair(it.first, it.second) }
         filterRange(list, range)
     }
-    val filteredWater = remember(dailyLogs, range) { filterRange(dailyLogs, range) }
+    val filteredWater: List<DailyLogSummary> = remember(dailyLogs, range) { filterRange(dailyLogs, range) }
 
     val weightNeighbors = remember(weightPairs, filteredWeight) {
         boundaryNeighbors(weightPairs, filteredWeight.map { it.date to it.weightKg })
@@ -240,19 +245,37 @@ fun ProgressScreen(
         zeroFillDateRange(filteredBurned, viewMinDate, viewMaxDate)
     }
 
-    Box(
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior(androidx.compose.material3.rememberTopAppBarState())
+
+    androidx.compose.material3.Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        LazyColumn(
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            com.example.myapplication.GlobalHeaderBar(
+                isOnline = isOnline,
+                onOpenMenu = onOpenMenu,
+                onProClick = onProClick,
+                scrollBehavior = scrollBehavior
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp)
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            item { Text("PROGRESS", fontWeight = FontWeight.Bold, fontSize = 22.sp) }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = innerPadding.calculateTopPadding() + 4.dp,
+                    bottom = 80.dp
+                )
+            ) {
             item {
                 RangeSelector(range = range, onSelect = { range = it })
             }
@@ -334,6 +357,7 @@ fun ProgressScreen(
         isVisible = showXpPopup,
         onDismiss = { showXpPopup = false }
     )
+}
 }
 
 @Composable

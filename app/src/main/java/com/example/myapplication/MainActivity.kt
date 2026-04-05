@@ -418,8 +418,7 @@ class MainActivity : ComponentActivity() {
 
                         Scaffold(
                             topBar = {
-                                if (currentScreen is Screen.Dashboard || currentScreen is Screen.Progress ||
-                                    currentScreen is Screen.Nutrition || currentScreen is Screen.Community) {
+                                if (currentScreen is Screen.Dashboard) {
                                     GlobalHeaderBar(
                                         isOnline = isOnline,
                                         onOpenMenu = {
@@ -460,7 +459,8 @@ class MainActivity : ComponentActivity() {
                             },
                             containerColor = MaterialTheme.colorScheme.background
                         ) { innerPadding ->
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                            val shouldApplyPadding = currentScreen !is Screen.Progress && currentScreen !is Screen.Nutrition && currentScreen !is Screen.Community
+                            Box(modifier = Modifier.fillMaxSize().then(if (shouldApplyPadding) Modifier.padding(innerPadding) else Modifier)) {
                                 // ============================================================
                                 // SCREEN ROUTING — vsak zaslon ima svojo vrstico
                                 // Za dodajanje novega zaslona: dodaj Screen objekt v AppNavigation.kt
@@ -536,7 +536,16 @@ class MainActivity : ComponentActivity() {
                                     currentScreen is Screen.Shop -> ShopScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.Progress -> ProgressScreen(
                                         openWeightInput = showWeightInputDialog,
-                                        userProfile = userProfile
+                                        userProfile = userProfile,
+                                        isOnline = isOnline,
+                                        onOpenMenu = {
+                                            HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN)
+                                            scope.launch { drawerState.open() }
+                                        },
+                                        onProClick = {
+                                            errorMessage = null
+                                            navViewModel.navigateTo(Screen.ProFeatures)
+                                        }
                                     )
                                     currentScreen is Screen.Nutrition -> {
                                         NutritionScreen(
@@ -549,7 +558,16 @@ class MainActivity : ComponentActivity() {
                                             openFoodSearch = openFoodSearch,
                                             onXPAdded = { appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail)) },
                                             snackbarHostState = nutritionSnackbarHostState,
-                                            userProfile = userProfile
+                                            userProfile = userProfile,
+                                            isOnline = isOnline,
+                                            onOpenMenu = {
+                                                HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN)
+                                                scope.launch { drawerState.open() }
+                                            },
+                                            onProClick = {
+                                                errorMessage = null
+                                                navViewModel.navigateTo(Screen.ProFeatures)
+                                            }
                                         )
                                     }
                                     currentScreen is Screen.BarcodeScanner -> BarcodeScannerScreen(
@@ -578,6 +596,15 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                     currentScreen is Screen.Community -> CommunityScreen(
+                                        isOnline = isOnline,
+                                        onOpenMenu = {
+                                            HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN)
+                                            scope.launch { drawerState.open() }
+                                        },
+                                        onProClick = {
+                                            errorMessage = null
+                                            navViewModel.navigateTo(Screen.ProFeatures)
+                                        },
                                         onViewProfile = { userId -> navigateTo(Screen.PublicProfile(userId)) }
                                     )
                                     currentScreen is Screen.BodyOverview -> BodyOverviewScreen(

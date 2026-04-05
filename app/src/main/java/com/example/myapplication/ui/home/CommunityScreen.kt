@@ -23,9 +23,14 @@ import kotlinx.coroutines.launch
 import com.example.myapplication.data.PublicProfile
 import androidx.compose.material.icons.automirrored.filled.List
 
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommunityScreen(
+    isOnline: Boolean = true,
+    onOpenMenu: () -> Unit = {},
+    onProClick: () -> Unit = {},
     onViewProfile: (String) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -47,12 +52,28 @@ fun CommunityScreen(
         isSearching = false
     }
 
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior(androidx.compose.material3.rememberTopAppBarState())
+
+    androidx.compose.material3.Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            com.example.myapplication.GlobalHeaderBar(
+                isOnline = isOnline,
+                onOpenMenu = onOpenMenu,
+                onProClick = onProClick,
+                scrollBehavior = scrollBehavior
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Surface(modifier = Modifier.padding(innerPadding), color = MaterialTheme.colorScheme.background) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
             ElevatedCard(
                 modifier = Modifier.fillMaxSize(),
                 shape = MaterialTheme.shapes.large,
@@ -248,6 +269,7 @@ fun CommunityScreen(
             }
         }
     }
+}
 }
 
 @Composable

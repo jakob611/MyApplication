@@ -33,6 +33,7 @@ Terminal VEDNO vrača output. Če dobiš prazen output ali "null":
 - To JE rezultat — ga preberi
 - NIKOLI ne napiši "terminal ne vrača outputa"
 - Zaženi: `./gradlew assembleDebug 2>&1 | tail -50` za jasen output
+- NIKOLI ne uporabljaj terminala in Python skript za avtomatsko spreminjanje kode in string/regex replace (prepovedano `python replace.py`). Vedno uporabi zgolj IDE vgrajena orodja (replace_string_in_file itd.).
 
 ---
 

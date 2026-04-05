@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.Badge
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -56,6 +57,8 @@ fun BadgeUnlockAnimation(
         delay(300)
         iconScale = 1.0f
         delay(3000)
+        visible = false
+        delay(300) // Wait for fade-out animation
         onDismiss()
     }
 
@@ -120,8 +123,15 @@ fun BadgeUnlockAnimation(
 
                 Spacer(Modifier.height(32.dp))
 
+                val scope = rememberCoroutineScope()
                 Button(
-                    onClick = onDismiss,
+                    onClick = {
+                        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            visible = false
+                            delay(300)
+                            onDismiss()
+                        }
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFFFD700)
                     )

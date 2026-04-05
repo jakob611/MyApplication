@@ -41,57 +41,60 @@ import com.example.myapplication.ui.screens.GenderCache
 // -----------------------------------------------------------------------
 // GLOBAL HEADER BAR (prikazan na Dashboard, Progress, Nutrition, Community)
 // -----------------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalHeaderBar(
     isOnline: Boolean = true,
     onOpenMenu: () -> Unit,
-    onProClick: () -> Unit
+    onProClick: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Column {
-            Row(
+    TopAppBar(
+        title = { },
+        navigationIcon = {
+            ElevatedCard(
+                onClick = onOpenMenu,
                 modifier = Modifier
-                    .statusBarsPadding()
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 14.dp)
+                    .size(52.dp), // Slightly smaller than 56 to fit 64dp TopAppBar height neatly
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
             ) {
-                ElevatedCard(
-                    onClick = onOpenMenu,
-                    modifier = Modifier.size(56.dp),
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_muscular_stickman),
-                            contentDescription = "Menu Avatar",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_muscular_stickman),
+                        contentDescription = "Menu Avatar",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
-
-                Spacer(Modifier.weight(1f))
-
-                AssistChip(
-                    onClick = onProClick,
-                    label = {
-                        Text("Upgrade to Premium", style = MaterialTheme.typography.labelLarge)
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary,
-                        labelColor = MaterialTheme.colorScheme.onTertiary
-                    ),
-                    shape = MaterialTheme.shapes.large
-                )
             }
-        }
-    }
+        },
+        actions = {
+            AssistChip(
+                onClick = onProClick,
+                modifier = Modifier.padding(end = 14.dp),
+                label = {
+                    Text("Upgrade to Premium", style = MaterialTheme.typography.labelLarge)
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    labelColor = MaterialTheme.colorScheme.onTertiary
+                ),
+                shape = MaterialTheme.shapes.large
+            )
+        },
+        scrollBehavior = scrollBehavior,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            scrolledContainerColor = MaterialTheme.colorScheme.background
+        )
+    )
 }
 
 // -----------------------------------------------------------------------

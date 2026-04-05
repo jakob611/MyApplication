@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,7 +107,10 @@ fun NutritionScreen(
     openFoodSearch: Boolean = false,
     onXPAdded: () -> Unit = {},
     snackbarHostState: SnackbarHostState,
-    userProfile: com.example.myapplication.data.UserProfile = com.example.myapplication.data.UserProfile()
+    userProfile: com.example.myapplication.data.UserProfile = com.example.myapplication.data.UserProfile(),
+    isOnline: Boolean = true,
+    onOpenMenu: () -> Unit = {},
+    onProClick: () -> Unit = {}
 ) {
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -562,24 +566,42 @@ fun NutritionScreen(
     val proteinProp = if (totalMacroCalories > 0) (proteinCals.toFloat() / totalMacroCalories.toFloat()).coerceIn(0f, 1f) else 0f
     val carbsProp = if (totalMacroCalories > 0) (carbsCals.toFloat() / totalMacroCalories.toFloat()).coerceIn(0f, 1f) else 0f
 
-    Box(Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp)
-        ) {
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior(androidx.compose.material3.rememberTopAppBarState())
+
+    androidx.compose.material3.Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            com.example.myapplication.GlobalHeaderBar(
+                isOnline = isOnline,
+                onOpenMenu = onOpenMenu,
+                onProClick = onProClick,
+                scrollBehavior = scrollBehavior
+            )
+        },
+        containerColor = backgroundColor
+    ) { innerPadding ->
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(backgroundColor)
+                    .verticalScroll(rememberScrollState())
+                    .padding(innerPadding)
+                    .padding(horizontal = 12.dp)
+            ) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Donut Progress View
             // Donut Progress View + Active Calories Bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     // Workout / Rest day oznaka
                     if (plan != null) {
                         val dayLabel = if (isWorkoutDayToday) "🏋️ Workout day" else "😴 Rest day"
@@ -651,10 +673,12 @@ fun NutritionScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Active Calories Bar (Goal: 800 kcal)
-                ActiveCaloriesBar(currentCalories = activeCaloriesBurned, goal = 800)
+                Box(
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
+                ) {
+                    // Active Calories Bar (Goal: 800 kcal)
+                    ActiveCaloriesBar(currentCalories = activeCaloriesBurned, goal = 800)
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1053,4 +1077,5 @@ fun NutritionScreen(
             shape = MaterialTheme.shapes.extraLarge
         )
     }
+}
 } // End NutritionScreen

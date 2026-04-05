@@ -241,3 +241,5 @@
 | **Health Connect sync** | `HealthConnectScreen.kt` + `data/HealthStorage.kt` |
 | **BMI / body fat % izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
 
+-   U p d a t e d   M A P B O X _ P U B L I C _ K E Y   i n   l o c a l . p r o p e r t i e s  
+ 

@@ -86,7 +86,15 @@ internal fun macroLabel(label: String, consumed: Double, target: Int, unitPrefer
         else -> ""
     }
     val unit = if (unitPreference == "lbs" || unitPreference == "lb") "oz" else "g"
-    val cVal = if (unit == "oz") (consumed / 28.3495).roundToInt() else consumed.roundToInt()
-    val tVal = if (unit == "oz") (target.toDouble() / 28.3495).roundToInt() else target
+    val cVal = if (unit == "oz") {
+        (consumed / 28.3495).roundToInt()
+    } else {
+        (kotlin.math.round(consumed / 10.0) * 10).toInt()
+    }
+    val tVal = if (unit == "oz") {
+        (target.toDouble() / 28.3495).roundToInt()
+    } else {
+        (kotlin.math.round(target / 10.0) * 10).toInt()
+    }
     return if (target > 0) "$emoji $label: $cVal/$tVal $unit" else "$emoji $label: $cVal $unit"
 }

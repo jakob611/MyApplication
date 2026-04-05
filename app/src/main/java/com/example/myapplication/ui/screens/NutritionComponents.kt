@@ -129,12 +129,11 @@ internal fun MacroTextRow(
     var explainedMacro by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     fun macroColor(consumed: Double, target: Int): Color {
-        if (target <= 0) return textPrimary
-        val deviation = kotlin.math.abs((consumed - target) / target)
-        return when {
-            deviation <= 0.10 -> Color(0xFF10B981)
-            deviation <= 0.20 -> Color(0xFFF59E0B)
-            else -> Color(0xFFEF4444)
+        if (target <= 0) return textPrimary.copy(alpha = 0.5f)
+        return if (consumed > target) {
+            Color(0xFFEF4444)
+        } else {
+            textPrimary.copy(alpha = 0.5f)
         }
     }
 
