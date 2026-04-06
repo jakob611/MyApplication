@@ -280,3 +280,4 @@ U p d a t e d   m a p   p r o c e s s i n g   a l g o r i t h m   f o r   s m o 
  
 - Nutrition Screen UI Optimizations: Centered the Donut macro progress vertically/horizontally, rounded displayed gram values to nearest 10, and simplified macro text colors to gray (incomplete) and red (exceeded) to reduce visual loudness on empty days.
 - **2026-04-05**: Fixed BadgeUnlockAnimation fade-out bug, fixed Donut chart macro rounding and red/grey target display, centered Donut visually against ActiveCalories bar in Nutrition screen.
+- Passed missing isOnline, onOpenMenu, and onProClick parameters to GlobalHeaderBar in Progress, Nutrition, and Community screens.

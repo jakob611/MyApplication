@@ -154,3 +154,5 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  
  -   R u n T r a c k e r S c r e e n :   a u t o m a t i c a l l y   d i s p a t c h   M a p b o x   r o u t e   m a t c h i n g   a t   e n d   o f   w o r k o u t   fo
 - Fixed missing TopAppBar in CommunityScreen and clipped height by migrating GlobalHeaderBar layout to use Material3 TopAppBar under the hood.
+-   2 0 2 6 - 0 4 - 0 6   ( N u t r i t i o n   &   C o m m u n i t y   f i x e s )   -   P o p r a v l j e n   o d r e z a n   h e a d e r   n a   C o m m u n i t y S c r e e n ,   z a o k r o z e v a n j e   m a k r o v   i n   p o p r a v l j e n   a l i g n m e n t   z a   D o n u t   c h a r t  
+ 
