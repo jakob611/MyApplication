@@ -524,7 +524,7 @@ internal fun MakeCustomMealsDialog(
                                 )
                                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                     try {
-                                        val newId = com.example.myapplication.domain.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                        val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
                                         onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal)
                                         isSaving = false
                                     } catch (e: Exception) {

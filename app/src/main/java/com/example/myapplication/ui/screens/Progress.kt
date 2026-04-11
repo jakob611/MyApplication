@@ -1015,10 +1015,8 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                             // AchievementStore.awardXP sproži badge preverjanje
                             val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
                             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                com.example.myapplication.persistence.AchievementStore.awardXP(
-                                    context, userEmail, 50,
-                                    com.example.myapplication.data.XPSource.WEIGHT_ENTRY, "Weight logged"
-                                )
+                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
+                                useCase.awardXP(50, "WEIGHT_ENTRY")
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
                                 }

@@ -897,9 +897,8 @@ private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, set
                             val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
                             val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
                             CoroutineScope(Dispatchers.IO).launch {
-                                com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
-                                    context = context,
-                                    email = userEmail,
+                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
+                                useCase.recordWorkoutCompletion(
                                     caloriesBurned = caloriesRounded.toDouble(),
                                     hour = currentHour
                                 )

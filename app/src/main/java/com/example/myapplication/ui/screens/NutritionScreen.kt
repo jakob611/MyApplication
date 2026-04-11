@@ -481,10 +481,10 @@ fun NutritionScreen(
                     prefs.edit().putBoolean(xpKey, true).apply()
                     // AchievementStore.awardXP: pravilna pot — skozi FirestoreHelper, beleži xp_history, preveri badge-e
                     // LaunchedEffect je suspend context, klic je direkten (brez scope.launch)
-                    com.example.myapplication.persistence.AchievementStore.awardXP(
-                        context, userEmail, 100,
-                        com.example.myapplication.data.XPSource.NUTRITION_GOAL,
-                        "Hit daily calorie goal"
+                    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
+                    useCase.awardXP(
+                        100,
+                        "NUTRITION_GOAL"
                     )
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onXPAdded() }
                 }

@@ -224,7 +224,11 @@ class MainActivity : ComponentActivity() {
                     navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
                     scope.launch(Dispatchers.IO) {
-                        try { com.example.myapplication.persistence.AchievementStore.recordLoginOnly(context, userEmail) }
+                        try {
+                            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                            useCase.recordLoginOnly()
+                        }
                         catch (e: Exception) { Log.e("MainActivity", "Login streak error: ${e.message}") }
                     }
                     scope.launch(Dispatchers.IO) {
@@ -251,7 +255,11 @@ class MainActivity : ComponentActivity() {
                     }
                     scope.launch(Dispatchers.IO) {
                         delay(1500)
-                        try { com.example.myapplication.persistence.AchievementStore.checkAndSyncBadgesOnStartup(context, userEmail) }
+                        try {
+                            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                            useCase.checkAndSyncBadgesOnStartup()
+                        }
                         catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
                     }
                     scope.launch {
@@ -686,7 +694,9 @@ class MainActivity : ComponentActivity() {
                                                 UserPreferences.saveProfileFirestore(finalProfile)
                                                 UserPreferences.saveProfile(context, finalProfile)
                                                 appViewModel.setProfile(finalProfile)
-                                                com.example.myapplication.persistence.AchievementStore.recordPlanCreation(context, userEmail)
+                                                val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                                                useCase.recordPlanCreation()
                                                 appViewModel.setProfile(UserPreferences.loadProfile(context, userEmail))
                                                 val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                                                 if (uid != null) {

@@ -480,7 +480,7 @@ fun WorkoutSessionScreen(
                         },
                         totalKcal = results.sumOf { it.caloriesKcal },
                         totalTimeMin = results.sumOf { it.activeMinutes + it.restMinutes },
-                        onCompletion = { result ->
+                        onCompletion = { result: com.example.myapplication.domain.gamification.WorkoutCompletionResult? ->
                             // Handle badges and navigation only AFTER save is complete
                             if (result != null) {
                                 result.unlockedBadges.firstOrNull()?.let { badge -> onBadgeUnlocked(badge) }
@@ -495,6 +495,7 @@ fun WorkoutSessionScreen(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun ExerciseScreen(
     exercise: ExerciseData,

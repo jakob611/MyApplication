@@ -1,4 +1,4 @@
-package com.example.myapplication.domain.nutrition
+package com.example.myapplication.data.nutrition
 
 import com.example.myapplication.network.FatSecretApi
 import com.example.myapplication.network.FoodDetail

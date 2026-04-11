@@ -695,11 +695,8 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                     val xp = calculateXP(selectedActivity, finalDistance, finalTime)
                                     val runEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
                                     if (runEmail != null) {
-                                        com.example.myapplication.persistence.AchievementStore.awardXP(
-                                            context, runEmail, xp,
-                                            com.example.myapplication.data.XPSource.RUN_COMPLETED,
-                                            "Completed ${selectedActivity.label}: ${finalDistance.toInt()}m"
-                                        )
+                                        val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
+                                        useCase.awardXP(xp, "RUN_COMPLETED")
 
                                         val app = context.applicationContext as android.app.Application
                                         val bodyVm = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(app)

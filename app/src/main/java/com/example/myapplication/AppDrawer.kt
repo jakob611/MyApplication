@@ -724,9 +724,11 @@ fun SettingsDropdownRow(
 // Badge zahteve so definirane SAMO v BadgeDefinitions.ALL_BADGES (badge.requirement).
 // -----------------------------------------------------------------------
 fun calculateAutoUnlockedBadgeCount(userProfile: UserProfile): Pair<Set<String>, Int> {
+    val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
     val ids = com.example.myapplication.data.BadgeDefinitions.ALL_BADGES
         .filter { badge ->
-            com.example.myapplication.persistence.AchievementStore.getBadgeProgress(badge.id, userProfile) >= badge.requirement
+            useCase.getBadgeProgress(badge.id, userProfile) >= badge.requirement
         }
         .map { it.id }
         .toSet()

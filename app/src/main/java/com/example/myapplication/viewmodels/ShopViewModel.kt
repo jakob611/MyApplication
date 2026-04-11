@@ -6,7 +6,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.UserPreferences
 import com.example.myapplication.data.UserProfile
-import com.example.myapplication.persistence.AchievementStore
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions

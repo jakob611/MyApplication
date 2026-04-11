@@ -95,9 +95,9 @@ class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(appli
         val reward = challenge?.xpReward ?: 100
         
         viewModelScope.launch(Dispatchers.IO) {
-            com.example.myapplication.persistence.AchievementStore.awardXP(
-                getApplication(), userEmail, reward, com.example.myapplication.data.XPSource.BADGE_UNLOCKED, "Completed Challenge: ${challenge?.title}"
-            )
+            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+            useCase.awardXP(reward, "BADGE_UNLOCKED")
         }
     }
 
@@ -264,9 +264,9 @@ class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(appli
                     val today = LocalDate.now()
 
                     // 1. Award XP
-                    com.example.myapplication.persistence.AchievementStore.awardXP(
-                        getApplication(), email, 10, com.example.myapplication.data.XPSource.WORKOUT_COMPLETE, "Completed Rest Day Mobility"
-                    )
+                    val repoInstance = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                    val useCaseInstance = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repoInstance)
+                    useCaseInstance.awardXP(10, "WORKOUT_COMPLETE")
 
                     // 2. Mark as done locally AND advance Plan Day
                     val currentPlanDay = prefs.getInt("plan_day", 1)
@@ -344,7 +344,7 @@ class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(appli
 
     fun completeWorkoutSession(
         isExtraWorkout: Boolean = false,
-        onCompletion: (com.example.myapplication.persistence.AchievementStore.WorkoutCompletionResult?) -> Unit = {},
+        onCompletion: (com.example.myapplication.domain.gamification.WorkoutCompletionResult?) -> Unit = {},
         exerciseResults: List<Map<String, Any>> = emptyList(),
         totalKcal: Int = 0,
         totalTimeMin: Double = 0.0
@@ -407,8 +407,8 @@ class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(appli
                     return@launch
                 }
     
-                var completionResult: com.example.myapplication.persistence.AchievementStore.WorkoutCompletionResult? = null
-    
+                var completionResult: com.example.myapplication.domain.gamification.WorkoutCompletionResult? = null
+
                 try {
                     val batch = com.google.firebase.firestore.FirebaseFirestore.getInstance().batch()
                     val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -416,9 +416,12 @@ class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(appli
                     // Determine hour for Early Bird / Night Owl stats
                     val hour = java.time.LocalTime.now().hour
                     
+                    val repoInstance = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                    val useCaseInstance = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repoInstance)
+
                     // Use AchievementStore to record stats (Early Bird, Night Owl, Total Calories)
-                    val res = com.example.myapplication.persistence.AchievementStore.recordWorkoutCompletion(
-                        context, userEmail, totalKcal.toDouble(), hour, batch
+                    val res = useCaseInstance.recordWorkoutCompletion(
+                        totalKcal.toDouble(), hour
                     )
                     completionResult = res
                     

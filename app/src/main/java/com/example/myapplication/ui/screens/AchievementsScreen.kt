@@ -40,6 +40,8 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.example.myapplication.domain.gamification.ManageGamificationUseCase
+import com.example.myapplication.data.gamification.FirestoreGamificationRepository
 
 @Composable
 fun AchievementsScreen(
@@ -76,8 +78,9 @@ fun AchievementsScreen(
 
     // Convert badge IDs to Badge objects with LIVE progress calculation
     val allBadges = BadgeDefinitions.ALL_BADGES
+    val useCase = ManageGamificationUseCase(FirestoreGamificationRepository())
     val badgesWithStatus = allBadges.map { badge ->
-        val progress = com.example.myapplication.persistence.AchievementStore.getBadgeProgress(badge.id, userProfile)
+        val progress = useCase.getBadgeProgress(badge.id, userProfile)
         // badge.requirement je definiran v BadgeDefinitions.ALL_BADGES — en sam vir resnice
         val req = badge.requirement
         val isUnlocked = userProfile.badges.contains(badge.id) || progress >= req
@@ -637,4 +640,4 @@ private suspend fun loadUserInfo(userId: String): FollowUserInfo? {
     }
 }
 
-
+// Removed unused BadgeGrid that called undefined BadgeItemWithFlip
