@@ -107,7 +107,7 @@ internal fun AddFoodSheet(    meal: MealType,
         autocompleteSuggestions = emptyList()
         scope.launch {
             searching = true; searchError = null; hasSearched = true
-            runCatching { FatSecretApi.searchFoods(query, 1, 20) }
+            runCatching { com.example.myapplication.domain.nutrition.FoodRepositoryImpl.searchFoodByName(query, 20) }
                 .onSuccess { results = it }
                 .onFailure { e -> searchError = e.message ?: "Search failed" }
             searching = false
@@ -129,7 +129,7 @@ internal fun AddFoodSheet(    meal: MealType,
         LaunchedEffect(query) {
             if (query.length >= 2 && !hasSearched) {
                 runCatching {
-                    autocompleteSuggestions = FatSecretApi.getFoodAutocomplete(query, 5).map { it.suggestion }
+                    autocompleteSuggestions = com.example.myapplication.domain.nutrition.FoodRepositoryImpl.getFoodAutocomplete(query, 5)
                 }.onFailure { autocompleteSuggestions = emptyList() }
             } else {
                 autocompleteSuggestions = emptyList()
@@ -252,7 +252,7 @@ internal fun AddFoodSheet(    meal: MealType,
                         Button(onClick = {
                             clickedFoodSummary = item // Save this for recent cache
                             scope.launch {
-                                runCatching { FatSecretApi.getFoodDetail(item.id) }
+                                runCatching { com.example.myapplication.domain.nutrition.FoodRepositoryImpl.getFoodDetail(item.id) }
                                     .onSuccess { d -> showAmountDialogFor = d }
                                     .onFailure { e -> searchError = e.message ?: "Failed to load food detail" }
                             }
@@ -307,7 +307,7 @@ fun RecipesSearchSection(
         keyboardController?.hide() // Auto-hide keyboard
         scope.launch {
             searching = true; errorMsg = null; hasSearched = true
-            runCatching { FatSecretApi.searchRecipes(query, 1, 20) }
+            runCatching { com.example.myapplication.domain.nutrition.FoodRepositoryImpl.searchRecipes(query, 20) }
                 .onSuccess { results = it; Log.d("RecipesSearch", "Found ${it.size} recipes") }
                 .onFailure { e -> errorMsg = e.message ?: "Search failed"; Log.e("RecipesSearch", "Failed", e) }
             searching = false
@@ -398,7 +398,7 @@ fun RecipesSearchSection(
                     RecipeCard(recipe = recipe,
                         onClick = {
                             scope.launch {
-                                runCatching { FatSecretApi.getRecipeDetail(recipe.id) }
+                                runCatching { com.example.myapplication.domain.nutrition.FoodRepositoryImpl.getRecipeDetail(recipe.id) }
                                     .onSuccess { selectedRecipe = it }
                             }
                         },

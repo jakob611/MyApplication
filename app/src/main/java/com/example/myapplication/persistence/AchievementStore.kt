@@ -402,59 +402,15 @@ object AchievementStore {
             val daysBetween = if (lastUpdateDate != null) java.time.temporal.ChronoUnit.DAYS.between(lastUpdateDate, today) else 0L
 
             if (daysBetween > 1) {
-                // Check daily_logs for missed days before declaring them missed
-                // This makes the streak robust against stale "last_streak_update_date" (e.g. after crash or restore)
-                var actuallyMissedDays = 0
-                val missedDates = mutableListOf<LocalDate>()
-                
-                var checkDate = lastUpdateDate!!.plusDays(1)
-                while (checkDate.isBefore(today)) {
-                     val logRef = docRef.collection("daily_logs").document(checkDate.toString())
-                     // We must await to be sure. This might be slow if many days, but usually it's 1-2 days.
-                     val logSnap = logRef.get().await()
-                     if (!logSnap.exists()) {
-                         actuallyMissedDays++
-                         missedDates.add(checkDate)
-                     }
-                     checkDate = checkDate.plusDays(1)
-                }
-
-                if (actuallyMissedDays > 0) {
-                    // We truly missed some days. Check for freezes.
-                    if (profile.streakFreezes >= actuallyMissedDays) {
-                         consumedFreezes = actuallyMissedDays
-                         Log.d("AchievementStore", "❄️ Rescuing streak! Consuming $consumedFreezes freezes.")
-                         
-                         // Create 'frozen' logs for missed days -> matches user request for "map filled"
-                         for (missedDate in missedDates) {
-                             val frozenLog = mapOf(
-                                "date" to missedDate.toString(),
-                                "completed" to true,
-                                "type" to "frozen",
-                                "streak_at_this_point" to effectiveStreak, // Maintain level
-                                "timestamp" to FieldValue.serverTimestamp()
-                             )
-                             docRef.collection("daily_logs").document(missedDate.toString()).set(frozenLog).await()
-                         }
-
-                         withContext(Dispatchers.Main) {
-                             try {
-                                 android.widget.Toast.makeText(context, "❄️ Streak Freeze Used ($consumedFreezes)!", android.widget.Toast.LENGTH_LONG).show()
-                             } catch (_: Exception) {}
-                         }
-                    } else {
-                        // Not enough freezes -> Streak Reset 💀
-                        effectiveStreak = 0 
-                    }
-                } else {
-                    // All intermediate days were actually found in daily_logs! 
-                    // Legacy date was stale, but user was active. Streak continues.
-                    Log.d("AchievementStore", "Streak intact: All intermediate days found in logs.")
-                }
+                // OPOMBA: Zamujeni dnevi in Streak Freeze se od sedaj naprej obravnavajo striktno
+                // preko WeeklyStreakWorker-ja, ki teče v ozadju in upošteva Auto-Swap logiko.
+                // Ta legacy koda za ročno kurjenje freeze-ov in resetanje streaka je bila odstranjena,
+                // da se prepreči podvajanje / razdrobljenost logike in nepošten reset ob failu workerja.
+                Log.d("AchievementStore", "Missed days detected ($daysBetween). Relaying all freeze & auto-swap logic to WeeklyStreakWorker.")
             }
             
             // 4. Calculate new values
-            val newStreak = effectiveStreak + 1
+            val newStreak = if (isWorkoutSuccess) effectiveStreak + 1 else effectiveStreak
             // Ensure we don't consume more freezes than we have
             val newFreezes = (profile.streakFreezes - consumedFreezes).coerceAtLeast(0)
 

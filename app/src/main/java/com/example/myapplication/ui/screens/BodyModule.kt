@@ -931,8 +931,7 @@ private fun PlanResultStep(
                             if (weightKg != null && uid != null) {
                                 try {
                                     val dateStr = java.time.LocalDate.now().toString()
-                                    Firebase.firestore
-                                        .collection("users").document(uid)
+                                    com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
                                         .collection("weightLogs").document(dateStr)
                                         .set(mapOf("date" to dateStr, "weightKg" to weightKg))
                                     Log.d("BodyPlanQuiz", "Saved initial weight $weightKg kg to weightLogs")

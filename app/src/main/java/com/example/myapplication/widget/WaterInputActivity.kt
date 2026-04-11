@@ -15,8 +15,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import java.time.LocalDate
 
 /**
@@ -105,10 +103,11 @@ class WaterInputActivity : ComponentActivity() {
 
                         saving = true
                         val today = LocalDate.now().toString()
-                        val db = Firebase.firestore
+                        val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
+                        Log.d("WaterInput", "WRITE doc=${userRef.id} date=$today waterMl=$w")
 
                         // Save to dailyLogs (where water is stored)
-                        db.collection("users").document(uid).collection("dailyLogs").document(today)
+                        userRef.collection("dailyLogs").document(today)
                             .set(
                                 mapOf("date" to today, "waterMl" to w, "updatedAt" to FieldValue.serverTimestamp()),
                                 com.google.firebase.firestore.SetOptions.merge()

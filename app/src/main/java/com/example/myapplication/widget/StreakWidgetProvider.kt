@@ -9,7 +9,6 @@ import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
 import com.example.myapplication.R
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -70,25 +69,21 @@ class StreakWidgetProvider : AppWidgetProvider() {
         }
 
         private fun syncFromFirestore(context: Context) {
-            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-            val email = Firebase.auth.currentUser?.email
-
-            if (uid == null || email == null) {
+            val userDocId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+            if (userDocId == null) {
                 refreshWidgetUI(context)
                 return
             }
 
-            val db = Firebase.firestore
-
-            // Beri streak_days in plan_day iz users/{email}
-            db.collection("users").document(email)
+            // Beri streak_days in plan_day iz users/{resolvedDocId} (email-first)
+            com.example.myapplication.persistence.FirestoreHelper.getUserRef(userDocId)
                 .get()
                 .addOnSuccessListener { userSnap ->
                     val streak = (userSnap.getLong("streak_days") ?: 0L).toInt()
                     val planDay = (userSnap.getLong("plan_day") ?: 1L).toInt()
 
-                    // Beri plan iz user_plans/{uid} da dobimo trainingDays
-                    db.collection("user_plans").document(uid)
+                    // Beri plan iz user_plans/{resolvedDocId}
+                    Firebase.firestore.collection("user_plans").document(userDocId)
                         .get()
                         .addOnSuccessListener { planSnap ->
                             @Suppress("UNCHECKED_CAST")

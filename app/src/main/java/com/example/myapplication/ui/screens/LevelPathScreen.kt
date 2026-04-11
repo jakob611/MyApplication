@@ -581,8 +581,7 @@ data class FollowUserInfo(
 // Helper funkcija za nalaganje info o uporabniku
 private suspend fun loadFollowUserInfo(userId: String): FollowUserInfo? {
     return try {
-        val doc = Firebase.firestore.collection("users")
-            .document(userId)
+        val doc = com.example.myapplication.persistence.FirestoreHelper.getUserRef(userId)
             .get()
             .await()
 

@@ -35,6 +35,7 @@ object UserPreferences {
     private const val KEY_SHOW_PLAN_PATH = "show_plan_path"
     private const val KEY_SHOW_CHALLENGES = "show_challenges"
     private const val KEY_SHOW_FOLLOWERS = "show_followers"
+    private const val KEY_SHARE_ACTIVITIES = "share_activities" // Added share activities
     // Achievement tracking keys
     private const val KEY_TOTAL_CALORIES = "total_calories"
     private const val KEY_EARLY_BIRD = "early_bird_workouts"
@@ -83,6 +84,7 @@ object UserPreferences {
             putBoolean(userKey(profile.email, KEY_SHOW_PLAN_PATH), profile.showPlanPath)
             putBoolean(userKey(profile.email, KEY_SHOW_CHALLENGES), profile.showChallenges)
             putBoolean(userKey(profile.email, KEY_SHOW_FOLLOWERS), profile.showFollowers)
+            putBoolean(userKey(profile.email, KEY_SHARE_ACTIVITIES), profile.shareActivities) // Save share activities
             // Achievement tracking
             putInt(userKey(profile.email, "total_workouts_completed"), profile.totalWorkoutsCompleted)
             putFloat(userKey(profile.email, KEY_TOTAL_CALORIES), profile.totalCaloriesBurned.toFloat())
@@ -141,6 +143,7 @@ object UserPreferences {
             showPlanPath = prefs.getBoolean(userKey(email, KEY_SHOW_PLAN_PATH), false),
             showChallenges = prefs.getBoolean(userKey(email, KEY_SHOW_CHALLENGES), false),
             showFollowers = prefs.getBoolean(userKey(email, KEY_SHOW_FOLLOWERS), false),
+            shareActivities = prefs.getBoolean(userKey(email, KEY_SHARE_ACTIVITIES), false), // Load share activities
             // Achievement tracking
             totalWorkoutsCompleted = prefs.getInt(userKey(email, "total_workouts_completed"), 0),
             totalCaloriesBurned = prefs.getFloat(userKey(email, KEY_TOTAL_CALORIES), 0f).toDouble(),
@@ -249,15 +252,9 @@ object UserPreferences {
             KEY_SHOW_PLAN_PATH to profile.showPlanPath,
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
-            "total_workouts_completed" to profile.totalWorkoutsCompleted,    // kanonični ključ
-            KEY_TOTAL_CALORIES to profile.totalCaloriesBurned,
-            KEY_EARLY_BIRD to profile.earlyBirdWorkouts,
-            KEY_NIGHT_OWL to profile.nightOwlWorkouts,
-            "streak_days" to profile.currentLoginStreak,                      // kanonični ključ
-            KEY_LAST_LOGIN to (profile.lastLoginDate ?: ""),
-            KEY_TOTAL_PLANS to profile.totalPlansCreated,
-            KEY_PROFILE_PICTURE to profile.profilePictureUrl,
-            "limitations" to profile.limitations,
+            KEY_SHARE_ACTIVITIES to profile.shareActivities, // Save share activities to Firestore
+
+            "profilePictureUrl" to profile.profilePictureUrl
         )
 
         // KRITIČNO: polja ki so null se NE smejo pisati v Firestore!
@@ -355,6 +352,7 @@ object UserPreferences {
         val showPlanPath = doc.getBoolean(KEY_SHOW_PLAN_PATH) ?: false
         val showChallenges = doc.getBoolean(KEY_SHOW_CHALLENGES) ?: false
         val showFollowers = doc.getBoolean(KEY_SHOW_FOLLOWERS) ?: false
+        val shareActivities = doc.getBoolean(KEY_SHARE_ACTIVITIES) ?: false
         val totalWorkouts = (doc.get("total_workouts_completed") as? Number)?.toInt() ?: 0
         val totalCalories = (doc.get(KEY_TOTAL_CALORIES) as? Number)?.toDouble() ?: 0.0
         val earlyBird = (doc.get(KEY_EARLY_BIRD) as? Number)?.toInt() ?: 0
@@ -388,6 +386,7 @@ object UserPreferences {
             isPublicProfile = isPublic, showLevel = showLevel, showBadges = showBadges,
             showStreak = showStreak, // Load show streak
             showPlanPath = showPlanPath, showChallenges = showChallenges, showFollowers = showFollowers,
+            shareActivities = shareActivities,
             totalWorkoutsCompleted = totalWorkouts, totalCaloriesBurned = totalCalories,
             earlyBirdWorkouts = earlyBird, nightOwlWorkouts = nightOwl,
             currentLoginStreak = loginStreak, lastLoginDate = lastLogin,

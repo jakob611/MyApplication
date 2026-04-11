@@ -131,6 +131,8 @@ fun PlanPathVisualizer(
                     val dayPlan = dayPlanMap[globalDay]
                     val isRestDay = dayPlan?.isRestDay ?: false
                     val focusLabel = dayPlan?.focusLabel ?: ""
+                    val isFrozen = dayPlan?.isFrozen ?: false
+                    val isSwapped = dayPlan?.isSwapped ?: false
 
                     val isPast = globalDay < currentDayGlobal
                     val isToday = globalDay == currentDayGlobal
@@ -141,14 +143,17 @@ fun PlanPathVisualizer(
 
                     val isDragSource = draggedDay == globalDay
                     val isDropTarget = dropTargetDay == globalDay && draggedDay != -1 && draggedDay != globalDay
-                    val isDraggable = globalDay >= currentDayGlobal && onDragSwap != null
+                    val isDraggable = globalDay >= currentDayGlobal && onDragSwap != null && !isFrozen
 
                     val nodeColor = when {
+                        isFrozen -> Color(0xFF00BCD4) // Ledena barva
                         isDropTarget -> Color(0xFFFF9800)
                         isDragSource -> Color(0xFF7C3AED)
                         swapSourceDay == globalDay -> Color(0xFF7C3AED)
                         swapSourceDay != null && !isRestDay && globalDay >= currentDayGlobal &&
                             ((swapSourceDay - 1) / 7) == ((globalDay - 1) / 7) -> Color(0xFFFF9800)
+                        isSwapped && isCompleted -> Color(0xFF9C27B0) // Zamenjani opravljeni
+                        isSwapped -> Color(0xFFBA68C8) // Zamenjani
                         isRestDay && isCompleted -> Color(0xFF546E7A)
                         isRestDay && isToday -> Color(0xFF78909C)
                         isRestDay -> if (isDarkMode) Color(0xFF37474F) else Color(0xFFB0BEC5)
@@ -230,8 +235,8 @@ fun PlanPathVisualizer(
                                 } else Modifier
                             )
                             .combinedClickable(
-                                onClick = { if (draggedDay == -1) onNodeClick(globalDay) },
-                                onLongClick = { onNodeLongClick?.invoke(globalDay) }
+                                onClick = { if (draggedDay == -1 && !isFrozen) onNodeClick(globalDay) },
+                                onLongClick = { if (!isFrozen) onNodeLongClick?.invoke(globalDay) }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -239,10 +244,15 @@ fun PlanPathVisualizer(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            if (isRestDay) {
+                            if (isFrozen) {
+                                Text("❄️", fontSize = 20.sp)
+                                Text("FROZEN", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            } else if (isRestDay) {
                                 Text("💤", fontSize = if (isCompleted || isToday) 20.sp else 16.sp)
                                 if (!isFuture || isToday) {
-                                    Text("REST", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    Text(if (isSwapped) "SWAP" else "REST", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                } else if (isSwapped && isFuture) {
+                                    Text("SWAP", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                                 }
                             } else if (isCompleted) {
                                 Text("$globalDay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)

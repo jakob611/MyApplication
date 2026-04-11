@@ -2,6 +2,8 @@
 
 package com.example.myapplication.ui.screens
 
+import kotlinx.datetime.toLocalDateTime
+
 // =====================================================================
 // NutritionScreen.kt
 // Vsebuje: glavni NutritionScreen composable, ActiveCaloriesBar,
@@ -157,7 +159,7 @@ fun NutritionScreen(
 
     // DanaĹˇnji vnosi (lokalni state) â€” takoj naloĹľi iz lokalnega cache-a
     val initialFoods = remember {
-        val cacheDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val cacheDate = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
         try {
             val json = com.example.myapplication.persistence.DailySyncManager.loadFoodsJson(context, cacheDate)
             if (!json.isNullOrBlank()) {
@@ -327,7 +329,7 @@ fun NutritionScreen(
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
 
     // todayId — skupni ključ za vse lokalne cache-e (food, water, burned)
-    val todayId = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    val todayId = remember { kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString() }
     var lastSyncedSignature by remember { mutableStateOf("") }
     fun foodsSignature(list: List<TrackedFood>) = list.joinToString("|") { tf ->
         listOf(

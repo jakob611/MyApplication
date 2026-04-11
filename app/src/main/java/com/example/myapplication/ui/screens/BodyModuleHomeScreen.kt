@@ -46,12 +46,11 @@ fun BodyModuleHomeScreen(
     onStartPlan: () -> Unit,
     onStartWorkout: (PlanResult?) -> Unit,
     onStartAdditionalWorkout: () -> Unit = {},
-    currentPlan: PlanResult?,
-    onOpenHistory: () -> Unit,
-    onOpenManualLog: () -> Unit,
+    currentPlan: com.example.myapplication.data.PlanResult? = null,
+    onOpenHistory: () -> Unit = {},
+    onOpenManualLog: () -> Unit = {},
     onStartRun: () -> Unit = {},
-    onOpenActivityLog: () -> Unit = {},
-    onOpenShop: () -> Unit = {}
+    onOpenActivityLog: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val vm: BodyModuleHomeViewModel = viewModel(
@@ -201,7 +200,7 @@ fun BodyModuleHomeScreen(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("Rest Day: Mobility & Stretching", color = MaterialTheme.colorScheme.onSecondary, fontWeight = FontWeight.Bold)
-                            Text("Take 5 mins to stretch +20 XP", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f), fontSize = 12.sp)
+                            Text("Take 5 mins to stretch +10 XP", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f), fontSize = 12.sp)
                         }
                     }
                 }
@@ -368,23 +367,6 @@ fun BodyModuleHomeScreen(
                         .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f))
                 ) {
                     Text("🗺️", fontSize = 22.sp)
-                }
-
-                // 🛒 Gumb za Shop
-                IconButton(
-                    onClick = {
-                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
-                            context,
-                            com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK
-                        )
-                        onOpenShop()
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(MaterialTheme.shapes.large)
-                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f))
-                ) {
-                    Text("🛒", fontSize = 22.sp)
                 }
             }
 

@@ -22,12 +22,12 @@ import kotlinx.coroutines.delay
 fun LoadingWorkoutScreen(
     onLoadingComplete: () -> Unit
 ) {
-    // Dark background gradient
+    // Background gradient adapted to app theme
     val backgroundGradient = Brush.verticalGradient(
         listOf(
-            Color(0xFF17223B),
-            Color(0xFF25304A),
-            Color(0xFF193446)
+            androidx.compose.material3.MaterialTheme.colorScheme.background,
+            androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+            androidx.compose.material3.MaterialTheme.colorScheme.background
         )
     )
 
@@ -61,6 +61,8 @@ fun LoadingWorkoutScreen(
         label = "pulse"
     )
 
+    val primaryColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -74,7 +76,7 @@ fun LoadingWorkoutScreen(
             // Spinning loader
             Canvas(modifier = Modifier.size(120.dp)) {
                 drawArc(
-                    color = Color(0xFF6366F1),
+                    color = primaryColor,
                     startAngle = rotation,
                     sweepAngle = 280f,
                     useCenter = false,
@@ -89,7 +91,7 @@ fun LoadingWorkoutScreen(
                 text = "Advanced Algorithm\nWorking...",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = pulseAlpha),
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha = pulseAlpha),
                 textAlign = TextAlign.Center,
                 lineHeight = 32.sp
             )
@@ -100,7 +102,7 @@ fun LoadingWorkoutScreen(
             Text(
                 text = "Preparing your personalized workout",
                 fontSize = 14.sp,
-                color = Color(0xFFB0B8C4),
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -115,6 +117,7 @@ fun LoadingWorkoutScreen(
 @Composable
 private fun LoadingDots() {
     val infiniteTransition = rememberInfiniteTransition(label = "dots")
+    val primaryColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
 
     Row(
         horizontalArrangement = Arrangement.Center,
@@ -136,7 +139,7 @@ private fun LoadingDots() {
                     .size(8.dp)
                     .padding(2.dp)
                     .background(
-                        color = Color(0xFF6366F1).copy(alpha = alpha),
+                        color = primaryColor.copy(alpha = alpha),
                         shape = androidx.compose.foundation.shape.CircleShape
                     )
             )

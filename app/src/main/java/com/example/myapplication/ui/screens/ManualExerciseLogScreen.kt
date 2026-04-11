@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -632,15 +633,23 @@ private fun ExerciseDetailScreen(
                             PlayerView(ctx).apply {
                                 player = exoPlayer
                                 useController = true
+                                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             }
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                     )
                     if (isVideoLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             } else {
@@ -900,6 +909,3 @@ private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, set
         } catch (_: Exception) {}
     }
 }
-
-
-

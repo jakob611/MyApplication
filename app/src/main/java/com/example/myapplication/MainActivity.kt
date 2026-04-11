@@ -470,15 +470,8 @@ class MainActivity : ComponentActivity() {
                                     currentScreen is Screen.LoadingWorkout -> LoadingWorkoutScreen(
                                         onLoadingComplete = {
                                             scope.launch {
-                                                try {
-                                                    // Preveri v lokalnih prefs ali je bila vadba danes že opravljena
-                                                    val bmPrefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                                    val lastWorkoutEpoch = bmPrefs.getLong("last_workout_epoch", 0L)
-                                                    val todayEpoch = LocalDate.now().toEpochDay()
-                                                    val workoutDoneToday = lastWorkoutEpoch == todayEpoch
-                                                    if (workoutDoneToday) navigateTo(Screen.GenerateWorkout)
-                                                    else { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
-                                                } catch (_: Exception) { isExtraWorkoutSession = false; navigateTo(Screen.WorkoutSession) }
+                                                isExtraWorkoutSession = false
+                                                navigateTo(Screen.WorkoutSession)
                                             }
                                         }
                                     )
@@ -494,8 +487,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenHistory = { navigateTo(Screen.ExerciseHistory) },
                                         onOpenManualLog = { navigateTo(Screen.ManualExerciseLog) },
                                         onStartRun = { navigateTo(Screen.RunTracker) },
-                                        onOpenActivityLog = { navigateTo(Screen.ActivityLog) },
-                                        onOpenShop = { navigateTo(Screen.Shop) }
+                                        onOpenActivityLog = { navigateTo(Screen.ActivityLog) }
                                     )
                                     currentScreen is Screen.ActivityLog -> ActivityLogScreen(
                                         onBack = { navigateBack() }
@@ -510,12 +502,12 @@ class MainActivity : ComponentActivity() {
                                             onBack = {
                                                 selectedPlan = null; isExtraWorkoutSession = false
                                                 extraFocusAreas = emptyList(); extraEquipment = emptySet()
-                                                navViewModel.navigateTo(Screen.BodyModuleHome)
+                                                navViewModel.popTo(Screen.BodyModuleHome)
                                             },
                                             onFinished = {
                                                 selectedPlan = null; isExtraWorkoutSession = false
                                                 extraFocusAreas = emptyList(); extraEquipment = emptySet()
-                                                navViewModel.navigateTo(Screen.BodyModuleHome)
+                                                navViewModel.popTo(Screen.BodyModuleHome)
                                                 // Posodobi Plan Day widget takoj po končani vadbi
                                                 try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                                                 try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}

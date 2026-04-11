@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -510,8 +511,9 @@ private fun ExerciseScreen(
     val context = LocalContext.current
     var selectedDifficulty by remember { mutableStateOf(1) }
     var currentSet by remember(exercise.name) { mutableIntStateOf(1) }
-    var isVideoPlaying by remember(exercise.name) { mutableStateOf(false) }
-    var videoInitialized by remember(exercise.name) { mutableStateOf(false) }
+    var videoInitialized by remember { mutableStateOf(true) }
+    var isVideoPlaying by remember { mutableStateOf(true) }
+    var skipCount by remember { mutableStateOf(0) }
 
     // TRACK ACTUAL TIME SPENT ON EXERCISE
     var actualTimeSeconds by remember(exercise.name) { mutableStateOf(0) }
@@ -551,8 +553,8 @@ private fun ExerciseScreen(
             confirmButton = {
                 Button(
                     onClick = { showEndConfirm = false; onEndWorkout() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                ) { Text("End", color = Color.White) }
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("End", color = MaterialTheme.colorScheme.onError) }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = { showEndConfirm = false }) { Text("Continue") }
@@ -575,7 +577,7 @@ private fun ExerciseScreen(
             )
             androidx.compose.material3.TextButton(
                 onClick = { showEndConfirm = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE53935))
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {
                 Text("End workout", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -586,45 +588,60 @@ private fun ExerciseScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Video player - compact button first, expands on click
+        // Video player - auto plays by default, no toggle button
         val vidUrl = exercise.videoUrl ?: getVideoUrlForExercise(exercise.name)
 
-        if (videoInitialized) {
-            // Expanded video player
-            Box(modifier = Modifier.fillMaxWidth().height(250.dp)) {
-                val player = remember(vidUrl) {
-                    ExoPlayer.Builder(context).build().apply {
-                        setMediaItem(MediaItem.fromUri(vidUrl))
-                        repeatMode = Player.REPEAT_MODE_ALL
-                        prepare()
-                        playWhenReady = true
-                    }
+        // Expanded video player
+        Box(modifier = Modifier.fillMaxWidth().height(250.dp)) {
+            var isBuffering by remember(vidUrl) { mutableStateOf(true) }
+            var isVideoReady by remember(vidUrl) { mutableStateOf(false) }
+            val player = remember(vidUrl) {
+                androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                    setMediaItem(androidx.media3.common.MediaItem.fromUri(vidUrl))
+                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_ALL
+                    addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            isBuffering = playbackState == androidx.media3.common.Player.STATE_BUFFERING
+                            if (playbackState == androidx.media3.common.Player.STATE_READY) {
+                                isVideoReady = true
+                            }
+                        }
+                    })
+                    prepare()
+                    playWhenReady = true
                 }
-
-                LaunchedEffect(isVideoPlaying) {
-                    player.playWhenReady = isVideoPlaying
-                }
-
-                DisposableEffect(player) { onDispose { player.release() } }
-
-                AndroidView(
-                    factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = true } },
-                    modifier = Modifier.fillMaxSize()
-                )
             }
-        } else {
-            // Compact play button - no big black box
-            Button(
-                onClick = {
-                    videoInitialized = true
-                    isVideoPlaying = true
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Blue
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("▶  Play Video", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            LaunchedEffect(isVideoPlaying) {
+                player.playWhenReady = isVideoPlaying
+            }
+
+            DisposableEffect(player) { onDispose { player.release() } }
+
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx -> androidx.media3.ui.PlayerView(ctx).apply {
+                    this.player = player
+                    useController = true
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                } },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .graphicsLayer(alpha = if (isVideoReady) 1f else 0f)
+            )
+
+            if (isBuffering || !isVideoReady) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Transparent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 
@@ -659,28 +676,34 @@ private fun ExerciseScreen(
 
         // Display execution tips if available
         if (exercise.executionTips.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            androidx.compose.material3.Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "💡 Execution Tips:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+            var showTips by remember { mutableStateOf(false) }
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.TextButton(onClick = { showTips = !showTips }) {
+                Text(if (showTips) "Hide Execution Tips ↑" else "Show Execution Tips ↓", color = MaterialTheme.colorScheme.primary)
+            }
+            if (showTips) {
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.material3.Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     )
-                    Spacer(Modifier.height(4.dp))
-                    exercise.executionTips.forEach { tip ->
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "• $tip",
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(start = 8.dp, top = 2.dp),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                            "💡 Execution Tips:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
                         )
+                        Spacer(Modifier.height(4.dp))
+                        exercise.executionTips.forEach { tip ->
+                            Text(
+                                "• $tip",
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1028,14 +1051,7 @@ private fun WorkoutCelebrationScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                    colors = if (isExtra)
-                        listOf(Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460))
-                    else
-                        listOf(Color(0xFF1A2740), Color(0xFF0D1B2A), Color(0xFF1A3A2A))
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.systemBars),
         contentAlignment = Alignment.Center
     ) {
@@ -1079,7 +1095,7 @@ private fun WorkoutCelebrationScreen(
             if (isExtra) {
                 Text(
                     "Extra Workout Done!",
-                    fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                    fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer(scaleX = streakScale.value, scaleY = streakScale.value)
                 )
@@ -1096,11 +1112,11 @@ private fun WorkoutCelebrationScreen(
                 }
                 Text("💪→🦾", fontSize = 48.sp, modifier = Modifier.graphicsLayer(scaleX = armScale.value, scaleY = armScale.value))
             } else {
-                Text("Workout Complete!", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center)
+                Text("Workout Complete!", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(20.dp))
                 androidx.compose.material3.Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF1E2A3A)),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth().graphicsLayer(scaleX = streakScale.value, scaleY = streakScale.value)
                 ) {
                     Row(
@@ -1124,7 +1140,7 @@ private fun WorkoutCelebrationScreen(
                             )
                             Text("Day streak", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Box(modifier = Modifier.height(60.dp).width(1.dp).background(Color(0xFF2D3F55)))
+                        Box(modifier = Modifier.height(60.dp).width(1.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.3f)))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             // NO CALENDAR ICON - Just text
                             Spacer(Modifier.height(4.dp))
@@ -1135,13 +1151,13 @@ private fun WorkoutCelebrationScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 val motivations = listOf("Keep it up! 🚀", "You're unstoppable! ⚡", "One day at a time! 🎯", "Consistency is key! 🔑", "You're crushing it! 💥")
-                Text(motivations[targetStreak % motivations.size], fontSize = 16.sp, color = Color(0xFF4CAF50), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                Text(motivations[targetStreak % motivations.size], fontSize = 16.sp, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
                 
                 // ADDED: P1 Next Day Preview
                 if (!isExtra && nextDayPreview != null) {
                     Spacer(Modifier.height(24.dp))
                     androidx.compose.material3.Surface(
-                        color = Color(0xFF1E2A3A).copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                     ) {
                         Text(
@@ -1162,7 +1178,7 @@ private fun WorkoutCelebrationScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
             ) {
-                Text("Continue", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Continue", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }

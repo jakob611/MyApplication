@@ -27,8 +27,6 @@ import com.example.myapplication.persistence.FirestoreHelper
 import com.example.myapplication.persistence.RunRouteStore
 import com.example.myapplication.viewmodels.RunTrackerViewModel
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -82,7 +80,7 @@ private fun ExercisesTab() {
     
     LaunchedEffect(uid) {
         if (uid == null) return@LaunchedEffect
-        Firebase.firestore.collection("users").document(uid).collection("exerciseLogs")
+        FirestoreHelper.getUserRef(uid).collection("exerciseLogs")
             .orderBy("date", Query.Direction.DESCENDING).limit(200).get()
             .addOnSuccessListener { snap ->
                 entries = snap.documents.mapNotNull { d ->
@@ -137,7 +135,7 @@ private fun WorkoutsTab() {
     
     LaunchedEffect(uid) {
         if (uid == null) return@LaunchedEffect
-        Firebase.firestore.collection("users").document(uid).collection("workoutSessions")
+        FirestoreHelper.getUserRef(uid).collection("workoutSessions")
             .orderBy("date", Query.Direction.DESCENDING).limit(100).get()
             .addOnSuccessListener { snap ->
                 entries = snap.documents.mapNotNull { d ->
@@ -193,7 +191,7 @@ private fun WorkoutCard(uid: String, entry: WorkoutEntry) {
     fun loadExercisesIfNeeded() {
         if (exList.isNotEmpty()) return
         loading = true
-        Firebase.firestore.collection("users").document(uid).collection("workoutSessions").document(entry.id).get()
+        FirestoreHelper.getUserRef(uid).collection("workoutSessions").document(entry.id).get()
             .addOnSuccessListener { doc ->
                 @Suppress("UNCHECKED_CAST")
                 val rawList = doc.get("exercises") as? List<Map<String, Any>> ?: emptyList()

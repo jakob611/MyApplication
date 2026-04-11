@@ -1,7 +1,7 @@
 package com.example.myapplication.ui.screens
 
 import android.content.Context
-import android.graphics.PointF
+import com.example.myapplication.domain.math.Point2D
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,8 +33,22 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.face.FaceLandmark
+import coil.compose.AsyncImage
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.math.*
+
+data class DetectedFaceData(
+    val markers: Map<Int, Point2D>,
+    val imageWidth: Int,
+    val imageHeight: Int
+)
 
 data class Proportion(
     val name: String,
@@ -58,7 +72,7 @@ data class GoldenRatioAnalysis(
 )
 
 fun calculateAdvancedGoldenRatio(
-    markers: Map<Int, PointF>,
+    markers: Map<Int, Point2D>,
     normalizeBy: Pair<Int, Int>? = null
 ): GoldenRatioAnalysis {
     val phi = (1 + sqrt(5.0)) / 2 
@@ -102,8 +116,8 @@ fun calculateAdvancedGoldenRatio(
     return GoldenRatioAnalysis(ratioResults, weightedScore)
 }
 
-private fun distance(p1: PointF, p2: PointF): Double {
-    return sqrt((p1.x - p2.x).toDouble().pow(2) + (p1.y - p2.y).toDouble().pow(2))
+private fun distance(p1: Point2D, p2: Point2D): Double {
+    return p1.distanceTo(p2).toDouble()
 }
 
 @Composable
@@ -250,14 +264,16 @@ fun GoldenRatioScreen(
 @Composable
 fun AutoAnalysisSection() {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val calculatedScore = remember { mutableStateOf<Double?>(null) }
     val advancedAnalysis = remember { mutableStateOf<GoldenRatioAnalysis?>(null) }
+    val faceData = remember { mutableStateOf<DetectedFaceData?>(null) }
     val isLoading = remember { mutableStateOf(false) }
 
     val photoUri = remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && photoUri.value != null) {
-            processImage(context, photoUri.value!!, calculatedScore, advancedAnalysis, isLoading)
+            processImage(context, photoUri.value!!, calculatedScore, advancedAnalysis, isLoading, coroutineScope, faceData)
         }
     }
 
@@ -286,7 +302,8 @@ fun AutoAnalysisSection() {
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            processImage(context, uri, calculatedScore, advancedAnalysis, isLoading)
+            photoUri.value = uri
+            processImage(context, uri, calculatedScore, advancedAnalysis, isLoading, coroutineScope, faceData)
         }
     }
 
@@ -294,11 +311,123 @@ fun AutoAnalysisSection() {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (isLoading.value) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
-            Spacer(Modifier.height(16.dp))
-            Text("Analyzing facial symmetry...", color = Color(0xFFB6C6E6))
-        } else {
+        if (photoUri.value != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .padding(bottom = 16.dp)
+                    .background(Color.Black, RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = photoUri.value,
+                    contentDescription = "Selected Photo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+
+                if (isLoading.value) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "scanner")
+                    val offsetY by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ), label = "scanner_offset"
+                    )
+
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val y = size.height * offsetY
+                        drawLine(
+                            color = Color(0xFF00FF00),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 6f
+                        )
+                        drawRect(
+                            color = Color(0xFF00FF00).copy(alpha = 0.2f),
+                            topLeft = Offset(0f, y - 20f),
+                            size = androidx.compose.ui.geometry.Size(size.width, 40f)
+                        )
+                    }
+                    Text(
+                        "ANALYZING...",
+                        color = Color(0xFF00FF00),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+                    )
+                } else if (calculatedScore.value != null && faceData.value != null) {
+                    val data = faceData.value!!
+                    // Draw Golden Ratio grid overlay on top of photo
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val scale = max(size.width / data.imageWidth.toFloat(), size.height / data.imageHeight.toFloat())
+                        val offsetX = (size.width - data.imageWidth * scale) / 2f
+                        val offsetY = (size.height - data.imageHeight * scale) / 2f
+
+                        fun transform(p: Point2D): Offset {
+                            return Offset(p.x * scale + offsetX, p.y * scale + offsetY)
+                        }
+
+                        val markers = data.markers
+
+                        // Draw connected grid lines
+                        val pTop = markers[1]
+                        val pBottom = markers[33]
+                        val pLeftFace = markers[19]
+                        val pRightFace = markers[20]
+                        val pLeftEye = markers[15]
+                        val pRightEye = markers[16]
+                        val pNose = markers[23]
+                        val pMouthL = markers[27]
+                        val pMouthR = markers[29]
+                        val pMouthB = markers[31]
+
+                        val lineColor = Color(0xFFFFD700).copy(alpha = 0.8f)
+
+                        // Vertical symmetry line
+                        if (pTop != null && pBottom != null) {
+                            drawLine(lineColor, transform(pTop), transform(pBottom), strokeWidth = 3f)
+                        }
+                        
+                        // Face width bounds
+                        if (pLeftFace != null && pRightFace != null) {
+                            drawLine(lineColor.copy(alpha=0.4f), transform(pLeftFace), Offset(transform(pLeftFace).x, transform(pBottom ?: pLeftFace).y), strokeWidth = 2f)
+                            drawLine(lineColor.copy(alpha=0.4f), transform(pRightFace), Offset(transform(pRightFace).x, transform(pBottom ?: pRightFace).y), strokeWidth = 2f)
+                        }
+
+                        // Horizontal lines
+                        if (pLeftEye != null && pRightEye != null) {
+                            drawLine(Color.Cyan.copy(alpha = 0.6f), transform(pLeftEye), transform(pRightEye), strokeWidth = 3f)
+                        }
+                        if (pMouthL != null && pMouthR != null) {
+                            drawLine(Color.Cyan.copy(alpha = 0.6f), transform(pMouthL), transform(pMouthR), strokeWidth = 3f)
+                        }
+                        
+                        // Triangle from nose to mouth
+                        if (pNose != null && pMouthL != null && pMouthR != null) {
+                            val path = Path().apply {
+                                moveTo(transform(pNose).x, transform(pNose).y)
+                                lineTo(transform(pMouthL).x, transform(pMouthL).y)
+                                lineTo(transform(pMouthR).x, transform(pMouthR).y)
+                                close()
+                            }
+                            drawPath(path, color = Color(0xFFFFD700).copy(alpha = 0.4f), style = Stroke(width = 3f))
+                        }
+
+                        // Draw individual marker points
+                        markers.values.forEach { p ->
+                            drawCircle(Color.Red, radius = 6f, center = transform(p))
+                            drawCircle(Color.White, radius = 3f, center = transform(p))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isLoading.value) {
             Button(
                 onClick = {
                     val permissionCheck = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -555,9 +684,13 @@ fun processImage(
     uri: Uri,
     scoreState: MutableState<Double?>,
     analysisState: MutableState<GoldenRatioAnalysis?>,
-    loadingState: MutableState<Boolean>
+    loadingState: MutableState<Boolean>,
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    faceDataState: MutableState<DetectedFaceData?>
 ) {
     loadingState.value = true
+    scoreState.value = null
+    faceDataState.value = null
     try {
         val image: InputImage
         try {
@@ -575,40 +708,70 @@ fun processImage(
 
         detector.process(image)
             .addOnSuccessListener { faces ->
-                if (faces.isEmpty()) {
-                    com.example.myapplication.utils.AppToast.showWarning(context, "No face detected!")
+                coroutineScope.launch {
+                    delay(1000L) // Add scanning effect delay
+
+                    if (faces.isEmpty()) {
+                        com.example.myapplication.utils.AppToast.showWarning(context, "No face detected!")
+                        loadingState.value = false
+                        return@launch
+                    }
+
+                    val face = faces[0]
+                    val markers = mutableMapOf<Int, Point2D>()
+
+                    face.getLandmark(FaceLandmark.LEFT_EYE)?.position?.let { markers[15] = Point2D(it.x, it.y) }
+                    face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.let { markers[16] = Point2D(it.x, it.y) }
+                    face.getLandmark(FaceLandmark.NOSE_BASE)?.position?.let { markers[23] = Point2D(it.x, it.y) }
+                    face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position?.let { markers[27] = Point2D(it.x, it.y) }
+                    face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position?.let { markers[29] = Point2D(it.x, it.y) }
+                    face.getLandmark(FaceLandmark.MOUTH_BOTTOM)?.position?.let { markers[31] = Point2D(it.x, it.y) }
+
+                    val bounds = face.boundingBox
+                    markers[19] = Point2D(bounds.left.toFloat(), bounds.centerY().toFloat())
+                    markers[20] = Point2D(bounds.right.toFloat(), bounds.centerY().toFloat())
+                    markers[1] = Point2D(bounds.centerX().toFloat(), bounds.top.toFloat())
+                    markers[33] = Point2D(bounds.centerX().toFloat(), bounds.bottom.toFloat())
+
+                    val width = bounds.width().toFloat()
+                    val height = bounds.height().toFloat()
+
+                    val eyeDist = distance(markers[15] ?: Point2D(0f,0f), markers[16] ?: Point2D(1f,0f))
+                    val mouthWidth = distance(markers[27] ?: Point2D(0f,0f), markers[29] ?: Point2D(1f,0f))
+
+                    // Ideal height/width for tight ML bounding box is ~1.4
+                    val faceRatio = height.toDouble() / width.toDouble()
+                    val devBase = abs(faceRatio - 1.4) / 1.4
+
+                    // Ideal eye dist / mouth width is ~1.0
+                    val ratioEyesMouth = if (mouthWidth > 0.0) eyeDist / mouthWidth else 1.0
+                    val devEyesMouth = abs(ratioEyesMouth - 1.0)
+
+                    // Face symmetry (distance from eyes to bounding box edges)
+                    val leftEdge = markers[19] ?: Point2D(0f,0f)
+                    val leftEye = markers[15] ?: Point2D(0f,0f)
+                    val rightEye = markers[16] ?: Point2D(0f,0f)
+                    val rightEdge = markers[20] ?: Point2D(0f,0f)
+                    val leftDist = distance(leftEye, leftEdge)
+                    val rightDist = distance(rightEye, rightEdge)
+                    val devSymmetry = abs(leftDist - rightDist) / (leftDist + rightDist + 1.0)
+
+                    // Penalize score dynamically if face is tilted or turned (3D rotation)
+                    val turnPenalty = abs(face.headEulerAngleY).toDouble() * 0.003
+                    val tiltPenalty = abs(face.headEulerAngleZ).toDouble() * 0.003
+
+                    val totalDeviation = (devBase * 0.3) + (devEyesMouth * 0.3) + (devSymmetry * 0.4) + turnPenalty + tiltPenalty
+
+                    // Realistic mapping: Average deviation ~0.1 to 0.15 gives scores ~ 62-75%
+                    // Highly symmetrical faces give scores 85-95%.
+                    val stretchedScore = 1.0 - (totalDeviation * 2.5)
+                    val finalScore = stretchedScore.coerceIn(0.35, 0.99)
+
+                    faceDataState.value = DetectedFaceData(markers, image.width, image.height)
+                    scoreState.value = finalScore
                     loadingState.value = false
-                    return@addOnSuccessListener
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
                 }
-                
-                val face = faces[0]
-                val markers = mutableMapOf<Int, PointF>()
-                
-                face.getLandmark(FaceLandmark.LEFT_EYE)?.position?.let { markers[15] = PointF(it.x, it.y) }
-                face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.let { markers[16] = PointF(it.x, it.y) }
-                face.getLandmark(FaceLandmark.NOSE_BASE)?.position?.let { markers[23] = PointF(it.x, it.y) }
-                face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position?.let { markers[27] = PointF(it.x, it.y) }
-                face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position?.let { markers[29] = PointF(it.x, it.y) }
-                face.getLandmark(FaceLandmark.MOUTH_BOTTOM)?.position?.let { markers[31] = PointF(it.x, it.y) }
-                
-                val bounds = face.boundingBox
-                markers[19] = PointF(bounds.left.toFloat(), bounds.centerY().toFloat())
-                markers[20] = PointF(bounds.right.toFloat(), bounds.centerY().toFloat())
-                markers[1] = PointF(bounds.centerX().toFloat(), bounds.top.toFloat())
-                markers[33] = PointF(bounds.centerX().toFloat(), bounds.bottom.toFloat())
-                
-                val width = bounds.width().toFloat()
-                val height = bounds.height().toFloat()
-                var rawScore = 0.85 
-                
-                val faceRatio = height / width
-                val deviation = abs(faceRatio - 1.618)
-                rawScore -= deviation * 0.5 
-                
-                val finalScore = rawScore.coerceIn(0.1, 0.99)
-                
-                scoreState.value = finalScore
-                loadingState.value = false
             }
             .addOnFailureListener { e ->
                 com.example.myapplication.utils.AppToast.showError(context, "Detection failed: ${e.message}")
@@ -620,8 +783,8 @@ fun processImage(
     }
 }
 
-fun manualMeasurementsToMarkers(measurements: Map<String, Float>): Map<Int, PointF> {
-    val markers = mutableMapOf<Int, PointF>()
+fun manualMeasurementsToMarkers(measurements: Map<String, Float>): Map<Int, Point2D> {
+    val markers = mutableMapOf<Int, Point2D>()
     val faceHeight = measurements["face_height"] ?: 180f
     val faceWidth = measurements["face_width"] ?: 140f
     val foreheadHeight = measurements["forehead_height"] ?: 60f
@@ -629,20 +792,20 @@ fun manualMeasurementsToMarkers(measurements: Map<String, Float>): Map<Int, Poin
     val lowerFaceHeight = measurements["lower_face_height"] ?: 70f
 
     val centerX = faceWidth / 2f
-    markers[1] = PointF(centerX, 0f) 
-    markers[33] = PointF(centerX, faceHeight)
-    markers[11] = PointF(centerX, foreheadHeight) 
-    markers[23] = PointF(centerX, foreheadHeight + noseHeight * 0.8f) 
-    markers[31] = PointF(centerX, faceHeight - lowerFaceHeight * 0.5f) 
-    markers[19] = PointF(0f, faceHeight * 0.5f) 
-    markers[20] = PointF(faceWidth, faceHeight * 0.5f) 
+    markers[1] = Point2D(centerX, 0f) 
+    markers[33] = Point2D(centerX, faceHeight)
+    markers[11] = Point2D(centerX, foreheadHeight) 
+    markers[23] = Point2D(centerX, foreheadHeight + noseHeight * 0.8f) 
+    markers[31] = Point2D(centerX, faceHeight - lowerFaceHeight * 0.5f) 
+    markers[19] = Point2D(0f, faceHeight * 0.5f) 
+    markers[20] = Point2D(faceWidth, faceHeight * 0.5f) 
     val eyeY = foreheadHeight
-    markers[15] = PointF(centerX - 20f, eyeY)
-    markers[16] = PointF(centerX + 20f, eyeY) 
+    markers[15] = Point2D(centerX - 20f, eyeY)
+    markers[16] = Point2D(centerX + 20f, eyeY) 
     return markers
 }
 
-fun calculateBeautyScore(markers: Map<Int, PointF>): Double {
+fun calculateBeautyScore(markers: Map<Int, Point2D>): Double {
     val phi = (1 + sqrt(5.0)) / 2
     val scores = mutableListOf<Double>()
 
@@ -671,8 +834,3 @@ fun calculateBeautyScore(markers: Map<Int, PointF>): Double {
 
     return if (scores.isEmpty()) 0.0 else scores.average()
 }
-
-
-
-
-

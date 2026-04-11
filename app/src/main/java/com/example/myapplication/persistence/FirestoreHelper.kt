@@ -28,12 +28,13 @@ object FirestoreHelper {
      */
     fun getCurrentUserDocId(): String? {
         val user = auth.currentUser ?: return null
-        // If we have a cached resolved ID for this user, use it
-        if (cachedResolvedId != null && cachedForUid == user.uid) {
-            return cachedResolvedId
+        // Vedno preferiramo email kot doc ID (preglednost v konzoli).
+        // UID uporabimo samo, ce account nima emaila.
+        val email = user.email?.trim()?.takeIf { it.isNotBlank() }
+        if (email != null) {
+            return email
         }
-        // Otherwise, prefer email
-        return user.email?.takeIf { it.isNotBlank() } ?: user.uid
+        return user.uid
     }
 
     /**

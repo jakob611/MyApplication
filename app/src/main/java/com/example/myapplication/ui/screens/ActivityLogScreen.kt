@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.nativeCanvas
+import kotlinx.coroutines.tasks.await
 
 // ---------------------------------------------------------------
 // Pomožna funkcija za razdaljo (Haversine)
@@ -82,6 +84,12 @@ fun ActivityLogScreen(onBack: () -> Unit) {
     var deleteCandidate by remember { mutableStateOf<RunSession?>(null) }
     val scope = rememberCoroutineScope()
 
+    suspend fun markRunAsSmoothed(runId: String) {
+        val userRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+        Log.d("ActivityLog", "UPDATE isSmoothed doc=${userRef.id} runId=$runId")
+        userRef.collection("runSessions").document(runId).update("isSmoothed", true).await()
+    }
+
     // Samodejno glajenje po naknadni izbiri teka (ce prej ni bil zglajen in ni bilo povezave)
     LaunchedEffect(selectedRun) {
         val crun = selectedRun
@@ -94,13 +102,8 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                     if (finalPoints !== currentPoints) {
                         // Uspesno zglajeno, shranimo v _smoothed file, original ostane cel!
                         com.example.myapplication.persistence.RunRouteStore.saveRoute(context, "${crun.id}_smoothed", finalPoints)
-                        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                        if (uid != null) {
-                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                .collection("users").document(uid)
-                                .collection("runSessions").document(crun.id)
-                                .update("isSmoothed", true)
-                        }
+                        runCatching { markRunAsSmoothed(crun.id) }
+                            .onFailure { Log.w("ActivityLog", "Failed to mark isSmoothed for ${crun.id}", it) }
                         // Posodobimo lokalno stanje DVOJNO
                         withContext(kotlinx.coroutines.Dispatchers.Main) {
                             // Ohranimo original v allRawPoints za grafe "hitrosti"!!!
@@ -165,13 +168,8 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                             val finalPoints = com.example.myapplication.map.MapboxMapMatcher.matchRoute(currentPoints, isWalkingProfile)
                             if (finalPoints !== currentPoints) {
                                 com.example.myapplication.persistence.RunRouteStore.saveRoute(context, "${run.id}_smoothed", finalPoints)
-                                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                                if (uid != null) {
-                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                        .collection("users").document(uid)
-                                        .collection("runSessions").document(run.id)
-                                        .update("isSmoothed", true)
-                                }
+                                runCatching { markRunAsSmoothed(run.id) }
+                                    .onFailure { Log.w("ActivityLog", "Failed to mark isSmoothed for ${run.id}", it) }
                                 withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     allRoutes = allRoutes.toMutableMap().apply { put(run.id, finalPoints.map { Pair(it.latitude, it.longitude) }) }
                                     // Posodobi seznam runs, da dobi kljukico wasSmoothed=true
@@ -217,6 +215,7 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                 context = context,
                 runs = runs,
                 allRoutes = allRoutes,
+                selectedRunId = selectedRun?.id,
                 onRunSelected = { selectedRun = it },
                 modifier = Modifier.fillMaxSize()
             )
@@ -440,15 +439,18 @@ fun ActivityLogScreen(onBack: () -> Unit) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                         val runToDel = deleteCandidate
-                        if (uid != null && runToDel != null) {
-                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                .collection("users").document(uid)
-                                .collection("runSessions").document(runToDel.id).delete()
-                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                .collection("users").document(uid)
-                                .collection("publicActivities").document(runToDel.id).delete()
+                        if (runToDel != null) {
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                runCatching {
+                                    val userRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                                    Log.d("ActivityLog", "DELETE run session doc=${userRef.id} runId=${runToDel.id}")
+                                    userRef.collection("runSessions").document(runToDel.id).delete().await()
+                                    userRef.collection("publicActivities").document(runToDel.id).delete().await()
+                                }.onFailure {
+                                    Log.e("ActivityLog", "Delete failed for runId=${runToDel.id}", it)
+                                }
+                            }
                             com.example.myapplication.persistence.RunRouteStore.deleteRoute(context, runToDel.id)
                             runs = runs.filter { it.id != runToDel.id }
                             if (selectedRun?.id == runToDel.id) selectedRun = null
@@ -604,6 +606,7 @@ internal fun GlobalActivityOsmMap(
     context: android.content.Context,
     runs: List<RunSession>,
     allRoutes: Map<String, List<Pair<Double, Double>>>,
+    selectedRunId: String? = null,
     onRunSelected: (RunSession) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -688,24 +691,37 @@ internal fun GlobalActivityOsmMap(
             mapv.overlays.clear()
 
             val allGeoPoints = mutableListOf<org.osmdroid.util.GeoPoint>()
-            runs.forEach { run ->
+            val sortedRuns = runs.sortedBy { it.id == selectedRunId }
+            sortedRuns.forEach { run ->
                 val points = allRoutes[run.id]
                 if (!points.isNullOrEmpty()) {
                     val geoPoints = points.map { (lat, lng) -> org.osmdroid.util.GeoPoint(lat, lng) }
                     allGeoPoints.addAll(geoPoints)
 
+                    val isSelected = run.id == selectedRunId
                     val lineColor = activityColor(run.activityType)
-                    val androidColor = android.graphics.Color.rgb(
-                        (lineColor.red * 255).toInt(),
-                        (lineColor.green * 255).toInt(),
-                        (lineColor.blue * 255).toInt()
-                    )
+
+                    val androidColor = if (isSelected) {
+                        android.graphics.Color.rgb(255, 215, 0) // Distinct Yellow/Gold for selected
+                    } else {
+                        android.graphics.Color.rgb(
+                            (lineColor.red * 255).toInt(),
+                            (lineColor.green * 255).toInt(),
+                            (lineColor.blue * 255).toInt()
+                        )
+                    }
 
                     val polyline = org.osmdroid.views.overlay.Polyline(mapv).apply {
                         outlinePaint.color = androidColor
-                        outlinePaint.strokeWidth = 10f
+                        outlinePaint.strokeWidth = if (isSelected) 22f else 10f
                         outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                         outlinePaint.isAntiAlias = true
+
+                        if (isSelected) {
+                            // Add a black border effect by drawing shadow
+                            outlinePaint.setShadowLayer(5f, 0f, 0f, android.graphics.Color.BLACK)
+                        }
+
                         setPoints(geoPoints)
 
                         setOnClickListener { _, _, _ ->
@@ -722,11 +738,11 @@ internal fun GlobalActivityOsmMap(
                         val bmp = android.graphics.Bitmap.createBitmap(40, 40, android.graphics.Bitmap.Config.ARGB_8888)
                         val canvas = android.graphics.Canvas(bmp)
                         val paint = android.graphics.Paint().apply {
-                            color = androidColor
+                            color = if (isSelected) android.graphics.Color.BLACK else android.graphics.Color.rgb((lineColor.red * 255).toInt(), (lineColor.green * 255).toInt(), (lineColor.blue * 255).toInt())
                             isAntiAlias = true
                         }
                         canvas.drawCircle(20f, 20f, 15f, paint)
-                        val innerPaint = android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
+                        val innerPaint = android.graphics.Paint().apply { color = if (isSelected) android.graphics.Color.YELLOW else android.graphics.Color.WHITE }
                         canvas.drawCircle(20f, 20f, 7f, innerPaint)
                         icon = android.graphics.drawable.BitmapDrawable(context.resources, bmp)
                         title = "${run.activityType.emoji} Details"

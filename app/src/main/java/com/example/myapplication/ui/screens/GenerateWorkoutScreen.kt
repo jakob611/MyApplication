@@ -100,292 +100,190 @@ fun GenerateWorkoutScreen(
 
     val focusOptions = listOf("Arms", "Legs", "Back", "Chest", "Abs", "Shoulders", "Full Body")
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Gray)
-    ) {
+    Scaffold(
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = { Text("Generate Workout", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
         ) {
-                    // Header
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                        Text(
-                            "Generate Workout",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            modifier = Modifier.weight(1f)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 80.dp) // space for button
+            ) {
+                item {
+                    Text(
+                        "You've already worked out today!",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "Create a different extra workout plan",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                item {
+                    Text("Number of exercises", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = exerciseCountInput,
+                        onValueChange = { exerciseCountInput = it },
+                        placeholder = { Text("8") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary
                         )
-                    }
+                    )
+                }
 
-                    LazyColumn(
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Focus Area", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground)
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                items(focusOptions) { focus ->
+                    val isSelected = selectedFocus.contains(focus)
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                            .height(56.dp)
+                            .clickable {
+                                selectedFocus = if (isSelected) selectedFocus - focus else selectedFocus + focus
+                                HapticFeedback.performHapticFeedback(
+                                    context,
+                                    HapticFeedback.FeedbackType.CLICK
+                                )
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
-                        item {
-                            Text("You've already worked out today!", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Create a different workout plan", fontSize = 12.sp, color = Color.Gray)
-                        }
-
-                        item {
-                            Text("Number of exercises", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            OutlinedTextField(
-                                value = exerciseCountInput,
-                                onValueChange = { exerciseCountInput = it },
-                                placeholder = { Text("8") },
-                                modifier = Modifier.fillMaxWidth(),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                                ),
-                                singleLine = true
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                focus,
+                                fontSize = 16.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-
-                        item {
-                            Text("Focus Area", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        }
-
-                        items(focusOptions) { focus ->
-                            val isSelected = selectedFocus.contains(focus)
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .clickable {
-                                        selectedFocus = if (isSelected) selectedFocus - focus else selectedFocus + focus
-                                        HapticFeedback.performHapticFeedback(
-                                            context,
-                                            HapticFeedback.FeedbackType.CLICK
-                                        )
-                                    }
-                                    .background(
-                                        if (isSelected)
-                                            Color.Gray.copy(alpha = 0.2f)
-                                        else
-                                            Color.Gray
-                                    ),
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected)
-                                    Color.Gray.copy(alpha = 0.1f)
-                                else
-                                    Color.Gray
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(focus)
-                                    Spacer(Modifier.weight(1f))
-                                    if (isSelected) {
-                                        Icon(
-                                            Icons.Filled.CheckCircle,
-                                            contentDescription = "Selected",
-                                            tint = Color.Gray
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            Text("Equipment (override for this workout)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text("These settings are temporary and won't affect your plan", fontSize = 12.sp, color = Color.Gray)
-                        }
-
-                        items(availableEquipmentList) { eq ->
-                            val isSelected = selectedEquipment.contains(eq)
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .clickable {
-                                        val current = selectedEquipment.toMutableSet()
-                                        if (current.contains(eq)) current.remove(eq) else current.add(eq)
-                                        selectedEquipment = current
-                                        HapticFeedback.performHapticFeedback(
-                                            context,
-                                            HapticFeedback.FeedbackType.CLICK
-                                        )
-                                    }
-                                    .background(
-                                        if (isSelected)
-                                            Color.Gray.copy(alpha = 0.2f)
-                                        else
-                                            Color.Gray
-                                    ),
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected)
-                                    Color.Gray.copy(alpha = 0.1f)
-                                else
-                                    Color.Gray
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(eq)
-                                    Spacer(Modifier.weight(1f))
-                                    if (isSelected) {
-                                        Icon(
-                                            Icons.Filled.CheckCircle,
-                                            contentDescription = "Selected",
-                                            tint = Color.Gray
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = { generateWorkouts() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = selectedFocus.isNotEmpty() && exerciseCountInput.isNotBlank() && selectedEquipment.isNotEmpty()
-                            ) {
-                                Text("Generate Workout")
+                            Spacer(Modifier.weight(1f))
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
                 }
-    }
-}
 
-@Composable
-private fun LoadingWorkoutUI() {
-    // Dark background gradient
-    val backgroundGradient = androidx.compose.ui.graphics.Brush.verticalGradient(
-        listOf(
-            Color(0xFF17223B),
-            Color(0xFF25304A),
-            Color(0xFF193446)
-        )
-    )
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    Text("Equipment (override for this workout)", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground)
+                    Text("These settings are temporary and won't affect your main plan", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                }
 
-    // Rotating animation for the spinner
-    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "spinner")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(1000, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
-    // Pulsing animation for text
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Spinning loader
-            androidx.compose.foundation.Canvas(modifier = Modifier.size(120.dp)) {
-                drawArc(
-                    color = Color(0xFF6366F1),
-                    startAngle = rotation,
-                    sweepAngle = 280f,
-                    useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 12.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                )
+                items(availableEquipmentList) { eq ->
+                    val isSelected = selectedEquipment.contains(eq)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clickable {
+                                val current = selectedEquipment.toMutableSet()
+                                if (current.contains(eq)) current.remove(eq) else current.add(eq)
+                                selectedEquipment = current
+                                HapticFeedback.performHapticFeedback(
+                                    context,
+                                    HapticFeedback.FeedbackType.CLICK
+                                )
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                eq.replaceFirstChar { it.uppercase() },
+                                fontSize = 16.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.weight(1f))
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Main text with pulsing effect
-            Text(
-                text = "Advanced Algorithm\nWorking...",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = pulseAlpha),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 32.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Subtitle
-            Text(
-                text = "Preparing your personalized workout",
-                fontSize = 14.sp,
-                color = Color(0xFFB0B8C4),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Animated dots
-            LoadingDots()
         }
-    }
-}
 
-@Composable
-private fun LoadingDots() {
-    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "dots")
-
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(8.dp)
-    ) {
-        repeat(3) { index ->
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1f,
-                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                    animation = androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing, delayMillis = index * 200),
-                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        // Sticky button at the bottom
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Button(
+                onClick = { generateWorkouts() },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                enabled = selectedFocus.isNotEmpty() && exerciseCountInput.isNotBlank() && selectedEquipment.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                label = "dot$index"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .padding(2.dp)
-                    .background(
-                        color = Color(0xFF6366F1).copy(alpha = alpha),
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    )
-            )
-
-            if (index < 2) {
-                Spacer(modifier = Modifier.width(4.dp))
+                shape = RoundedCornerShape(28.dp)
+            ) {
+                Text("Generate Workout", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

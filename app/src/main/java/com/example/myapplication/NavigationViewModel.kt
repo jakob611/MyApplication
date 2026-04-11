@@ -35,6 +35,18 @@ class NavigationViewModel : ViewModel() {
         _stack.value = emptyList()
     }
 
+    fun popTo(screen: Screen) {
+        val currentStack = _stack.value
+        val index = currentStack.indexOfLast { it == screen }
+        if (index != -1) {
+            _previousScreen.value = _currentScreen.value
+            _currentScreen.value = screen
+            _stack.value = currentStack.take(index)
+        } else {
+            navigateTo(screen)
+        }
+    }
+
     /**
      * Navigira nazaj. Ker ima navigateBack() dostop do selectedPlan in isLoggedIn,
      * te vrednosti podamo kot parametre.

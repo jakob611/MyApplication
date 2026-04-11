@@ -29,5 +29,7 @@ data class DayPlan(
     val dayNumber: Int,        // 1-based zaporedna številka (1 = prvi dan plana)
     val exercises: List<String> = emptyList(),
     val isRestDay: Boolean = false,   // true = počitek, false = trening
-    val focusLabel: String = ""       // npr. "Legs", "Push", "Pull", "Rest" — prikazano na nodu
+    val focusLabel: String = "",       // npr. "Legs", "Push", "Pull", "Rest" — prikazano na nodu
+    val isSwapped: Boolean = false,
+    val isFrozen: Boolean = false
 )

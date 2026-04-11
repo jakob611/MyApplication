@@ -1,5 +1,9 @@
 package com.example.myapplication.viewmodels
 
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.isoDayNumber
+
 import android.app.Application
 import android.content.Context
 import androidx.core.content.edit
@@ -43,9 +47,9 @@ data class BodyHomeUiState(
     )
 )
 
-class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
-    private val prefs = app.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-    
+class BodyModuleHomeViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefs = getApplication<Application>().getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+
     // Prevent double submission of workouts/rest days
     private val isCompletingAction = AtomicBoolean(false)
 
@@ -119,12 +123,15 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     val remoteWeeklyTarget = (remoteStats["weekly_target"] as? Number)?.toInt() ?: 0
 
                     val localTotal = prefs.getInt("total_workouts_completed", 0)
-                    if (remoteTotal > localTotal || (prefs.getInt("plan_day", 1) <= 1 && remotePlanDay > 1)) {
+                    val localLastEpoch = prefs.getLong("last_workout_epoch", 0L)
+                    val localStreak = prefs.getInt("streak_days", 0)
+
+                    if (remoteTotal > localTotal || remoteLastEpoch > localLastEpoch || remoteStreak > localStreak || (prefs.getInt("plan_day", 1) <= 1 && remotePlanDay > 1)) {
                         prefs.edit {
-                            putInt("streak_days", remoteStreak)
-                            putInt("total_workouts_completed", remoteTotal)
-                            putInt("plan_day", remotePlanDay)
-                            putLong("last_workout_epoch", remoteLastEpoch)
+                            putInt("streak_days", maxOf(remoteStreak, localStreak))
+                            putInt("total_workouts_completed", maxOf(remoteTotal, localTotal))
+                            putInt("plan_day", maxOf(remotePlanDay, prefs.getInt("plan_day", 1)))
+                            putLong("last_workout_epoch", maxOf(remoteLastEpoch, localLastEpoch))
                         }
                     }
                     if (remoteWeeklyTarget > 0) {
@@ -181,16 +188,17 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
 
                     if (isRest && userEmail.isNotEmpty()) {
                         try {
-                            com.example.myapplication.persistence.AchievementStore.checkAndUpdatePlanStreak(
-                                getApplication(), userEmail, isRestDaySuccess = true
-                            )
+                            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                            useCase.restDayInitiated()
                             updateStreak()
                         } catch (_: Exception) {}
                     }
                 }
             }
 
-            val weeklyTarget = prefs.getInt("weekly_target", 0).let { if (it > 0) it else 3 }
+            val wt = prefs.getInt("weekly_target", 0)
+            val weeklyTarget = if (wt > 0) wt else 3
 
             _ui.value = _ui.value.copy(
                 planDay       = prefs.getInt("plan_day", 1),
@@ -257,7 +265,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
 
                     // 1. Award XP
                     com.example.myapplication.persistence.AchievementStore.awardXP(
-                        getApplication(), email, 20, com.example.myapplication.data.XPSource.WORKOUT_COMPLETE, "Completed Rest Day Mobility"
+                        getApplication(), email, 10, com.example.myapplication.data.XPSource.WORKOUT_COMPLETE, "Completed Rest Day Mobility"
                     )
 
                     // 2. Mark as done locally AND advance Plan Day
@@ -280,9 +288,9 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     }
 
                     // 3. Update Streak (Rescue or Maintain)
-                    com.example.myapplication.persistence.AchievementStore.checkAndUpdatePlanStreak(
-                        context, email, isRestDaySuccess = true
-                    )
+                    val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                    useCase.restDayInitiated()
 
                     // 4. Update UI State immediately - READ FRESH PROFILE like in completeWorkoutSession
                     val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
@@ -441,7 +449,9 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                     val newPlanDay = _ui.value.planDay + 1
                     val newTotal = _ui.value.totalWorkoutsCompleted + 1
 
-                    com.example.myapplication.persistence.AchievementStore.checkAndUpdatePlanStreak(context, userEmail, isWorkoutSuccess = true, batch = batch)
+                    val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+                    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                    useCase.completeWorkoutSession(100)
 
                     if (userEmail.isNotEmpty()) {
                         // We do not know authoritative streak yet (batch not committed), but local SharedPreferences handles it?
@@ -490,7 +500,9 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         weeklyDone = newWeeklyDone,
                         planDay = newPlanDay,
                         totalWorkoutsCompleted = newTotal,
-                        todayIsRest = nextDayIsRest
+                        todayIsRest = nextDayIsRest,
+                        isWorkoutDoneToday = true,
+                        showCompletionAnimation = true
                     )
 
                     withContext(Dispatchers.Main) { onCompletion(res) }
@@ -503,56 +515,6 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (_: Exception) {}
                     }
                 }
-    
-                val newWeeklyDone = if (shouldReset) 1 else currentWeeklyDone + 1
-                val newPlanDay = _ui.value.planDay + 1
-                val newTotal = _ui.value.totalWorkoutsCompleted + 1
-    
-                // Update streak safely via AchievementStore logic (prevent double increment)
-                try {
-                    com.example.myapplication.persistence.AchievementStore.checkAndUpdatePlanStreak(context, userEmail, isWorkoutSuccess = true)
-                } catch (_: Exception) {}
-                // Now read the authoritative streak from updated profile
-                val updatedProfile = com.example.myapplication.data.UserPreferences.loadProfile(context, userEmail)
-                val newStreak = updatedProfile.currentLoginStreak
-    
-                val nextDayIsRest = tryGetNextDayIsRest(newPlanDay)
-    
-                prefs.edit {
-                    putLong("last_workout_epoch", today.toEpochDay())
-                    putInt("weekly_done", newWeeklyDone)
-                    putInt("plan_day", newPlanDay)
-                    putInt("total_workouts_completed", newTotal)
-                    putInt("streak_days", newStreak)
-                    putBoolean("today_is_rest", nextDayIsRest)
-                    if (shouldReset) putLong("last_week_reset", currentWeekStart.toEpochDay())
-                }
-    
-                if (userEmail.isNotEmpty()) {
-                    com.example.myapplication.data.UserPreferences.saveWorkoutStats(
-                        email = userEmail,
-                        streak = newStreak,
-                        totalWorkouts = newTotal,
-                        weeklyDone = newWeeklyDone,
-                        lastWorkoutEpoch = today.toEpochDay(),
-                        planDay = newPlanDay,
-                        weeklyTarget = weeklyTarget
-                    )
-                }
-    
-                val trainingDays = prefs.getInt("weekly_target", 3)
-                val planDayLabel = com.example.myapplication.widget.StreakWidgetProvider.planDayToLabel(newPlanDay, trainingDays)
-                com.example.myapplication.widget.StreakWidgetProvider.updateWidgetFromApp(context, newStreak, planDayLabel)
-    
-                _ui.value = _ui.value.copy(
-                    streakDays = newStreak,
-                    weeklyDone = newWeeklyDone,
-                    planDay = newPlanDay,
-                    totalWorkoutsCompleted = newTotal,
-                    isWorkoutDoneToday = true,
-                    showCompletionAnimation = true
-                )
-                withContext(Dispatchers.Main) { onCompletion(completionResult) }
             } finally {
                 isCompletingAction.set(false)
             }
@@ -657,17 +619,23 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun calculateWeeklyWorkoutsFromFirestore(email: String): Int {
         if (email.isBlank()) return -1
         val userProfile = com.example.myapplication.data.UserPreferences.loadProfile(getApplication(), email)
-        val currentWeekStart = LocalDate.now()
-            .with(java.time.temporal.TemporalAdjusters.previousOrSame(userProfile.startDayOfWeek()))
-        val startEpochDay = currentWeekStart.toEpochDay()
+
+        val tz = kotlinx.datetime.TimeZone.currentSystemDefault()
+        val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date
+        val targetIsoDay = userProfile.startDayOfWeek().value
+        val currentIsoDay = today.dayOfWeek.value
+        val daysToSubtract = (currentIsoDay - targetIsoDay + 7) % 7
+        val currentWeekStart = kotlinx.datetime.LocalDate.fromEpochDays(today.toEpochDays() - daysToSubtract)
+
+        val startEpochDay = currentWeekStart.toEpochDays().toLong()
         val lastEpoch = prefs.getLong("last_workout_epoch", 0L)
-        val localCount = if (lastEpoch > 0L && LocalDate.ofEpochDay(lastEpoch).toEpochDay() >= startEpochDay)
+        val localCount = if (lastEpoch > 0L && lastEpoch >= startEpochDay)
             prefs.getInt("weekly_done", 0) else 0
 
         return try {
-            val startTimestamp = com.google.firebase.Timestamp(
-                java.util.Date.from(currentWeekStart.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant())
-            )
+            val startInstant = kotlinx.datetime.LocalDateTime(currentWeekStart, kotlinx.datetime.LocalTime(0, 0)).toInstant(tz)
+            val startTimestamp = com.google.firebase.Timestamp(startInstant.epochSeconds, 0)
+
             // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
             val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
             val querySnapshot = ref.collection("workoutSessions")
@@ -684,6 +652,7 @@ class BodyModuleHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+
 
 
 

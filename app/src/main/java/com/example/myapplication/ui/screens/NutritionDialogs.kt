@@ -518,21 +518,16 @@ internal fun MakeCustomMealsDialog(
                                     )
                                 }
                                 val mealData = mapOf(
-                                    "name" to name, "items" to itemsList,
+                                    "name" to name,
+                                    "items" to itemsList,
                                     "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                 )
                                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                     try {
-                                        val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-                                        docRef.collection("customMeals").add(mealData)
-                                            .addOnSuccessListener { ref ->
-                                                onSaved(SavedCustomMeal(ref.id, name, itemsList), selectedMeal)
-                                                isSaving = false
-                                            }
-                                            .addOnFailureListener {
-                                                isSaving = false
-                                            }
-                                    } catch (_: Exception) {
+                                        val newId = com.example.myapplication.domain.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                        onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal)
+                                        isSaving = false
+                                    } catch (e: Exception) {
                                         isSaving = false
                                     }
                                 }

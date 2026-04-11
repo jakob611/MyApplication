@@ -100,6 +100,7 @@ fun ProgressScreen(
     var burnedByDay by remember { mutableStateOf<List<Pair<LocalDate, Double>>>(emptyList()) } // ADDED
     var loading by remember { mutableStateOf(true) }
     var range by rememberSaveable { mutableStateOf(ProgressRange.WEEK) }
+    var showPreviousProgress by rememberSaveable { mutableStateOf(false) }
     var showWeightDialog by remember { mutableStateOf(openWeightInput) }
     var xpPopupAmount by remember { mutableStateOf(0) }
     var showXpPopup by remember { mutableStateOf(false) }
@@ -116,9 +117,9 @@ fun ProgressScreen(
 
     DisposableEffect(uid) {
         if (uid != null) {
-            val db = Firebase.firestore
+            val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
             loading = true
-            weightListener = db.collection("users").document(uid).collection("weightLogs")
+            weightListener = userRef.collection("weightLogs")
                 .addSnapshotListener { snap, _ ->
                     weightLogs = snap?.documents?.mapNotNull { d ->
                         val dateStr = d.getString("date") ?: d.id
@@ -127,7 +128,7 @@ fun ProgressScreen(
                         WeightLog(date, w)
                     }?.sortedBy { it.date } ?: emptyList()
                 }
-            dailyListener = db.collection("users").document(uid).collection("dailyLogs")
+            dailyListener = userRef.collection("dailyLogs")
                 .addSnapshotListener { snap, _ ->
                     dailyLogs = snap?.documents?.mapNotNull { d ->
                         val dateStr = d.getString("date") ?: d.id
@@ -144,7 +145,7 @@ fun ProgressScreen(
                 }
 
             // Listen to daily_health for burned calories
-            sessionListener = db.collection("users").document(uid).collection("daily_health")
+            sessionListener = userRef.collection("daily_health")
                 .addSnapshotListener { snap, _ ->
                     val burnedMap = mutableMapOf<LocalDate, Double>()
                     snap?.documents?.forEach { d ->
@@ -245,6 +246,50 @@ fun ProgressScreen(
         zeroFillDateRange(filteredBurned, viewMinDate, viewMaxDate)
     }
 
+    // Previous period data for comparison overlay
+    val prevMinDate = remember(viewMinDate, range) {
+        when(range) {
+            ProgressRange.WEEK -> viewMinDate.minusWeeks(1)
+            ProgressRange.MONTH -> viewMinDate.minusMonths(1)
+            ProgressRange.YEAR -> viewMinDate.minusYears(1)
+            ProgressRange.ALL -> viewMinDate
+        }
+    }
+    val prevMaxDate = remember(viewMaxDate, range) {
+        when(range) {
+            ProgressRange.WEEK -> viewMaxDate.minusWeeks(1)
+            ProgressRange.MONTH -> viewMaxDate.minusMonths(1)
+            ProgressRange.YEAR -> viewMaxDate.minusYears(1)
+            ProgressRange.ALL -> viewMaxDate
+        }
+    }
+
+    fun shiftForward(date: LocalDate): LocalDate {
+        return when(range) {
+            ProgressRange.WEEK -> date.plusWeeks(1)
+            ProgressRange.MONTH -> date.plusMonths(1)
+            ProgressRange.YEAR -> date.plusYears(1)
+            ProgressRange.ALL -> date
+        }
+    }
+
+    val prevWeightPairs = remember(weightPairs, prevMinDate, prevMaxDate, showPreviousProgress, range) {
+        if (!showPreviousProgress || range == ProgressRange.ALL) null
+        else weightPairs.filter { !it.first.isBefore(prevMinDate) && !it.first.isAfter(prevMaxDate) }.map { shiftForward(it.first) to it.second }
+    }
+    val prevZeroFilledDaily = remember(dailyPairs, prevMinDate, prevMaxDate, showPreviousProgress, range) {
+        if (!showPreviousProgress || range == ProgressRange.ALL) null
+        else zeroFillDateRange(dailyPairs, prevMinDate, prevMaxDate).map { shiftForward(it.first) to it.second }
+    }
+    val prevZeroFilledWater = remember(waterPairs, prevMinDate, prevMaxDate, showPreviousProgress, range) {
+        if (!showPreviousProgress || range == ProgressRange.ALL) null
+        else zeroFillDateRange(waterPairs, prevMinDate, prevMaxDate).map { shiftForward(it.first) to it.second }
+    }
+    val prevZeroFilledBurned = remember(burnedPairs, prevMinDate, prevMaxDate, showPreviousProgress, range) {
+        if (!showPreviousProgress || range == ProgressRange.ALL) null
+        else zeroFillDateRange(burnedPairs, prevMinDate, prevMaxDate).map { shiftForward(it.first) to it.second }
+    }
+
     val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior(androidx.compose.material3.rememberTopAppBarState())
 
     androidx.compose.material3.Scaffold(
@@ -273,11 +318,35 @@ fun ProgressScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = innerPadding.calculateTopPadding() + 4.dp,
-                    bottom = 80.dp
+                    bottom = innerPadding.calculateBottomPadding() + 100.dp
                 )
             ) {
             item {
                 RangeSelector(range = range, onSelect = { range = it })
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Compare previous period",
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Switch(
+                        checked = showPreviousProgress,
+                        onCheckedChange = { showPreviousProgress = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
             }
             if (loading) {
                 item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -290,11 +359,15 @@ fun ProgressScreen(
                         val displayPoints = filteredWeight.map {
                             it.date to if (isLbs) it.weightKg * 2.20462 else it.weightKg
                         }
+                        val prevDisplayPoints = prevWeightPairs?.map {
+                            it.first to if (isLbs) it.second * 2.20462 else it.second
+                        }
                         ChartSectionWithAxis(
                             title = if (isLbs) "Weight (lb)" else "Weight (kg)",
                             unit = if (isLbs) "lb" else "kg",
                             color = Color(0xFF2563EB),
                             points = displayPoints,
+                            previousPoints = prevDisplayPoints,
                             addWeightButton = if (uid != null) { { showWeightDialog = true } } else null,
                             edgePrev = weightNeighbors.prev?.let { it.first to if (isLbs) it.second * 2.20462 else it.second },
                             edgeNext = weightNeighbors.next?.let { it.first to if (isLbs) it.second * 2.20462 else it.second },
@@ -307,6 +380,7 @@ fun ProgressScreen(
                         ChartSectionWithAxis(
                             title = "Caloric intake", unit = "kcal", color = Color(0xFFF97316),
                             points = zeroFilledDaily,
+                            previousPoints = prevZeroFilledDaily,
                             edgePrev = dailyNeighbors.prev,
                             edgeNext = dailyNeighbors.next,
                             minDate = viewMinDate,
@@ -318,6 +392,7 @@ fun ProgressScreen(
                         ChartSectionWithAxis(
                             title = "Water (ml)", unit = "ml", color = Color(0xFF10B981),
                             points = zeroFilledWater,
+                            previousPoints = prevZeroFilledWater,
                             edgePrev = waterNeighbors.prev,
                             edgeNext = waterNeighbors.next,
                             minDate = viewMinDate,
@@ -331,6 +406,7 @@ fun ProgressScreen(
                             ChartSectionWithAxis(
                                 title = "Calories burned", unit = "kcal", color = Color(0xFFE11D48),
                                 points = zeroFilledBurned,
+                                previousPoints = prevZeroFilledBurned,
                                 edgePrev = burnedNeighbors.prev,
                                 edgeNext = burnedNeighbors.next,
                                 minDate = viewMinDate,
@@ -384,6 +460,7 @@ private fun ChartSectionWithAxis(
     unit: String,
     color: Color,
     points: List<Pair<LocalDate, Double>>,
+    previousPoints: List<Pair<LocalDate, Double>>? = null,
     addWeightButton: (() -> Unit)? = null,
     edgePrev: Pair<LocalDate, Double>? = null,
     edgeNext: Pair<LocalDate, Double>? = null,
@@ -402,23 +479,48 @@ private fun ChartSectionWithAxis(
                             HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.CLICK)
                             addWeightButton()
                         }, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add weight")
+                            Icon(Icons.Filled.Add, contentDescription = "Add")
                         }
                     }
                 }
+                
+                // Add Before/After Metric for Weight Graph
+                if (title.contains("Weight") && points.isNotEmpty()) {
+                    val firstVal = points.first().second
+                    val lastVal = points.last().second
+                    val diff = lastVal - firstVal
+                    
+                    if (abs(diff) >= 0.1) {
+                        val trendText = if (diff < 0) "Lost" else "Gained"
+                        val trendColor = if (diff < 0) Color(0xFF10B981) else Color(0xFFE11D48)
+                        val periodText = when(rangeType) {
+                            ProgressRange.WEEK -> "this week"
+                            ProgressRange.MONTH -> "this month"
+                            ProgressRange.YEAR -> "this year"
+                            ProgressRange.ALL -> "all time"
+                        }
+                        
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("$trendText ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                            Text(
+                                String.format(java.util.Locale.US, "%.1f %s", abs(diff), unit),
+                                color = trendColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(" $periodText", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        }
+                    }
+                }
+                
                 Spacer(Modifier.height(8.dp))
-                // Even if points are empty, we might want to show the grid if we have a valid range?
-                // But usually "No data" is better if literally no data points in this graph.
                 if (points.isEmpty()) {
-                     // Note: You can choose to show empty chart with grid instead.
-                     // For now, let's keep "No data" but you could simply call InteractiveLineChart with empty list
-                     // if you want to see the synchronized axis.
-                     // The user requested "Uskladi x-os... plotaj točke samo kjer obstajajo", which implies showing charts even if sparse.
-                     // But if *no* points exist for a specific metric:
                     Text("No data", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     InteractiveLineChart(
                         points = points,
+                        previousPoints = previousPoints,
                         strokeColor = color,
                         unit = unit,
                         edgePrev = edgePrev,
@@ -436,6 +538,7 @@ private fun ChartSectionWithAxis(
 @Composable
 private fun InteractiveLineChart(
     points: List<Pair<LocalDate, Double>>,
+    previousPoints: List<Pair<LocalDate, Double>>? = null,
     strokeColor: Color,
     unit: String,
     edgePrev: Pair<LocalDate, Double>? = null,
@@ -450,7 +553,7 @@ private fun InteractiveLineChart(
     val sorted = remember(points) { points.sortedBy { it.first } }
 
     // Calculate Y-axis range based on visible points
-    val values = remember(sorted) { sorted.map { it.second } }
+    val values = remember(sorted, previousPoints) { sorted.map { it.second } + (previousPoints?.map { it.second } ?: emptyList()) }
     val minV = remember(values) { values.minOrNull() ?: 0.0 }
     val maxV = remember(values) { values.maxOrNull() ?: 0.0 }
 
@@ -603,7 +706,56 @@ private fun InteractiveLineChart(
             if (sorted.isNotEmpty() && xPositions.size == sorted.size && yPositions.size == sorted.size) {
                  // Clip to bounds to prevent drawing outside chart area
                  drawContext.canvas.save()
-                 drawContext.canvas.clipRect(0f, 0f, innerW, innerH)
+                 drawContext.canvas.clipRect(0f, -60f, innerW, innerH + 30f)
+
+                 // PREVIOUS PERIOD DASHED LINE
+                 previousPoints?.let { prevPts ->
+                     val prevSorted = prevPts.sortedBy { it.first }.filter { !it.first.isBefore(minDate) && !it.first.isAfter(maxDate) }
+                     val prevXP = prevSorted.map { (d, _) ->
+                         val daysFromStart = ChronoUnit.DAYS.between(minDate, d).toFloat()
+                         (daysFromStart / totalDays.toFloat()) * innerW
+                     }
+                     val prevYP = prevSorted.map { (_, v) ->
+                         val norm = (v - niceMin) / span
+                         (innerH - (norm * innerH)).toFloat()
+                     }
+
+                     if (prevSorted.size > 1) {
+                         val prevPath = Path().apply {
+                             prevSorted.forEachIndexed { idx, _ ->
+                                 if (idx == 0) moveTo(prevXP[idx], prevYP[idx]) else lineTo(prevXP[idx], prevYP[idx])
+                             }
+                         }
+                         val prevDashEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+                         drawPath(prevPath, strokeColor.copy(alpha = 0.35f), style = Stroke(width = 3.5f, pathEffect = prevDashEffect))
+                     }
+
+                     prevSorted.forEachIndexed { idx, _ ->
+                         if (prevXP[idx] in 0f..innerW) {
+                             drawCircle(color = strokeColor.copy(alpha = 0.35f), radius = 5.5f, center = androidx.compose.ui.geometry.Offset(prevXP[idx], prevYP[idx]))
+                         }
+                     }
+                 }
+
+                 // BEFORE-AFTER DASHED TRENDLINE FOR WEIGHT
+                 if (unit.contains("lb") || unit.contains("kg")) {
+                     val firstY = yPositions.first()
+                     val firstX = xPositions.first()
+                     val lastY = yPositions.last()
+                     val lastX = xPositions.last()
+                     
+                     if (firstX != lastX) {
+                         val trendEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                         val trendColor = if (lastY > firstY) Color(0xFF10B981).copy(alpha=0.6f) else Color(0xFFE11D48).copy(alpha=0.6f) // Note: higher Y means lower value.
+                         drawLine(
+                             color = trendColor,
+                             start = androidx.compose.ui.geometry.Offset(firstX, firstY),
+                             end = androidx.compose.ui.geometry.Offset(lastX, lastY),
+                             strokeWidth = 2.5f,
+                             pathEffect = trendEffect
+                         )
+                     }
+                 }
 
                  if (sorted.size > 1) {
                     val path = Path().apply {
@@ -661,10 +813,14 @@ private fun InteractiveLineChart(
                 drawContext.canvas.restore()
             }
 
-            // Points
+            // Points (drawn AFTER restricting canvas clip so points don't overflow graph lines!)
             sorted.forEachIndexed { idx, _ ->
                 val x = xPositions.getOrNull(idx) ?: return@forEachIndexed
                 val y = yPositions.getOrNull(idx) ?: return@forEachIndexed
+                
+                // Skip drawing points outside the canvas width bounds to fix glitch where dot flies off graph edge
+                if (x < 0 || x > innerW) return@forEachIndexed
+                
                 val isSelected = selectedIndex == idx
                 if (isSelected) {
                     drawCircle(color = selectedColor, radius = 11f, center = androidx.compose.ui.geometry.Offset(x, y), style = Stroke(width = 4f))
@@ -711,7 +867,7 @@ private fun InteractiveLineChart(
                  Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = xDp - 15.dp, y = 0.dp)
+                        .offset(x = xDp - 15.dp, y = (-4).dp)
                         .width(30.dp)
                 ) {
                     Text(label, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -745,7 +901,7 @@ private fun InteractiveLineChart(
                  Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = xDp + 4.dp, y = 0.dp)
+                        .offset(x = xDp + 4.dp, y = (-4).dp)
                         .width(40.dp)
                 ) {
                     Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Start)
@@ -759,7 +915,7 @@ private fun InteractiveLineChart(
                  Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = paddingStartForAxis, y = 0.dp)
+                        .offset(x = paddingStartForAxis, y = (-4).dp)
                         .width(40.dp)
                 ) {
                     Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Start)
@@ -850,7 +1006,8 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                     // Convert to kg for storage if input is lbs
                     val wKg = if (isLbs) inputVal / 2.20462 else inputVal
 
-                    db.collection("users").document(uid).collection("weightLogs").document(dateStr)
+                    com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
+                        .collection("weightLogs").document(dateStr)
                         .set(mapOf("date" to dateStr, "weightKg" to wKg))
                         .addOnSuccessListener {
                             Log.d("ProgressScreen", "Saved weight $wKg kg to weightLogs")
@@ -891,7 +1048,8 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                                 }
                             }
 
-                            db.collection("users").document(uid).collection("dailyMetrics").document(dateStr)
+                            com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
+                                .collection("dailyMetrics").document(dateStr)
                                 .set(mapOf("date" to dateStr, "weight" to wKg.toFloat()), com.google.firebase.firestore.SetOptions.merge())
                                 .addOnSuccessListener {
                                     Log.d("ProgressScreen", "Saved weight $wKg to dailyMetrics")

@@ -15,8 +15,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import java.time.LocalDate
 
 /**
@@ -105,10 +103,11 @@ class WeightInputActivity : ComponentActivity() {
 
                         saving = true
                         val today = LocalDate.now().toString()
-                        val db = Firebase.firestore
+                        val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
+                        Log.d("WeightInput", "WRITE doc=${userRef.id} date=$today")
 
                         // Save to weightLogs (for chart) — merge: ne izbriši obstoječih polj
-                        db.collection("users").document(uid).collection("weightLogs").document(today)
+                        userRef.collection("weightLogs").document(today)
                             .set(
                                 mapOf("date" to today, "weightKg" to w, "updatedAt" to FieldValue.serverTimestamp()),
                                 com.google.firebase.firestore.SetOptions.merge()
@@ -117,7 +116,7 @@ class WeightInputActivity : ComponentActivity() {
                                 Log.d("WeightInput", "Saved to weightLogs: $w kg")
 
                                 // Save to dailyMetrics (for widget)
-                                db.collection("users").document(uid).collection("dailyMetrics").document(today)
+                                userRef.collection("dailyMetrics").document(today)
                                     .set(
                                         mapOf("date" to today, "weight" to w.toFloat(), "updatedAt" to FieldValue.serverTimestamp()),
                                         com.google.firebase.firestore.SetOptions.merge()

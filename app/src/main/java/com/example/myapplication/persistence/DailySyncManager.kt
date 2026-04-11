@@ -5,6 +5,8 @@ import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.ktx.firestore
 
 /**
  * DailySyncManager — Local-first arhitektura za dnevne podatke.
@@ -132,6 +134,53 @@ object DailySyncManager {
             com.example.myapplication.worker.DailySyncWorker.schedule(context)
         } else {
             Log.d(TAG, "syncOnAppOpen: all data synced — nothing to do")
+        }
+    }
+
+    /**
+     * Kliče se ob vsaki lokalni spremembi, da uporabnik TAKOJ vidi
+     * posodobljene grafe v ProgressScreen (instant feedback).
+     */
+    fun syncTodayNow(context: Context, uid: String) {
+        val date = todayStr()
+        val waterMl = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE).getInt("water_$date", 0)
+        val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE).getInt("burned_$date", 0)
+        val foodsJson = loadFoodsJson(context, date)
+
+        val payload = mutableMapOf<String, Any>(
+            "date" to date,
+            "waterMl" to waterMl,
+            "burnedCalories" to burnedKcal,
+            "syncedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+
+        if (!foodsJson.isNullOrBlank()) {
+            runCatching {
+                val arr = org.json.JSONArray(foodsJson)
+                val items = (0 until arr.length()).map { i ->
+                    val obj = arr.getJSONObject(i)
+                    mutableMapOf<String, Any>().also { map ->
+                        obj.keys().forEach { key -> map[key] = obj.get(key) }
+                    }
+                }
+                if (items.isNotEmpty()) payload["items"] = items
+            }
+        }
+
+        Firebase.firestore
+            .collection("users").document(uid)
+            .collection("dailyLogs").document(date)
+            .set(payload, com.google.firebase.firestore.SetOptions.merge())
+            .addOnSuccessListener {
+                markSynced(context, date)
+            }
+
+        // Takojšnje posodabljanje tudi v daily_health, ker ga uporablja ProgressScreen
+        if (burnedKcal > 0) {
+            Firebase.firestore
+                .collection("users").document(uid)
+                .collection("daily_health").document(date)
+                .set(mapOf("date" to date, "calories" to burnedKcal), com.google.firebase.firestore.SetOptions.merge())
         }
     }
 }

@@ -84,7 +84,7 @@ object ProfileStore {
         // Naloži javne aktivnosti (komprimirane rute) samo če je shareActivities=true AND fetchActivities=true
         val recentActivities: List<PublicActivity>? = if (shareActivities && fetchActivities) {
             try {
-                val actSnap = firestore.collection("users").document(userId)
+                val actSnap = FirestoreHelper.getUserRef(userId)
                     .collection("publicActivities")
                     .orderBy("startTime", com.google.firebase.firestore.Query.Direction.DESCENDING)
                     .limit(10)

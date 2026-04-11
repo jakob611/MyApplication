@@ -2,7 +2,6 @@ package com.example.myapplication.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,11 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -34,10 +31,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
 
 private data class DashboardModule(
     val title: String,
-    val subtitle: String,
+    val icon: ImageVector,
     val containerColor: Color,
     val textColor: Color,
     val enabled: Boolean = true
@@ -56,21 +54,27 @@ fun DashboardScreen(
     val modules = listOf(
         DashboardModule(
             title = "BODY MODULE",
-            subtitle = "Unlock your full physical potential with customized workout plans, intelligent progress tracking, and complete nutrition management.",
+            icon = Icons.Filled.FitnessCenter,
             containerColor = MaterialTheme.colorScheme.secondary,
             textColor = MaterialTheme.colorScheme.onSecondary
         ),
         DashboardModule(
             title = "HAIR MODULE",
-            subtitle = "Coming Soon: Discover specialized hair care routines, maintenance plans, and expert advice for healthier hair.",
+            icon = Icons.Filled.Waves,
             containerColor = MaterialTheme.colorScheme.tertiary,
             textColor = MaterialTheme.colorScheme.onTertiary
         ),
         DashboardModule(
             title = "FACE MODULE",
-            subtitle = "Analyze your facial features, monitor your skin health, and practice targeted exercises to improve your natural glow.",
+            icon = Icons.Filled.Face,
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             textColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        DashboardModule(
+            title = "SHOP",
+            icon = Icons.Filled.ShoppingCart,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            textColor = MaterialTheme.colorScheme.onPrimaryContainer
         )
     )
 
@@ -86,7 +90,7 @@ fun DashboardScreen(
             DashboardModuleCard(
                 modifier = Modifier.weight(1f),
                 title = m.title,
-                subtitle = m.subtitle,
+                icon = m.icon,
                 containerColor = m.containerColor,
                 textColor = m.textColor,
                 enabled = m.enabled,
@@ -100,7 +104,7 @@ fun DashboardScreen(
 private fun DashboardModuleCard(
     modifier: Modifier = Modifier,
     title: String,
-    subtitle: String,
+    icon: ImageVector,
     containerColor: Color,
     textColor: Color,
     enabled: Boolean,
@@ -116,51 +120,30 @@ private fun DashboardModuleCard(
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
-            verticalArrangement = Arrangement.Center
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = textColor
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = subtitle,
-                fontSize = 14.sp,
-                color = textColor.copy(alpha = 0.8f),
-                lineHeight = 20.sp
-            )
-            Spacer(Modifier.height(16.dp))
-            LinearProgressIndicator(
-                progress = { 0.2f },
-                modifier = Modifier.fillMaxWidth(0.6f).height(6.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = textColor.copy(alpha = 0.1f),
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = onClick,
-                modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                shape = RoundedCornerShape(100.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "ENTER",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = textColor
                 )
             }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = textColor.copy(alpha = 0.8f)
+            )
         }
     }
 }
