@@ -1,5 +1,7 @@
 package com.example.myapplication.data
 
+import kotlinx.datetime.Clock
+
 // AlgorithmData je v istem paketu (data) — import ni potreben
 
 /**
@@ -12,5 +14,5 @@ data class NutritionPlan(
     val carbs: Int = 0,
     val fat: Int = 0,
     val algorithmData: AlgorithmData? = null,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = Clock.System.now().toEpochMilliseconds()
 )
