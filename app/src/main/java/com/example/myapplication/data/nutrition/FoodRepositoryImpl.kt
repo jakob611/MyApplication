@@ -8,6 +8,7 @@ import com.example.myapplication.network.RecipeSummary
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import kotlinx.datetime.Clock
 
 /**
  * Singleton implementacija repozitorija,
@@ -75,6 +76,3 @@ object FoodRepositoryImpl {
             .addSnapshotListener { doc, _ -> onData(doc) }
     }
 }
-
-
-

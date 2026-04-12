@@ -616,7 +616,7 @@ fun processImage(
     scoreState.value = null
     faceDataState.value = null
 
-    val detector = FaceDetectorProvider.provideFaceDetector(context)
+    val detector = com.example.myapplication.data.looksmaxing.AndroidMLKitFaceDetector(context)
 
     coroutineScope.launch {
         try {

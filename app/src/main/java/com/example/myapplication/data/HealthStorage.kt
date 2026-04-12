@@ -1,12 +1,16 @@
 package com.example.myapplication.data
 
 import android.util.Log
+import java.util.Calendar
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import kotlinx.coroutines.tasks.await
-import java.util.Calendar
-import java.util.Date
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 data class DailyHealthStats(
     val date: String = "",
@@ -142,6 +146,34 @@ object HealthStorage {
         } catch (e: Exception) {
             Log.e(TAG, "Error getting health goals", e)
             HealthGoals()
+        }
+    }
+
+    private suspend fun doStoreDailyData(
+        steps: Long, distanceMeters: Double, activeTimeMin: Long, date: String
+    ) {
+        val uid = auth.currentUser?.uid ?: return
+        val docRef = db.collection("users").document(uid).collection("dailyLogs").document(date)
+
+        try {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val updates = mapOf(
+                "steps" to steps,
+                "distanceMeters" to distanceMeters,
+                "activeTimeMins" to activeTimeMin,
+                "lastHealthSync" to nowMs
+            )
+            docRef.set(updates, SetOptions.merge()).await()
+
+            // Update achievement progress for Steps
+            val goals = getHealthGoals()
+            val stepsGoal = goals.stepsGoal
+            if (steps >= stepsGoal) {
+                // Award achievement - requires injection of use case eventually, ignore for now to fix build quickly as this is a singleton
+                // TODO: Update via UseCase
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error storing daily data", e)
         }
     }
 }

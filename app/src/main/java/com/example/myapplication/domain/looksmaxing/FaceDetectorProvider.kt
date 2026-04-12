@@ -1,10 +1,9 @@
 package com.example.myapplication.domain.looksmaxing
 
-import android.content.Context
-import com.example.myapplication.data.looksmaxing.AndroidMLKitFaceDetector
-
-object FaceDetectorProvider {
-    fun provideFaceDetector(context: Context): FaceDetector {
-        return AndroidMLKitFaceDetector(context)
-    }
+/**
+ * Domenski vmesnik za Face Detector Provider.
+ * Implementacija z Android Contextom bo injicirana iz data/platform modula.
+ */
+interface FaceDetectorProvider {
+    fun provideFaceDetector(): FaceDetector
 }

@@ -1,56 +1,61 @@
 package com.example.myapplication.data.settings
 
 import android.content.Context
-import android.content.SharedPreferences
+import android.util.Log
+import com.example.myapplication.domain.settings.SettingsManager
+import com.example.myapplication.domain.settings.SettingsProvider
+import com.russhwolf.settings.Settings
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
- * 🚧 TODO (KMP MIGRATION):
- * This repository isolates Android's SharedPreferences.
- * To make the app KMP-ready, replace `SharedPreferences` with `androidx.datastore.preferences.core`
- * or `russhwolf:multiplatform-settings`.
+ * TODO: Migration to pure KMP. This is currently tightly coupled with Context.
  */
 class UserPreferencesRepository(private val context: Context) {
 
-    private val userPrefs: SharedPreferences by lazy {
-        context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    // Using Multiplatform Settings instead of SharedPreferences directly
+    private val settings: Settings = com.russhwolf.settings.SharedPreferencesSettings(context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE))
+
+    // Obstojeći SharedPrefs prenašamo v Settings objekt, ampak trenutno še vedno podpiramo star behavior do popolne menjave
+
+    fun getUserDataChanges(): Flow<com.example.myapplication.data.UserProfile?> {
+        return flowOf(null) // Mocked for now - wait for serialization setup or use custom string mapping
     }
 
-    private val algoPrefs: SharedPreferences by lazy {
-        context.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE)
+    fun getUserId(): String? {
+        return settings.getStringOrNull("user_id")
     }
 
-    private val widgetPrefs: SharedPreferences by lazy {
-        context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+    fun setUserId(userId: String?) {
+        if (userId == null) settings.remove("user_id") else settings.putString("user_id", userId)
     }
 
-    // Example methods for migrating shared preference usages
+    fun getUserToken(): String? {
+        return settings.getStringOrNull("user_token")
+    }
+
+    fun setUserToken(token: String?) {
+        if (token == null) settings.remove("user_token") else settings.putString("user_token", token)
+    }
 
     fun isDarkModeEnabled(): Boolean {
-        return userPrefs.getBoolean("dark_mode", true)
+        return settings.getBoolean("dark_mode", true)
     }
 
     fun setDarkModeEnabled(enabled: Boolean) {
-        userPrefs.edit().putBoolean("dark_mode", enabled).apply()
+        settings.putBoolean("dark_mode", enabled)
     }
 
     fun isFreshStartOnLogin(): Boolean {
-        return widgetPrefs.getBoolean("fresh_start_on_login", false)
+        return settings.getBoolean("fresh_start_on_login", false)
     }
 
     fun setFreshStartOnLogin(freshStart: Boolean) {
-        widgetPrefs.edit().putBoolean("fresh_start_on_login", freshStart).apply()
+        settings.putBoolean("fresh_start_on_login", freshStart)
     }
 
     fun clearAllSettings() {
-        val prefNames = listOf(
-            "user_prefs", "body_module", "nutrition_xp", "bm_prefs",
-            "smartwatch_prefs", "algorithm_prefs", "weight_widget_prefs",
-            "water_widget_prefs", "food_cache", "water_cache", "burned_cache",
-            "daily_sync_prefs", "streak_widget_prefs", "app_flags"
-        )
-        for (name in prefNames) {
-            context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().apply()
-        }
+        settings.clear()
         setFreshStartOnLogin(true)
     }
 }

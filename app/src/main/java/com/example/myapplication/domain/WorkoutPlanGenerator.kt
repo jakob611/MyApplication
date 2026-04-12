@@ -173,7 +173,7 @@ fun generateAdvancedCustomPlan(
 
     return PlanResult(
         weeks = weeksStructure,
-        id = java.util.UUID.randomUUID().toString(),
+        id = kotlinx.datetime.Clock.System.now().toEpochMilliseconds().toString() + "-" + (1..1000).random().toString(),
         name = "",
         calories = targetCalories.toInt(),
         protein = macros.first,

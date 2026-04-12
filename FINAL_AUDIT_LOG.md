@@ -24,3 +24,26 @@ Nadaljuj od zadnje pregledane datoteke. Ne preskakuj vrst. Preberi vsako vrstico
 | `data/AdvancedExerciseRepository.kt` | Repozitorij vaj z lokalno vsebino JSON | Vsebuje `android.content.Context`, `org.json.*`, in `android.util.Log`. | Ne | POTREBUJE POSEG | KMP json parsing z `kotlinx.serialization` in multiplatform logging. |
 | `data/gamification/FirestoreGamificationRepository.kt` | Gamification repozitorij | Uporablja `java.time.LocalDate` in Firebase logiko. | Ne | POTREBUJE POSEG | Zamenjava `java.time.LocalDate` z `kotlinx.datetime`. |
 | `data/barcode/AndroidMLKitBarcodeScanner.kt` | ML Kit implementacija | Uporablja `android.util.Log`, `androidx.camera.core.*`, `com.google.mlkit.*`. Je pričakovana platform specific implementacija. | Ne | OČIŠČENO | Nobena, je platform code. |
+| `domain/DateFormatter.kt` | Oblikovanje datumov | Brez kritičnih napak ali platformno specifičnih kršitev. | Ne | OČIŠČENO | Nobena. |
+| `domain/DateTimeExtensions.kt` | Razširitve za datum in čas | Brez platformno specifičnih kršitev (KMP ready). | Ne | OČIŠČENO | Nobena. |
+| `domain/Logger.kt` | KMP Logging abstraktor | Brez kršitev (pripravljen za Kermit ali KMP logging). | Ne | OČIŠČENO | Nobena. |
+| `domain/WorkoutGenerator.kt` | Logika ustvarjanja vadbe | Brez tipičnih android.* napak, domenski KMP model. | Ne | OČIŠČENO | Nobena. |
+| `domain/WorkoutPlanGenerator.kt` | Generiranje načrta | Vsebuje `java.util.UUID.randomUUID()`. JVM-only kršitev. | Ne | POTREBUJE POSEG | Zamenjati `java.util.UUID` s custom KMP string generatorjem (ali kodo uporabe iz randomUUID). |
+| `domain/barcode/BarcodeScanner.kt` | Domenski interface | Brez platformnih odvisnosti. | Ne | OČIŠČENO | Nobena. |
+| `domain/barcode/BarcodeScannerProvider.kt` | Provider | Brez odvisnosti. | Ne | OČIŠČENO | Nobena. |
+| `domain/gamification/GamificationRepository.kt` | Domenski interface | Čisti interface, brez kršitev. | Ne | OČIŠČENO | Nobena. |
+| `domain/gamification/ManageGamificationUseCase.kt`| Domenski use-cases | Čisti interface/razred, brez platform-specific odvisnosti. | Ne | OČIŠČENO | Nobena. |
+| `domain/looksmaxing/CalculateGoldenRatioUseCase.kt`| Domenska logika (math) | Brez platformnih odvisnosti | Ne | OČIŠČENO | Nobena. |
+| `domain/looksmaxing/FaceDetector.kt` | Domenski interface | Brez platformnih odvisnosti | Ne | OČIŠČENO | Nobena. |
+| `domain/looksmaxing/FaceDetectorProvider.kt`| Provider | Vsebuje `import android.content.Context`. | Ne | POTREBUJE POSEG | Abstrahirati Context ali spremeniti pristop providerja za čisti KMP. |
+| `domain/looksmaxing/BeautyModels.kt` | Data in model razredi | Čisti Kotlin modeli. | Ne | OČIŠČENO | Nobena. |
+| `domain/looksmaxing/Point2D.kt` | Data class | Čisti Kotlin modeli | Ne | OČIŠČENO | Nobena. |
+| `domain/metrics/MetricsRepository.kt` | Domenski interface | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/metrics/SaveWeightUseCase.kt` | Domenski use-case | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/metrics/SyncWeightUseCase.kt` | Domenski use-case | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/nutrition/BodyCompositionUseCase.kt`| Domenska logika | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/nutrition/FoodRepository.kt` | Domenski interface | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/nutrition/NutritionCalculations.kt`| Domenska logika (math) | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/run/CompressRouteUseCase.kt` | Domenska logika | Brez kršitev | Ne | OČIŠČENO | Nobena. |
+| `domain/settings/SettingsManager.kt` | Domenska logika (abstrakt) | Brez kršitev, čisti Kotlin. | Ne | OČIŠČENO | Nobena. |
+| `domain/settings/SettingsProvider.kt` | Provider | Brez kršitev, čisti Kotlin | Ne | OČIŠČENO | Nobena. |
