@@ -1,8 +1,9 @@
-                                                import java.util.Properties
+import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
 }
 val localProps = Properties().apply {
@@ -77,6 +78,7 @@ android {
 dependencies {
      implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
     implementation("com.russhwolf:multiplatform-settings:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))

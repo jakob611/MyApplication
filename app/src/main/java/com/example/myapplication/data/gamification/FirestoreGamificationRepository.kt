@@ -3,11 +3,11 @@ package com.example.myapplication.data.gamification
 import android.util.Log
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.persistence.FirestoreHelper
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
-import java.time.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Zlata koda - KMP ready Firestore implementacija za Gamification,
@@ -17,6 +17,16 @@ import java.time.LocalDate
 class FirestoreGamificationRepository : GamificationRepository {
 
     private val db = FirebaseFirestore.getInstance()
+
+    private fun getTodayStr(): String {
+        return Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+    }
+
+    private fun getYesterdayStr(): String {
+        val yesterdayMillis = Clock.System.now().toEpochMilliseconds() - 86400000L
+        return kotlinx.datetime.Instant.fromEpochMilliseconds(yesterdayMillis)
+            .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+    }
 
     override suspend fun awardXP(amount: Int, reason: String) {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
@@ -36,8 +46,8 @@ class FirestoreGamificationRepository : GamificationRepository {
                 transaction.set(logRef, mapOf(
                     "amount" to amount,
                     "reason" to reason,
-                    "date" to LocalDate.now().toString(),
-                    "timestamp" to System.currentTimeMillis()
+                    "date" to getTodayStr(),
+                    "timestamp" to Clock.System.now().toEpochMilliseconds()
                 ))
             }.await()
             Log.d("GamificationRepo", "Uspešno dodeljeno $amount XP za $reason")
@@ -58,7 +68,7 @@ class FirestoreGamificationRepository : GamificationRepository {
 
     override suspend fun updateStreak(isWorkoutSuccess: Boolean) {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
-        val todayStr = LocalDate.now().toString()
+        val todayStr = getTodayStr()
 
         try {
             db.runTransaction { transaction ->
@@ -88,7 +98,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                 transaction.set(todayLogRef, mapOf(
                     "date" to todayStr,
                     "status" to if (isWorkoutSuccess) "WORKOUT_DONE" else "REST_DONE",
-                    "timestamp" to System.currentTimeMillis()
+                    "timestamp" to Clock.System.now().toEpochMilliseconds()
                 ))
             }.await()
         } catch (e: Exception) {
@@ -117,7 +127,7 @@ class FirestoreGamificationRepository : GamificationRepository {
 
     override suspend fun runMidnightStreakCheck() {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
-        val yesterdayStr = LocalDate.now().minusDays(1).toString()
+        val yesterdayStr = getYesterdayStr()
 
         try {
             val yesterdayLogRef = userRef.collection("daily_logs").document(yesterdayStr)
@@ -134,7 +144,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                     userRef.collection("daily_logs").document(yesterdayStr).set(mapOf(
                         "date" to yesterdayStr,
                         "status" to "REST_SWAPPED",
-                        "timestamp" to System.currentTimeMillis()
+                        "timestamp" to Clock.System.now().toEpochMilliseconds()
                     )).await()
                     Log.d("GamificationRepo", "Workout zgrešen, a je bil nadomeščen s Swap-om Rest dneva.")
                     return
@@ -147,7 +157,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                     userRef.collection("daily_logs").document(yesterdayStr).set(mapOf(
                         "date" to yesterdayStr,
                         "status" to "FROZEN",
-                        "timestamp" to System.currentTimeMillis()
+                        "timestamp" to Clock.System.now().toEpochMilliseconds()
                     )).await()
                     Log.d("GamificationRepo", "Streak Freeze uspešno porabljen. Streak ohranjen.")
                 } else {
