@@ -1,5 +1,7 @@
 package com.example.myapplication.data
 
+import kotlinx.datetime.Clock
+
 /**
  * Tip aktivnosti — vpliva na prikaz statistik in izračun kalorij.
  * MET vrednosti (Metabolic Equivalent of Task) iz standardnih tabel.
@@ -54,7 +56,7 @@ data class RunSession(
     val maxSpeedMps: Float = 0.0f,
     val avgSpeedMps: Float = 0.0f,
     val polylinePoints: List<LocationPoint> = emptyList(),
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = Clock.System.now().toEpochMilliseconds(),
     val caloriesKcal: Int = 0,
     val elevationGainM: Float = 0f,
     val elevationLossM: Float = 0f,
