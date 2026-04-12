@@ -1,7 +1,5 @@
 package com.example.myapplication.data
 
-import android.content.Context
-import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -19,18 +17,14 @@ object AdvancedExerciseRepository {
     var isInitialized: Boolean = false
         private set
 
-    suspend fun init(context: Context) {
+    suspend fun init(jsonString: String) {
         if (exercises.isNotEmpty()) {
             isInitialized = true
             return
         }
 
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             try {
-                val inputStream = context.assets.open("exercises.json")
-                val reader = InputStreamReader(inputStream)
-                val jsonString = reader.readText()
-                reader.close()
 
                 val jsonElement = Json.parseToJsonElement(jsonString)
                 val jsonArray = jsonElement.jsonArray
@@ -52,9 +46,9 @@ object AdvancedExerciseRepository {
                 availableEquipment = equipmentSet.toSortedSet()
                 isInitialized = true
 
-                android.util.Log.d("AdvancedExerciseRepo", "Loaded ${exercises.size} exercises and ${availableEquipment.size} equipment types.")
+                com.example.myapplication.domain.Logger.d("AdvancedExerciseRepo", "Loaded ${exercises.size} exercises and ${availableEquipment.size} equipment types.")
             } catch (e: Exception) {
-                android.util.Log.e("AdvancedExerciseRepo", "Error loading exercises: ${e.message}")
+                com.example.myapplication.domain.Logger.e("AdvancedExerciseRepo", "Error loading exercises: ${e.message}")
             }
         }
     }

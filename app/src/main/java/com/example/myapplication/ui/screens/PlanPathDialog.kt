@@ -277,7 +277,8 @@ private fun DayInfoDialog(
     val isFuture = dayNumber > currentDay
 
     val difficultyLevel: Int = remember(context) {
-        val raw = AlgorithmPreferences.getCurrentDifficulty(context)
+        val settings = com.russhwolf.settings.SharedPreferencesSettings(context.getSharedPreferences("algorithm_prefs", android.content.Context.MODE_PRIVATE))
+        val raw = AlgorithmPreferences.getCurrentDifficulty(settings)
         Math.round(raw).coerceIn(1, 10)
     }
     val difficultyLabel: String = when {

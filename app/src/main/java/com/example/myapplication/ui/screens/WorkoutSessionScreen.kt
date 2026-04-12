@@ -145,7 +145,7 @@ fun WorkoutSessionScreen(
 ) {
     val context = LocalContext.current
     // Replaced ExerciseCache
-    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AdvancedExerciseRepository.init(context) } }
+    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AdvancedExerciseRepository.init(context.assets.open("exercises.json").bufferedReader().use { it.readText() }) } }
 
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
 
@@ -216,7 +216,7 @@ fun WorkoutSessionScreen(
                 word.lowercase().replaceFirstChar { it.uppercase() }
             }
 
-        val multiplier = AlgorithmPreferences.getExerciseMultiplier(context, normalizedName)
+        val multiplier = AlgorithmPreferences.getExerciseMultiplier(context.getAlgoSettings(), normalizedName)
 
         val adjustedSets = (refined.parsedSets * multiplier).toInt().coerceAtLeast(1)
         val adjustedReps = if (refined.parsedReps > 0) (refined.parsedReps * multiplier).toInt().coerceAtLeast(1) else 0
@@ -247,7 +247,7 @@ fun WorkoutSessionScreen(
     LaunchedEffect(currentPlan, isExtra, extraFocusAreas) {
         state = WorkoutState.Loading
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            AdvancedExerciseRepository.init(context)
+            AdvancedExerciseRepository.init(context.assets.open("exercises.json").bufferedReader().use { it.readText() })
         }
 
         // Check if plan exists - if not, immediately go back
@@ -265,10 +265,10 @@ fun WorkoutSessionScreen(
         }
 
         // Zagotovi da je začetna težavnost inicializirana
-        AlgorithmPreferences.initDifficultyForPlan(context, currentPlan.experience)
+        AlgorithmPreferences.initDifficultyForPlan(context.getAlgoSettings(), currentPlan.experience)
 
         // Določi ciljno težavnost glede na recovery/catchup/normalen način
-        val isRecovery = AlgorithmPreferences.isRecoveryMode(context)
+        val isRecovery = AlgorithmPreferences.isRecoveryMode(context.getAlgoSettings())
         val weeklyTarget = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
             .getInt("weekly_target", 3)
         val weeklyDone = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
@@ -277,10 +277,10 @@ fun WorkoutSessionScreen(
         val targetDifficulty: Float = when {
             isRecovery -> {
                 // Recovery: linearna interpolacija od 50% do 100% težavnosti skozi teden
-                AlgorithmPreferences.getRecoveryDayDifficulty(context, weeklyDone, weeklyTarget)
+                AlgorithmPreferences.getRecoveryDayDifficulty(context.getAlgoSettings(), weeklyDone, weeklyTarget)
             }
             else -> {
-                AlgorithmPreferences.getCurrentDifficulty(context, currentPlan.experience)
+                AlgorithmPreferences.getCurrentDifficulty(context.getAlgoSettings(), currentPlan.experience)
             }
         }
 
@@ -463,7 +463,7 @@ fun WorkoutSessionScreen(
                        // scope.launch { ... } removed
 
                        results.forEach { r ->
-                           AlgorithmPreferences.saveExerciseFeedback(context, r.name, r.difficultyRating)
+                           AlgorithmPreferences.saveExerciseFeedback(context.getAlgoSettings(), r.name, r.difficultyRating)
                        }
 
                     }
@@ -749,9 +749,9 @@ private fun ExerciseScreen(
                         else -> 1.0f // OK: no change
                     }
                     if (adjustmentFactor != 1.0f) {
-                        val currentMultiplier = AlgorithmPreferences.getExerciseMultiplier(context, exercise.name)
+                        val currentMultiplier = AlgorithmPreferences.getExerciseMultiplier(context.getAlgoSettings(), exercise.name)
                         val newMultiplier = (currentMultiplier * adjustmentFactor).coerceIn(0.5f, 2.0f)
-                        AlgorithmPreferences.saveExerciseMultiplier(context, exercise.name, newMultiplier)
+                        AlgorithmPreferences.saveExerciseMultiplier(context.getAlgoSettings(), exercise.name, newMultiplier)
                     }
 
                     // Finish exercise with ACTUAL data
@@ -954,7 +954,7 @@ private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<Str
                             "Too Long" -> -1
                             else -> 0
                         }
-                        AlgorithmPreferences.saveGlobalFeedback(context, adjustment)
+                        AlgorithmPreferences.saveGlobalFeedback(context.getAlgoSettings(), adjustment)
                         com.example.myapplication.utils.AppToast.showSuccess(context, "Thanks! Adjusting next workout...")
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1184,3 +1184,6 @@ private fun WorkoutCelebrationScreen(
         }
     }
 }
+
+private fun Context.getAlgoSettings() = com.russhwolf.settings.SharedPreferencesSettings(this.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE))
+

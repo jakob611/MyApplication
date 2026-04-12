@@ -33,7 +33,8 @@ fun DeveloperSettingsScreen(
 
     // Initialize repo if needed (it handles single init internally)
     LaunchedEffect(Unit) {
-        AdvancedExerciseRepository.init(context)
+        val jsonString = context.assets.open("exercises.json").bufferedReader().use { it.readText() }
+        AdvancedExerciseRepository.init(jsonString)
     }
 
     // Initialize defaults from PlanResult and UserProfile

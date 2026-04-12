@@ -74,7 +74,8 @@ fun GenerateWorkoutScreen(
 
     // Init advanced repo za seznam opreme
     LaunchedEffect(Unit) {
-        AdvancedExerciseRepository.init(context)
+        val jsonString = context.assets.open("exercises.json").bufferedReader().use { it.readText() }
+        AdvancedExerciseRepository.init(jsonString)
         availableEquipmentList = AdvancedExerciseRepository.getAllEquipment().toList()
     }
 

@@ -91,7 +91,8 @@ class MainActivity : ComponentActivity() {
 
         // Eager load AdvancedExerciseRepository in background immediately upon app startup
         kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-            com.example.myapplication.data.AdvancedExerciseRepository.init(applicationContext)
+            val jsonString = applicationContext.assets.open("exercises.json").bufferedReader().use { it.readText() }
+            com.example.myapplication.data.AdvancedExerciseRepository.init(jsonString)
         }
 
         intentExtras.value = intent.extras
