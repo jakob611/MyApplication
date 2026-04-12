@@ -1,6 +1,12 @@
 Vedno piši v slovenščini.
 
 ## ⛔ STOP — PREDEN KARKOLI NAREDIŠ
+## 🚨 KRITIČNI VARNOSTNI PROTOKOL (ANTI-WIPE)
+
+1. **PREPOVED MASOVNEGA PREMIKANJA:** Nikoli ne premikaj več kot 1 datoteke hkrati. Po vsakem premiku se USTAVI in počakaj na mojo potrditev.
+2. **VERIFIKACIJA VSEBINE:** Preden shraniš spremembo v datoteko, moraš preveriti, da vsebina NI prazna. Če `read_file` vrne prazno ali če tvoj `edit` izbriše vse, TAKOJ prekini postopek.
+3. **STRIKTNA PREPOVED TERMINALSKIH FILER-OPERACIJ:** Strogo prepovedana uporaba terminalskih ukazov `mv`, `cp`, `rm`, `Rename-Item`, `Move-Item`. Za premikanje uporabi IZKLJUČNO vgrajeno orodje za urejanje datotek ali me prosi, da to naredim jaz ročno v IDE.
+4. **MANUALNI CHECKPOINT:** Po vsaki spremembi v `MainActivity` ali `shared` modulu, moraš v chat napisati: "Build preverjen, MainActivity vsebina potrjena."
 
 Izvedi VSE 3 korake. Ne preskočiš nobenega:
 
