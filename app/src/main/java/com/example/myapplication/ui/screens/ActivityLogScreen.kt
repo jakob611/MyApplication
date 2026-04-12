@@ -30,8 +30,8 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.ActivityType
 import com.example.myapplication.data.RunSession
 import com.example.myapplication.viewmodels.RunTrackerViewModel
-import java.text.SimpleDateFormat
-import java.util.Locale
+
+
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.input.pointer.pointerInput
@@ -236,7 +236,7 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                 ) {
                     items(runs) { run ->
                         val color = activityColor(run.activityType)
-                        val fmt = remember { SimpleDateFormat("dd MMM", Locale.ENGLISH) }
+                        
                         Card(
                             modifier = Modifier
                                 .width(140.dp)
@@ -247,7 +247,7 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                         ) {
                             Column(Modifier.padding(12.dp)) {
                                 Text("${run.activityType.emoji} ${run.activityType.label}", fontWeight = FontWeight.Bold, color = color)
-                                Text(fmt.format(java.util.Date(run.startTime)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(com.example.myapplication.domain.DateFormatter.formatEpoch(run.startTime, "dd MMM"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(4.dp))
                                 Text("${"%.2f".format(run.getDistanceKm())} km", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
@@ -265,7 +265,6 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                 selectedRun?.let { run ->
                     val color = activityColor(run.activityType)
                     val rawPoints = allRawPoints[run.id] ?: emptyList()
-                    val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy · HH:mm", Locale.ENGLISH) }
 
                     Card(
                         modifier = Modifier
@@ -329,7 +328,7 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        fmt.format(java.util.Date(run.startTime)),
+                                        com.example.myapplication.domain.DateFormatter.formatEpoch(run.startTime, "dd MMM"),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

@@ -6,6 +6,10 @@ import com.example.myapplication.utils.calculateAdvancedBMR
 import com.example.myapplication.utils.calculateEnhancedTDEE
 import com.example.myapplication.utils.calculateSmartCalories
 import com.example.myapplication.utils.calculateOptimalMacros
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+
 // --- PLAN STRUCTURE GENERATION ---
 
 /**
@@ -38,7 +42,7 @@ fun generatePlanWeeks(trainingDaysPerWeek: Int, focusAreas: List<String> = empty
     val focuses = if (focusAreas.isNotEmpty()) focusAreas else listOf("Full Body")
 
     // --- INTRO WEEK LOGIC ---
-    val today = java.time.LocalDate.now()
+    val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
     val dayOfWeek = today.dayOfWeek.value // 1=Mon, 7=Sun
     val isMonday = dayOfWeek == 1
     
@@ -185,7 +189,7 @@ fun generateAdvancedCustomPlan(
         goal = goal,
         equipment = equipment,
         focusAreas = focusAreas,
-        startDate = java.time.LocalDate.now().toString()
+        startDate = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
     )
 }
 
@@ -655,6 +659,8 @@ fun generatePersonalizedTips(
     // Return the most relevant tips (limit to prevent overwhelming the user)
     return tips.distinct().take(15)
 }
+
+
 
 
 

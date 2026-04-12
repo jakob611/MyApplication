@@ -15,7 +15,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FieldValue
-import java.time.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.launch
 
 /**
  * Transparent Activity that shows a weight input dialog from widget.
@@ -84,7 +87,7 @@ class WeightInputActivity : ComponentActivity() {
                             fontSize = 12.sp
                         )
                     }
-                    Text("Date: ${LocalDate.now()}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Date: ${kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             confirmButton = {
@@ -102,42 +105,26 @@ class WeightInputActivity : ComponentActivity() {
                         }
 
                         saving = true
-                        val today = LocalDate.now().toString()
-                        val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
-                        Log.d("WeightInput", "WRITE doc=${userRef.id} date=$today")
+                        val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
 
-                        // Save to weightLogs (for chart) — merge: ne izbriši obstoječih polj
-                        userRef.collection("weightLogs").document(today)
-                            .set(
-                                mapOf("date" to today, "weightKg" to w, "updatedAt" to FieldValue.serverTimestamp()),
-                                com.google.firebase.firestore.SetOptions.merge()
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            val saveWeightUseCase = com.example.myapplication.domain.metrics.SaveWeightUseCase(
+                                com.example.myapplication.data.metrics.MetricsRepositoryImpl()
                             )
-                            .addOnSuccessListener {
-                                Log.d("WeightInput", "Saved to weightLogs: $w kg")
+                            val result = saveWeightUseCase.execute(uid, w.toFloat(), today)
 
-                                // Save to dailyMetrics (for widget)
-                                userRef.collection("dailyMetrics").document(today)
-                                    .set(
-                                        mapOf("date" to today, "weight" to w.toFloat(), "updatedAt" to FieldValue.serverTimestamp()),
-                                        com.google.firebase.firestore.SetOptions.merge()
-                                    )
-                                    .addOnSuccessListener {
-                                        Log.d("WeightInput", "Saved to dailyMetrics: $w kg")
-                                        // Update widget
-                                        WeightWidgetProvider.updateWidgetFromApp(context, w.toFloat())
-                                        onSaved()
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Log.e("WeightInput", "Failed to save to dailyMetrics", e)
-                                        errorMessage = "Save failed"
-                                        saving = false
-                                    }
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                if (result.isSuccess) {
+                                    Log.d("WeightInput", "Successfully saved weight via UseCase")
+                                    WeightWidgetProvider.updateWidgetFromApp(context, w.toFloat())
+                                    onSaved()
+                                } else {
+                                    Log.e("WeightInput", "Failed to save weight", result.exceptionOrNull())
+                                    errorMessage = "Save failed"
+                                    saving = false
+                                }
                             }
-                            .addOnFailureListener { e ->
-                                Log.e("WeightInput", "Failed to save to weightLogs", e)
-                                errorMessage = "Save failed"
-                                saving = false
-                            }
+                        }
                     }
                 ) { Text(if (saving) "Saving..." else "Save") }
             },
@@ -147,4 +134,3 @@ class WeightInputActivity : ComponentActivity() {
         )
     }
 }
-

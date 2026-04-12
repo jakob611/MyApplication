@@ -12,8 +12,11 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.myapplication.domain.DateFormatter
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.launch
 
 class WeightWidgetProvider : AppWidgetProvider() {
 
@@ -65,24 +68,25 @@ class WeightWidgetProvider : AppWidgetProvider() {
         }
 
         val today = todayId()
-        val db = Firebase.firestore
-        db.collection("users").document(uid)
-            .collection("dailyMetrics").document(today)
-            .get()
-            .addOnSuccessListener { snap ->
-                val serverVal = (snap.get("weight") as? Number)?.toFloat() ?: 0f
-                // Update local cache with server value
+        kotlinx.coroutines.GlobalScope.launch {
+            val useCase = com.example.myapplication.domain.metrics.SyncWeightUseCase(
+                com.example.myapplication.data.metrics.MetricsRepositoryImpl()
+            )
+            val result = useCase.execute(uid, today)
+            
+            val serverVal = result.getOrNull() ?: 0f
+            if (result.isSuccess) {
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 prefs.edit().putFloat("weight_$today", serverVal).apply()
-                // Refresh widget UI
-                refreshAll(context)
                 Log.d(TAG, "Synced weight from Firestore: $serverVal kg")
+            } else {
+                Log.w(TAG, "Sync weight from Firestore failed", result.exceptionOrNull())
             }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "Sync weight from Firestore failed", e)
-                // Still refresh with cached value
+            
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 refreshAll(context)
             }
+        }
     }
 
     private fun handleDelta(context: Context, delta: Float) {
@@ -102,24 +106,14 @@ class WeightWidgetProvider : AppWidgetProvider() {
 
         // Background sync to Firestore (if logged in)
         if (uid != null) {
-            val db = Firebase.firestore
-
-            // Save to dailyMetrics (for widget sync)
-            val metricsRef = db.collection("users").document(uid)
-                .collection("dailyMetrics").document(today)
-            metricsRef.set(
-                mapOf("date" to today, "weight" to newVal, "updatedAt" to FieldValue.serverTimestamp()),
-                com.google.firebase.firestore.SetOptions.merge()
-            )
-
-            // Also save to weightLogs (for Progress chart)
-            val logsRef = db.collection("users").document(uid)
-                .collection("weightLogs").document(today)
-            logsRef.set(
-                mapOf("date" to today, "weightKg" to newVal.toDouble(), "updatedAt" to FieldValue.serverTimestamp()),
-                com.google.firebase.firestore.SetOptions.merge()
-            ).addOnFailureListener { e ->
-                Log.w(TAG, "Background sync failed for weight=$newVal", e)
+            kotlinx.coroutines.GlobalScope.launch {
+                val useCase = com.example.myapplication.domain.metrics.SaveWeightUseCase(
+                    com.example.myapplication.data.metrics.MetricsRepositoryImpl()
+                )
+                val result = useCase.execute(uid, newVal, today)
+                if (result.isFailure) {
+                    Log.w(TAG, "Background sync failed for weight=$newVal", result.exceptionOrNull())
+                }
             }
         }
     }
@@ -140,7 +134,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
         const val ACTION_REFRESH = "com.example.myapplication.widget.WEIGHT_REFRESH"
         const val ACTION_OPEN_INPUT = "com.example.myapplication.widget.WEIGHT_OPEN_INPUT"
 
-        private fun todayId(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        private fun todayId(): String = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
 
         fun updateAppWidget(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
             val layoutId = context.resources.getIdentifier("widget_weight", "layout", context.packageName)
@@ -193,4 +187,3 @@ class WeightWidgetProvider : AppWidgetProvider() {
         }
     }
 }
-

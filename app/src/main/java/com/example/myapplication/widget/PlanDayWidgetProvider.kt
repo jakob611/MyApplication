@@ -11,6 +11,8 @@ import android.widget.RemoteViews
 import com.example.myapplication.R
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * PlanDayWidget — prikazuje:
@@ -104,9 +106,9 @@ class PlanDayWidgetProvider : AppWidgetProvider() {
                             // Dan v planu glede na startDate (absolutni kalendar)
                             val todayPlanDay = if (startDate.isNotBlank()) {
                                 try {
-                                    val start = java.time.LocalDate.parse(startDate)
-                                    val today = java.time.LocalDate.now()
-                                    val diff = java.time.temporal.ChronoUnit.DAYS.between(start, today).toInt() + 1
+                                    val start = kotlinx.datetime.LocalDate.parse(startDate)
+                                    val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                                    val diff = start.daysUntil(today) + 1
                                     diff.coerceAtLeast(1)
                                 } catch (_: Exception) { planDay }
                             } else planDay

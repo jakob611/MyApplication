@@ -12,8 +12,10 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.myapplication.domain.DateFormatter
+import java.util.UUID
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class QuickMealWidgetProvider : AppWidgetProvider() {
 
@@ -205,12 +207,12 @@ class QuickMealWidgetProvider : AppWidgetProvider() {
             Breakfast, Lunch, Dinner, Snacks
         }
 
-        private fun todayId(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        private fun todayId(): String = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
 
         private fun getCurrentMealType(): MealType {
-            val calendar = Calendar.getInstance()
-            val hour = calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = calendar.get(Calendar.MINUTE)
+            val now = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+            val hour = now.hour
+            val minute = now.minute
             val timeInMinutes = hour * 60 + minute
 
             return when {

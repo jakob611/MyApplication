@@ -5,7 +5,9 @@ import com.example.myapplication.domain.math.Point2D
 data class DetectedFaceData(
     val markers: Map<Int, Point2D>,
     val imageWidth: Int,
-    val imageHeight: Int
+    val imageHeight: Int,
+    val headEulerAngleY: Float = 0f,
+    val headEulerAngleZ: Float = 0f
 )
 
 data class Proportion(

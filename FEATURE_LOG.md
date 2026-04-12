@@ -191,3 +191,13 @@
     
  -   * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      O b n o v l j e n a   p o p v a r j e n a   i z b r i s a n a   k o d a   i z   G i t   z g o d o v i n e   t e r   p o p r a v l j e n   \ D a t e F o r m a t t e r . k t \   z   u p o r a b o   \ j a v a . t i m e \ .   A p l i k a c i j a   z o p e t   z i d a   u s p e an o .  
  - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicama, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
+[   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) . 
+ [   ]   V s i   W i d g e t i   p o   i s k a n j u   ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n   I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o ,   d a   i z p u aa j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
+ [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i n i m i   f o r m a t i ,   d a   n a t a n n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
+ [   ]   P r e v e r j e n a   o d s t r a n i t e v   n e s m i s e l n i h   o d v i s n o s t i   ( j i h   n i ,   j a v a . t i m e   i n   j a v a . u t i l . D a t e   s t a   ~e   t a k o   d e l   J D K j a   i n   n i s t a   t e r j a l i   p o s e b n e   k n j i ~n i c e   v   g r a d l e ) . 
+ [   ]   b u i l d   j e   ae l   s k o z i   b p .  
+ 
+[x] Ustvarjen interfejs FaceDetector.
+[x] Ustvarjen AndroidMLKitFaceDetector v data plasti.
+[x] GoldenRatioScreen refaktoriran, da ne uporablja ML Kit neposredno.
+[x] Build uspesen.

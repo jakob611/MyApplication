@@ -32,8 +32,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.LocalDate
+import com.example.myapplication.domain.*
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -42,7 +42,6 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import com.example.myapplication.utils.HapticFeedback
 import java.util.Locale
-import java.time.temporal.ChronoUnit
 import com.example.myapplication.data.UserProfile
 
 // Data holders
@@ -557,9 +556,9 @@ private fun InteractiveLineChart(
     val minV = remember(values) { values.minOrNull() ?: 0.0 }
     val maxV = remember(values) { values.maxOrNull() ?: 0.0 }
 
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH) }
-    val monthFormatter = remember { DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH) }
-    val dayFormatter = remember { DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH) } // For Week view
+    val dateFormatter = "dd MMM"
+    val monthFormatter = "MMM"
+    val dayFormatter = "EEE" // For Week view
     val yTicks = 5
 
     fun roundToNice(value: Double, roundUp: Boolean): Double {
@@ -643,11 +642,11 @@ private fun InteractiveLineChart(
             val innerW = size.width
             val innerH = size.height
 
-            val totalDays = ChronoUnit.DAYS.between(minDate, maxDate).coerceAtLeast(1)
+            val totalDays = daysBetween(minDate, maxDate).coerceAtLeast(1)
 
             // Compute xPositions for data points based on global minDate/maxDate
             xPositions = sorted.map { (d, _) ->
-                val daysFromStart = ChronoUnit.DAYS.between(minDate, d).toFloat()
+                val daysFromStart = daysBetween(minDate, d).toFloat()
                 (daysFromStart / totalDays.toFloat()) * innerW
             }
 
@@ -675,7 +674,7 @@ private fun InteractiveLineChart(
                 if (current.isBefore(minDate)) current = current.plusMonths(1)
 
                 while (!current.isAfter(maxDate)) {
-                    val daysFromStart = ChronoUnit.DAYS.between(minDate, current).toFloat()
+                    val daysFromStart = daysBetween(minDate, current).toFloat()
                     val x = (daysFromStart / totalDays.toFloat()) * innerW
 
                     if (x >= 0 && x <= innerW) {
@@ -712,7 +711,7 @@ private fun InteractiveLineChart(
                  previousPoints?.let { prevPts ->
                      val prevSorted = prevPts.sortedBy { it.first }.filter { !it.first.isBefore(minDate) && !it.first.isAfter(maxDate) }
                      val prevXP = prevSorted.map { (d, _) ->
-                         val daysFromStart = ChronoUnit.DAYS.between(minDate, d).toFloat()
+                         val daysFromStart = daysBetween(minDate, d).toFloat()
                          (daysFromStart / totalDays.toFloat()) * innerW
                      }
                      val prevYP = prevSorted.map { (_, v) ->
@@ -771,7 +770,7 @@ private fun InteractiveLineChart(
 
                 // Edge prev
                 edgePrev?.let { prev ->
-                    val dxPrev = ChronoUnit.DAYS.between(minDate, prev.first).toFloat()
+                    val dxPrev = daysBetween(minDate, prev.first).toFloat()
                     val xPrev = (dxPrev / totalDays.toFloat()) * innerW
                     val yPrev = run {
                         val norm = (prev.second - niceMin) / span
@@ -792,7 +791,7 @@ private fun InteractiveLineChart(
 
                  // Edge next
                 edgeNext?.let { next ->
-                    val dxNext = ChronoUnit.DAYS.between(minDate, next.first).toFloat()
+                    val dxNext = daysBetween(minDate, next.first).toFloat()
                     val xNext = (dxNext / totalDays.toFloat()) * innerW
                     val yNext = run {
                         val norm = (next.second - niceMin) / span
@@ -848,10 +847,10 @@ private fun InteractiveLineChart(
 
         if (rangeType == ProgressRange.WEEK) {
             // Draw day labels for the week
-            val days = ChronoUnit.DAYS.between(minDate, maxDate).toInt()
+            val days = daysBetween(minDate, maxDate).toInt()
             for (i in 0..days) {
-                val d = minDate.plusDays(i.toLong())
-                val label = dayFormatter.format(d) // Mon, Tue...
+                val d = minDate.plusDays(i)
+                val label = DateFormatter.format(d, dayFormatter) // Mon, Tue...
                 val fraction = i.toFloat() / days.coerceAtLeast(1).toFloat()
 
                 // Position logic using box with weight or constraint
@@ -885,14 +884,14 @@ private fun InteractiveLineChart(
             // Labels usually go between lines or at lines.
             // Let's put label next to the line.
 
-            val totalDays = ChronoUnit.DAYS.between(minDate, maxDate).coerceAtLeast(1)
+            val totalDays = daysBetween(minDate, maxDate).coerceAtLeast(1)
             val innerW_approx = maxWidth.value * LocalDensity.current.density - with(LocalDensity.current) { paddingStartForAxis.toPx() + 16.dp.toPx() }
 
             if (current.isBefore(minDate)) current = current.plusMonths(1)
 
             while (!current.isAfter(maxDate)) {
-                 val label = monthFormatter.format(current)
-                 val daysFromStart = ChronoUnit.DAYS.between(minDate, current).toFloat()
+                 val label = DateFormatter.format(current, monthFormatter)
+                 val daysFromStart = daysBetween(minDate, current).toFloat()
                  val fraction = daysFromStart / totalDays.toFloat()
                  val px = fraction * innerW_approx
                  val xDp = with(LocalDensity.current) { px.toDp() } + paddingStartForAxis
@@ -911,7 +910,7 @@ private fun InteractiveLineChart(
 
             // Also label the very first month if we started in middle of it?
             if (minDate.dayOfMonth > 1) {
-                 val label = monthFormatter.format(minDate)
+                 val label = DateFormatter.format(minDate, monthFormatter)
                  Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -953,7 +952,7 @@ private fun InteractiveLineChart(
                         modifier = Modifier.offset(x = xDp, y = yDp).width(tooltipWidthDp)
                     ) {
                         Column(Modifier.padding(10.dp)) {
-                            Text(dateFormatter.format(date), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(DateFormatter.format(date, dateFormatter), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             val formatPattern = if (unit == "kg") "%.1f" else "%.0f"
                             Text("${String.format(java.util.Locale.US, formatPattern, value)} $unit", fontSize = 13.sp)
                         }

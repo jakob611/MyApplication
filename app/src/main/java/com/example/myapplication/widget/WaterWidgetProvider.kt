@@ -12,8 +12,10 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.myapplication.domain.DateFormatter
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class WaterWidgetProvider : AppWidgetProvider() {
 
@@ -136,7 +138,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
         const val ACTION_REFRESH = "com.example.myapplication.widget.WATER_REFRESH"
         const val ACTION_OPEN_INPUT = "com.example.myapplication.widget.WATER_OPEN_INPUT"
 
-        private fun todayId(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        private fun todayId(): String = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
 
         fun updateAppWidget(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
             val layoutId = context.resources.getIdentifier("widget_water", "layout", context.packageName)

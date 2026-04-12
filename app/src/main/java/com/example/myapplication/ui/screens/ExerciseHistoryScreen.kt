@@ -35,8 +35,7 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import java.text.SimpleDateFormat
-import java.util.Date
+import com.example.myapplication.domain.DateFormatter
 import java.util.Locale
 
 @Composable
@@ -87,8 +86,8 @@ private fun ExercisesTab() {
                     try { 
                         ExerciseLog(
                             name = d.getString("name") ?: "?", 
-                            date = d.getTimestamp("date")?.toDate() ?: Date(), 
-                            caloriesKcal = (d.get("caloriesKcal") as? Number)?.toInt() ?: 0, 
+                            date = d.getTimestamp("date")?.toDate()?.time ?: System.currentTimeMillis(),
+                            caloriesKcal = (d.get("caloriesKcal") as? Number)?.toInt() ?: 0,
                             sets = (d.get("sets") as? Number)?.toInt(), 
                             reps = (d.get("reps") as? Number)?.toInt(), 
                             durationSeconds = (d.get("durationSeconds") as? Number)?.toInt()
@@ -102,13 +101,12 @@ private fun ExercisesTab() {
     if (loading) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
     else if (entries.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No individual exercises yet") } }
     else {
-        val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy", Locale.ENGLISH) }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(items = entries, key = { "${it.name}_${it.date.time}" }) { ex ->
+            items(items = entries, key = { "${it.name}_${it.date}" }) { ex ->
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(ex.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(fmt.format(ex.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(DateFormatter.formatEpoch(ex.date, "EEE, dd MMM yyyy"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             val details = when { 
@@ -142,8 +140,8 @@ private fun WorkoutsTab() {
                     try { 
                         WorkoutEntry(
                             id = d.id, 
-                            date = d.getTimestamp("date")?.toDate() ?: Date(), 
-                            totalKcal = (d.get("totalKcal") as? Number)?.toInt() ?: 0, 
+                            date = d.getTimestamp("date")?.toDate()?.time ?: System.currentTimeMillis(),
+                            totalKcal = (d.get("totalKcal") as? Number)?.toInt() ?: 0,
                             totalTimeMin = (d.get("totalTimeMin") as? Number)?.toDouble() ?: 0.0, 
                             exercisesCount = (d.get("exercisesCount") as? Number)?.toInt() ?: 0
                         ) 
@@ -177,13 +175,12 @@ private fun formatWorkoutTime(totalMinutes: Double): String {
     return when { hours > 0 -> "${hours}h ${minutes}m ${seconds}s"; minutes > 0 -> "${minutes}m ${seconds}s"; else -> "${seconds}s" }
 }
 
-data class WorkoutEntry(val id: String, val date: Date, val totalKcal: Int, val totalTimeMin: Double, val exercisesCount: Int)
+data class WorkoutEntry(val id: String, val date: Long, val totalKcal: Int, val totalTimeMin: Double, val exercisesCount: Int)
 data class WorkoutExercise(val name: String, val activeMinutes: Double, val restMinutes: Double, val caloriesKcal: Int)
-data class ExerciseLog(val name: String, val date: Date, val caloriesKcal: Int, val sets: Int? = null, val reps: Int? = null, val durationSeconds: Int? = null)
+data class ExerciseLog(val name: String, val date: Long, val caloriesKcal: Int, val sets: Int? = null, val reps: Int? = null, val durationSeconds: Int? = null)
 
 @Composable
 private fun WorkoutCard(uid: String, entry: WorkoutEntry) {
-    val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy", Locale.ENGLISH) }
     var expanded by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var exList by remember { mutableStateOf<List<WorkoutExercise>>(emptyList()) }
@@ -203,7 +200,7 @@ private fun WorkoutCard(uid: String, entry: WorkoutEntry) {
     Card(modifier = Modifier.fillMaxWidth().clickable { if (!expanded) loadExercisesIfNeeded(); expanded = !expanded }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column { Text("Workout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(fmt.format(entry.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column { Text("Workout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(DateFormatter.formatEpoch(entry.date, "EEE, dd MMM yyyy"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text("${entry.totalKcal} kcal", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.height(8.dp))
@@ -220,7 +217,6 @@ private fun WorkoutCard(uid: String, entry: WorkoutEntry) {
 
 @Composable
 private fun RunCard(run: RunSession) {
-    val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy HH:mm", Locale.ENGLISH) }
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var routePoints by remember { mutableStateOf<List<com.example.myapplication.data.LocationPoint>>(emptyList()) }
@@ -237,7 +233,7 @@ private fun RunCard(run: RunSession) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("${run.activityType.emoji} ${run.activityType.label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(fmt.format(Date(run.startTime)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(DateFormatter.formatEpoch(run.startTime, "EEE, dd MMM yyyy HH:mm"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("${"%.2f".format(run.getDistanceKm())} km", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }

@@ -29,10 +29,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
-import com.google.mlkit.vision.face.FaceLandmark
 import coil.compose.AsyncImage
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -45,6 +41,7 @@ import java.io.File
 import kotlin.math.*
 import com.example.myapplication.domain.looksmaxing.models.*
 import com.example.myapplication.domain.looksmaxing.CalculateGoldenRatioUseCase
+import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
 
 @Composable
 fun GoldenRatioScreen(
@@ -618,97 +615,163 @@ fun processImage(
     loadingState.value = true
     scoreState.value = null
     faceDataState.value = null
-    try {
-        val image: InputImage
+
+    val detector = FaceDetectorProvider.provideFaceDetector(context)
+
+    coroutineScope.launch {
         try {
-            image = InputImage.fromFilePath(context, uri)
-        } catch (e: Exception) {
-            loadingState.value = false
-            return
-        }
+            val faceData = detector.detectFace(uri)
 
-        val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-            .build()
-        val detector = FaceDetection.getClient(options)
+            delay(1000L) // Add scanning effect delay
 
-        detector.process(image)
-            .addOnSuccessListener { faces ->
-                coroutineScope.launch {
-                    delay(1000L) // Add scanning effect delay
-
-                    if (faces.isEmpty()) {
-                        com.example.myapplication.utils.AppToast.showWarning(context, "No face detected!")
-                        loadingState.value = false
-                        return@launch
-                    }
-
-                    val face = faces[0]
-                    val markers = mutableMapOf<Int, Point2D>()
-
-                    face.getLandmark(FaceLandmark.LEFT_EYE)?.position?.let { markers[15] = Point2D(it.x, it.y) }
-                    face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.let { markers[16] = Point2D(it.x, it.y) }
-                    face.getLandmark(FaceLandmark.NOSE_BASE)?.position?.let { markers[23] = Point2D(it.x, it.y) }
-                    face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position?.let { markers[27] = Point2D(it.x, it.y) }
-                    face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position?.let { markers[29] = Point2D(it.x, it.y) }
-                    face.getLandmark(FaceLandmark.MOUTH_BOTTOM)?.position?.let { markers[31] = Point2D(it.x, it.y) }
-
-                    val bounds = face.boundingBox
-                    markers[19] = Point2D(bounds.left.toFloat(), bounds.centerY().toFloat())
-                    markers[20] = Point2D(bounds.right.toFloat(), bounds.centerY().toFloat())
-                    markers[1] = Point2D(bounds.centerX().toFloat(), bounds.top.toFloat())
-                    markers[33] = Point2D(bounds.centerX().toFloat(), bounds.bottom.toFloat())
-
-                    val width = bounds.width().toFloat()
-                    val height = bounds.height().toFloat()
-
-                    val useCase = CalculateGoldenRatioUseCase()
-
-                    val eyeDist = useCase.distance(markers[15] ?: Point2D(0f,0f), markers[16] ?: Point2D(1f,0f))
-                    val mouthWidth = useCase.distance(markers[27] ?: Point2D(0f,0f), markers[29] ?: Point2D(1f,0f))
-
-                    // Ideal height/width for tight ML bounding box is ~1.4
-                    val faceRatio = height.toDouble() / width.toDouble()
-                    val devBase = abs(faceRatio - 1.4) / 1.4
-
-                    // Ideal eye dist / mouth width is ~1.0
-                    val ratioEyesMouth = if (mouthWidth > 0.0) eyeDist / mouthWidth else 1.0
-                    val devEyesMouth = abs(ratioEyesMouth - 1.0)
-
-                    // Face symmetry (distance from eyes to bounding box edges)
-                    val leftEdge = markers[19] ?: Point2D(0f,0f)
-                    val leftEye = markers[15] ?: Point2D(0f,0f)
-                    val rightEye = markers[16] ?: Point2D(0f,0f)
-                    val rightEdge = markers[20] ?: Point2D(0f,0f)
-                    val leftDist = useCase.distance(leftEye, leftEdge)
-                    val rightDist = useCase.distance(rightEye, rightEdge)
-                    val devSymmetry = abs(leftDist - rightDist) / (leftDist + rightDist + 1.0)
-
-                    // Penalize score dynamically if face is tilted or turned (3D rotation)
-                    val turnPenalty = abs(face.headEulerAngleY).toDouble() * 0.003
-                    val tiltPenalty = abs(face.headEulerAngleZ).toDouble() * 0.003
-
-                    val totalDeviation = (devBase * 0.3) + (devEyesMouth * 0.3) + (devSymmetry * 0.4) + turnPenalty + tiltPenalty
-
-                    // Realistic mapping: Average deviation ~0.1 to 0.15 gives scores ~ 62-75%
-                    // Highly symmetrical faces give scores 85-95%.
-                    val stretchedScore = 1.0 - (totalDeviation * 2.5)
-                    val finalScore = stretchedScore.coerceIn(0.35, 0.99)
-
-                    faceDataState.value = DetectedFaceData(markers, image.width, image.height)
-                    scoreState.value = finalScore
-                    loadingState.value = false
-                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
-                }
-            }
-            .addOnFailureListener { e ->
-                com.example.myapplication.utils.AppToast.showError(context, "Detection failed: ${e.message}")
+            if (faceData == null || faceData.markers.isEmpty()) {
+                com.example.myapplication.utils.AppToast.showWarning(context, "No face detected!")
                 loadingState.value = false
+                return@launch
             }
 
-    } catch (e: Exception) {
-        loadingState.value = false
+            val markers = faceData.markers
+            val width = faceData.imageWidth.toFloat()
+            val height = faceData.imageHeight.toFloat()
+
+            val useCase = CalculateGoldenRatioUseCase()
+
+            val eyeDist = useCase.distance(markers[15] ?: Point2D(0f,0f), markers[16] ?: Point2D(1f,0f))
+            val mouthWidth = useCase.distance(markers[27] ?: Point2D(0f,0f), markers[29] ?: Point2D(1f,0f))
+
+            // Ideal height/width for tight ML bounding box is ~1.4
+            val faceRatio = height.toDouble() / width.toDouble()
+            val devBase = abs(faceRatio - 1.4) / 1.4
+
+            // Ideal eye dist / mouth width is ~1.0
+            val ratioEyesMouth = if (mouthWidth > 0.0) eyeDist / mouthWidth else 1.0
+            val devEyesMouth = abs(ratioEyesMouth - 1.0)
+
+            // Face symmetry (distance from eyes to bounding box edges)
+            val leftEdge = markers[19] ?: Point2D(0f,0f)
+            val leftEye = markers[15] ?: Point2D(0f,0f)
+            val rightEye = markers[16] ?: Point2D(0f,0f)
+            val rightEdge = markers[20] ?: Point2D(0f,0f)
+            val leftDist = useCase.distance(leftEye, leftEdge)
+            val rightDist = useCase.distance(rightEye, rightEdge)
+            val devSymmetry = abs(leftDist - rightDist) / (leftDist + rightDist + 1.0)
+
+            // Penalize score dynamically if face is tilted or turned (3D rotation)
+            val turnPenalty = abs(faceData.headEulerAngleY).toDouble() * 0.003
+            val tiltPenalty = abs(faceData.headEulerAngleZ).toDouble() * 0.003
+
+            val totalDeviation = (devBase * 0.3) + (devEyesMouth * 0.3) + (devSymmetry * 0.4) + turnPenalty + tiltPenalty
+
+            // Realistic mapping: Average deviation ~0.1 to 0.15 gives scores ~ 62-75%
+            // Highly symmetrical faces give scores 85-95%.
+            val stretchedScore = 1.0 - (totalDeviation * 2.5)
+            val finalScore = stretchedScore.coerceIn(0.35, 0.99)
+
+            faceDataState.value = faceData
+            scoreState.value = finalScore
+            loadingState.value = false
+            com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
+        } catch (e: Exception) {
+            com.example.myapplication.utils.AppToast.showError(context, "Detection failed: ${e.message}")
+            loadingState.value = false
+        }
     }
 }
 
+@Composable
+fun MLKitScanningOverlay(
+    isLoading: Boolean,
+    calculatedScore: Double?,
+    faceData: DetectedFaceData?
+) {
+    if (isLoading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "scanner")
+        val offsetY by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ), label = "scanner_offset"
+        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val y = size.height * offsetY
+            drawLine(
+                color = Color(0xFF00FF00),
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 6f
+            )
+            drawRect(
+                color = Color(0xFF00FF00).copy(alpha = 0.2f),
+                topLeft = Offset(0f, y - 20f),
+                size = androidx.compose.ui.geometry.Size(size.width, 40f)
+            )
+        }
+    } else if (calculatedScore != null && faceData != null) {
+        val data = faceData
+        // Draw Golden Ratio grid overlay on top of photo
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val scale = max(size.width / data.imageWidth.toFloat(), size.height / data.imageHeight.toFloat())
+            val offsetX = (size.width - data.imageWidth * scale) / 2f
+            val offsetY = (size.height - data.imageHeight * scale) / 2f
+
+            fun transform(p: Point2D): Offset {
+                return Offset(p.x * scale + offsetX, p.y * scale + offsetY)
+            }
+
+            val markers = data.markers
+
+            // Draw connected grid lines
+            val pTop = markers[1]
+            val pBottom = markers[33]
+            val pLeftFace = markers[19]
+            val pRightFace = markers[20]
+            val pLeftEye = markers[15]
+            val pRightEye = markers[16]
+            val pNose = markers[23]
+            val pMouthL = markers[27]
+            val pMouthR = markers[29]
+            val pMouthB = markers[31]
+
+            val lineColor = Color(0xFFFFD700).copy(alpha = 0.8f)
+
+            // Vertical symmetry line
+            if (pTop != null && pBottom != null) {
+                drawLine(lineColor, transform(pTop), transform(pBottom), strokeWidth = 3f)
+            }
+
+            // Face width bounds
+            if (pLeftFace != null && pRightFace != null) {
+                drawLine(lineColor.copy(alpha=0.4f), transform(pLeftFace), Offset(transform(pLeftFace).x, transform(pBottom ?: pLeftFace).y), strokeWidth = 2f)
+                drawLine(lineColor.copy(alpha=0.4f), transform(pRightFace), Offset(transform(pRightFace).x, transform(pBottom ?: pRightFace).y), strokeWidth = 2f)
+            }
+
+            // Horizontal lines
+            if (pLeftEye != null && pRightEye != null) {
+                drawLine(Color.Cyan.copy(alpha = 0.6f), transform(pLeftEye), transform(pRightEye), strokeWidth = 3f)
+            }
+            if (pMouthL != null && pMouthR != null) {
+                drawLine(Color.Cyan.copy(alpha = 0.6f), transform(pMouthL), transform(pMouthR), strokeWidth = 3f)
+            }
+
+            // Triangle from nose to mouth
+            if (pNose != null && pMouthL != null && pMouthR != null) {
+                val path = Path().apply {
+                    moveTo(transform(pNose).x, transform(pNose).y)
+                    lineTo(transform(pMouthL).x, transform(pMouthL).y)
+                    lineTo(transform(pMouthR).x, transform(pMouthR).y)
+                    close()
+                }
+                drawPath(path, color = Color(0xFFFFD700).copy(alpha = 0.4f), style = Stroke(width = 3f))
+            }
+
+            // Draw individual marker points
+            markers.values.forEach { p ->
+                drawCircle(Color.Red, radius = 6f, center = transform(p))
+                drawCircle(Color.White, radius = 3f, center = transform(p))
+            }
+        }
+    }
+}

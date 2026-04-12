@@ -13,7 +13,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.time.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class StatsWidget : AppWidgetProvider() {
 
@@ -63,7 +65,7 @@ class StatsWidget : AppWidgetProvider() {
         scope.launch {
             try {
                 // Determine today's date string
-                val today = LocalDate.now().toString()
+                val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
                 
                 // Fetch stats from HealthStorage
                 val stats = HealthStorage.getDailyStats(today)

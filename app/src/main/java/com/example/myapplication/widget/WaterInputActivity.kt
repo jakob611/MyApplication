@@ -15,7 +15,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FieldValue
-import java.time.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Transparent Activity that shows a water input dialog from widget.
@@ -84,7 +86,7 @@ class WaterInputActivity : ComponentActivity() {
                             fontSize = 12.sp
                         )
                     }
-                    Text("Date: ${LocalDate.now()}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Date: ${kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             confirmButton = {
@@ -102,7 +104,7 @@ class WaterInputActivity : ComponentActivity() {
                         }
 
                         saving = true
-                        val today = LocalDate.now().toString()
+                        val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
                         val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
                         Log.d("WaterInput", "WRITE doc=${userRef.id} date=$today waterMl=$w")
 
