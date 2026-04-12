@@ -14,6 +14,9 @@ import kotlinx.datetime.toLocalDateTime
  * ki zamenjuje AchievementStore in rešuje Heisenbug, ker BERE IZ ENOSTEGA VIRA RESNICE (Firestore).
  * NIMA NITI ENE SharedPreferences ODVISNOSTI.
  */
+/**
+ * Android implementation of GamificationRepository with direct Firestore integration.
+ */
 class FirestoreGamificationRepository : GamificationRepository {
 
     private val db = FirebaseFirestore.getInstance()
