@@ -31,9 +31,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.example.myapplication.network.OpenFoodFactsAPI
 import com.example.myapplication.network.OpenFoodFactsProduct
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import com.example.myapplication.domain.barcode.BarcodeScannerProvider
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -233,6 +231,7 @@ private fun CameraPreview(
         ProcessCameraProvider.getInstance(context)
     }
     val executor = remember { Executors.newSingleThreadExecutor() }
+    val barcodeScanner = remember { BarcodeScannerProvider.provideBarcodeScanner() }
 
     AndroidView(
         factory = { ctx ->
@@ -249,7 +248,7 @@ private fun CameraPreview(
                     .build()
                     .also {
                         it.setAnalyzer(executor) { imageProxy ->
-                            processImageProxy(imageProxy, onBarcodeDetected)
+                            barcodeScanner.processImage(imageProxy, onBarcodeDetected)
                         }
                     }
 
@@ -273,48 +272,6 @@ private fun CameraPreview(
     )
 }
 
-@androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun processImageProxy(
-    imageProxy: ImageProxy,
-    onBarcodeDetected: (String) -> Unit
-) {
-    val mediaImage = imageProxy.image
-    if (mediaImage != null) {
-        val image = InputImage.fromMediaImage(
-            mediaImage,
-            imageProxy.imageInfo.rotationDegrees
-        )
-
-        val scanner = BarcodeScanning.getClient()
-        scanner.process(image)
-            .addOnSuccessListener { barcodes ->
-                for (barcode in barcodes) {
-                    when (barcode.valueType) {
-                        Barcode.TYPE_PRODUCT -> {
-                            barcode.rawValue?.let { value ->
-                                Log.d("BarcodeScanner", "Detected barcode: $value")
-                                onBarcodeDetected(value)
-                            }
-                        }
-                        else -> {
-                            barcode.rawValue?.let { value ->
-                                Log.d("BarcodeScanner", "Detected barcode (other type): $value")
-                                onBarcodeDetected(value)
-                            }
-                        }
-                    }
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e("BarcodeScanner", "Barcode scanning failed", e)
-            }
-            .addOnCompleteListener {
-                imageProxy.close()
-            }
-    } else {
-        imageProxy.close()
-    }
-}
 
 @Composable
 private fun ManualBarcodeInput(
@@ -734,4 +691,3 @@ private fun NutritionRow(label: String, value: String) {
         Text(value, fontWeight = FontWeight.SemiBold)
     }
 }
-

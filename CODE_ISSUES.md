@@ -193,3 +193,5 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 - **2026-04-12 (MLKit Izolacija)** - Odstranjen ML Kit iz GoldenRatioScreen UI-ja. Logika premaknjena v AndroidMLKitFaceDetector v data plasti. Uporablja nov FaceDetector interfejs v domain plasti.
 
 - **2026-04-12 (Preverbe in DI)** - Vpeljan FaceDetectorProvider, popravljen resource leak v MLKit detectorju. BarcodeScannerScreen se vedno uporablja mlkit, ampak model za obraz je popolnoma izoliran.
+
+- **2026-04-12 (Barcode Scanner Izolacija)** - Odstranjen ML Kit iz BarcodeScannerScreen UI-ja. Logika premaknjena v AndroidMLKitBarcodeScanner v data plasti. Uporablja nov BarcodeScanner interfejs in BarcodeScannerProvider v domain plasti. Vsi ui/screens/ sedaj brez com.google.mlkit uvozov.

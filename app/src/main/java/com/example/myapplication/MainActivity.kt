@@ -658,29 +658,14 @@ class MainActivity : ComponentActivity() {
                                             )
                                             appViewModel.setProfile(updatedFromQuiz)
                                             UserPreferences.saveProfile(context, updatedFromQuiz)
+                                            scope.launch { UserPreferences.saveProfileFirestore(updatedFromQuiz) }
+
                                             val freqStr = quizData["frequency"] as? String
                                             val freqParsed = freqStr?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
                                             if (freqParsed != null && freqParsed > 0) {
                                                 context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                                     .edit().putInt("weekly_target", freqParsed).apply()
                                                 Log.d("MainActivity", "weekly_target set from quiz: $freqParsed")
-                                            }
-                                            scope.launch {
-                                                try {
-                                                    val bioRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-                                                    val bioData = mapOf(
-                                                        "height" to (newHeight ?: 0.0), "age" to (newAge ?: 0),
-                                                        "gender" to (newGender ?: ""),
-                                                        "activityLevel" to (quizData["frequency"] as? String ?: ""),
-                                                        "experience" to (quizData["experience"] as? String ?: ""),
-                                                        "bodyFat" to (quizData["bodyFat"] as? String ?: ""),
-                                                        "workoutGoal" to (quizData["goal"] as? String ?: ""),
-                                                        "limitations" to limitationsList,
-                                                        "nutritionStyle" to (quizData["nutrition"] as? String ?: ""),
-                                                        "sleepHours" to (quizData["sleep"] as? String ?: "")
-                                                    )
-                                                    bioRef.set(bioData, com.google.firebase.firestore.SetOptions.merge()).await()
-                                                } catch (e: Exception) { Log.e("MainActivity", "Firestore biometric save error", e) }
                                             }
                                         },
                                         onFinish = { plan ->

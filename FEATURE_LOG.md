@@ -201,3 +201,5 @@
 [x] Ustvarjen AndroidMLKitFaceDetector v data plasti.
 [x] GoldenRatioScreen refaktoriran, da ne uporablja ML Kit neposredno.
 [x] Build uspesen.
+
+- **2026-04-12 (Barcode Scanner Izolacija)** - Odstranjen ML Kit iz BarcodeScannerScreen UI-ja. Logika premaknjena v AndroidMLKitBarcodeScanner v data plasti. Uporablja nov BarcodeScanner interfejs in BarcodeScannerProvider v domain plasti. Vsi ui/screens/ sedaj brez com.google.mlkit uvozov.
