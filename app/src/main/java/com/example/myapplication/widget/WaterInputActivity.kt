@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -47,6 +47,7 @@ class WaterInputActivity : ComponentActivity() {
     @Composable
     private fun WaterInputDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
         val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
         // uid v remember{} — ne sme se klicati ob vsakem recomposition
         val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
         var waterInput by remember { mutableStateOf("") }
@@ -105,29 +106,22 @@ class WaterInputActivity : ComponentActivity() {
 
                         saving = true
                         val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
-                        val userRef = com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
-                        Log.d("WaterInput", "WRITE doc=${userRef.id} date=$today waterMl=$w")
 
-                        // Save to dailyLogs (where water is stored)
-                        userRef.collection("dailyLogs").document(today)
-                            .set(
-                                mapOf("date" to today, "waterMl" to w, "updatedAt" to FieldValue.serverTimestamp()),
-                                com.google.firebase.firestore.SetOptions.merge()
-                            )
-                            .addOnSuccessListener {
-                                Log.d("WaterInput", "Saved to dailyLogs: $w ml")
+                        coroutineScope.launch {
+                            try {
+                                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(w, today)
                                 // Posodobi lokalni cache — NutritionScreen bere iz tega
                                 com.example.myapplication.persistence.DailySyncManager
                                     .saveWaterLocally(context, w, today)
                                 // Update widget
                                 WaterWidgetProvider.updateWidgetFromApp(context, w)
                                 onSaved()
-                            }
-                            .addOnFailureListener { e ->
+                            } catch (e: Exception) {
                                 Log.e("WaterInput", "Failed to save water", e)
                                 errorMessage = "Save failed"
                                 saving = false
                             }
+                        }
                     }
                 ) { Text(if (saving) "Saving..." else "Save") }
             },

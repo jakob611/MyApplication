@@ -41,16 +41,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.myapplication.data.HealthStorage
 import com.example.myapplication.health.HealthConnectManager
 import com.example.myapplication.network.OpenFoodFactsProduct
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
-import java.text.SimpleDateFormat
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Date
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toJavaInstant
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 // -----------------------------------------------------------------------
 // ActiveCaloriesBar - navpicna progresna vrstica za porabljene kalorije
@@ -129,18 +128,21 @@ fun NutritionScreen(
     // Active Calories (Health Connect) - load from SharedPreferences INSTANTLY
     val healthManager = remember { HealthConnectManager.getInstance(context) }
     val burnedPrefs = remember { context.getSharedPreferences("burned_cache", android.content.Context.MODE_PRIVATE) }
-    val todayBurnedKey = remember { "burned_${java.time.LocalDate.now()}" }
+    val todayBurnedKey = remember { "burned_${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date}" }
     var activeCaloriesBurned by remember { mutableStateOf(burnedPrefs.getInt(todayBurnedKey, 0)) }
 
     LaunchedEffect(Unit) {
         // Check permissions and load data
         if (healthManager.isAvailable() && healthManager.hasAllPermissions()) {
             while (true) {
-                val now = Instant.now()
-                val startOfDay = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val now = Clock.System.now().toJavaInstant()
+                val tz = TimeZone.currentSystemDefault()
+                val startOfDay = Clock.System.now().toLocalDateTime(tz).date
+                // java.time mapping is needed only for HealthConnect client argument for now
+                val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
 
                 // 1. Health Connect (Active)
-                val healthConnectCalories = healthManager.readCalories(startOfDay, now)
+                val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
 
                 // 2. App Exercises (Workouts + Logs)
                 val appExercisesCalories = HealthStorage.getTodayAppExercisesCalories()
@@ -196,7 +198,7 @@ fun NutritionScreen(
 
     // Water tracking - load from SharedPreferences INSTANTLY for no flicker
     val waterPrefs = remember { context.getSharedPreferences("water_cache", android.content.Context.MODE_PRIVATE) }
-    val todayWaterKey = remember { "water_${java.time.LocalDate.now()}" }
+    val todayWaterKey = remember { "water_${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date}" }
     val cachedWater = remember { waterPrefs.getInt(todayWaterKey, 0) }
     var waterConsumedMl by remember { mutableStateOf(cachedWater) }
     // waterLoaded = true means Firestore initial read happened (ne overwritamo lokalnih sprememb)
@@ -292,11 +294,9 @@ fun NutritionScreen(
     // Snapshot listener za customMeals
     DisposableEffect(Unit) {
         val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-        var reg: ListenerRegistration? = null
+        var reg: com.google.firebase.firestore.ListenerRegistration? = null
         if (uid != null) {
-            reg = Firebase.firestore.collection("users").document(uid)
-                .collection("customMeals")
-                .addSnapshotListener { snaps, _ ->
+            reg = com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid) { snaps ->
                     val list = snaps?.documents?.mapNotNull { doc ->
                         val name = doc.getString("name") ?: "Custom meal"
                         @Suppress("UNCHECKED_CAST")
@@ -353,11 +353,9 @@ fun NutritionScreen(
     // Restore ob zagonu â€” enkratno branje iz Firestore (samo ÄŤe je lokalni cache prazen)
     var firestoreFoodsLoaded by remember { mutableStateOf(false) }
     DisposableEffect(uid, todayId) {
-        var reg: ListenerRegistration? = null
+        var reg: com.google.firebase.firestore.ListenerRegistration? = null
         if (uid != null) {
-            reg = Firebase.firestore.collection("users").document(uid)
-                .collection("dailyLogs").document(todayId)
-                .addSnapshotListener { doc, _ ->
+            reg = com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId) { doc ->
                     // â”€â”€ HRANA: Firestore prevzame samo ob prvem nalaganju in SAMO ÄŤe je lokalni cache prazen â”€â”€
                     if (!firestoreFoodsLoaded) {
                         firestoreFoodsLoaded = true
@@ -513,13 +511,14 @@ fun NutritionScreen(
     val textPrimary = MaterialTheme.colorScheme.onBackground
 
     // Ugotovi ali je danes workout day ali rest day (glede na aktiven plan)
-    val todayDayOfWeek = remember { java.time.LocalDate.now().dayOfWeek.value } // 1=Mon, 7=Sun
+    val todayDayOfWeek = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek.value } // 1=Mon, 7=Sun
     val isWorkoutDayToday = remember(plan) {
         if (plan == null) false
         else {
             // Preveri pri tekočem planu ali je danes trening ali počitek
-            val startDate = try { java.time.LocalDate.parse(plan.startDate) } catch (_: Exception) { java.time.LocalDate.now() }
-            val daysSinceStart = java.time.temporal.ChronoUnit.DAYS.between(startDate, java.time.LocalDate.now()).toInt()
+            val startDate = try { kotlinx.datetime.LocalDate.parse(plan.startDate) } catch (_: Exception) { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
+            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val daysSinceStart = (todayDate.toEpochDays() - startDate.toEpochDays())
             val allDays = plan.weeks.flatMap { it.days }
             val todayDayInPlan = allDays.getOrNull(daysSinceStart)
             // Če ni podatka o dnevu, predpostavi workout day
@@ -807,6 +806,7 @@ fun NutritionScreen(
             Spacer(modifier = Modifier.height(80.dp)) // Bottom padding for snackbar
         }
     }
+    } // Closes Scaffold!
 
     // Sheet: iskanje hrane + dodajanje
     if (sheetMeal != null) {
@@ -880,16 +880,19 @@ fun NutritionScreen(
                     return@ChooseMealDialog true
                 }
 
-                // CRITICAL FIX: Re-fetch from Firestore to get ALL nutritional data
-                Firebase.firestore.collection("users").document(currentUid)
-                    .collection("customMeals").document(cm.id)
-                    .get()
-                    .addOnSuccessListener { doc ->
+                val scope = kotlinx.coroutines.MainScope()
+                scope.launch {
+                    try {
+                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        val doc = db.collection("users").document(currentUid)
+                            .collection("customMeals").document(cm.id)
+                            .get().await()
+
                         if (!doc.exists()) {
                             android.widget.Toast.makeText(context, "Meal not found", android.widget.Toast.LENGTH_SHORT).show()
                             pendingCustomMeal = null
                             askWhereToAdd = false
-                            return@addOnSuccessListener
+                            return@launch
                         }
 
                         val items = doc.get("items") as? List<*> ?: emptyList<Any>()
@@ -940,12 +943,12 @@ fun NutritionScreen(
                         }
                         pendingCustomMeal = null
                         askWhereToAdd = false
-                    }
-                    .addOnFailureListener { e ->
+                    } catch (e: Exception) {
                         android.widget.Toast.makeText(context, "Failed to load meal: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                         pendingCustomMeal = null
                         askWhereToAdd = false
                     }
+                }
 
                 true // Close dialog immediately, Firestore callback will handle the rest
             }
@@ -960,14 +963,17 @@ fun NutritionScreen(
                 Button(onClick = {
                     val uidDel = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                     if (uidDel != null) {
-                        Firebase.firestore.collection("users").document(uidDel)
-                            .collection("customMeals").document(mealToDelete.id)
-                            .delete()
-                            .addOnCompleteListener {
+                        val scope = kotlinx.coroutines.MainScope()
+                        scope.launch {
+                            try {
+                                com.example.myapplication.data.nutrition.FoodRepositoryImpl.deleteCustomMeal(mealToDelete.id)
                                 confirmDelete = null
                                 // Refresh quick meal widget after deletion
                                 com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)
+                            } catch (e: Exception) {
+                                // handle
                             }
+                        }
                     } else confirmDelete = null
                 }) { Text("Delete") }
             },
@@ -1079,5 +1085,9 @@ fun NutritionScreen(
             shape = MaterialTheme.shapes.extraLarge
         )
     }
-}
+
 } // End NutritionScreen
+
+fun startOfDayDiffDays(startDate: kotlinx.datetime.LocalDate, todayDate: kotlinx.datetime.LocalDate): Int {
+    return (todayDate.toEpochDays() - startDate.toEpochDays())
+}

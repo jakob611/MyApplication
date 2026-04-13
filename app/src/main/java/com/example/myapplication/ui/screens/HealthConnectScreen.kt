@@ -41,10 +41,10 @@ import com.example.myapplication.data.DailyHealthStats
 import com.example.myapplication.data.HealthGoals
 import com.example.myapplication.data.HealthStorage
 import com.example.myapplication.health.HealthConnectManager
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toInstant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -155,8 +155,8 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                 android.util.Log.d("HealthConnectScreen", "=== Starting data load ===")
 
                 val newSteps = healthManager.readTodaySteps()
-                val now = Instant.now()
-                val startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val now = java.time.Instant.now()
+                val startOfDay = java.time.LocalDateTime.now().toLocalDate().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
                 val newCalories = healthManager.readCalories(startOfDay, now)
 
                 val todayExercises = healthManager.readTodayExerciseSessions()
@@ -186,7 +186,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                     lastExercise = newExercise
 
                     HealthStorage.saveDailyStats(DailyHealthStats(
-                        date = LocalDate.now().toString(),
+                        date = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString(),
                         steps = newSteps,
                         calories = newCalories,
                         exerciseMinutes = newExercise
@@ -238,7 +238,7 @@ fun HealthConnectScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         // Try loading from FIRESTORE CACHE first (so user sees steps immediately)
-        val today = LocalDate.now().toString()
+        val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
         val cached = HealthStorage.getDailyStats(today)
         if (cached != null) {
             todaySteps = cached.steps

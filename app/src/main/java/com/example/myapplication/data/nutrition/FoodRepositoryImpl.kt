@@ -75,4 +75,18 @@ object FoodRepositoryImpl {
             .collection("dailyLogs").document(todayId)
             .addSnapshotListener { doc, _ -> onData(doc) }
     }
+
+    suspend fun logWater(amountMl: Int, dateStr: String) {
+        val docRef = FirestoreHelper.getCurrentUserDocRef()
+        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+        val data = mapOf(
+            "date" to dateStr,
+            "waterMl" to amountMl,
+            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+        FirebaseFirestore.getInstance().runTransaction { transaction ->
+            transaction.set(dailyLogRef, data, com.google.firebase.firestore.SetOptions.merge())
+            null
+        }.await()
+    }
 }
