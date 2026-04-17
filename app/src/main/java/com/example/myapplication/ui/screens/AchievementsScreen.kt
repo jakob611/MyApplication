@@ -35,9 +35,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.myapplication.data.*
 import com.example.myapplication.persistence.FollowStore
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
@@ -78,7 +75,13 @@ fun AchievementsScreen(
 
     // Convert badge IDs to Badge objects with LIVE progress calculation
     val allBadges = BadgeDefinitions.ALL_BADGES
-    val useCase = ManageGamificationUseCase(FirestoreGamificationRepository())
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val useCase = ManageGamificationUseCase(
+        repository = FirestoreGamificationRepository(),
+        workoutDoneProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).isWorkoutDoneToday() },
+        weeklyTargetProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).getWeeklyTargetFlow() }
+    )
+    val gamificationState by useCase.getGamificationStateFlow().collectAsState(initial = com.example.myapplication.domain.gamification.GamificationState(), context = kotlin.coroutines.EmptyCoroutineContext)
     val badgesWithStatus = allBadges.map { badge ->
         val progress = useCase.getBadgeProgress(badge.id, userProfile)
         // badge.requirement je definiran v BadgeDefinitions.ALL_BADGES — en sam vir resnice
@@ -368,25 +371,19 @@ fun AchievementsScreen(
 
             // PLAN PATH Section - same visualizer as PlanPathDialog
             if (activePlan != null) {
-                val bmPrefs = androidx.compose.ui.platform.LocalContext.current
-                    .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-                val localActivityDays = bmPrefs.getInt("weekly_target", 0)
-
                 val safeGoal = when {
-                    localActivityDays > 0 -> localActivityDays
+                    gamificationState.weeklyTarget > 0 -> gamificationState.weeklyTarget
                     activePlan.trainingDays > 0 -> activePlan.trainingDays
                     else -> 4
                 }
+
+                val isTodayDone = gamificationState.workoutDoneToday
+
                 // Plan ima 4 tedne × 7 dni = 28 dni (vključno z rest dnevi)
                 val totalPlanDays = 28
                 val currentWeekGlobal = ((currentPlanDay - 1) / 7) + 1
                 val blockStartWeek = 1
 
-                val prefs = androidx.compose.ui.platform.LocalContext.current
-                    .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-                val lastWorkoutEpoch = prefs.getLong("last_workout_epoch", 0L)
-                val isTodayDone = if (lastWorkoutEpoch == 0L) false
-                    else java.time.LocalDate.ofEpochDay(lastWorkoutEpoch) == java.time.LocalDate.now()
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -616,8 +613,7 @@ private fun getBadgeIcon(iconName: String): ImageVector {
 // Helper funkcija za nalaganje info o uporabniku
 private suspend fun loadUserInfo(userId: String): FollowUserInfo? {
     return try {
-        val doc = Firebase.firestore.collection("users")
-            .document(userId)
+        val doc = com.example.myapplication.persistence.FirestoreHelper.getUserRef(userId)
             .get()
             .await()
 

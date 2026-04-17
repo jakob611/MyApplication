@@ -6,14 +6,11 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.example.myapplication.persistence.PlanDataStore
 import com.example.myapplication.data.PlanResult
-import com.google.firebase.auth.FirebaseAuth
+import com.example.myapplication.persistence.FirestoreHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.awaitClose
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BodyOverviewViewmodel : ViewModel() {
-    private val auth = FirebaseAuth.getInstance()
-
     private val _currentUserId = MutableStateFlow<String?>(null)
 
     val plans: StateFlow<List<PlanResult>> = _currentUserId
@@ -28,23 +25,7 @@ class BodyOverviewViewmodel : ViewModel() {
         )
 
     init {
-        observeAuthState()
-    }
-
-    private fun observeAuthState() {
-        viewModelScope.launch {
-            val authStateFlow = callbackFlow<String?> {
-                val listener = FirebaseAuth.AuthStateListener { auth ->
-                    trySend(auth.currentUser?.uid)
-                }
-                auth.addAuthStateListener(listener)
-                awaitClose { auth.removeAuthStateListener(listener) }
-            }
-
-            authStateFlow.collect { userId ->
-                _currentUserId.value = userId
-            }
-        }
+        refreshPlans()
     }
 
     fun clearPlans() {
@@ -52,6 +33,6 @@ class BodyOverviewViewmodel : ViewModel() {
     }
 
     fun refreshPlans() {
-        _currentUserId.value = auth.currentUser?.uid
+        _currentUserId.value = FirestoreHelper.getCurrentUserDocId()
     }
 }

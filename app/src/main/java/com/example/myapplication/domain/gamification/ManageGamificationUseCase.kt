@@ -4,11 +4,19 @@ import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.Badge
 import com.example.myapplication.data.BadgeDefinitions
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 
 data class WorkoutCompletionResult(
     val unlockedBadges: List<Badge>,
     val xpAwarded: Int,
     val isCritical: Boolean
+)
+
+data class GamificationState(
+    val weeklyTarget: Int = 0,
+    val workoutDoneToday: Boolean = false
 )
 
 /**
@@ -17,8 +25,20 @@ data class WorkoutCompletionResult(
  * brez zlorabe ali napačnega pomnenja v prejšnjih SharedPreferences.
  */
 class ManageGamificationUseCase(
-    private val repository: GamificationRepository
+    private val repository: GamificationRepository,
+    private val workoutDoneProvider: () -> Boolean = { false },
+    private val weeklyTargetProvider: () -> Flow<Int> = { flowOf(0) }
 ) {
+
+    fun getGamificationStateFlow(): Flow<GamificationState> {
+        return weeklyTargetProvider().combine(flowOf(workoutDoneProvider())) { target, _ ->
+            GamificationState(
+                weeklyTarget = target,
+                workoutDoneToday = workoutDoneProvider()
+            )
+        }
+    }
+
     /** Uporabnik je uspeĹˇno zakljuŤil workout */
     suspend fun completeWorkoutSession(calKcal: Int) {
         // UI sedaj klice samo TO!

@@ -1,58 +1,49 @@
 package com.example.myapplication
 
-import android.app.Application
-import android.util.Log
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.UserPreferences
 import com.example.myapplication.data.UserProfile
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.domain.profile.ObserveUserProfileUseCase
+import com.example.myapplication.data.profile.FirestoreUserProfileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+sealed class AppIntent {
+    data class StartListening(val email: String) : AppIntent()
+    data class SetProfile(val profile: UserProfile) : AppIntent()
+}
+
 /**
- * AppViewModel — drži userProfile kot StateFlow.
- * Real-time Firestore listener kliče documentToUserProfile() direktno iz snapshota —
- * brez dvojnega branja. Korak 5a refaktoriranja.
+ * AppViewModel — MVI vmesnik.
+ * Drži stanje preko StateFlow in sprejema akcije preko handleIntent.
  */
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+class AppViewModel(
+    private val observeUserProfileUseCase: ObserveUserProfileUseCase = ObserveUserProfileUseCase(
+        FirestoreUserProfileRepository()
+    )
+) : ViewModel() {
 
     private val _userProfile = MutableStateFlow(UserProfile())
-    val userProfile: StateFlow<UserProfile> = _userProfile
+    val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
-    /**
-     * Nastavi profil direktno (npr. ob loginu iz lokalnih prefs ali ob ročni posodobitvi).
-     */
-    fun setProfile(profile: UserProfile) {
-        _userProfile.value = profile
-    }
+    private var isListening = false
 
-    /**
-     * Požene real-time Firestore listener.
-     * Ob vsakem snapshotu pokliče UserPreferences.documentToUserProfile() direktno —
-     * ena sama logika mapiranja, brez podvojenega Firestore branja.
-     */
-    fun startListening(email: String) {
-        viewModelScope.launch {
-            try {
-                val userRef = FirestoreHelper.getCurrentUserDocRef()
-                userRef.addSnapshotListener { snap, error ->
-                    if (error != null) {
-                        Log.e("AppViewModel", "Firestore listener error: ${error.message}")
-                        return@addSnapshotListener
-                    }
-                    if (snap != null && snap.exists()) {
-                        try {
-                            _userProfile.value = UserPreferences.documentToUserProfile(snap, email)
-                            Log.d("AppViewModel", "✅ userProfile refreshed from Firestore snapshot")
-                        } catch (e: Exception) {
-                            Log.e("AppViewModel", "Error mapping profile: ${e.message}")
+    fun handleIntent(intent: AppIntent) {
+        when (intent) {
+            is AppIntent.SetProfile -> {
+                _userProfile.value = intent.profile
+            }
+            is AppIntent.StartListening -> {
+                if (!isListening) {
+                    isListening = true
+                    viewModelScope.launch {
+                        observeUserProfileUseCase(intent.email).collect { profile ->
+                            _userProfile.value = profile
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("AppViewModel", "Error starting Firestore listener: ${e.message}")
             }
         }
     }

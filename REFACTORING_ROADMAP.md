@@ -235,7 +235,6 @@ Iz `BodyModuleHomeScreen.kt`:
 ```
 package com.example.myapplication.ui.screens
 ```
-(isti paket → import ni potreben)
 
 ### Done kriterij Korak 3c
 - [ ] `ui/screens/PlanPathDialog.kt` obstaja
@@ -457,7 +456,6 @@ Ko hočeš da AI implementira korak, reci točno:
 **"Implementiraj Korak 1"** ali **"Implementiraj Korak 3b"**
 
 AI bo prebral ta dokument (ne 1900-vrstične datoteke!) in točno vedel kaj narediti.
-
 
 
 

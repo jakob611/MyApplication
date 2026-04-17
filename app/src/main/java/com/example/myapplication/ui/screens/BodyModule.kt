@@ -25,8 +25,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 import android.util.Log
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import com.example.myapplication.utils.calculateAdvancedBMR
 import com.example.myapplication.utils.calculateEnhancedTDEE
 import com.example.myapplication.utils.calculateSmartCalories
@@ -40,6 +38,10 @@ import com.example.myapplication.domain.generateIntelligentTrainingPlan
 import com.example.myapplication.domain.calculateOptimalSessionLength
 import com.example.myapplication.domain.generatePersonalizedTips
 import kotlin.math.*
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.encodeToString
 
 @Composable
 fun BodyPlanQuizScreen(
@@ -930,11 +932,13 @@ private fun PlanResultStep(
                             val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                             if (weightKg != null && uid != null) {
                                 try {
-                                    val dateStr = java.time.LocalDate.now().toString()
-                                    com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
-                                        .collection("weightLogs").document(dateStr)
-                                        .set(mapOf("date" to dateStr, "weightKg" to weightKg))
-                                    Log.d("BodyPlanQuiz", "Saved initial weight $weightKg kg to weightLogs")
+                                    val dateStr = kotlinx.datetime.Clock.System.now().let { it.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()) }.date.toString()
+                                    val result = com.example.myapplication.data.metrics.MetricsRepositoryImpl().saveWeight(uid, weightKg.toFloat(), dateStr)
+                                    if (result.isSuccess) {
+                                        Log.d("BodyPlanQuiz", "Saved initial weight $weightKg kg to weightLogs")
+                                    } else {
+                                        Log.e("BodyPlanQuiz", "Failed to save weight to weightLogs", result.exceptionOrNull())
+                                    }
                                 } catch (e: Exception) {
                                     Log.e("BodyPlanQuiz", "Failed to save weight to weightLogs", e)
                                 }
@@ -960,6 +964,5 @@ private fun PlanResultStep(
         TextButton(onClick = onBack) { Text("Back", color = accentYellow) }
     }
 }
-
 
 

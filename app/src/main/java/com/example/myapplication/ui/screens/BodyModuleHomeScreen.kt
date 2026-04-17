@@ -54,9 +54,7 @@ fun BodyModuleHomeScreen(
 ) {
     val context = LocalContext.current
     val vm: BodyModuleHomeViewModel = viewModel(
-        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
-            context.applicationContext as android.app.Application
-        )
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
     )
     val ui by vm.ui.collectAsState()
 
@@ -69,7 +67,8 @@ fun BodyModuleHomeScreen(
 
     // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
     LaunchedEffect(Unit) {
-        vm.refreshStats()
+        val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail))
     }
 
     val showKnowledge = remember { mutableStateOf(false) }
@@ -189,7 +188,7 @@ fun BodyModuleHomeScreen(
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable {
                         com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
-                        vm.completeRestDayActivity()
+                        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteRestDay)
                     }
                 ) {
                     Row(
@@ -271,7 +270,7 @@ fun BodyModuleHomeScreen(
                                     EpicCounter(
                                         targetValue = animTargetDay,
                                         animate = ui.showCompletionAnimation, // Pass animation flag
-                                        onAnimationEnd = { vm.onCompletionAnimationShown() }, // Reset flag
+                                        onAnimationEnd = { vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.HideCompletionAnimation) }, // Reset flag
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 34.sp,
                                         fontWeight = FontWeight.Bold
@@ -500,15 +499,15 @@ fun BodyModuleHomeScreen(
                 challenge = ch,
                 onDismiss = { selectedChallenge = null },
                 onAccept = {
-                    vm.acceptChallenge(ch.id)
+                    vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.AcceptChallenge(ch.id))
                     selectedChallenge = null
-                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                    com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
                         context,
                         com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
                     )
                 },
                 onComplete = {
-                    vm.completeChallenge(ch.id)
+                    vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteChallenge(ch.id))
                     selectedChallenge = null
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
                         context,

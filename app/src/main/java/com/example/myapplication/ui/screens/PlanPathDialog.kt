@@ -155,11 +155,16 @@ fun PlanPathDialog(
                         TextButton(onClick = {
                             val plan = localPlan
                             if (plan != null && vm != null) {
-                                vm.swapDaysInPlan(plan, fromDay, toDay) { updated ->
-                                    localPlan = updated
-                                    onPlanUpdated?.invoke(updated)
-                                    com.example.myapplication.utils.AppToast.showSuccess(context, "Swapped + all future weeks updated!")
-                                }
+                                vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.SwapDays(
+                                    currentPlan = plan,
+                                    dayA = fromDay,
+                                    dayB = toDay,
+                                    onResult = { updated ->
+                                        localPlan = updated
+                                        onPlanUpdated?.invoke(updated)
+                                        com.example.myapplication.utils.AppToast.showSuccess(context, "Swapped!")
+                                    }
+                                ))
                             }
                             pendingSwap = null
                         }) {

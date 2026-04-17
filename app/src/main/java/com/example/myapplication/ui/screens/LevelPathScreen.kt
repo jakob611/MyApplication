@@ -42,9 +42,6 @@ import com.example.myapplication.data.Badge
 import com.example.myapplication.data.BadgeDefinitions
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.persistence.FollowStore
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -76,54 +73,28 @@ fun LevelPathScreen(
     val scope = rememberCoroutineScope()
     val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
 
-    // Pridobi vse badge-e in jih pravilno označi kot odklenjene
+    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
+        com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+    )
     val allBadges = BadgeDefinitions.ALL_BADGES
-    val unlockedBadgeIds = userProfile.badges.toSet()
-
-    // Dodaj tudi avtomatsko odklenjevanje glede na napredek
-    val autoUnlockedIds = mutableSetOf<String>()
-
-    // Check workout badges
-    if (userProfile.totalWorkoutsCompleted >= 1) autoUnlockedIds.add("first_workout")
-    if (userProfile.totalWorkoutsCompleted >= 10) autoUnlockedIds.add("committed_10")
-    if (userProfile.totalWorkoutsCompleted >= 50) autoUnlockedIds.add("committed_50")
-    if (userProfile.totalWorkoutsCompleted >= 100) autoUnlockedIds.add("committed_100")
-
-    // Check level badges
-    if (userProfile.level >= 5) autoUnlockedIds.add("level_5")
-    if (userProfile.level >= 10) autoUnlockedIds.add("level_10")
-    if (userProfile.level >= 25) autoUnlockedIds.add("level_25")
-
-    // Check follower badges
-    if (userProfile.followers >= 1) autoUnlockedIds.add("first_follower")
-    if (userProfile.followers >= 10) autoUnlockedIds.add("social_butterfly")
-    if (userProfile.followers >= 50) autoUnlockedIds.add("influencer")
-
-    // Check streak badges
-    if (userProfile.currentLoginStreak >= 7) autoUnlockedIds.add("week_warrior")
-    if (userProfile.currentLoginStreak >= 30) autoUnlockedIds.add("month_master")
-
-    // Check early bird / night owl
-    if (userProfile.earlyBirdWorkouts >= 5) autoUnlockedIds.add("early_bird")
-    if (userProfile.nightOwlWorkouts >= 5) autoUnlockedIds.add("night_owl")
-
-    // Check plans
-    if (userProfile.totalPlansCreated >= 1) autoUnlockedIds.add("first_plan")
-    if (userProfile.totalPlansCreated >= 5) autoUnlockedIds.add("plan_master")
-
-    val allUnlockedIds = unlockedBadgeIds + autoUnlockedIds
 
     val badgesWithStatus = allBadges.map { badge ->
+        val progress = useCase.getBadgeProgress(badge.id, userProfile)
+        val req = badge.requirement
+        val isUnlocked = userProfile.badges.contains(badge.id) || progress >= req
         badge.copy(
-            unlocked = allUnlockedIds.contains(badge.id),
-            progress = calculateBadgeProgress(badge, userProfile),
-            requirement = getBadgeRequirement(badge)
+            unlocked = isUnlocked,
+            progress = progress,
+            requirement = req
         )
     }
 
     // Sortiraj - odklenjeni najprej
-    val sortedBadges = badgesWithStatus.sortedByDescending { it.unlocked }
-    val unlockedCount = sortedBadges.count { it.unlocked }
+    val sortedBadges = badgesWithStatus.sortedWith(
+        compareByDescending<Badge> { it.unlocked }
+            .thenByDescending { it.progress.toFloat() / it.requirement.coerceAtLeast(1).toFloat() }
+    )
+    val unlockedCount = badgesWithStatus.count { it.unlocked }
 
     Scaffold(
         topBar = {
@@ -306,6 +277,28 @@ fun LevelPathScreen(
 
             // ===== PLAN PATH SECTION =====
             if (activePlan != null) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
+                    repository = com.example.myapplication.data.gamification.FirestoreGamificationRepository(),
+                    workoutDoneProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).isWorkoutDoneToday() },
+                    weeklyTargetProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).getWeeklyTargetFlow() }
+                )
+                val gamificationState by useCase.getGamificationStateFlow().collectAsState(
+                    initial = com.example.myapplication.domain.gamification.GamificationState(),
+                    context = kotlin.coroutines.EmptyCoroutineContext
+                )
+
+                val safeGoal = when {
+                    gamificationState.weeklyTarget > 0 -> gamificationState.weeklyTarget
+                    activePlan.trainingDays > 0 -> activePlan.trainingDays
+                    else -> 4
+                }
+
+                val isTodayDone = gamificationState.workoutDoneToday
+
+                // Plan: 4 tedne × 7 dni = 28 (vključno z rest dnevi)
+                val totalDays = 28
+
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     shape = RoundedCornerShape(16.dp),
@@ -320,19 +313,8 @@ fun LevelPathScreen(
                         )
                         Spacer(Modifier.height(16.dp))
 
-                        val bmPrefs = androidx.compose.ui.platform.LocalContext.current
-                            .getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-                        val localActivityDays = bmPrefs.getInt("weekly_target", 0)
-                        val safeGoal = when {
-                            localActivityDays > 0 -> localActivityDays
-                            activePlan.trainingDays > 0 -> activePlan.trainingDays
-                            else -> 4
-                        }
                         // Plan: 4 tedne × 7 dni = 28 (vključno z rest dnevi)
                         val totalDays = 28
-                        val lastWorkoutEpoch = bmPrefs.getLong("last_workout_epoch", 0L)
-                        val isTodayDone = if (lastWorkoutEpoch == 0L) false
-                            else java.time.LocalDate.ofEpochDay(lastWorkoutEpoch) == java.time.LocalDate.now()
 
                         val pathHeight = ((totalDays * 80) + 200).dp
                         Box(modifier = Modifier.fillMaxWidth().height(pathHeight)) {
@@ -525,52 +507,6 @@ private fun getBadgeIcon(iconName: String): ImageVector {
     }
 }
 
-private fun calculateBadgeProgress(badge: Badge, userProfile: UserProfile): Int {
-    return when (badge.id) {
-        "first_workout", "committed_10", "committed_50", "committed_100" ->
-            userProfile.totalWorkoutsCompleted
-        "calorie_crusher_1k", "calorie_crusher_5k", "calorie_crusher_10k" ->
-            userProfile.totalCaloriesBurned.toInt()
-        "level_5", "level_10", "level_25" ->
-            userProfile.level
-        "first_follower", "social_butterfly", "influencer" ->
-            userProfile.followers
-        "early_bird" -> userProfile.earlyBirdWorkouts
-        "night_owl" -> userProfile.nightOwlWorkouts
-        "week_warrior", "month_master", "year_champion" ->
-            userProfile.currentLoginStreak
-        "first_plan", "plan_master" ->
-            userProfile.totalPlansCreated
-        else -> 0
-    }
-}
-
-private fun getBadgeRequirement(badge: Badge): Int {
-    return when (badge.id) {
-        "first_workout" -> 1
-        "committed_10" -> 10
-        "committed_50" -> 50
-        "committed_100" -> 100
-        "calorie_crusher_1k" -> 1000
-        "calorie_crusher_5k" -> 5000
-        "calorie_crusher_10k" -> 10000
-        "level_5" -> 5
-        "level_10" -> 10
-        "level_25" -> 25
-        "first_follower" -> 1
-        "social_butterfly" -> 10
-        "influencer" -> 50
-        "early_bird" -> 5
-        "night_owl" -> 5
-        "week_warrior" -> 7
-        "month_master" -> 30
-        "year_champion" -> 365
-        "first_plan" -> 1
-        "plan_master" -> 5
-        else -> 1
-    }
-}
-
 // Data class za prikaz uporabnika v follow listi
 data class FollowUserInfo(
     val uid: String,
@@ -599,7 +535,7 @@ private suspend fun loadFollowUserInfo(userId: String): FollowUserInfo? {
             username = username,
             displayName = displayName
         )
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 }
@@ -714,4 +650,5 @@ fun FollowListDialog(
         }
     }
 }
+
 

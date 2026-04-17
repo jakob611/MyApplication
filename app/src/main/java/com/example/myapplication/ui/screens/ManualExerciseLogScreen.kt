@@ -32,10 +32,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toLocalDateTime
 import org.json.JSONArray
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -116,47 +116,41 @@ object GenderCache {
         }
         
         CoroutineScope(Dispatchers.IO).launch {
-            val docRef = try {
-                com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            } catch (_: Exception) { null }
-
-            if (docRef == null) { 
+            val email = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+            if (email.isBlank()) {
                 kotlinx.coroutines.withContext(Dispatchers.Main) { onDone(null) }
-                return@launch 
+                return@launch
             }
 
-            docRef.get()
-                .addOnSuccessListener { doc ->
-                    val g = doc.getString("gender")
-                    @Suppress("UNCHECKED_CAST")
-                    val eqList = (doc.get("equipment") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-                    val eqSet = (eqList.map { it.lowercase() } + listOf("bodyweight")).toSet()
-                    @Suppress("UNCHECKED_CAST")
-                    val focusList = (doc.get("focusAreas") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-                    val userScore = (doc.get("currentDifficulty") as? Number)?.toFloat()
-                        ?: (doc.get("experienceScore") as? Number)?.toFloat()
-                        ?: run {
-                            when (doc.getString("experience")) {
-                                "Beginner" -> 4f
-                                "Intermediate" -> 7f
-                                "Advanced" -> 9f
-                                else -> 5f
-                            }
-                        }
-                    prefs.edit {
-                        putString(KEY_GENDER, g)
-                        putStringSet(KEY_EQUIPMENT, eqSet)
-                        putFloat(KEY_USER_SCORE, userScore)
-                        putString(KEY_FOCUS_AREAS, focusList.joinToString(","))
-                        putBoolean(KEY_LOADED, true)
-                    }
-                    cached = g
-                    cachedEquipment = eqSet
-                    cachedUserScore = userScore
-                    cachedFocusAreas = focusList
-                    onDone(g)
-                }
-                .addOnFailureListener { onDone(null) }
+            // Try fetching latest profile from Firestore mapping it via our domain
+            val remoteProfile = com.example.myapplication.data.UserPreferences.loadProfileFromFirestore(email)
+            val finalProfile = remoteProfile ?: com.example.myapplication.data.UserPreferences.loadProfile(context, email)
+
+            val g = finalProfile.gender
+            val eqSet = finalProfile.equipment.map { it.lowercase() }.toSet() + setOf("bodyweight")
+            val focusList = finalProfile.focusAreas
+            val userScore = when (finalProfile.experience) {
+                "Beginner" -> 4f
+                "Intermediate" -> 7f
+                "Advanced" -> 9f
+                else -> 5f
+            }
+
+            prefs.edit {
+                putString(KEY_GENDER, g)
+                putStringSet(KEY_EQUIPMENT, eqSet)
+                putFloat(KEY_USER_SCORE, userScore)
+                putString(KEY_FOCUS_AREAS, focusList.joinToString(","))
+                putBoolean(KEY_LOADED, true)
+            }
+            cached = g
+            cachedEquipment = eqSet
+            cachedUserScore = userScore
+            cachedFocusAreas = focusList
+
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                onDone(g)
+            }
         }
     }
 
@@ -862,49 +856,42 @@ private fun ExerciseEntryScreen(
 private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, sets: Int, reps: Int, durationSeconds: Int?) {
     CoroutineScope(Dispatchers.IO).launch {
         try {
-            val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            docRef.collection("weightLogs")
-                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    val userWeightKg = (snapshot.documents.firstOrNull()?.get("weightKg") as? Number)?.toDouble() ?: 70.0
-                    val activeMinutes: Double
-                    val restMinutes: Double
-                    if (durationSeconds != null) {
-                        activeMinutes = (sets * durationSeconds) / 60.0
-                        restMinutes = 0.0
-                    } else {
-                        val secondsPerRep = 3.0
-                        activeMinutes = (sets * reps * secondsPerRep) / 60.0
-                        restMinutes = ((sets - 1) * 60.0) / 60.0
-                    }
-                    val activeRate = exercise.caloriesPerMinPerKg * userWeightKg
-                    val restRate = 0.0167 * userWeightKg
-                    val totalCalories = (activeMinutes * activeRate) + (restMinutes * restRate)
-                    val caloriesRounded = kotlin.math.round(totalCalories).toInt()
-                    val log = hashMapOf(
-                        "name" to exercise.name,
-                        "date" to com.google.firebase.Timestamp.now(),
-                        "caloriesKcal" to caloriesRounded,
-                        "sets" to sets,
-                        "reps" to reps,
-                        "durationSeconds" to durationSeconds
-                    )
-                    docRef.collection("exerciseLogs")
-                        .add(log)
-                        .addOnSuccessListener {
-                            val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                            val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                            CoroutineScope(Dispatchers.IO).launch {
-                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
-                                useCase.recordWorkoutCompletion(
-                                    caloriesBurned = caloriesRounded.toDouble(),
-                                    hour = currentHour
-                                )
-                            }
-                        }
-                }
-        } catch (_: Exception) {}
+            val userWeightKg = com.example.myapplication.persistence.FirestoreHelper.fetchLatestWeightKg() ?: 70.0
+
+            val activeMinutes: Double
+            val restMinutes: Double
+            if (durationSeconds != null) {
+                activeMinutes = (sets * durationSeconds) / 60.0
+                restMinutes = 0.0
+            } else {
+                val secondsPerRep = 3.0
+                activeMinutes = (sets * reps * secondsPerRep) / 60.0
+                restMinutes = ((sets - 1) * 60.0) / 60.0
+            }
+
+            val activeRate = exercise.caloriesPerMinPerKg * userWeightKg
+            val restRate = 0.0167 * userWeightKg
+            val totalCalories = (activeMinutes * activeRate) + (restMinutes * restRate)
+            val caloriesRounded = kotlin.math.round(totalCalories).toInt()
+
+            com.example.myapplication.data.AdvancedExerciseRepository.saveExerciseLog(
+                name = exercise.name,
+                sets = sets,
+                reps = reps,
+                durationSeconds = durationSeconds,
+                caloriesKcal = caloriesRounded
+            )
+
+            val currentHour = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).hour
+            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
+                com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+            )
+            useCase.recordWorkoutCompletion(
+                caloriesBurned = caloriesRounded.toDouble(),
+                hour = currentHour
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("ManualExerciseLog", "Error saving log: ${e.message}")
+        }
     }
 }

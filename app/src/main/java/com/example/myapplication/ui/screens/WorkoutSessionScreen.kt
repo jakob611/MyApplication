@@ -49,9 +49,6 @@ import com.example.myapplication.domain.WorkoutGenerator
 import com.example.myapplication.data.AlgorithmPreferences
 import com.example.myapplication.domain.WorkoutGoal
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
@@ -150,18 +147,15 @@ fun WorkoutSessionScreen(
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
 
     var userWeightKg by remember { mutableStateOf(70.0) }
-    // uid v remember{} — ne kliči ob vsakem recomposition
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     LaunchedEffect(Unit) {
         try {
-            // Skozi FirestoreHelper — pravilno za email in legacy UID uporabnike
-            val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            ref.collection("weightLogs")
-                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(1).get()
-                .addOnSuccessListener {
-                    val w = it.documents.firstOrNull()?.get("weightKg") as? Number
-                    if (w != null) userWeightKg = w.toDouble()
-                }
+            val weight = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.example.myapplication.persistence.FirestoreHelper.fetchLatestWeightKg()
+            }
+            if (weight != null && weight > 0) {
+                userWeightKg = weight
+            }
         } catch(e: Exception) {}
     }
 
@@ -305,8 +299,7 @@ fun WorkoutSessionScreen(
         } else {
             // Navaden workout: rotacija fokusa po planDay
             val rawFocus = currentPlan.focusAreas.ifEmpty {
-                val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
+                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, uid ?: "")
                 profile.focusAreas.ifEmpty { listOf("Full Body") }
             }
             val allFocus = if (rawFocus.any { it.equals("None", ignoreCase = true) }) {
@@ -349,8 +342,7 @@ fun WorkoutSessionScreen(
             equipment = extraEquipment.map { it.trim().lowercase() }.toSet()
         } else {
             val rawEquipment = currentPlan.equipment.ifEmpty {
-                val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, email)
+                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, uid ?: "")
                 profile.equipment
             }
             equipment = if (rawEquipment.isNotEmpty()) {
@@ -467,7 +459,8 @@ fun WorkoutSessionScreen(
                        }
 
                     }
-                    vm.completeWorkoutSession(
+                    vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteWorkoutSession(
+                        email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: "",
                         isExtraWorkout = isExtra,
                         exerciseResults = results.map { r ->
                             mapOf(
@@ -488,7 +481,7 @@ fun WorkoutSessionScreen(
                             onXPAdded()
                             onFinished()
                         }
-                    )
+                    ))
                 }
             }
         }

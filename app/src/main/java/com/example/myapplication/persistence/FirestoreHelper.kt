@@ -12,6 +12,19 @@ object FirestoreHelper {
     private val auth = Firebase.auth
     private const val TAG = "FirestoreHelper"
 
+    /**
+     * Gets the latest weight for the user.
+     */
+    suspend fun fetchLatestWeightKg(): Double? {
+        return try {
+            val snap = getCurrentUserDocRef().collection("weightLogs")
+                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(1).get().await()
+            (snap.documents.firstOrNull()?.get("weightKg") as? Number)?.toDouble()
+        } catch(e: Exception) {
+            null
+        }
+    }
+
     // Cache resolved doc ID to avoid repeated network calls
     @Volatile
     private var cachedResolvedId: String? = null

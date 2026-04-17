@@ -698,17 +698,19 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                         val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
                                         useCase.awardXP(xp, "RUN_COMPLETED")
 
-                                        val app = context.applicationContext as android.app.Application
-                                        val bodyVm = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(app)
-                                            .create(com.example.myapplication.viewmodels.BodyModuleHomeViewModel::class.java)
+                                        val bodyVm = androidx.lifecycle.ViewModelProvider(
+                                            context as androidx.lifecycle.ViewModelStoreOwner,
+                                            com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
+                                        ).get(com.example.myapplication.viewmodels.BodyModuleHomeViewModel::class.java)
                                         val uiState = bodyVm.ui.value
                                         val currentDay = uiState.planDay
                                         if (!uiState.isWorkoutDoneToday && !uiState.todayIsRest && finalDistance > 1000) {
-                                            bodyVm.completeWorkoutSession(
+                                            bodyVm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteWorkoutSession(
+                                                email = uiState.errorMessage ?: "", // TODO: proper email if needed
                                                 isExtraWorkout = false,
                                                 totalKcal = calories,
                                                 totalTimeMin = finalTime / 60.0
-                                            )
+                                            ))
                                             withContext(Dispatchers.Main) {
                                                 com.example.myapplication.utils.AppToast.showSuccess(context, "Workout Day $currentDay Complete! +$xp XP!")
                                             }

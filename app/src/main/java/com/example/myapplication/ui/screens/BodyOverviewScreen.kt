@@ -488,9 +488,7 @@ private fun StatRow(label: String, value: String, labelColor: Color, valueColor:
 
 // --- Datum helper ---
 fun Long.formatPrettyDate(): String {
-    val locale = Locale.ENGLISH
-    val sdf = java.text.SimpleDateFormat("MMMM d, yyyy", locale)
-    return sdf.format(java.util.Date(this))
+    return com.example.myapplication.domain.DateFormatter.formatEpoch(this, "MMMM d, yyyy")
 }
 
 /* ===== PARSER: AlgorithmData.macroBreakdown -> številke (protein g total, carbs g, fat g, calories kcal) ===== */

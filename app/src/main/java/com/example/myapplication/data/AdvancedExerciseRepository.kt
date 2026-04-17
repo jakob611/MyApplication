@@ -9,6 +9,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.tasks.await
 
 object AdvancedExerciseRepository {
     private var exercises: List<RefinedExercise> = emptyList()
@@ -16,6 +17,9 @@ object AdvancedExerciseRepository {
 
     var isInitialized: Boolean = false
         private set
+
+    fun getAllExercises(): List<RefinedExercise> = exercises
+    fun getAllEquipment(): Set<String> = availableEquipment
 
     suspend fun init(jsonString: String) {
         if (exercises.isNotEmpty()) {
@@ -156,11 +160,28 @@ object AdvancedExerciseRepository {
         )
     }
 
-    fun getAllExercises(): List<RefinedExercise> = exercises
-
-    fun getAllEquipment(): Set<String> = availableEquipment
-
-    fun getExerciseByName(name: String): RefinedExercise? {
-        return exercises.find { it.name.equals(name, ignoreCase = true) }
+    suspend fun saveExerciseLog(
+        name: String,
+        sets: Int,
+        reps: Int,
+        durationSeconds: Int?,
+        caloriesKcal: Int
+    ) {
+        withContext(Dispatchers.IO) {
+            try {
+                val docRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                val log = hashMapOf(
+                    "name" to name,
+                    "date" to kotlinx.datetime.Clock.System.now().toEpochMilliseconds(),
+                    "caloriesKcal" to caloriesKcal,
+                    "sets" to sets,
+                    "reps" to reps,
+                    "durationSeconds" to durationSeconds
+                )
+                docRef.collection("exerciseLogs").add(log).await()
+            } catch (e: Exception) {
+                com.example.myapplication.domain.Logger.e("AdvancedExerciseRepo", "Failed to save exercise log: ${e.message}")
+            }
+        }
     }
 }

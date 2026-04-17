@@ -74,7 +74,9 @@ internal fun activityColor(type: ActivityType): Color = when (type) {
 @Composable
 fun ActivityLogScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<RunTrackerViewModel>()
+    val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<RunTrackerViewModel>(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
+    )
 
     var runs by remember { mutableStateOf<List<RunSession>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }

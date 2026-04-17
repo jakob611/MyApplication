@@ -134,7 +134,9 @@
 |----------|-----------|---------|
 | `FirestoreHelper.kt` | **EDINI resolver za Firestore dokumente** — email vs UID, migracija legacy podatkov, cache | ⛔ **Nikoli ne obidi!** Vse piše skozi `getCurrentUserDocRef()` |
 | `AchievementStore.kt` | `awardXP()`, `recordWorkoutCompletion()`, `checkAndUnlockBadges()`, `updateLoginStreak()`, `recordPlanCreation()` | ⛔ **Edini vhod za XP in badge-e** |
-| `UserPreferences.kt` | Profil load/save (Firestore + lokalni cache), `documentToUserProfile()` mapiranje, dark mode | Vse skozi `FirestoreHelper` |
+| `UserPreferencesRepository.kt` | **KMP Settings (Data)**: Shramba in `Flow` manager za parametre, vključno z nadomestitvjo legacy `bm_prefs`. | Čisti KMP |
+| `Domain/Gamification` | Use Case za XP in nagrade: `ManageGamificationUseCase`, `GamificationState`, `GamificationRepository`. | Ločeno od UI in Androida |
+| `WorkoutRepository.kt` | **Domain interfejs**: Baza za `isWorkoutDoneToday` in `getWeeklyTargetFlow()`. | — |
 | `PlanDataStore.kt` | Plan CRUD (`addPlan`, `deletePlan`, `updatePlan`, `savePlans`), AI plan HTTP klic, Firestore + DataStore backup | Kolekcija `user_plans` (ne `users`!) |
 | `NutritionPlanStore.kt` | Nutrition plan shranjevanje in posodabljanje v Firestore | — |
 | `ProfileStore.kt` | Javni profili (`getPublicProfile`), iskanje uporabnikov, privacy nastavitve update | Za public profile prikaz |
@@ -210,11 +212,9 @@
 | **Plan shranjevanje / brisanje** | `persistence/PlanDataStore.kt` |
 | **Plan prikaz (krogi, dnevi)** | `PlanPathVisualizer.kt` |
 | **Seznam vseh planov** | `MyPlansScreen.kt` |
-| **XP podeljevanje** | `persistence/AchievementStore.kt` → `awardXP()` |
-| **Badge unlock logika** | `persistence/AchievementStore.kt` + `data/BadgeDefinitions.kt` |
-| **Badge prikaz** | `BadgesScreen.kt` |
-| **Level / XP prikaz** | `AchievementsScreen.kt` |
-| **Streak logika (daily)** | `persistence/AchievementStore.kt` → `updateLoginStreak()` |
+| **XP podeljevanje** | `domain/gamification/ManageGamificationUseCase.kt` → `awardXP()` |
+| **Badge unlock logika** | `domain/gamification/ManageGamificationUseCase.kt` + `data/BadgeDefinitions.kt` |
+| **Streak logika (daily)** | `domain/gamification/ManageGamificationUseCase.kt` → `updateStreak()` |
 | **Streak logika (polnoč Worker)** | `workers/WeeklyStreakWorker.kt` |
 | **Grafi napredka** | `Progress.kt` |
 | **Teža logging** | `Progress.kt` (weightLogs Firestore listener) |
@@ -239,7 +239,7 @@
 | **Kviz za ustvarjanje plana** | `BodyModule.kt` → `BodyPlanQuizScreen()` |
 | **Body home (streak, daily plan)** | `BodyModuleHomeScreen.kt` |
 | **Health Connect sync** | `HealthConnectScreen.kt` + `data/HealthStorage.kt` |
+| **Level / XP prikaz** | `AchievementsScreen.kt` |
+| **Badge prikaz** | `BadgesScreen.kt` |
 | **BMI / body fat % izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
-
--   U p d a t e d   M A P B O X _ P U B L I C _ K E Y   i n   l o c a l . p r o p e r t i e s  
  
