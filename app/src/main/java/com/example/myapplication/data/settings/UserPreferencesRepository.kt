@@ -15,6 +15,7 @@ class UserPreferencesRepository(private val context: Context) {
 
     // Using Multiplatform Settings instead of SharedPreferences directly
     private val settings: Settings = com.russhwolf.settings.SharedPreferencesSettings(context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE))
+    private val bmSettings: Settings = com.russhwolf.settings.SharedPreferencesSettings(context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE))
 
     // Obstojeći SharedPrefs prenašamo v Settings objekt, ampak trenutno še vedno podpiramo star behavior do popolne menjave
 
@@ -32,6 +33,28 @@ class UserPreferencesRepository(private val context: Context) {
 
     fun getUserToken(): String? {
         return settings.getStringOrNull("user_token")
+    }
+
+    fun getWeeklyTargetFlow(): Flow<Int> {
+        return flowOf(bmSettings.getInt("weekly_target", 0))
+    }
+
+    fun getLastWorkoutEpochFlow(): Flow<Long> {
+        return flowOf(bmSettings.getLong("last_workout_epoch", 0L))
+    }
+
+    fun isWorkoutDoneToday(): Boolean {
+        val lastEpoch = bmSettings.getLong("last_workout_epoch", 0L)
+        return if (lastEpoch == 0L) false
+        else java.time.LocalDate.ofEpochDay(lastEpoch) == java.time.LocalDate.now()
+    }
+
+    fun getPlanDay(): Int {
+        return bmSettings.getInt("plan_day", 1)
+    }
+
+    fun getWeeklyTarget(): Int {
+        return bmSettings.getInt("weekly_target", 3)
     }
 
     fun setUserToken(token: String?) {
@@ -54,9 +77,53 @@ class UserPreferencesRepository(private val context: Context) {
         settings.putBoolean("fresh_start_on_login", freshStart)
     }
 
+    suspend fun updateWorkoutStats(completedDay: Int, timestamp: Long) {
+        bmSettings.putInt("plan_day", completedDay)
+        bmSettings.putLong("last_workout_epoch", timestamp / 86400000L) // Store in epoch days to be backward compatible?
+        // Actually, older code stored EpochDay (from LocalDate).
+        // Let's ensure compatibility if needed, or just store the timestamp if that's what's asked.
+        // Wait, standard LocalDate.toEpochDay() is milliseconds / (1000*60*60*24). Let's do that.
+        val epochDay = timestamp / (1000 * 60 * 60 * 24)
+        bmSettings.putLong("last_workout_epoch", epochDay)
+    }
+
+    suspend fun updateDailyCalories(calories: Double, timestamp: Long) {
+        val todayEpochDay = timestamp / (1000 * 60 * 60 * 24)
+        val lastSavedEpochDay = bmSettings.getLong("daily_calories_epoch", 0L)
+        val currentCalories = if (todayEpochDay == lastSavedEpochDay) {
+            bmSettings.getFloat("daily_calories", 0f).toDouble()
+        } else {
+            0.0
+        }
+        val newCalories = currentCalories + calories
+        bmSettings.putLong("daily_calories_epoch", todayEpochDay)
+        bmSettings.putFloat("daily_calories", newCalories.toFloat())
+    }
+
+    fun getDailyCalories(): Double {
+        val lastSavedEpochDay = bmSettings.getLong("daily_calories_epoch", 0L)
+        val todayEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
+        return if (todayEpochDay == lastSavedEpochDay) {
+            bmSettings.getFloat("daily_calories", 0f).toDouble()
+        } else {
+            0.0
+        }
+    }
+
+    fun getDailyCaloriesFlow(): Flow<Double> {
+        return kotlinx.coroutines.flow.flow {
+            val lastSavedEpochDay = bmSettings.getLong("daily_calories_epoch", 0L)
+            val todayEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
+            if (todayEpochDay == lastSavedEpochDay) {
+                emit(bmSettings.getFloat("daily_calories", 0f).toDouble())
+            } else {
+                emit(0.0)
+            }
+        }
+    }
+
     fun clearAllSettings() {
         settings.clear()
         setFreshStartOnLogin(true)
     }
 }
-
