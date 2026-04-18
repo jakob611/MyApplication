@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
+import kotlinx.datetime.toLocalDateTime
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import org.json.JSONArray
@@ -342,7 +343,7 @@ object PlanDataStore {
                 experience = planMap["experience"] as? String,
                 goal = planMap["goal"] as? String,
                 weeks = weeks,
-                startDate = planMap["startDate"] as? String ?: java.time.LocalDate.now().toString(),
+                startDate = planMap["startDate"] as? String ?: kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString(),
                 focusAreas = when (val fa = planMap["focusAreas"]) {
                     is List<*> -> fa.filterIsInstance<String>()
                     is String -> if (fa.isBlank()) emptyList() else fa.split(",").map { it.trim() }

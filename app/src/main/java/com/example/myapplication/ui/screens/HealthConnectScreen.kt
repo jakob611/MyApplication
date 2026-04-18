@@ -46,6 +46,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.toInstant
 import kotlinx.coroutines.delay
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.launch
 
 @Composable
@@ -155,8 +156,9 @@ fun HealthConnectScreen(onBack: () -> Unit) {
                 android.util.Log.d("HealthConnectScreen", "=== Starting data load ===")
 
                 val newSteps = healthManager.readTodaySteps()
-                val now = java.time.Instant.now()
-                val startOfDay = java.time.LocalDateTime.now().toLocalDate().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+                val now = java.time.Instant.ofEpochMilli(kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+                val todayDate = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                val startOfDay = java.time.Instant.ofEpochMilli(kotlinx.datetime.LocalDateTime(todayDate.year, todayDate.monthNumber, todayDate.dayOfMonth, 0, 0).toInstant(kotlinx.datetime.TimeZone.currentSystemDefault()).toEpochMilliseconds())
                 val newCalories = healthManager.readCalories(startOfDay, now)
 
                 val todayExercises = healthManager.readTodayExerciseSessions()

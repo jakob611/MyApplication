@@ -20,6 +20,7 @@ import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.domain.WorkoutGenerationParams
 import com.example.myapplication.domain.WorkoutGenerator
+import kotlinx.datetime.toLocalDateTime
 import com.example.myapplication.domain.WorkoutGoal
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -238,7 +239,8 @@ fun DeveloperSettingsScreen(
             val todayIsRest = prefs.getBoolean("today_is_rest", false)
             val workoutDoneToday = run {
                 val epoch = prefs.getLong("last_workout_epoch", 0L)
-                if (epoch == 0L) false else java.time.LocalDate.ofEpochDay(epoch) == java.time.LocalDate.now()
+                val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                if (epoch == 0L) false else kotlinx.datetime.LocalDate.fromEpochDays(epoch.toInt()) == today
             }
 
             Card(

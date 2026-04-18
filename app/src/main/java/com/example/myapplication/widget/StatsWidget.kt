@@ -86,7 +86,8 @@ class StatsWidget : AppWidgetProvider() {
                 updatedViews.setTextViewText(R.id.widget_calories_value, calories.toString())
                 
                 // Timestamp
-                val timeParams = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                val now = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                val timeParams = "${now.hour.toString().padStart(2, '0')}:${now.minute.toString().padStart(2, '0')}"
                 updatedViews.setTextViewText(R.id.widget_last_updated, "Updated $timeParams")
 
                 appWidgetManager.updateAppWidget(appWidgetId, updatedViews)

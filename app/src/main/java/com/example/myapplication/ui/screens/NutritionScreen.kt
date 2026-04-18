@@ -139,8 +139,8 @@ fun NutritionScreen(
                 val now = Clock.System.now().toJavaInstant()
                 val tz = TimeZone.currentSystemDefault()
                 val startOfDay = Clock.System.now().toLocalDateTime(tz).date
-                // java.time mapping is needed only for HealthConnect client argument for now
-                val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+                // Conversion to java.time.Instant is required for HealthConnect API
+                val startOfDayJavaObj = java.time.Instant.ofEpochMilli(kotlinx.datetime.LocalDateTime(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth, 0, 0).toInstant(kotlinx.datetime.TimeZone.currentSystemDefault()).toEpochMilliseconds())
 
                 // 1. Health Connect (Active)
                 val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
