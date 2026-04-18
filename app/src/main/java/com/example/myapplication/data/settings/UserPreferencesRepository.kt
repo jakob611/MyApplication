@@ -7,6 +7,9 @@ import com.example.myapplication.domain.settings.SettingsProvider
 import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * TODO: Migration to pure KMP. This is currently tightly coupled with Context.
@@ -46,7 +49,11 @@ class UserPreferencesRepository(private val context: Context) {
     fun isWorkoutDoneToday(): Boolean {
         val lastEpoch = bmSettings.getLong("last_workout_epoch", 0L)
         return if (lastEpoch == 0L) false
-        else java.time.LocalDate.ofEpochDay(lastEpoch) == java.time.LocalDate.now()
+        else {
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val lastDate = kotlinx.datetime.LocalDate.fromEpochDays(lastEpoch.toInt())
+            lastDate == now
+        }
     }
 
     fun getPlanDay(): Int {

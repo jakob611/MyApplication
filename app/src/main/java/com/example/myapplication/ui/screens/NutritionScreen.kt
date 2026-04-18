@@ -113,6 +113,10 @@ fun NutritionScreen(
     onOpenMenu: () -> Unit = {},
     onProClick: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
+    )
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(showAddedMessage) {
@@ -121,9 +125,6 @@ fun NutritionScreen(
             showAddedMessage = null
         }
     }
-
-    // Context for widget updates
-    val context = LocalContext.current
 
     // Active Calories (Health Connect) - load from SharedPreferences INSTANTLY
     val healthManager = remember { HealthConnectManager.getInstance(context) }
@@ -477,13 +478,7 @@ fun NutritionScreen(
                 val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
                 if (userEmail != null) {
                     prefs.edit().putBoolean(xpKey, true).apply()
-                    // AchievementStore.awardXP: pravilna pot — skozi FirestoreHelper, beleži xp_history, preveri badge-e
-                    // LaunchedEffect je suspend context, klic je direkten (brez scope.launch)
-                    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
-                    useCase.awardXP(
-                        100,
-                        "NUTRITION_GOAL"
-                    )
+                    nutritionViewModel.awardNutritionXP(100)
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onXPAdded() }
                 }
             }

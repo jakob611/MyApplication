@@ -62,7 +62,7 @@ fun LevelPathScreen(
     val GrayLocked = Color(0xFF6B7280)
     val GoldBadge = MaterialTheme.colorScheme.secondary
 
-    var selectedBadge by remember { mutableStateOf<Badge?>(null) }
+    var selectedBadge by remember { mutableStateOf<com.example.myapplication.data.Badge?>(null) }
 
     // Followers/Following dialog state
     var showFollowersDialog by remember { mutableStateOf(false) }
@@ -73,13 +73,20 @@ fun LevelPathScreen(
     val scope = rememberCoroutineScope()
     val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
 
-    val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
-        com.example.myapplication.data.gamification.FirestoreGamificationRepository()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val gamificationViewModel: com.example.myapplication.viewmodels.GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
-    val allBadges = BadgeDefinitions.ALL_BADGES
+
+    val allBadges = com.example.myapplication.data.BadgeDefinitions.ALL_BADGES
+
+    val gamificationState by gamificationViewModel.gamificationStateFlow.collectAsState(
+        initial = com.example.myapplication.domain.gamification.GamificationState(),
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
 
     val badgesWithStatus = allBadges.map { badge ->
-        val progress = useCase.getBadgeProgress(badge.id, userProfile)
+        val progress = gamificationViewModel.getBadgeProgress(badge.id, userProfile)
         val req = badge.requirement
         val isUnlocked = userProfile.badges.contains(badge.id) || progress >= req
         badge.copy(
@@ -89,9 +96,8 @@ fun LevelPathScreen(
         )
     }
 
-    // Sortiraj - odklenjeni najprej
     val sortedBadges = badgesWithStatus.sortedWith(
-        compareByDescending<Badge> { it.unlocked }
+        compareByDescending<com.example.myapplication.data.Badge> { it.unlocked }
             .thenByDescending { it.progress.toFloat() / it.requirement.coerceAtLeast(1).toFloat() }
     )
     val unlockedCount = badgesWithStatus.count { it.unlocked }
@@ -277,16 +283,6 @@ fun LevelPathScreen(
 
             // ===== PLAN PATH SECTION =====
             if (activePlan != null) {
-                val context = androidx.compose.ui.platform.LocalContext.current
-                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
-                    repository = com.example.myapplication.data.gamification.FirestoreGamificationRepository(),
-                    workoutDoneProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).isWorkoutDoneToday() },
-                    weeklyTargetProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).getWeeklyTargetFlow() }
-                )
-                val gamificationState by useCase.getGamificationStateFlow().collectAsState(
-                    initial = com.example.myapplication.domain.gamification.GamificationState(),
-                    context = kotlin.coroutines.EmptyCoroutineContext
-                )
 
                 val safeGoal = when {
                     gamificationState.weeklyTarget > 0 -> gamificationState.weeklyTarget
@@ -463,7 +459,7 @@ fun LevelPathScreen(
 
 @Composable
 private fun BadgeItem(
-    badge: Badge,
+    badge: com.example.myapplication.data.Badge,
     goldColor: Color,
     grayColor: Color,
     onClick: () -> Unit

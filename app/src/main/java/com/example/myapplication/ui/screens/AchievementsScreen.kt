@@ -37,8 +37,7 @@ import com.example.myapplication.data.*
 import com.example.myapplication.persistence.FollowStore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import com.example.myapplication.domain.gamification.ManageGamificationUseCase
-import com.example.myapplication.data.gamification.FirestoreGamificationRepository
+import com.example.myapplication.domain.gamification.GamificationProvider
 
 @Composable
 fun AchievementsScreen(
@@ -76,20 +75,22 @@ fun AchievementsScreen(
     // Convert badge IDs to Badge objects with LIVE progress calculation
     val allBadges = BadgeDefinitions.ALL_BADGES
     val context = androidx.compose.ui.platform.LocalContext.current
-    val useCase = ManageGamificationUseCase(
-        repository = FirestoreGamificationRepository(),
-        workoutDoneProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).isWorkoutDoneToday() },
-        weeklyTargetProvider = { com.example.myapplication.data.settings.UserPreferencesRepository(context).getWeeklyTargetFlow() }
+    val gamificationViewModel: com.example.myapplication.viewmodels.GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
-    val gamificationState by useCase.getGamificationStateFlow().collectAsState(initial = com.example.myapplication.domain.gamification.GamificationState(), context = kotlin.coroutines.EmptyCoroutineContext)
+
+    val gamificationState by gamificationViewModel.gamificationStateFlow.collectAsState(
+        initial = com.example.myapplication.domain.gamification.GamificationState(),
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
+
     val badgesWithStatus = allBadges.map { badge ->
-        val progress = useCase.getBadgeProgress(badge.id, userProfile)
-        // badge.requirement je definiran v BadgeDefinitions.ALL_BADGES — en sam vir resnice
+        val userProgress = gamificationViewModel.getBadgeProgress(badge.id, userProfile)
         val req = badge.requirement
-        val isUnlocked = userProfile.badges.contains(badge.id) || progress >= req
+        val isUnlocked = userProfile.badges.contains(badge.id) || userProgress >= req
         badge.copy(
             unlocked = isUnlocked,
-            progress = progress,
+            progress = userProgress,
             requirement = req
         )
     }

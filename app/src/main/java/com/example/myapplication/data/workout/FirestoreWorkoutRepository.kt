@@ -39,9 +39,7 @@ class FirestoreWorkoutRepository : WorkoutRepository {
 
     override suspend fun getRunSessions(userId: String, startAfterDoc: Any?, limit: Int): Pair<List<RunSession>, Any?> {
         return try {
-            var query = FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(userId)
+            var query = FirestoreHelper.getCurrentUserDocRef()
                 .collection("runSessions")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(limit.toLong())

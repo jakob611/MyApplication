@@ -17,9 +17,9 @@ start_android_build (preko MCP).
 
 check_build_results (čez 30s) — ne ustavi se, dokler ne vidiš "BUILD SUCCESSFUL".
 
-git_commit_local — šele ko je build ZELEN.
+git_commit_and_push — šele ko je build ZELEN (hkrati doda spremembe in pusha na remote).
 
-git_push_remote — na koncu vsake faze.
+check_git_status — za preverjanje stanja v terminalu.
 
 📋 PREVERI DOKUMENTACIJO (Brez izjem)
 Pred začetkom preberi: CODE_ISSUES.md, REFACTORING_ROADMAP.md in APP_MAP.md. Če jih nisi prebral, se USTAVI.

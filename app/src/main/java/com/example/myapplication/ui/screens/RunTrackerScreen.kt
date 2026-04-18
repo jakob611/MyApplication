@@ -133,8 +133,13 @@ private fun calculateXP(activityType: ActivityType, distanceMeters: Double, time
 }
 
 @Composable
-fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserProfile()) {
+fun RunTrackerScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val viewModel: com.example.myapplication.viewmodels.RunTrackerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
+    )
+    val preferencesRepo = remember { com.example.myapplication.data.settings.UserPreferencesRepository(context) }
+
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         val config = Configuration.getInstance()
@@ -343,7 +348,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                IconButton(onClick = onBackPressed, modifier = Modifier.align(Alignment.Start)) {
+                IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
                 }
 
@@ -695,8 +700,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                     val xp = calculateXP(selectedActivity, finalDistance, finalTime)
                                     val runEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
                                     if (runEmail != null) {
-                                        val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
-                                        useCase.awardXP(xp, "RUN_COMPLETED")
+                                        viewModel.awardRunXP(xp)
 
                                         val bodyVm = androidx.lifecycle.ViewModelProvider(
                                             context as androidx.lifecycle.ViewModelStoreOwner,
@@ -721,7 +725,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                                         }
                                     }
                                     withContext(Dispatchers.Main) {
-                                        showSummary = false; onBackPressed()
+                                        showSummary = false; onBack()
                                     }
                                 }
                             },
@@ -766,7 +770,7 @@ fun RunTrackerScreen(onBackPressed: () -> Unit, userProfile: UserProfile = UserP
                 TextButton(onClick = {
                     showDiscardDialog = false
                     context.startService(Intent(context, RunTrackingService::class.java).apply { action = RunTrackingService.ACTION_STOP })
-                    onBackPressed()
+                    onBack()
                 }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {

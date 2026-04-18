@@ -199,8 +199,7 @@ class MainActivity : ComponentActivity() {
 
                     // Preveri in sinhroniziraj badge ob zagonu
                     try {
-                        val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
-                        val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                        val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                         useCase.checkAndSyncBadgesOnStartup()
                     }
                     catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
@@ -244,8 +243,7 @@ class MainActivity : ComponentActivity() {
 
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
-                            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                            val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                             useCase.recordLoginOnly()
                         }
                         catch (e: Exception) { Log.e("MainActivity", "Login streak error: ${e.message}") }
@@ -275,8 +273,7 @@ class MainActivity : ComponentActivity() {
                     scope.launch(Dispatchers.IO) {
                         delay(1500)
                         try {
-                            val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
-                            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                            val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                             useCase.checkAndSyncBadgesOnStartup()
                         }
                         catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
@@ -598,8 +595,7 @@ class MainActivity : ComponentActivity() {
                                     currentScreen is Screen.ExerciseHistory -> ExerciseHistoryScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.ManualExerciseLog -> ManualExerciseLogScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.RunTracker -> RunTrackerScreen(
-                                        onBackPressed = { navigateBack() },
-                                        userProfile = userProfile
+                                        onBack = { navigateBack() }
                                     )
                                     currentScreen is Screen.GenerateWorkout -> GenerateWorkoutScreen(
                                         onBack = { navigateBack() },
@@ -708,8 +704,7 @@ class MainActivity : ComponentActivity() {
                                                 UserPreferences.saveProfileFirestore(finalProfile)
                                                 UserPreferences.saveProfile(context, finalProfile)
                                                 appViewModel.handleIntent(AppIntent.SetProfile(finalProfile))
-                                                val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
-                                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+                                                val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                                                 useCase.recordPlanCreation()
                                                 appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
                                                 val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()

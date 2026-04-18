@@ -5,7 +5,9 @@ import com.example.myapplication.viewmodels.BodyHomeUiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import com.example.myapplication.data.UserPreferences
-import java.time.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private val settingsRepo: UserPreferencesRepository) {
     fun invoke(email: String): Flow<BodyHomeUiState> = flow {
@@ -25,7 +27,11 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
                 val planDay = stats["plan_day"] as? Int ?: 1
                 val lastEpoch = stats["last_workout_epoch"] as? Long ?: 0L
 
-                val isDoneToday = if (lastEpoch == 0L) false else LocalDate.ofEpochDay(lastEpoch) == LocalDate.now()
+                val isDoneToday = if (lastEpoch == 0L) false else {
+                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                    val lastDate = kotlinx.datetime.LocalDate.fromEpochDays(lastEpoch.toInt())
+                    lastDate == now
+                }
 
                 // Sync with local repository
                 settingsRepo.updateWorkoutStats(

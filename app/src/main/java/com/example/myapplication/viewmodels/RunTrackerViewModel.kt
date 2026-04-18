@@ -3,6 +3,7 @@ package com.example.myapplication.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.RunSession
+import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.workout.WorkoutRepository
 import kotlinx.coroutines.launch
 
@@ -10,7 +11,16 @@ import kotlinx.coroutines.launch
  * ViewModel za RunTrackerScreen — samo branje zgodovine tekov.
  * Dejansko sledenje teka izvaja RunTrackingService (foreground service).
  */
-class RunTrackerViewModel(private val workoutRepo: WorkoutRepository) : ViewModel() {
+class RunTrackerViewModel(
+    private val workoutRepo: WorkoutRepository,
+    private val gamificationUseCase: ManageGamificationUseCase
+) : ViewModel() {
+
+    fun awardRunXP(xp: Int) {
+        viewModelScope.launch {
+            gamificationUseCase.awardXP(xp, "RUN_COMPLETED")
+        }
+    }
 
     private var lastVisibleDoc: Any? = null
     var isLastPage = false

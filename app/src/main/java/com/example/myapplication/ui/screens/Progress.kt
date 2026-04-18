@@ -966,6 +966,9 @@ private fun InteractiveLineChart(
 @Composable
 private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
+    val progressViewModel: com.example.myapplication.viewmodels.ProgressViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
+    )
     val scope = rememberCoroutineScope() // DODANO: Proper scope namesto GlobalScope
     val isLbs = weightUnit == "lb"
     var weightInput by remember { mutableStateOf("") }
@@ -1014,8 +1017,7 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                             // AchievementStore.awardXP sproži badge preverjanje
                             val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
                             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(com.example.myapplication.data.gamification.FirestoreGamificationRepository())
-                                useCase.awardXP(50, "WEIGHT_ENTRY")
+                                progressViewModel.awardWeightLogXP()
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
                                 }
