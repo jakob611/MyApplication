@@ -18,12 +18,21 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.toJavaInstant
 
+data class DailyTotals(
+    val consumed: Int = 0,
+    val burned: Int = 0,
+    val water: Int = 0
+)
+
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase
 ) : ViewModel() {
 
     private val _healthConnectSyncTrigger = MutableStateFlow(0)
     val healthConnectSyncTrigger: StateFlow<Int> = _healthConnectSyncTrigger.asStateFlow()
+
+    private val _uiState = MutableStateFlow(DailyTotals())
+    val uiState: StateFlow<DailyTotals> = _uiState.asStateFlow()
 
     private val uidFlow = MutableStateFlow<String?>(com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId())
 
@@ -34,6 +43,10 @@ class NutritionViewModel(
 
     fun syncHealthConnectNow() {
         _healthConnectSyncTrigger.value += 1
+    }
+
+    fun updateDailyTotals(consumed: Int, burned: Int, water: Int) {
+        _uiState.value = DailyTotals(consumed = consumed, burned = burned, water = water)
     }
 
     fun awardNutritionXP(xp: Int) {

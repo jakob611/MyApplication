@@ -116,6 +116,8 @@ fun NutritionScreen(
     val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
+    val uiState by nutritionViewModel.uiState.collectAsState()
+
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(showAddedMessage) {
@@ -127,9 +129,6 @@ fun NutritionScreen(
 
     // Active Calories (Health Connect) - load from SharedPreferences INSTANTLY
     val healthManager = remember { HealthConnectManager.getInstance(context) }
-    val burnedPrefs = remember { context.getSharedPreferences("burned_cache", android.content.Context.MODE_PRIVATE) }
-    val todayBurnedKey = remember { "burned_${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date}" }
-    var activeCaloriesBurned by remember { mutableStateOf(burnedPrefs.getInt(todayBurnedKey, 0)) }
     val hcSyncState by nutritionViewModel.healthConnectSyncTrigger.collectAsState()
 
     LaunchedEffect(hcSyncState) {
@@ -139,21 +138,28 @@ fun NutritionScreen(
                 val now = Clock.System.now().toJavaInstant()
                 val tz = TimeZone.currentSystemDefault()
                 val startOfDay = Clock.System.now().toLocalDateTime(tz).date
-                // java.time mapping is needed only for HealthConnect client argument for now
                 val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
 
-                // 1. Health Connect (Active)
                 val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
-
-                // 2. App Exercises (Workouts + Logs)
                 val appExercisesCalories = HealthStorage.getTodayAppExercisesCalories()
 
-                // Sum -> Total Active Calories
                 val newBurned = healthConnectCalories + appExercisesCalories
-                activeCaloriesBurned = newBurned
 
-                // Save to SharedPreferences immediately
-                burnedPrefs.edit().putInt(todayBurnedKey, newBurned).apply()
+                // POTISNI V FIRESTORE DA GRAFI TAKOJ OŽIVIJO NA DRUGIH ZASLONIH
+                val todayId = startOfDay.toString()
+                try {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
+                        ref.set(mapOf(
+                            "date" to todayId,
+                            "burnedCalories" to newBurned
+                        ), com.google.firebase.firestore.SetOptions.merge()).await()
+                    }
+                } catch (e: Exception) {
+                    Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
+                }
 
                 kotlinx.coroutines.delay(10000) // Refresh every 10s
             }
@@ -197,17 +203,10 @@ fun NutritionScreen(
     }
     var trackedFoods by remember { mutableStateOf<List<TrackedFood>>(initialFoods) }
 
-    // Water tracking - load from SharedPreferences INSTANTLY for no flicker
-    val waterPrefs = remember { context.getSharedPreferences("water_cache", android.content.Context.MODE_PRIVATE) }
-    val todayWaterKey = remember { "water_${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date}" }
-    val cachedWater = remember { waterPrefs.getInt(todayWaterKey, 0) }
-    var waterConsumedMl by remember { mutableStateOf(cachedWater) }
-    // waterLoaded = true means Firestore initial read happened (ne overwritamo lokalnih sprememb)
-    var waterLoaded by remember { mutableStateOf(false) }
-    // UI debounce za vode gumbe (prepreÄŤuje double-tap)
+    // UI debounce za vode gumbe (preprečuje double-tap)
     val lastWaterClickState = remember { mutableStateOf(0L) }
 
-    // Poraba (izraÄŤuni)
+    // Poraba (izračuni)
     val consumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
     val consumedProtein = trackedFoods.sumOf { it.proteinG ?: 0.0 }
     val consumedCarbs = trackedFoods.sumOf { it.carbsG ?: 0.0 }
@@ -323,100 +322,69 @@ fun NutritionScreen(
     // ob vsakem recomposition, ker bi to vsakič restartalo DisposableEffect(uid, todayId)
     // in ustvarjalo nove Firestore listenerje (memory leak + napačno obnašanje).
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
-
-    // todayId — skupni ključ za vse lokalne cache-e (food, water, burned)
     val todayId = remember { kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString() }
-    var lastSyncedSignature by remember { mutableStateOf("") }
-    fun foodsSignature(list: List<TrackedFood>) = list.joinToString("|") { tf ->
-        listOf(
-            tf.name,
-            tf.meal.name,
-            tf.amount,
-            tf.unit,
-            tf.caloriesKcal,
-            tf.proteinG ?: 0.0,
-            tf.carbsG ?: 0.0,
-            tf.fatG ?: 0.0,
-            tf.fiberG ?: 0.0,
-            tf.sugarG ?: 0.0,
-            tf.saturatedFatG ?: 0.0,
-            tf.sodiumMg ?: 0.0,
-            tf.potassiumMg ?: 0.0,
-            tf.cholesterolMg ?: 0.0
-        ).joinToString(";")
-    }
 
-    // Restore ob zagonu â€” enkratno branje iz Firestore (samo ÄŤe je lokalni cache prazen)
-    var firestoreFoodsLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(uid, todayId) {
         if (uid != null) {
             com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId)
                 .collect { doc ->
-                    // â”€â”€ HRANA: Firestore prevzame samo ob prvem nalaganju in SAMO ÄŤe je lokalni cache prazen â”€â”€
-                    if (!firestoreFoodsLoaded) {
-                        firestoreFoodsLoaded = true
-                        val items = doc.get("items") as? List<*>
-                        if (items != null && trackedFoods.isEmpty()) {
-                            val parsedFoods = items.mapNotNull { any ->
-                                val m = any as? Map<*, *> ?: return@mapNotNull null
-                                val name = m["name"] as? String ?: return@mapNotNull null
-                                val mealStr = m["meal"] as? String ?: "Breakfast"
-                                val meal = runCatching { MealType.valueOf(mealStr) }.getOrNull() ?: MealType.Breakfast
-                                val amount = (m["amount"] as? Number)?.toDouble()
-                                    ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0
-                                val unit = m["unit"] as? String ?: "servings"
-                                val kcal = (m["caloriesKcal"] as? Number)?.toDouble()
-                                    ?: (m["caloriesKcal"] as? String)?.toDoubleOrNull() ?: 0.0
-                                val p = (m["proteinG"] as? Number)?.toDouble()
-                                    ?: (m["proteinG"] as? String)?.toDoubleOrNull()
-                                val c = (m["carbsG"] as? Number)?.toDouble()
-                                    ?: (m["carbsG"] as? String)?.toDoubleOrNull()
-                                val f = (m["fatG"] as? Number)?.toDouble()
-                                    ?: (m["fatG"] as? String)?.toDoubleOrNull()
-                                val barcode = m["barcode"] as? String
-                                TrackedFood(
-                                    id = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString(),
-                                    name = name,
-                                    meal = meal,
-                                    amount = amount,
-                                    unit = unit,
-                                    caloriesKcal = kcal,
-                                    proteinG = p,
-                                    carbsG = c,
-                                    fatG = f,
-                                    fiberG = (m["fiberG"] as? Number)?.toDouble()
-                                        ?: (m["fiberG"] as? String)?.toDoubleOrNull(),
-                                    sugarG = (m["sugarG"] as? Number)?.toDouble()
-                                        ?: (m["sugarG"] as? String)?.toDoubleOrNull(),
-                                    saturatedFatG = (m["saturatedFatG"] as? Number)?.toDouble()
-                                        ?: (m["saturatedFatG"] as? String)?.toDoubleOrNull(),
-                                    sodiumMg = (m["sodiumMg"] as? Number)?.toDouble()
-                                        ?: (m["sodiumMg"] as? String)?.toDoubleOrNull(),
-                                    potassiumMg = (m["potassiumMg"] as? Number)?.toDouble()
-                                        ?: (m["potassiumMg"] as? String)?.toDoubleOrNull(),
-                                    cholesterolMg = (m["cholesterolMg"] as? Number)?.toDouble()
-                                        ?: (m["cholesterolMg"] as? String)?.toDoubleOrNull(),
-                                    barcode = barcode
-                                )
-                            }
-                            if (parsedFoods.isNotEmpty()) {
-                                trackedFoods = parsedFoods
-                                lastSyncedSignature = foodsSignature(parsedFoods)
-                                Log.d("NutritionLocal", "Loaded ${parsedFoods.size} foods from Firestore (local was empty)")
-                            }
-                        }
-                    }
-                    // â”€â”€ VODA: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
                     val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
-                    if (serverWater > waterConsumedMl) {
-                        waterConsumedMl = serverWater
-                        waterPrefs.edit().putInt(todayWaterKey, serverWater).apply()
-                    }
-                    // â”€â”€ BURNED: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
-                    val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt()
-                    if (serverBurned != null && serverBurned > activeCaloriesBurned) {
-                        activeCaloriesBurned = serverBurned
-                        burnedPrefs.edit().putInt(todayBurnedKey, serverBurned).apply()
+                    val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
+                    val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+
+                    nutritionViewModel.updateDailyTotals(
+                        consumed = serverConsumed,
+                        burned = serverBurned,
+                        water = serverWater
+                    )
+
+                    val items = doc.get("items") as? List<*>
+                    if (items != null) {
+                        val parsedFoods = items.mapNotNull { any ->
+                            val m = any as? Map<*, *> ?: return@mapNotNull null
+                            val name = m["name"] as? String ?: return@mapNotNull null
+                            val mealStr = m["meal"] as? String ?: "Breakfast"
+                            val meal = runCatching { MealType.valueOf(mealStr) }.getOrNull() ?: MealType.Breakfast
+                            val amount = (m["amount"] as? Number)?.toDouble()
+                                ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0
+                            val unit = m["unit"] as? String ?: "servings"
+                            val kcal = (m["caloriesKcal"] as? Number)?.toDouble()
+                                ?: (m["caloriesKcal"] as? String)?.toDoubleOrNull() ?: 0.0
+                            val p = (m["proteinG"] as? Number)?.toDouble()
+                                ?: (m["proteinG"] as? String)?.toDoubleOrNull()
+                            val c = (m["carbsG"] as? Number)?.toDouble()
+                                ?: (m["carbsG"] as? String)?.toDoubleOrNull()
+                            val f = (m["fatG"] as? Number)?.toDouble()
+                                ?: (m["fatG"] as? String)?.toDoubleOrNull()
+                            val barcode = m["barcode"] as? String
+                            TrackedFood(
+                                id = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString(),
+                                name = name,
+                                meal = meal,
+                                amount = amount,
+                                unit = unit,
+                                caloriesKcal = kcal,
+                                proteinG = p,
+                                carbsG = c,
+                                fatG = f,
+                                fiberG = (m["fiberG"] as? Number)?.toDouble()
+                                    ?: (m["fiberG"] as? String)?.toDoubleOrNull(),
+                                sugarG = (m["sugarG"] as? Number)?.toDouble()
+                                    ?: (m["sugarG"] as? String)?.toDoubleOrNull(),
+                                saturatedFatG = (m["saturatedFatG"] as? Number)?.toDouble()
+                                    ?: (m["saturatedFatG"] as? String)?.toDoubleOrNull(),
+                                sodiumMg = (m["sodiumMg"] as? Number)?.toDouble()
+                                    ?: (m["sodiumMg"] as? String)?.toDoubleOrNull(),
+                                potassiumMg = (m["potassiumMg"] as? Number)?.toDouble()
+                                    ?: (m["potassiumMg"] as? String)?.toDoubleOrNull(),
+                                cholesterolMg = (m["cholesterolMg"] as? Number)?.toDouble()
+                                    ?: (m["cholesterolMg"] as? String)?.toDoubleOrNull(),
+                                barcode = barcode
+                            )
+                        }
+                        if (parsedFoods.isNotEmpty()) {
+                            trackedFoods = parsedFoods
+                        }
                     }
                 }
         }
@@ -424,9 +392,21 @@ fun NutritionScreen(
 
     // Lokalni zapis hrane â€” TAKOJ ob vsaki spremembi, brez ÄŤakanja na Firestore
     LaunchedEffect(trackedFoods, todayId) {
-        val sig = foodsSignature(trackedFoods)
-        if (sig == lastSyncedSignature) return@LaunchedEffect
-        lastSyncedSignature = sig
+        val calculatedConsumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
+
+        try {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (userId != null) {
+                val ref = db.collection("users").document(userId).collection("dailyLogs").document(todayId)
+                ref.set(mapOf(
+                    "date" to todayId,
+                    "consumedCalories" to calculatedConsumedKcal
+                ), com.google.firebase.firestore.SetOptions.merge()).await()
+            }
+        } catch (e: Exception) {
+            Log.e("NutritionScreen", "Failed to sync consumed Kcal to firestore", e)
+        }
 
         // Serializiraj v JSON in shrani lokalno
         try {
@@ -472,45 +452,6 @@ fun NutritionScreen(
                     nutritionViewModel.awardNutritionXP(100)
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onXPAdded() }
                 }
-            }
-        }
-    }
-
-    // Lokalni zapis vode â€” TAKOJ ob vsaki spremembi, brez Firestore
-    LaunchedEffect(waterConsumedMl, todayId) {
-        // Shrani lokalno takoj
-        waterPrefs.edit().putInt(todayWaterKey, waterConsumedMl).apply()
-        com.example.myapplication.persistence.DailySyncManager.saveWaterLocally(context, waterConsumedMl, todayId)
-        // Posodobi water widget takoj
-        com.example.myapplication.widget.WaterWidgetProvider.updateWidgetFromApp(context, waterConsumedMl)
-        // POTISNI V FIRESTORE DA DRUGI KLIENTI TAKOJ SPREJMEJO!
-        launch {
-            try {
-                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(waterConsumedMl, todayId)
-            } catch (e: Exception) {
-                Log.e("NutritionScreen", "Failed to sync water to firestore", e)
-            }
-        }
-    }
-
-    // Lokalni zapis porabljenih kalorij — TAKOJ, brez Firestore
-    LaunchedEffect(activeCaloriesBurned, todayId) {
-        burnedPrefs.edit().putInt(todayBurnedKey, activeCaloriesBurned).apply()
-        com.example.myapplication.persistence.DailySyncManager.saveBurnedLocally(context, activeCaloriesBurned, todayId)
-        // POTISNI V FIRESTORE DA GRAFI TAKOJ OŽIVIJO NA DRUGIH ZASLONIH
-        launch {
-            try {
-                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (uid != null) {
-                    val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
-                    ref.set(mapOf(
-                        "date" to todayId,
-                        "burnedCalories" to activeCaloriesBurned
-                    ), com.google.firebase.firestore.SetOptions.merge()).await()
-                }
-            } catch (e: Exception) {
-                Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
             }
         }
     }
@@ -564,7 +505,7 @@ fun NutritionScreen(
 
     // Water tracking — prilagojen cilj
     val waterTarget = adjustedWaterTarget.toFloat()
-    val waterProgress = (waterConsumedMl.toFloat() / waterTarget).coerceIn(0f, 1f)
+    val waterProgress = (uiState.water.toFloat() / waterTarget).coerceIn(0f, 1f)
 
     // Calculate macro calories
     val fatCals = (consumedFat * 9).roundToInt()
@@ -635,15 +576,15 @@ fun NutritionScreen(
                                 this.fatCalories = fatCals
                                 this.proteinCalories = proteinCals
                                 this.carbsCalories = carbsCals
-                                this.consumedCalories = consumedKcal
+                                this.consumedCalories = uiState.consumed
                                 this.targetCalories = adjustedTargetCalories
                                 innerProgress = waterProgress
                                 textColor = textPrimary.toArgb()
                                 waterColor = textPrimary.toArgb()
-                                innerValue = waterConsumedMl.toString()
+                                innerValue = uiState.water.toString()
                                 innerLabel = "ml"
                                 weightUnit = userProfile.weightUnit
-                                centerValue = "$consumedKcal/$adjustedTargetCalories"
+                                centerValue = "${uiState.consumed}/$adjustedTargetCalories"
                                 centerLabel = "kcal"
                                 startAngle = 135f
                                 sweepAngle = 270f
@@ -659,14 +600,14 @@ fun NutritionScreen(
                             view.fatCalories = fatCals
                             view.proteinCalories = proteinCals
                             view.carbsCalories = carbsCals
-                            view.consumedCalories = consumedKcal
+                            view.consumedCalories = uiState.consumed
                             view.targetCalories = adjustedTargetCalories
                             view.innerProgress = waterProgress
                             view.textColor = textPrimary.toArgb()
                             view.waterColor = textPrimary.toArgb()
-                            view.innerValue = waterConsumedMl.toString()
+                            view.innerValue = uiState.water.toString()
                             view.weightUnit = userProfile.weightUnit
-                            view.centerValue = "$consumedKcal/$adjustedTargetCalories"
+                            view.centerValue = "${uiState.consumed}/$adjustedTargetCalories"
                             view.onSegmentClick = { clicked ->
                                 view.clickedSegment = clicked
                                 view.invalidate()
@@ -688,7 +629,7 @@ fun NutritionScreen(
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
                 ) {
                     // Active Calories Bar (Goal: 800 kcal)
-                    ActiveCaloriesBar(currentCalories = activeCaloriesBurned, goal = 800)
+                    ActiveCaloriesBar(currentCalories = uiState.burned, goal = 800)
                 }
             }
 
@@ -720,16 +661,28 @@ fun NutritionScreen(
 
             // Water controls
             WaterControlsRow(
-                waterConsumedMl = waterConsumedMl,
+                waterConsumedMl = uiState.water,
                 textPrimary = textPrimary,
                 lastClickState = lastWaterClickState,
                 onMinus = { newVal ->
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
-                    waterConsumedMl = newVal
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newVal, todayId)
+                        } catch (e: Exception) {
+                            Log.e("NutritionScreen", "Failed to sync water to firestore", e)
+                        }
+                    }
                 },
                 onPlus = { newVal ->
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
-                    waterConsumedMl = newVal
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newVal, todayId)
+                        } catch (e: Exception) {
+                            Log.e("NutritionScreen", "Failed to sync water to firestore", e)
+                        }
+                    }
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )

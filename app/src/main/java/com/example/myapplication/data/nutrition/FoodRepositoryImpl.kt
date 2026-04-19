@@ -55,18 +55,18 @@ object FoodRepositoryImpl {
     }
 
     fun observeDailyLog(uid: String, todayId: String): Flow<com.google.firebase.firestore.DocumentSnapshot> = callbackFlow {
-        val listener = FirestoreHelper.getUserRef(uid)
-            .collection("dailyLogs").document(todayId)
-            .addSnapshotListener { doc, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                if (doc != null) {
-                    android.util.Log.d("DEBUG_DATA", "Novo stanje iz baze (dailyLog): ${doc.data}")
-                    trySend(doc)
-                }
+        val docRef = FirestoreHelper.getUserRef(uid).collection("dailyLogs").document(todayId)
+        val listener = docRef.addSnapshotListener { doc, error ->
+            android.util.Log.d("DEBUG_DATA", "Poslušam dokument: ${docRef.path}")
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
             }
+            if (doc != null) {
+                android.util.Log.d("DEBUG_DATA", "Novo stanje iz baze (dailyLog): ${doc.data}")
+                trySend(doc)
+            }
+        }
         awaitClose { listener.remove() }
     }
 
