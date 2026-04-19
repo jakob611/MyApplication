@@ -1,10 +1,10 @@
 package com.example.myapplication.domain.workout
 
+import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.viewmodels.BodyHomeUiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import com.example.myapplication.data.UserPreferences
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -18,7 +18,7 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
 
         try {
             // Firestore Sync: Preberi osvežene podatke in posodobi lokalno bazo
-            val stats = UserPreferences.getWorkoutStats(email)
+            val stats = UserProfileManager.getWorkoutStats(email)
             if (stats != null) {
                 val streak = stats["streak_days"] as? Int ?: 0
                 val total = stats["total_workouts_completed"] as? Int ?: 0

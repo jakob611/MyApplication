@@ -13,7 +13,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.MainActivity
-import com.example.myapplication.data.UserPreferences
+import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.workout.FirestoreWorkoutRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import java.time.LocalDate
@@ -106,17 +108,10 @@ class StreakReminderWorker(
             return Result.success()
         }
 
-        // Dodano: Preveri nastavitve obvestil (Quiet Hours & Mute)
         val email = currentUser.email.orEmpty()
-        val userProfile = UserPreferences.loadProfile(context, email)
-        
-        if (userProfile.muteStreakReminders) {
-            Log.d(TAG, "User muted streak reminders — skipping")
-            scheduleForTomorrow()
-            return Result.success()
-        }
-        
-        // Preveri Quiet hours
+        val userProfile = UserProfileManager.loadProfile(email)
+
+        // --- 1. QUIET HOURS PREVERBA (na podlagi uporabnikovih nastavitev) ---
         try {
             val now = LocalTime.now()
             val startParts = userProfile.quietHoursStart.split(":")
@@ -141,6 +136,14 @@ class StreakReminderWorker(
             Log.e(TAG, "Error parsing quiet hours: ${e.message}")
         }
 
+        // --- 2. PREVERI NASTAVITVE OBNOVITEV (Mute) ---
+        if (userProfile.muteStreakReminders) {
+            Log.d(TAG, "User muted streak reminders — skipping")
+            scheduleForTomorrow()
+            return Result.success()
+        }
+
+        // --- 3. PREBERI PODATKE O VADBI IN STREAKU ---
         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
         val todayIsRest = prefs.getBoolean("today_is_rest", false)
         val lastWorkoutEpoch = prefs.getLong("last_workout_epoch", 0L)
@@ -152,6 +155,7 @@ class StreakReminderWorker(
 
         Log.d(TAG, "Reminder check: todayIsRest=$todayIsRest, workoutDone=$workoutDoneToday, streak=$currentStreak")
 
+        // --- 4. ODLOČITEV KAJ NAREDITI NA PODLAGI STANJA ---
         when {
             todayIsRest -> {
                 // Rest dan — ni potreben opomnik
@@ -167,7 +171,7 @@ class StreakReminderWorker(
             }
         }
 
-        // Načrtuj za jutri ob 20:00
+        // --- 5. NAČRTUJ ZA JUTRI OB 20:00 ---
         scheduleForTomorrow()
 
         return Result.success()
@@ -183,9 +187,10 @@ class StreakReminderWorker(
             .getInt("burned_$dateKey", 0)
 
         val email = Firebase.auth.currentUser?.email
-        val streakFreezes = if (!email.isNullOrBlank()) {
-            runCatching { UserPreferences.loadProfile(context, email).streakFreezes }.getOrDefault(0)
-        } else {
+        // --- 6. PREBERI ŠTEVILO ZAMRZOVANJ (FROZEN DAYS) ---
+        val streakFreezes = try {
+            runCatching { UserProfileManager.loadProfile(email ?: "").streakFreezes }.getOrDefault(0)
+        } catch(e:Exception) {
             0
         }
 

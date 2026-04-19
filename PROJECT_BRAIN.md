@@ -218,8 +218,7 @@ Na UI sloju smo našli nekaj ogromnih arhitekturnih "grehov", kjer so Compose fu
 
 | Identifikator (Datoteka) | Razlog |
 | :--- | :--- |
-| `LevelPathScreen.kt` (v `LevelPathScreen.kt`) | **Mrtva Koda:** Zaslon sicer obstaja v navigaciji (MainActivity in AppNavigation), vendar ga ne kliče nobena pot nobenega preostajajočega gumba (vsi usmerjajo na `AchievementsScreen`). Nikoli ga ni možno odpreti v produkcijski aplikaciji. |
-| `BadgesScreen.kt` (v `BadgesScreen.kt`) | **Mrtva Koda:** Identična usoda kot pri `LevelPath` – z obširno posodobitvijo uporabniškega vmesnika pod AchievementScreen so te originalne komponente postale izolirani otoki smeti. |
-| `GoldenRatioScreen.kt` | Sumljivo – ob pregledu se zdi izolirana komponenta. Potrebna natančna UI revizija. |
-| `EAdditivesScreen.kt` | Izpadla funkcionalnost ali nedokončan prototip skenerja "E-števil" in aditivov? Mrtva koda? |
-
+| `LevelPathScreen.kt` | **Izbrisano** (2026-04-19): Mrtva komponenta, nikoli priklicana. |
+| `BadgesScreen.kt` | **Izbrisano** (2026-04-19): Mrtva komponenta, nikoli priklicana. |
+| `GoldenRatioScreen.kt` | **Izbrisano** (2026-04-19): Izolirana in neuporabljena komponenta. |
+| `EAdditivesScreen.kt` | **Izbrisano** (2026-04-19): Izpadla funkcionalnost, mrtva koda. |

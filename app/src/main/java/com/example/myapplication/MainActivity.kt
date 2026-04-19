@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.myapplication.data.UserPreferences
+import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.persistence.PlanDataStore
 import com.example.myapplication.ui.home.CommunityScreen
@@ -164,8 +164,8 @@ class MainActivity : ComponentActivity() {
                         val user = Firebase.auth.currentUser
                         if (user != null && user.email != null) {
                             isLoggedIn = true; userEmail = user.email!!
-                            appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
-                            scope.launch { isDarkMode = UserPreferences.isDarkMode(userEmail) }
+                            appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                            scope.launch { isDarkMode = UserProfileManager.isDarkMode(userEmail) }
                             navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
                         } else errorMessage = "Google sign-in error."
                     }, onError = { err -> errorMessage = err })
@@ -174,7 +174,7 @@ class MainActivity : ComponentActivity() {
 
             // === INITIAL AUTH & SYNC FLOW ===
             LaunchedEffect(Unit) {
-                appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
+                appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                 val accountEmail = com.google.firebase.ktx.Firebase.auth.currentUser?.email
 
                 // Preveri fresh_start flag (nastavljen ob delete data/account)
@@ -194,8 +194,8 @@ class MainActivity : ComponentActivity() {
                         userEmail = accountEmail
 
                         // Nastavi uporabniški profil
-                        appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
-                        isDarkMode = UserPreferences.isDarkMode(userEmail)
+                        appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                        isDarkMode = UserProfileManager.isDarkMode(userEmail)
 
                     // Preveri in sinhroniziraj badge ob zagonu
                     try {
@@ -211,9 +211,9 @@ class MainActivity : ComponentActivity() {
                     // Osveži podatke o profilu iz Firestore
                     kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                         try {
-                            val remote = UserPreferences.loadProfileFromFirestore(userEmail)
+                            val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
                             if (remote != null) {
-                                UserPreferences.saveProfile(context, remote)
+                                UserProfileManager.saveProfile(remote)
                                 val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
                                 if (actParsed != null && actParsed > 0) {
                                     context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
@@ -237,8 +237,8 @@ class MainActivity : ComponentActivity() {
                     isLoggedIn = true
                     userEmail = user.email ?: ""
 
-                    appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
-                    isDarkMode = UserPreferences.isDarkMode(userEmail)
+                    appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                    isDarkMode = UserProfileManager.isDarkMode(userEmail)
                     navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
                     scope.launch(Dispatchers.IO) {
@@ -250,7 +250,7 @@ class MainActivity : ComponentActivity() {
                     }
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val profile = UserPreferences.loadProfile(context, userEmail)
+                            val profile = UserProfileManager.loadProfile(userEmail)
                             com.example.myapplication.workers.WeeklyStreakWorker.ensureScheduled(context, profile.startOfWeek)
                         } catch (e: Exception) { Log.e("MainActivity", "WeeklyStreakWorker error: ${e.message}") }
                     }
@@ -258,9 +258,9 @@ class MainActivity : ComponentActivity() {
                     delay(250)
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val remote = UserPreferences.loadProfileFromFirestore(userEmail)
+                            val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
                             if (remote != null) {
-                                UserPreferences.saveProfile(context, remote)
+                                UserProfileManager.saveProfile(remote)
                                 val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
                                 if (actParsed != null && actParsed > 0) {
                                     context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
@@ -410,13 +410,13 @@ class MainActivity : ComponentActivity() {
                                 },
                                                 onProfileUpdate = { updatedProfile ->
                                                     appViewModel.handleIntent(AppIntent.SetProfile(updatedProfile))
-                                                    UserPreferences.saveProfile(context, updatedProfile)
-                                                    scope.launch { UserPreferences.saveProfileFirestore(updatedProfile) }
+                                                    UserProfileManager.saveProfile(updatedProfile)
+                                                    scope.launch { UserProfileManager.saveProfileFirestore(updatedProfile) }
                                                 },
                                                 isDarkMode = isDarkMode,
                                 onDarkModeToggle = {
                                     isDarkMode = !isDarkMode
-                                    scope.launch { UserPreferences.setDarkMode(userEmail, isDarkMode) }
+                                    scope.launch { UserProfileManager.setDarkMode(userEmail, isDarkMode) }
                                 },
                                 onNavigateToPrivacyPolicy = { navigateTo(Screen.PrivacyPolicy); scope.launch { drawerState.close() } },
                                 onNavigateToTermsOfService = { navigateTo(Screen.TermsOfService); scope.launch { drawerState.close() } },
@@ -537,10 +537,10 @@ class MainActivity : ComponentActivity() {
                                                 try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                                                 try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                                             },
-                                            onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail))) },
+                                            onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) },
                                             onBadgeUnlocked = { badge ->
                                                 unlockedBadge = badge
-                                                appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
+                                                appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                                             }
                                         )
                                     }
@@ -571,7 +571,7 @@ class MainActivity : ComponentActivity() {
                                             onProductConsumed = { scannedProduct = null },
                                             openBarcodeScan = openBarcodeScan,
                                             openFoodSearch = openFoodSearch,
-                                            onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail))) },
+                                            onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) },
                                             snackbarHostState = nutritionSnackbarHostState,
                                             userProfile = userProfile,
                                             isOnline = isOnline,
@@ -680,8 +680,8 @@ class MainActivity : ComponentActivity() {
                                                 sleepHours = quizData["sleep"] as? String
                                             )
                                             appViewModel.handleIntent(AppIntent.SetProfile(updatedFromQuiz))
-                                            UserPreferences.saveProfile(context, updatedFromQuiz)
-                                            scope.launch { UserPreferences.saveProfileFirestore(updatedFromQuiz) }
+                                            UserProfileManager.saveProfile(updatedFromQuiz)
+                                            scope.launch { UserProfileManager.saveProfileFirestore(updatedFromQuiz) }
 
                                             val freqStr = quizData["frequency"] as? String
                                             val freqParsed = freqStr?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
@@ -697,14 +697,14 @@ class MainActivity : ComponentActivity() {
                                                 PlanDataStore.addPlan(context, plan)
                                                 var currentProfile = userProfile
                                                 if (currentProfile.height == null || currentProfile.height == 0.0)
-                                                    currentProfile = UserPreferences.loadProfile(context, userEmail)
+                                                    currentProfile = UserProfileManager.loadProfile(userEmail)
                                                 val finalProfile = currentProfile.copy(equipment = plan.equipment, focusAreas = plan.focusAreas)
-                                                UserPreferences.saveProfileFirestore(finalProfile)
-                                                UserPreferences.saveProfile(context, finalProfile)
+                                                UserProfileManager.saveProfileFirestore(finalProfile)
+                                                UserProfileManager.saveProfile(finalProfile)
                                                 appViewModel.handleIntent(AppIntent.SetProfile(finalProfile))
                                                 val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                                                 useCase.recordPlanCreation()
-                                                appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
+                                                appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                                                 val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
                                                 if (uid != null) {
                                                     val nutritionPlan = com.example.myapplication.data.NutritionPlan(
@@ -723,7 +723,7 @@ class MainActivity : ComponentActivity() {
                                                 bodyPrefs.edit().putInt("weekly_target", weeklyTargetToSave).apply()
                                                 // Shrani v Firestore POD EMAIL (ne UID) — ker getWorkoutStats bere users/{email}
                                                 if (userEmail.isNotBlank()) {
-                                                    com.example.myapplication.data.UserPreferences.saveWorkoutStats(
+                                                    UserProfileManager.saveWorkoutStats(
                                                         email = userEmail,
                                                         streak = bodyPrefs.getInt("streak_days", 0),
                                                         totalWorkouts = bodyPrefs.getInt("total_workouts_completed", 0),
@@ -753,14 +753,14 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToDevSettings = { navigateTo(Screen.DeveloperSettings) },
                                         onProfileUpdate = { updatedProfile ->
                                             appViewModel.handleIntent(AppIntent.SetProfile(updatedProfile))
-                                            UserPreferences.saveProfile(context, updatedProfile)
-                                            scope.launch { UserPreferences.saveProfileFirestore(updatedProfile) }
+                                            UserProfileManager.saveProfile(updatedProfile)
+                                            scope.launch { UserProfileManager.saveProfileFirestore(updatedProfile) }
                                         },
                                         onDeleteAllData = {
                                             scope.launch {
                                                 try {
-                                                    UserPreferences.deleteUserData(userEmail); PlanDataStore.deleteAllPlans()
-                                                    PlanDataStore.clearPlan(context); UserPreferences.clearAllLocalData(context)
+                                                    UserProfileManager.deleteUserData(userEmail); PlanDataStore.deleteAllPlans()
+                                                    PlanDataStore.clearPlan(context); UserProfileManager.clearAllLocalData()
                                                     bodyOverviewViewModel.clearPlans(); errorMessage = "All data deleted."
                                                 } catch (e: Exception) { errorMessage = "Delete failed: ${e.localizedMessage}" }
                                             }
@@ -768,8 +768,8 @@ class MainActivity : ComponentActivity() {
                                         onDeleteAccount = {
                                             scope.launch {
                                                 try {
-                                                    UserPreferences.deleteUserData(userEmail); PlanDataStore.deleteAllPlans()
-                                                    PlanDataStore.clearPlan(context); UserPreferences.clearAllLocalData(context)
+                                                    UserProfileManager.deleteUserData(userEmail); PlanDataStore.deleteAllPlans()
+                                                    PlanDataStore.clearPlan(context); UserProfileManager.clearAllLocalData()
                                                     com.example.myapplication.persistence.FirestoreHelper.clearCache()
                                                     try { Firebase.auth.currentUser?.delete()?.await() }
                                                     catch (reauth: com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException) {
@@ -848,8 +848,8 @@ class MainActivity : ComponentActivity() {
                                                 val user = Firebase.auth.currentUser
                                                 if (user != null && user.isEmailVerified) {
                                                     isLoggedIn = true; userEmail = email
-                                                    appViewModel.handleIntent(AppIntent.SetProfile(UserPreferences.loadProfile(context, userEmail)))
-                                                    scope.launch { isDarkMode = UserPreferences.isDarkMode(userEmail) }
+                                                    appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                                                    scope.launch { isDarkMode = UserProfileManager.isDarkMode(userEmail) }
                                                     navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
                                                 } else if (user != null) { errorMessage = "Please verify your email first!"; Firebase.auth.signOut() }
                                                 else errorMessage = "Error: no user."

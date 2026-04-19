@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.platform.LocalDensity
+import com.example.myapplication.data.settings.UserProfileManager
 
 private fun getVideoUrlForExercise(exerciseName: String): String {
     val baseUrl = "https://storage.googleapis.com/fitness-videos-glowupp/"
@@ -299,7 +300,7 @@ fun WorkoutSessionScreen(
         } else {
             // Navaden workout: rotacija fokusa po planDay
             val rawFocus = currentPlan.focusAreas.ifEmpty {
-                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, uid ?: "")
+                val profile = UserProfileManager.loadProfile(uid ?: "")
                 profile.focusAreas.ifEmpty { listOf("Full Body") }
             }
             val allFocus = if (rawFocus.any { it.equals("None", ignoreCase = true) }) {
@@ -342,7 +343,7 @@ fun WorkoutSessionScreen(
             equipment = extraEquipment.map { it.trim().lowercase() }.toSet()
         } else {
             val rawEquipment = currentPlan.equipment.ifEmpty {
-                val profile = com.example.myapplication.data.UserPreferences.loadProfile(context, uid ?: "")
+                val profile = UserProfileManager.loadProfile(uid ?: "")
                 profile.equipment
             }
             equipment = if (rawEquipment.isNotEmpty()) {
@@ -1179,4 +1180,3 @@ private fun WorkoutCelebrationScreen(
 }
 
 private fun Context.getAlgoSettings() = com.russhwolf.settings.SharedPreferencesSettings(this.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE))
-

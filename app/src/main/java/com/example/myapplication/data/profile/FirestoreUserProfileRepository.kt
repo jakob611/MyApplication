@@ -1,8 +1,8 @@
 package com.example.myapplication.data.profile
 
 import android.util.Log
-import com.example.myapplication.data.UserPreferences
 import com.example.myapplication.data.UserProfile
+import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.domain.profile.UserProfileRepository
 import com.example.myapplication.persistence.FirestoreHelper
 import kotlinx.coroutines.channels.awaitClose
@@ -23,7 +23,7 @@ class FirestoreUserProfileRepository : UserProfileRepository {
                     }
                     if (snap != null && snap.exists()) {
                         try {
-                            val profile = UserPreferences.documentToUserProfile(snap, email)
+                            val profile = UserProfileManager.documentToUserProfile(snap, email)
                             trySend(profile)
                             Log.d("FirestoreUserProfileRep", "✅ userProfile refreshed from Firestore snapshot")
                         } catch (e: Exception) {

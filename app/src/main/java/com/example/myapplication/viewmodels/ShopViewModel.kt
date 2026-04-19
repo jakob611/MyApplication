@@ -4,7 +4,6 @@ import android.app.Application
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.UserPreferences
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.auth.ktx.auth
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import com.example.myapplication.data.settings.UserProfileManager
 
 data class ShopState(
     val userXP: Int = 0,
@@ -41,16 +41,15 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         val email = currentUserEmail
         if (email.isBlank()) return
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val profile = UserPreferences.loadProfileFromFirestore(email)
-                ?: UserPreferences.loadProfile(context, email)
-            
-            // Assume we store coupons in a subcollection or just local logic for now?
-            // For MVP, just show XP and freezes.
-            _state.value = _state.value.copy(
-                userXP = profile.xp,
-                streakFreezes = profile.streakFreezes
-            )
+        viewModelScope.launch {
+            if (email.isNotBlank()) {
+                val profile = UserProfileManager.loadProfileFromFirestore(email)
+                    ?: UserProfileManager.loadProfile(email)
+                _state.value = _state.value.copy(
+                    userXP = profile.xp,
+                    streakFreezes = profile.streakFreezes
+                )
+            }
         }
     }
 
@@ -63,9 +62,9 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
             _state.value = _state.value.copy(isLoading = true)
             try {
                 // 1. Load fresh profile
-                val profile = UserPreferences.loadProfileFromFirestore(email)
-                    ?: UserPreferences.loadProfile(context, email)
-                
+                val profile = UserProfileManager.loadProfileFromFirestore(email)
+                    ?: UserProfileManager.loadProfile(email)
+
                 val PRICE = 300
                 val MAX_FREEZES = 3
 
@@ -93,8 +92,8 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
                 )
 
                 // Save
-                UserPreferences.saveProfile(context, updatedProfile)
-                UserPreferences.saveProfileFirestore(updatedProfile)
+                UserProfileManager.saveProfile(updatedProfile)
+                UserProfileManager.saveProfileFirestore(updatedProfile)
 
                 // Log XP spend
                 try {
@@ -136,9 +135,9 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             _state.value = _state.value.copy(isLoading = true)
             try {
-                 val profile = UserPreferences.loadProfileFromFirestore(email)
-                    ?: UserPreferences.loadProfile(context, email)
-                
+                 val profile = UserProfileManager.loadProfileFromFirestore(email)
+                    ?: UserProfileManager.loadProfile(email)
+
                 val PRICE = 500
                 if (profile.xp < PRICE) {
                     withContext(Dispatchers.Main) {
@@ -151,8 +150,8 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
                 val newXP = profile.xp - PRICE
                 val updatedProfile = profile.copy(xp = newXP)
                 
-                UserPreferences.saveProfile(context, updatedProfile)
-                UserPreferences.saveProfileFirestore(updatedProfile)
+                UserProfileManager.saveProfile(updatedProfile)
+                UserProfileManager.saveProfileFirestore(updatedProfile)
 
                 // In real app, save coupon to database. Here just a toast.
                  withContext(Dispatchers.Main) {

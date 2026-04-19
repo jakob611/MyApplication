@@ -123,8 +123,8 @@ object GenderCache {
             }
 
             // Try fetching latest profile from Firestore mapping it via our domain
-            val remoteProfile = com.example.myapplication.data.UserPreferences.loadProfileFromFirestore(email)
-            val finalProfile = remoteProfile ?: com.example.myapplication.data.UserPreferences.loadProfile(context, email)
+            val remoteProfile = com.example.myapplication.data.settings.UserProfileManager.loadProfileFromFirestore(email)
+            val finalProfile = remoteProfile ?: com.example.myapplication.data.settings.UserProfileManager.loadProfile(email)
 
             val g = finalProfile.gender
             val eqSet = finalProfile.equipment.map { it.lowercase() }.toSet() + setOf("bodyweight")
@@ -580,6 +580,7 @@ private fun ExerciseListItem(exercise: ExerciseInfo, onClick: () -> Unit) {
 
 // ─── Exercise Detail Screen ────────────────────────────────────────────────────
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun ExerciseDetailScreen(
     exercise: ExerciseInfo,

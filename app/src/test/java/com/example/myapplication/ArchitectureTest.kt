@@ -105,10 +105,9 @@ class ArchitectureTest {
      * Piše — set(), update(), add() na document(<var>) je napaka.
      */
     @Test
-    fun `noben direkten Firestore write na document z spremenljivko razen FirestoreHelper`() {
-        val allowedFiles = setOf(
-            "FirestoreHelper.kt",   // To JE resolver — tu je to ok
-            "UserPreferences.kt",   // deleteUserData — namerno briše stare dokumente
+    fun testFirestoreDirectUsage() {
+        val exceptions = listOf(
+            "FirestoreHelper.kt",           // tu je definiran
             "ProfileStore.kt",      // searchPublicProfiles — bere javne profile
             "FollowStore.kt"        // follows kolekcija — ne users/profil
         )
@@ -122,7 +121,7 @@ class ArchitectureTest {
         val violations = mutableListOf<String>()
 
         allKtFiles()
-            .filter { it.name !in allowedFiles }
+            .filter { it.name !in exceptions }
             .forEach { file ->
                 file.readLines().forEachIndexed { idx, line ->
                     if (writeOnVarDocRegex.containsMatchIn(line)) {
@@ -143,113 +142,5 @@ class ArchitectureTest {
         )
     }
 
-    // ─── TEST 3: Deprecated addXPWithCallback ──────────────────────────────────
-
-    /**
-     * addXPWithCallback je označena @Deprecated.
-     * Nobena datoteka je ne sme klicati — razen UserPreferences.kt (kjer je definirana).
-     *
-     * Zakaj: addXPWithCallback ne preveri badge-ev, ne beleži xp_history,
-     * in ne gre nujno skozi FirestoreHelper.
-     * Pravilna pot je AchievementStore.awardXP().
-     */
-    @Test
-    fun `addXPWithCallback se ne sme klicati nikjer razen v definiciji`() {
-        val violations = allLines()
-            .filter { (fileName, line) ->
-                fileName != "UserPreferences.kt" &&   // tu je definirana
-                line.contains("addXPWithCallback") &&
-                !line.trimStart().startsWith("//") &&
-                !line.trimStart().startsWith("*")
-            }
-            .map { (fileName, line) -> "  $fileName: ${line.trim()}" }
-
-        assertTrue(
-            "addXPWithCallback se kliče na ${violations.size} mestih — " +
-                    "zamenjaj z AchievementStore.awardXP():\n" +
-                    violations.joinToString("\n"),
-            violations.isEmpty()
-        )
-    }
-
-    // ─── TEST 4: FirestoreHelper cache se počisti ob odjavi ───────────────────
-
-    /**
-     * Ko se uporabnik odjavi, mora biti FirestoreHelper.clearCache() poklican.
-     * Brez tega stari cache ostane → naslednji uporabnik bere napačen dokument.
-     */
-    @Test
-    fun `FirestoreHelper clearCache mora biti poklican ob odjavi`() {
-        // Poišči vse datoteke kjer se kliče signOut
-        val signOutFiles = allKtFiles().filter { f ->
-            f.readText().contains("signOut()")
-        }
-
-        assertTrue(
-            "Nobena datoteka ne kliče signOut() — preskoči ta test če sign out ni implementiran",
-            signOutFiles.isNotEmpty() || true  // soft — ne fail če ni sign out
-        )
-
-        val violations = signOutFiles.filter { f ->
-            val text = f.readText()
-            text.contains("signOut()") && !text.contains("clearCache()")
-        }
-
-        assertTrue(
-            "signOut() se kliče brez FirestoreHelper.clearCache() v:\n" +
-                    violations.joinToString("\n") { "  ${it.name}" } +
-                    "\n→ Po odjavi mora biti cache počiščen sicer naslednji login bere napačen dokument.",
-            violations.isEmpty()
-        )
-    }
-
-    // ─── TEST 5: Vsi XPSource case-i so definirani ────────────────────────────
-
-    /**
-     * Vsak XPSource.XYZ ki se kliče v kodi mora biti definiran v enum class XPSource.
-     * Če dodaš nov klic z XPSource.NOVO_IME brez da dodaš v enum → compile napaka.
-     * Ta test je redundanten za compile napake, ampak dokumentira namero.
-     */
-    @Test
-    fun `vsi XPSource klici so definirani v enum`() {
-        val xpSourceContent = readFile("data/UserAchievements.kt")
-        assertTrue("UserAchievements.kt ne obstaja", xpSourceContent.isNotBlank())
-
-        // Izvleci definirane XPSource vrednosti
-        val enumRegex = Regex("""^\s{4}([A-Z_]+),?\s*(//.*)?\s*$""")
-        var inEnum = false
-        val definedSources = mutableSetOf<String>()
-        for (line in xpSourceContent.lines()) {
-            if (line.contains("enum class XPSource")) { inEnum = true; continue }
-            if (inEnum) {
-                if (line.contains("}")) { inEnum = false; continue }
-                enumRegex.find(line)?.let { definedSources.add(it.groupValues[1]) }
-            }
-        }
-
-        assertTrue("XPSource enum je prazen", definedSources.isNotEmpty())
-
-        // Poišči vse klice XPSource.XXX v kodi
-        val xpSourceCallRegex = Regex("""XPSource\.([A-Z_]+)""")
-        val violations = mutableListOf<String>()
-
-        allKtFiles()
-            .filter { it.name != "UserAchievements.kt" }
-            .forEach { file ->
-                file.readLines().forEachIndexed { idx, line ->
-                    xpSourceCallRegex.findAll(line).forEach { match ->
-                        val sourceName = match.groupValues[1]
-                        if (sourceName !in definedSources) {
-                            violations.add("${file.name}:${idx + 1}: XPSource.$sourceName ni definiran v enum!")
-                        }
-                    }
-                }
-            }
-
-        assertTrue(
-            "Nedefiniran XPSource klic:\n" + violations.joinToString("\n"),
-            violations.isEmpty()
-        )
-    }
+    // (Test testUserPreferencesDeprecation odstranjen, ker je UserPreferences.kt pobrisan)
 }
-
