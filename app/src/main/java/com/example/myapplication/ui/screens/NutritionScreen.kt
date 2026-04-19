@@ -408,12 +408,9 @@ fun NutritionScreen(
                     }
                     // â”€â”€ VODA: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
                     val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
-                    if (!waterLoaded) {
-                        if (serverWater > waterConsumedMl) {
-                            waterConsumedMl = serverWater
-                            waterPrefs.edit().putInt(todayWaterKey, serverWater).apply()
-                        }
-                        waterLoaded = true
+                    if (serverWater > waterConsumedMl) {
+                        waterConsumedMl = serverWater
+                        waterPrefs.edit().putInt(todayWaterKey, serverWater).apply()
                     }
                     // â”€â”€ BURNED: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
                     val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt()
@@ -486,12 +483,36 @@ fun NutritionScreen(
         com.example.myapplication.persistence.DailySyncManager.saveWaterLocally(context, waterConsumedMl, todayId)
         // Posodobi water widget takoj
         com.example.myapplication.widget.WaterWidgetProvider.updateWidgetFromApp(context, waterConsumedMl)
+        // POTISNI V FIRESTORE DA DRUGI KLIENTI TAKOJ SPREJMEJO!
+        launch {
+            try {
+                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(waterConsumedMl, todayId)
+            } catch (e: Exception) {
+                Log.e("NutritionScreen", "Failed to sync water to firestore", e)
+            }
+        }
     }
 
-    // Lokalni zapis porabljenih kalorij â€” TAKOJ, brez Firestore
+    // Lokalni zapis porabljenih kalorij — TAKOJ, brez Firestore
     LaunchedEffect(activeCaloriesBurned, todayId) {
         burnedPrefs.edit().putInt(todayBurnedKey, activeCaloriesBurned).apply()
         com.example.myapplication.persistence.DailySyncManager.saveBurnedLocally(context, activeCaloriesBurned, todayId)
+        // POTISNI V FIRESTORE DA GRAFI TAKOJ OŽIVIJO NA DRUGIH ZASLONIH
+        launch {
+            try {
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (uid != null) {
+                    val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
+                    ref.set(mapOf(
+                        "date" to todayId,
+                        "burnedCalories" to activeCaloriesBurned
+                    ), com.google.firebase.firestore.SetOptions.merge()).await()
+                }
+            } catch (e: Exception) {
+                Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
+            }
+        }
     }
 
     // Barve iz teme — preberi enkrat v Composable kontekstu

@@ -63,6 +63,7 @@ object FoodRepositoryImpl {
                     return@addSnapshotListener
                 }
                 if (doc != null) {
+                    android.util.Log.d("DEBUG_DATA", "Novo stanje iz baze (dailyLog): ${doc.data}")
                     trySend(doc)
                 }
             }
