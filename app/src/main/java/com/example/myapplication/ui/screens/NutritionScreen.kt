@@ -130,8 +130,9 @@ fun NutritionScreen(
     val burnedPrefs = remember { context.getSharedPreferences("burned_cache", android.content.Context.MODE_PRIVATE) }
     val todayBurnedKey = remember { "burned_${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date}" }
     var activeCaloriesBurned by remember { mutableStateOf(burnedPrefs.getInt(todayBurnedKey, 0)) }
+    val hcSyncState by nutritionViewModel.healthConnectSyncTrigger.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(hcSyncState) {
         // Check permissions and load data
         if (healthManager.isAvailable() && healthManager.hasAllPermissions()) {
             while (true) {
@@ -291,35 +292,30 @@ fun NutritionScreen(
     var savedMeals by remember { mutableStateOf<List<SavedCustomMeal>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf<SavedCustomMeal?>(null) }
 
-    // Snapshot listener za customMeals
-    DisposableEffect(Unit) {
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-        var reg: com.google.firebase.firestore.ListenerRegistration? = null
-        if (uid != null) {
-            reg = com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid) { snaps ->
-                    val list = snaps?.documents?.mapNotNull { doc ->
-                        val name = doc.getString("name") ?: "Custom meal"
-                        @Suppress("UNCHECKED_CAST")
-                        val itemsAny = doc.get("items") as? List<Map<String, Any?>>
-                        val items: List<Map<String, Any>> = itemsAny?.mapNotNull { m ->
-                            try {
-                                // Create mutable map with Any type
-                                val map = mutableMapOf<String, Any>()
-                                map["id"] = m["id"] as? String ?: ""
-                                map["name"] = m["name"] as? String ?: ""
-                                map["amt"] = (m["amt"] as? String) ?: (m["amt"]?.toString() ?: "")
-                                map["unit"] = m["unit"] as? String ?: ""
-                                map // Return as immutable
-                            } catch (_: Exception) { // Param e unused
-                                null
-                            }
-                        } ?: emptyList()
-                        SavedCustomMeal(id = doc.id, name = name, items = items)
-                    } ?: emptyList()
-                    savedMeals = list
-                }
+    // StateFlow collect zamenjuje direktni collect v UI
+    val snaps by nutritionViewModel.customMealsState.collectAsState()
+    LaunchedEffect(snaps) {
+        if (snaps != null) {
+            val list = snaps!!.documents.mapNotNull { doc ->
+                val name = doc.getString("name") ?: "Custom meal"
+                @Suppress("UNCHECKED_CAST")
+                val itemsAny = doc.get("items") as? List<Map<String, Any?>>
+                val items: List<Map<String, Any>> = itemsAny?.mapNotNull { m ->
+                    try {
+                        val map = mutableMapOf<String, Any>()
+                        map["id"] = m["id"] as? String ?: ""
+                        map["name"] = m["name"] as? String ?: ""
+                        map["amt"] = (m["amt"] as? String) ?: (m["amt"]?.toString() ?: "")
+                        map["unit"] = m["unit"] as? String ?: ""
+                        map
+                    } catch (_: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                SavedCustomMeal(id = doc.id, name = name, items = items)
+            }
+            savedMeals = list
         }
-        onDispose { reg?.remove() }
     }
 
     // ── Identifikacija uporabnika ──────────────────────────────────────────────
@@ -352,14 +348,14 @@ fun NutritionScreen(
 
     // Restore ob zagonu â€” enkratno branje iz Firestore (samo ÄŤe je lokalni cache prazen)
     var firestoreFoodsLoaded by remember { mutableStateOf(false) }
-    DisposableEffect(uid, todayId) {
-        var reg: com.google.firebase.firestore.ListenerRegistration? = null
+    LaunchedEffect(uid, todayId) {
         if (uid != null) {
-            reg = com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId) { doc ->
+            com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId)
+                .collect { doc ->
                     // â”€â”€ HRANA: Firestore prevzame samo ob prvem nalaganju in SAMO ÄŤe je lokalni cache prazen â”€â”€
                     if (!firestoreFoodsLoaded) {
                         firestoreFoodsLoaded = true
-                        val items = doc?.get("items") as? List<*>
+                        val items = doc.get("items") as? List<*>
                         if (items != null && trackedFoods.isEmpty()) {
                             val parsedFoods = items.mapNotNull { any ->
                                 val m = any as? Map<*, *> ?: return@mapNotNull null
@@ -411,7 +407,7 @@ fun NutritionScreen(
                         }
                     }
                     // â”€â”€ VODA: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
-                    val serverWater = (doc?.get("waterMl") as? Number)?.toInt() ?: 0
+                    val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
                     if (!waterLoaded) {
                         if (serverWater > waterConsumedMl) {
                             waterConsumedMl = serverWater
@@ -420,14 +416,13 @@ fun NutritionScreen(
                         waterLoaded = true
                     }
                     // â”€â”€ BURNED: samo ob prvem nalaganju, prevzame Firestore vrednost ÄŤe je viĹˇja â”€â”€
-                    val serverBurned = (doc?.get("burnedCalories") as? Number)?.toInt()
+                    val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt()
                     if (serverBurned != null && serverBurned > activeCaloriesBurned) {
                         activeCaloriesBurned = serverBurned
                         burnedPrefs.edit().putInt(todayBurnedKey, serverBurned).apply()
                     }
                 }
         }
-        onDispose { reg?.remove() }
     }
 
     // Lokalni zapis hrane â€” TAKOJ ob vsaki spremembi, brez ÄŤakanja na Firestore

@@ -6,6 +6,7 @@ import com.example.myapplication.data.settings.UserPreferencesRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.tasks.await
 
 class UpdateBodyMetricsUseCase(
     private val workoutRepo: WorkoutRepository,
@@ -52,8 +53,15 @@ class UpdateBodyMetricsUseCase(
                 )
             }
 
-            // 5. Posodobi dnevne kalorije
+            // 5. Posodobi dnevne kalorije v repozitoriju posameznikovih nastavitev
             settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
+
+            // 6. Uskladi burnedCalories s tabelo dailyLogs (da takoj osveži graf NutritionScreen)
+            val todayStr = now.toLocalDateTime(tz).date.toString()
+            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                .collection("dailyLogs").document(todayStr)
+                .set(mapOf("burnedCalories" to com.google.firebase.firestore.FieldValue.increment(totalKcal.toDouble())), com.google.firebase.firestore.SetOptions.merge())
+                .await()
 
             Result.success(res)
         } catch (e: Exception) {

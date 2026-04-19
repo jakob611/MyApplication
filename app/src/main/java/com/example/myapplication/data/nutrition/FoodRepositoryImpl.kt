@@ -8,6 +8,9 @@ import com.example.myapplication.network.RecipeSummary
 import com.example.myapplication.persistence.FirestoreHelper
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.channels.awaitClose
 
 /**
  * Singleton implementacija repozitorija,
@@ -36,6 +39,36 @@ object FoodRepositoryImpl {
         return FatSecretApi.getRecipeDetail(id)
     }
 
+    fun observeCustomMeals(uid: String): Flow<com.google.firebase.firestore.QuerySnapshot> = callbackFlow {
+        val listener = FirestoreHelper.getUserRef(uid)
+            .collection("customMeals")
+            .addSnapshotListener { snaps, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snaps != null) {
+                    trySend(snaps)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun observeDailyLog(uid: String, todayId: String): Flow<com.google.firebase.firestore.DocumentSnapshot> = callbackFlow {
+        val listener = FirestoreHelper.getUserRef(uid)
+            .collection("dailyLogs").document(todayId)
+            .addSnapshotListener { doc, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (doc != null) {
+                    trySend(doc)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
     suspend fun logCustomMeal(name: String, itemsList: List<Any>): String {
         val docRef = FirestoreHelper.getCurrentUserDocRef()
         val mealData = mapOf(
@@ -59,18 +92,6 @@ object FoodRepositoryImpl {
         FirestoreHelper.getDb().runTransaction { transaction ->
             transaction.delete(mealRef)
         }.await()
-    }
-
-    fun observeCustomMeals(uid: String, onData: (com.google.firebase.firestore.QuerySnapshot?) -> Unit): com.google.firebase.firestore.ListenerRegistration {
-        return FirestoreHelper.getUserRef(uid)
-            .collection("customMeals")
-            .addSnapshotListener { snaps, _ -> onData(snaps) }
-    }
-
-    fun observeDailyLog(uid: String, todayId: String, onData: (com.google.firebase.firestore.DocumentSnapshot?) -> Unit): com.google.firebase.firestore.ListenerRegistration {
-        return FirestoreHelper.getUserRef(uid)
-            .collection("dailyLogs").document(todayId)
-            .addSnapshotListener { doc, _ -> onData(doc) }
     }
 
     suspend fun logWater(amountMl: Int, dateStr: String) {
