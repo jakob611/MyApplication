@@ -227,6 +227,13 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 *   **Rešitev**: Ustanovljen `MyApplication` (application class) in vpisan v `AndroidManifest.xml`. Inicializacija `SettingsManager.provider = AndroidSettingsProvider(this)` je tako vezana na začetek zagona aplikacije, ne glede na specifično Activity / ViewModels.
 *   **Trenutni korak**: Popravek naložen in deluje.
 
+## Reworked / Fixed (2026 M04 19)
+- [x] **Nutrition UI Delay**: Converted `FoodRepositoryImpl.kt` methods (`observeCustomMeals`, `observeDailyLog`) to return `Flow` using `callbackFlow` emitting instantly via `addSnapshotListener`. Real-time data streams populated seamlessly.
+- [x] **State Flows in ViewModels**: Migrated state collections `.stateIn` operator within `NutritionViewModel` (for custom meals and Health Connect re-syncing triggers) and `ProgressViewModel` (for weight log states) for automatic Compose propagation.
+- [x] **Burned Calories Graph Issue**: Restructured `UpdateBodyMetricsUseCase.kt` to merge directly onto `burnCalories` in `dailyLogs`, preventing desync between exercise logs and vertical progress charts in the Nutrition page.
+- [x] **Pull-to-refresh / HC Manual Re-triggers**: Handled natively within the `NutritionViewModel` propagating down to Composable `LaunchedEffect`.
+
+## Backlog
 ## Orodja
 - **Firebase Emulator Suite**: Za lokalno testiranje Firestore, Authentication in drugih Firebase storitev.
 - **Android Studio Profiler**: Za analizo zmogljivosti in odkrivanje morebitnih težav s pomnilnikom ali CPU.
