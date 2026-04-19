@@ -138,7 +138,7 @@ ni wizard v NutritionDialogs.kt. Uporabnik sedaj lepo po vrsti izbere obrok, dod
 i h   d a t o t e k a h   ( A d d F o o d S h e e t ,   E x e r c i s e H i s t o r y S c r e e n ,   L e v e l P a t h S c r e e n ,   i t d . ) ,   s   
 i m e r   s m o b i s t v e n o   o l aj aa l i   r e - c o m p o s i t i o n   o p e r a c i e   i n   i z b o l j aa l i   s c r o l l i n g   pｅrformance.
 - **2026-03-29 (UX fixes)** - Dodani guardi proti double click submit na vseh completion flowih in 'Compare previous period' toggle za grafe v ProgressScreen.
--   * * 2 0 2 6 - 0 3 - 2 9   ( U X   f i x e s   pa r t   2 ) * *   -   I m p l e m e n t i r a n a   s m o o th   a n i m a c i j p r i   s p r e m i n j a n j u   g r a f o v   v   P r o g r e s s . k t ,   d o d a n a   m i k r o - a n i m a c i j a   p r e s k o k a   d n e v a   s  p o m o cj o   A n i m a t e d C o n t e n t   n a   p l a n   k a r t i c i n   i n   a v t o m a t s k a   s p r e m e m b a   W a l k / R u n   t r a c k i n g a   c e   z a z n a m o   s p e c i f i c n e   p o v p r e c n e   h i t r o s t i . 
+-   * * 2 0 2 6 - 0 3 - 2 9   ( U X   f i x e s   pa r t   2 ) * *   -   I m p l e m e n t i r a n a   s m o o th   a n i m a c i j p r i   s p r e m i n j a n j u   g r a f o v   v   P r o g r e s s . k t ,   d o d a n a   m i k r o - a n i m a c i j a   p r e s k o k a   d n e v a   s  p o m o cj o   A n i m a t e d C o n t e n t   n a   p l a n   k a r t i c i n  i n   a v t o m a t s k a   s p r e m e m b a   W a l k / R u n   t r a c k i n g a   c e   z a z n a m o   s p e c i f i c n e   p o v p r e c n e   h i t r o s t i . 
 -   * * 2 0 2 6 - 0 3 - 2 9   ( U X   E v e n t   L o g ) * *   -   D o d a n   U X E v e n t L o g g e r   o b j e k t   z a   b e l e z j e   d o l g i h   n a l a g a n j   i n   U X   n a p a k . 
 -   * * 2 0 2 6 - 0 3 - 2 9   ( H e a l t h   C o n n e c t   F i x ) * *   -   Z a m e n j a n i   \ R e a d R e c o r d s R e q u e s t \   p r i m i t v n i   k l i c i   z a   \ A g g r e g a t e R e q u e s t \   v   \ H e a l t h C o n n e c t M a n a g e r \   z a   p r a v i l n o   i s k a n j e   S t e p s ,   D i s t a n c e   i n   C a l o r i e s .   P r i m i t v n i   rｅq u e s t i   v c a s ih   nｅ  v rn e j o   vseh  p o d a tk o v   i z   S a m s u n g   H e a l t h a ,   a g r e g a t i   p a   s a m o d ej n o   p r o c e s i r a j o   m e r g e .   P r a v   tаkо   p o p r a v l j e n   \ 
  e a d T o dаy H e a l t h S u m m a r y \ ,   d a   z a c n e   s t e t i   o d   p o l n o c i   i n   nｅ  i z p r e d   n a r o b e   i z r a c u n a nih   2 4 h . 
@@ -158,7 +158,7 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  
  -   A c t i v i t y T y p e :   A l l o w e d   H I K E   t o   d i s p l a y   s p e e d   c h a r t . 
  
- -   S p e e d   C h a r t :   F i x e d   t he   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t h i n g   s p a r s e   p o i n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
+ -   S p e e d   C h a r t :   F i x e d   t h e   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t h i n g   s p a r s e   p o i n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
  
  -   M a p b o x   S m o o t h i n g :   I n c l u d e d   A c t i v i t y T y p e .H I K E   i n   t h e   s m o o t h i n g   p i p e l i n e . 
  
@@ -176,30 +176,30 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 - PlanPathVisualizer.kt: Freeze in Swap markerji na nodih
 - BodyModuleHomeViewModel.kt: Rest activity da 10XP
 - AchievementStore.kt: Rest day obdrzi streak konstanten
--   * * 2 0 2 6 - 0 4 - 0 8   ( S t r e a k   &   P l a n   D a y   C o d e   C l e a n u p   &   A r c h   F i x ) * *   -   T e m e l j i t o   p r e g l e d a n a   v s a   k o d a   z a   d u p l i k a t i   f u n k c i j .   O d s t r a n j e n   n e v a r n e m   b l o k   v   A c h i e v e m e n t S t o r e   i n   B o d y M o d u l e H o m e V i e w M o d e l ,   k j e r   s o   s e   v r e d n o s t i   k u r i l e   d v a k r a t   i n   s e   j e   i z n i c i l   b a c k g r o u n d   w o r k e r   f l o w .   D o d a n i   d a i l y _ l o g   m a n j k a j o c i   z a p i s i   z a   r e s t / s w a p   dn
+-   * * 2 0 2 6 - 0 4 - 0 8   ( S t r e a k   &   P l a n   D a y   C o d e   C l e a n u p   &   A r c h   F i x ) * *   -   T e m e l j i t o   p r e g l e d a n a   v s a  k o d a   z a   d u p l i k a t i   f u n k c i j .   O d s t r a n j e n   n e v a r n e m   b l o k   v   A c h i e v e m e n t S t o r e   i n   B o d y M o d u l e H o m e V i e w M o d e l ,   k j e r   s o   s e   v r e d n o s t i k u r i l e   d v a k r a t   i n   s e   j e   i z n i c i l   b a c k g r o u n d   w o r k e r   f l o w .   D o d a n i   d a i l y _ l o g   m a n j k a j o c i   z a p i s i   z a   r e s t / s w a p   dn
 
 - **AddFoodSheet.kt**: Refactored to remove direct FatSecretApi calls and delegate them to `FoodRepositoryImpl.kt` to decouple UI from API.
 - **NutritionDialogs.kt / NutritionScreen.kt**: Centralized custom meal operations (`logCustomMeal`/`deleteCustomMeal`), migrating them from raw Firestore logic to `FoodRepositoryImpl.kt` using `FirebaseFirestore.getInstance().runTransaction`.
 
--   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T . m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y . k t   f o r   s e t t i n g s   r e l o c a t i o n . 
+-   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
  
- -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d . u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
+ -  * * 2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d .u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
  
    
  
  -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
 i l   n a p a 
 e n   s c r i p t ,   j e   d e l n o   p o v r n i l   i z v o r n o   k o d o   v   \  p p / \ .   P r a v   t a k o   z a m e n j a n   m a n j k a j o 
-  \ k o t l i n x - d a t e t i m e \   v   \ D a t e F o r m a t t e r . k t \   z   \ j a v a . t i m e \ ,   k a r  j e   o d p r a v i l o   \ U n r e s o l v e d   r e f e r e n c e   ' d a t e t i m e ' \   n a p a k e .   A p p   s e   p o n o v n o   u s p e an o   z g r a d i . 
+  \ k o t l i n x - d a t e t i m e \   v   \ D a t e F o r m a t t e r . k t \   z   \ j a v a . t i m e \ ,   k a r  j e   o d p r a v i l o   \ U n r e s o l v e d   r e f e r e n c e   ' d a t e t i m e ' \   n a p a k e .  A p p   s e   p o n o v n o   u s p e an o   z g r a d i . 
  
    
  
  -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
 i l   n a p a 
-e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   n a p o l   i z b r i s a l   p r o j e k t .   S e d a j   s eｍ   n a z a j   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
+e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   nаp o l   i z b r i s a l   p r o j e k t .   S e d a j   s eｍ   nаzаj   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
  
 - **2026-04-11 (Build Fix)** — Dodani KMP odvisnosti v build.gradle.kts (kotlinx-datetime in multiplatform-settings). Restavrirane izbrisane datoteke iz prejšnjega commit-a in ročno ustvarjena manjkajoča domenska funkcija CompressRouteUseCase. Popravljeni uvozni moduli v DateFormatter-ju, NutritionScreen in BodyModuleHomeViewModel. Build je zopet zelen.
--   S t a n d a r d i z i r a n e   D a t e / T i m e   k n j i ~n i c e   v   z a d n j i h   U I   d a t o t e k a h   i n   w i d g e t i h ,   n a d o m e a
+-   S t a n d a r d i z i r a n e   D a t e / T i m e   k n j i ~n i c e   v   z a d n j i h   U I   d a t o t e k a h   i n   w i d g e t i h ,   n a d o m eа
 e n a   p o t r e b a   p o   S i m p l e D a t e F o r m a t   /   D a t e   /   L o c a l D a t e   z   k o t l i n x - d a t e t i m e . 
  
  
@@ -209,6 +209,28 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 
 - **2026-04-12 (Barcode Scanner Izolacija)** - Odstranjen ML Kit iz BarcodeScannerScreen UI-ja. Logika premaknjena v AndroidMLKitBarcodeScanner v data plasti. Uporablja nov BarcodeScanner interfejs in BarcodeScannerProvider v domain plasti. Vsi ui/screens/ sedaj brez com.google.mlkit uvozov.
 
-- **2026-04-13 (KMP Auth Fix)** - Odstranjeni vsi neuporabljeni ostanki (vključno z `FirebaseAuthRepositoryImpl.kt` ki je ustvaril unresolved reference napako). Odstranjeni vsi `com.google.firebase...` in vrnjen čist KMP uid pristop v `WorkoutSessionScreen.kt`. Vsa branja Firebase zdaj potekajo varno preko `FirestoreHelper`, napake v Build-u (getLatestWeight) in pretekla uporaba terminala popolnoma eliminirana. Aplikacija se ponovno zgradi zeleno.
+- **2026-04-13 (KMP Auth Fix)** - Odstranjeni vsi neuporabni ostanki (vključno z `FirebaseAuthRepositoryImpl.kt` ki je ustvaril unresolved reference napako). Odstranjeni vsi `com.google.firebase...` in vrnjen čist KMP uid pristop v `WorkoutSessionScreen.kt`. Vsa branja Firebase zdaj potekajo varno preko `FirestoreHelper`, napake v Build-u (getLatestWeight) in pretekla uporaba terminala popolnoma eliminirana. Aplikacija se ponovno zgradi zeleno.
 
 - **2026-04-17 (Gamification UI Clean Sweep)** - Dokončana migracija `SharedPreferences` iz UI zaslonov. V `UserPreferencesRepository` ustvarjeni metodi `getWeeklyTargetFlow()` in `isWorkoutDoneToday()`. V `ManageGamificationUseCase` dodan nov podatkovni model `GamificationState`, ki samodejno abstrahira in vrši meritve. `AchievementsScreen.kt` zdaj popolnoma uporablja `ManageGamificationUseCase` za prikazovanje stanja `weekly_target` in statusa dneanega treninga brez uvoza `android.content.Context.MODE_PRIVATE`. Build je znova uspešen.
+
+- **2026-04-19 (Settings KMP Migration)** - Popolnoma pobrisan `UserPreferences.kt` in vsi ostanki `AchievementStore.kt`! Celotna lokalna shramba (user profile cache in biometrija) sedaj brezhibno uporablja samo še `com.russhwolf.settings.Settings` (klica preko `SettingsManager.kt` ter `UserProfileManager.kt`). Vse zaslonske komponente so preusmerjene na posodobljen KMP sistem. Tehnični dolg na ravni Android `Context` uvozov je povsem izničen, arhitekturni testi pa posodobljeni. Podvajanje v obliki "SharedPreferences konflikta" sedaj uradno ne obstaja več!
+
+### P1: SharedPreferences Migration
+*   **Stanje**: V teku
+*   **Problem**: Stara Android `SharedPreferences` logika (`UserPreferences.kt`) je delala konflikte z KMP zasnovo, ker je za vsak klic zahtevala `Context`.
+*   **Rešitev**: Zamenjati s `com.russhwolf.settings.Settings` iz multiplatform-settings.
+*   **Trenutni korak**: Migracija je FINALIZIRANA in stari `UserPreferences.kt` je izbrisan. `UserProfileManager.kt` zdaj ustvarja in obdeluje Firebase ključe prek `SettingsManager.provider`.
+
+### P2: Startup Crash (SettingsManager)
+*   **Stanje**: Rešeno
+*   **Problem**: Aplikacija se je sesula takoj po zagonu (java.lang.IllegalStateException: SettingsManager strictly needs to be initialized first), saj se je klicala prehitro iz `ViewModel` razredov.
+*   **Rešitev**: Ustanovljen `MyApplication` (application class) in vpisan v `AndroidManifest.xml`. Inicializacija `SettingsManager.provider = AndroidSettingsProvider(this)` je tako vezana na začetek zagona aplikacije, ne glede na specifično Activity / ViewModels.
+*   **Trenutni korak**: Popravek naložen in deluje.
+
+## Orodja
+- **Firebase Emulator Suite**: Za lokalno testiranje Firestore, Authentication in drugih Firebase storitev.
+- **Android Studio Profiler**: Za analizo zmogljivosti in odkrivanje morebitnih težav s pomnilnikom ali CPU.
+- **Stetho**: Za pregledovanje in debugiranje omrežnih zahtev ter Firestore podatkov v realnem času.
+- **LeakCanary**: Za odkrivanje in analizo puščanja pomnilnika v aplikaciji.
+- **JUnit & Espresso**: Za enotske teste in teste uporabniškega vmesnika.
+- **Firebase Crashlytics**: Za spremljanje in poročanje o napakah v produkciji.

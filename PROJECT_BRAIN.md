@@ -127,8 +127,7 @@
 *   **`profile/FirestoreUserProfileRepository.kt`** - Opazovalec in mapper posodobitev Firestore profilnega dokumenta nazaj na domensko entiteto `UserProfile`.
 *   **`HealthStorage.kt`** - Upravljanje dnevnih statistik korakov, kalorij in minut preko Firebase.
 *   **`AlgorithmPreferences.kt`** - KMP shranjevanje nastavitev za progresivno težavnost in Recovery mode (Multiplatform Settings).
-*   **`settings/UserPreferencesRepository.kt`** - (Android Specific) lokalni repozitorij, prav tako bere Multiplatform preferences in zagotavlja začasne/mocked Flow podatke ter shrambo za `daily_calories` statistiko.
-*   **`UserPreferences.kt`** - Stara masivna Android specific Singleton konfiguracija za sinhronizacijo uporabniških profilov s Firestore (`Firebase.firestore`).
+*   **`settings/UserPreferencesRepository.kt`** - Lokalni repozitorij, bere Multiplatform preferences in zagotavlja začasne/mocked Flow podatke ter shrambo za `daily_calories` statistiko.
 
 **👁 ML/AI Integracije**
 *   **`looksmaxing/AndroidMLKitFaceDetector.kt`** - Vezava zadeve ob lokalni ML prepoznavalnik.
@@ -145,16 +144,10 @@ Našli smo izjemno kritične odklone pri pravilih strukture! Veliko repozitorije
 
 | Odgovorni razred | Trenutno (napačno) stanje | Pravilna resolucija |
 | :--- | :--- | :--- |
-| `UserPreferences.kt` | `private val db = Firebase.firestore` | Skrit za `FirestoreHelper` |
 | `MetricsRepositoryImpl.kt` | `private val db = Firebase.firestore` | Namesto hard-coded instance poklicati Helper |
 | `FoodRepositoryImpl.kt` | `FirebaseFirestore.getInstance().runTransaction { ... }` | Uporabiti `FirestoreHelper.withRetry` oz ustrezno transakcijsko abstrakcijo |
 | `FirestoreGamificationRepository.kt` | `private val db = FirebaseFirestore.getInstance()` | Za transakcije prenoviti iz `db.runTransaction` na podprt helper mehanizem |
 | `HealthStorage.kt` | `private val db get() = Firebase.firestore` | Spremeniti vse klice preko Helperja |
-
-🚨 **PODVAJANJE PODATKOV in LOKALNE SMETI (SharedPreferences Konflikt)**
-
-V mapi `data` se masovno podvajata dva sistema: `UserPreferences` in `UserPreferencesRepository`.
-Oba kličeta in pišeta v `"user_prefs"`. Prvi uporablja izvirni `Context.getSharedPreferences()`, drugi pa knjižnico `com.russhwolf.settings.SharedPreferencesSettings()`. Potrebujemo enoten prenos v KMP `SettingsManager` in dokončen izbris starega Android mehanizma, saj zdaj oba sistema "tekmujeta" med sabo.
 
 ---
 

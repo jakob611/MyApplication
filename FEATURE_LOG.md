@@ -183,23 +183,40 @@
 **Tveganje:** 🟡 srednje
 
 - **Food Repository Integration**: Created `FoodRepositoryImpl.kt` to centralize all FatSecret API operations and Firestore logging (batch/transaction) for custom meals. This completely removes database/API writes from UI code (`AddFoodSheet`, `NutritionDialogs`, `NutritionScreen`), making the UI "dumb" and resilient against data loss.
-
--   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T . m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y . k t   f o r   s e t t i n g s   r e l o c a t i o n .  
- -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d . u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n .  
-    
- -   * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      O b n o v l j e n a   i z b r i s a n a   k o d a   i z   G i t   z g o d o v i n e   t e r   p o p r a v l j e n   \ D a t e F o r m a t t e r . k t \   z   u p o r a b o   \ j a v a . t i m e \ ,   d a   j e   p r o j e k t   z n o v a   z g r a d l j i v .  
-    
- -   * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      O b n o v l j e n a   p o p v a r j e n a   i z b r i s a n a   k o d a   i z   G i t   z g o d o v i n e   t e r   p o p r a v l j e n   \ D a t e F o r m a t t e r . k t \   z   u p o r a b o   \ j a v a . t i m e \ .   A p l i k a c i j a   z o p e t   z i d a   u s p e an o .  
- - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicama, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
-[   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) . 
- [   ]   V s i   W i d g e t i   p o   i s k a n j u   ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n   I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o ,   d a   i z p u aa j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
- [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i n i m i   f o r m a t i ,   d a   n a t a n n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
- [   ]   P r e v e r j e n a   o d s t r a n i t e v   n e s m i s e l n i h   o d v i s n o s t i   ( j i h   n i ,   j a v a . t i m e   i n   j a v a . u t i l . D a t e   s t a   ~e   t a k o   d e l   J D K j a   i n   n i s t a   t e r j a l i   p o s e b n e   k n j i ~n i c e   v   g r a d l e ) . 
- [   ]   b u i l d   j e   ae l   s k o z i   b p .  
+-   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T . m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y . k t   f o r   s e t t i n g s   r e l o c a t i o n . 
  
+ -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d . u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   ca l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
+ 
+   
+ 
+ -   * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      O b n o v l j e n a   i z b r i s a n a   k o d a   i z   G i t   z g o d o v i n e   t e r   p o p r a v l j e n   \ D a t e F o r m a t t e r . k t \   z   u p o r a b o   \ j a v a . t i m e \ ,   d a   j e   p r o j e k t   z n o v a   z g r a d l j i v . 
+ 
+- **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
+[   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
+ [   ]   Vs i   W i d g e t i   p o   i s k a n j u   ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n   I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o ,   d a   i z p u a
+a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
+ [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
+n i m i   f o r m a t i ,   d a   n a t a n 
+n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
+ [   ]   P r e v e r j e n a   o d s t r a n i t e v   n e s m i s e l n i h   o d v i s n o s t i   ( j i h   n i ,   j a v a . t i m e   i n   j a v a . u t i l . D a t e   s t a   ~e   t a k o   d e l   J D K j a   i n   n i s t a   t e r j a l i  p o s e b n e  k n j i c e  v  g r a d l e) . 
+[ ] b u i l d  j e  a e l  s k o z i  b p .
+
+
 [x] Ustvarjen interfejs FaceDetector.
 [x] Ustvarjen AndroidMLKitFaceDetector v data plasti.
 [x] GoldenRatioScreen refaktoriran, da ne uporablja ML Kit neposredno.
 [x] Build uspesen.
 
 - **2026-04-12 (Barcode Scanner Izolacija)** - Odstranjen ML Kit iz BarcodeScannerScreen UI-ja. Logika premaknjena v AndroidMLKitBarcodeScanner v data plasti. Uporablja nov BarcodeScanner interfejs in BarcodeScannerProvider v domain plasti. Vsi ui/screens/ sedaj brez com.google.mlkit uvozov.
+
+## 2026-04-19 — KMP Settings Migracija (UserPreferences.kt Delete)
+**Datoteke:** `UserPreferences.kt` (deleted), `UserProfileManager.kt` (new), `SettingsManager.kt`, `MainActivity.kt`, `WorkoutSessionScreen.kt`, multiple viewmodels...
+**Kaj:** Celotna logika upravljanja z nastavitvami in pretekle stare Android `SharedPreferences` logike iz `UserPreferences.kt` je bila popolnoma migrirana na `com.russhwolf.settings.Settings`. Krojijo se neposredne instance znotraj singleton `UserProfileManager.kt`, stari `UserPreferences.kt` in `AchievementStore.kt` sta izbrisana. Arhitekturni testi prilagojeni.
+**Zakaj:** Tehnični dolg ("SharedPreferences konflikt") med Android `Context` zahtevki in preostalimi KMP strukturami. Enoten sistem brez Android UI uvozov v podatkovni domeni.
+**Tveganje:** 🟢 nizko (obstoječa baza pokrita z KMP Settings)
+
+## 2026-04-19 — Fix SettingsManager Initialization Crash
+**Datoteke:** `MyApplication.kt`, `AndroidManifest.xml`
+**Kaj:** Ustvarjen razred `MyApplication` (ki deduje po `Application`), da se `SettingsManager.provider` inicializira z `AndroidSettingsProvider` takoj ob zagonu procesa, preden se ustvarijo dejavnosti in ViewModels. Prav tako posodobljen `AndroidManifest.xml`, da uporablja `.MyApplication`.
+**Zakaj:** Orodno okno `SettingsManager strictly needs to be initialized first.` `IllegalStateException` ob zagonu zaradi napačnega čakanja in poizkusov inicializacije med `ViewModel` in `Activity`.
+**Tveganje:** 🟢 nizko

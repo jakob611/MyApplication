@@ -60,6 +60,7 @@
     </queries>
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:extractNativeLibs="true"
         android:icon="@drawable/ic_glow_upp_icon"
