@@ -286,7 +286,7 @@ internal fun AddFoodSheet(    meal: MealType,
 @Composable
 fun RecipesSearchSection(
     onScanBarcode: () -> Unit = {},
-    onOpenEAdditives: () -> Unit = {},
+
     userProfile: com.example.myapplication.data.UserProfile
 ) {
     val scope = rememberCoroutineScope()
@@ -326,17 +326,6 @@ fun RecipesSearchSection(
                         contentDescription = "Scan", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.height(4.dp))
                     Text("Scan Barcode", color = MaterialTheme.colorScheme.background, fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                }
-            }
-            Button(onClick = onOpenEAdditives, modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                shape = RoundedCornerShape(12.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🧪", fontSize = 24.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text("E-Additives", color = MaterialTheme.colorScheme.background, fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }

@@ -385,7 +385,7 @@ class MainActivity : ComponentActivity() {
                     val enableDrawerGestures = when (currentScreen) {
                         is Screen.Dashboard, is Screen.Progress, is Screen.BodyModuleHome,
                         is Screen.BodyOverview, is Screen.MyPlans, is Screen.FaceModule,
-                        is Screen.GoldenRatio, is Screen.HairModule, is Screen.Shop,
+                        is Screen.HairModule, is Screen.Shop,
                         is Screen.Community, is Screen.MyAccount, is Screen.ExerciseHistory,
                         is Screen.ManualExerciseLog, is Screen.Nutrition -> true
                         else -> currentScreen !is Screen.RunTracker && currentScreen !is Screen.ActivityLog
@@ -422,7 +422,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToTermsOfService = { navigateTo(Screen.TermsOfService); scope.launch { drawerState.close() } },
                                 onNavigateToContact = { navigateTo(Screen.Contact); scope.launch { drawerState.close() } },
                                 onNavigateToAbout = { navigateTo(Screen.About); scope.launch { drawerState.close() } },
-                                onNavigateToLevelPath = { navigateTo(Screen.Achievements); scope.launch { drawerState.close() } },
+                                onNavigateToAchievements = { navigateTo(Screen.Achievements); scope.launch { drawerState.close() } },
                                 onNavigateToBadges = { navigateTo(Screen.Achievements); scope.launch { drawerState.close() } },
                                 onNavigateToHealthConnect = { navigateTo(Screen.HealthConnect); scope.launch { drawerState.close() } },
                                 onNavigateToMyAccount = { navigateTo(Screen.MyAccount); scope.launch { drawerState.close() } }
@@ -435,7 +435,7 @@ class MainActivity : ComponentActivity() {
                                     is Screen.Dashboard, is Screen.Progress, is Screen.BodyOverview,
                                     is Screen.MyPlans, is Screen.BodyModuleHome, is Screen.Nutrition,
                                     is Screen.Community, is Screen.MyAccount, is Screen.FaceModule,
-                                    is Screen.GoldenRatio, is Screen.HairModule, is Screen.Shop -> true
+                                    is Screen.HairModule, is Screen.Shop -> true
                                     else -> false
                                 }
                             }
@@ -545,10 +545,9 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     currentScreen is Screen.FaceModule -> FaceModuleScreen(
-                                        onBack = { navigateBack() },
-                                        onGoldenRatioClick = { navigateTo(Screen.GoldenRatio) }
+                                        onBack = { navigateBack() }
                                     )
-                                    currentScreen is Screen.GoldenRatio -> GoldenRatioScreen(onBack = { navigateBack() })
+
                                     currentScreen is Screen.HairModule -> HairModuleScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.Shop -> ShopScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.Progress -> ProgressScreen(
@@ -568,7 +567,6 @@ class MainActivity : ComponentActivity() {
                                         NutritionScreen(
                                             plan = plans.maxByOrNull { it.createdAt },
                                             onScanBarcode = { openBarcodeScan = false; navigateTo(Screen.BarcodeScanner) },
-                                            onOpenEAdditives = { navigateTo(Screen.EAdditives) },
                                             scannedProduct = scannedProduct,
                                             onProductConsumed = { scannedProduct = null },
                                             openBarcodeScan = openBarcodeScan,
@@ -591,7 +589,7 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { navigateBack() },
                                         onProductScanned = { product, barcode -> scannedProduct = Pair(product, barcode); navigateBack() }
                                     )
-                                    currentScreen is Screen.EAdditives -> EAdditivesScreen(onNavigateBack = { navigateBack() })
+
                                     currentScreen is Screen.ExerciseHistory -> ExerciseHistoryScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.ManualExerciseLog -> ManualExerciseLogScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.RunTracker -> RunTrackerScreen(
@@ -796,14 +794,6 @@ class MainActivity : ComponentActivity() {
                                     currentScreen is Screen.TermsOfService -> TermsOfServiceScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.Contact -> ContactScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.About -> AboutScreen(onBack = { navigateBack() })
-                                    currentScreen is Screen.LevelPath -> {
-                                        val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                        LevelPathScreen(userProfile = userProfile, activePlan = plans.firstOrNull(), currentPlanDay = prefs.getInt("plan_day", 1), onBack = { navigateBack() })
-                                    }
-                                    currentScreen is Screen.BadgesScreen -> BadgesScreenContent(
-                                        userProfile = userProfile,
-                                        onBack = { navigateBack() }
-                                    )
                                     currentScreen is Screen.Achievements -> {
                                         val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                         AchievementsScreen(

@@ -207,7 +207,7 @@ fun ProgressScreen(
     if (allFilteredDates.isNotEmpty()) {
          // If we have data, we use the actual data range, but we might want to extend it to fill the "Range" view
         // logic:
-        // WEEK: always show 7 days ending at maxDate (or today if empty)
+        // WEEK: always show 7 days ending at dataMax (or today if empty)
         // MONTH: always show at least one month or the range of data
         // YEAR: always show at least one year or range
         // ALL: range of data
@@ -1008,67 +1008,41 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                     // Convert to kg for storage if input is lbs
                     val wKg = if (isLbs) inputVal / 2.20462 else inputVal
 
-                    com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
-                        .collection("weightLogs").document(dateStr)
-                        .set(mapOf("date" to dateStr, "weightKg" to wKg))
-                        .addOnSuccessListener {
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            progressViewModel.saveWeightLog(uid, dateStr, wKg) {}
                             Log.d("ProgressScreen", "Saved weight $wKg kg to weightLogs")
 
-                            // AchievementStore.awardXP sproži badge preverjanje
-                            val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: return@addOnSuccessListener
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                progressViewModel.awardWeightLogXP()
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
-                                }
+                            progressViewModel.awardWeightLogXP()
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
                             }
 
-                            // Avtomatsko posodobi nutrition plan z novo težo - UPORABLJA rememberCoroutineScope
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    Log.d("ProgressScreen", "🔥 Starting nutrition plan recalculation for uid=$uid, weight=$wKg")
-                                    val success = com.example.myapplication.persistence.NutritionPlanStore.recalculateNutritionPlan(
-                                        uid, wKg
-                                    )
-                                    Log.d("ProgressScreen", "🔥 Recalculation result: $success")
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        if (success) {
-                                            android.widget.Toast.makeText(context, "✅ Nutrition plan updated!", android.widget.Toast.LENGTH_LONG).show()
-                                        } else {
-                                            // POMEMBNO: Prikaži error uporabniku!
-                                            android.widget.Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", android.widget.Toast.LENGTH_LONG).show()
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("ProgressScreen", "🔥 ERROR updating nutrition plan", e)
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        android.widget.Toast.makeText(context, "❌ Failed to update nutrition plan: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                    }
+                            // Avtomatsko posodobi nutrition plan z novo težo
+                            Log.d("ProgressScreen", "🔥 Starting nutrition plan recalculation for uid=$uid, weight=$wKg")
+                            val success = com.example.myapplication.persistence.NutritionPlanStore.recalculateNutritionPlan(
+                                uid, wKg
+                            )
+                            Log.d("ProgressScreen", "🔥 Recalculation result: $success")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                if (success) {
+                                    android.widget.Toast.makeText(context, "✅ Nutrition plan updated!", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", android.widget.Toast.LENGTH_LONG).show()
                                 }
+                                onSaved()
+                                onDismiss()
                             }
-
-                            com.example.myapplication.persistence.FirestoreHelper.getUserRef(uid)
-                                .collection("dailyMetrics").document(dateStr)
-                                .set(mapOf("date" to dateStr, "weight" to wKg.toFloat()), com.google.firebase.firestore.SetOptions.merge())
-                                .addOnSuccessListener {
-                                    Log.d("ProgressScreen", "Saved weight $wKg to dailyMetrics")
-                                    HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.SUCCESS)
-                                    com.example.myapplication.widget.WeightWidgetProvider.updateWidgetFromApp(context, wKg.toFloat())
-                                    onSaved()
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e("ProgressScreen", "Failed to save to dailyMetrics", e)
-                                    HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.ERROR)
-                                    onSaved()
-                                }
+                        } catch (e: Exception) {
+                            Log.e("ProgressScreen", "🔥 ERROR updating nutrition plan", e)
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "❌ Failed to update nutrition plan: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                saving = false
+                            }
                         }
-                        .addOnFailureListener { e ->
-                            Log.e("ProgressScreen", "Failed to save weight", e)
-                            HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.ERROR)
-                        }
-                        .addOnCompleteListener { saving = false }
+                    }
                 }
-            ) { Text(if (saving) "Saving..." else "Save") }
+            ) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = {

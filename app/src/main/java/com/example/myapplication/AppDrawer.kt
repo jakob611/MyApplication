@@ -112,7 +112,7 @@ fun FigmaDrawerContent(
     onNavigateToTermsOfService: () -> Unit,
     onNavigateToContact: () -> Unit,
     onNavigateToAbout: () -> Unit,
-    onNavigateToLevelPath: () -> Unit = {},
+    onNavigateToAchievements: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
     onNavigateToHealthConnect: () -> Unit = {},
     onNavigateToMyAccount: () -> Unit
@@ -189,7 +189,7 @@ fun FigmaDrawerContent(
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
                 shape = MaterialTheme.shapes.large,
-                modifier = Modifier.fillMaxWidth().shadow(8.dp, MaterialTheme.shapes.large).clickable { onNavigateToLevelPath() }
+                modifier = Modifier.fillMaxWidth().shadow(8.dp, MaterialTheme.shapes.large).clickable { onNavigateToAchievements() }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // Level & XP header

@@ -101,7 +101,6 @@ fun ActiveCaloriesBar(
 fun NutritionScreen(
     plan: PlanResult?,
     onScanBarcode: () -> Unit = {},
-    onOpenEAdditives: () -> Unit = {},
     scannedProduct: Pair<OpenFoodFactsProduct, String>? = null,
     onProductConsumed: () -> Unit = {},
     openBarcodeScan: Boolean = false,
@@ -794,7 +793,6 @@ fun NutritionScreen(
             // Recipes search section
             RecipesSearchSection(
                 onScanBarcode = onScanBarcode,
-                onOpenEAdditives = onOpenEAdditives,
                 userProfile = userProfile
             )
 
@@ -878,22 +876,16 @@ fun NutritionScreen(
                 val scope = kotlinx.coroutines.MainScope()
                 scope.launch {
                     try {
-                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        val doc = db.collection("users").document(currentUid)
-                            .collection("customMeals").document(cm.id)
-                            .get().await()
+                        val items = nutritionViewModel.getCustomMealItems(currentUid, cm.id)
 
-                        if (!doc.exists()) {
+                        if (items == null) {
                             android.widget.Toast.makeText(context, "Meal not found", android.widget.Toast.LENGTH_SHORT).show()
                             pendingCustomMeal = null
                             askWhereToAdd = false
                             return@launch
                         }
 
-                        val items = doc.get("items") as? List<*> ?: emptyList<Any>()
-
-                        val newItems = items.mapNotNull { any ->
-                            val m = any as? Map<*, *> ?: return@mapNotNull null
+                        val newItems = items.mapNotNull { m ->
                             val name = m["name"] as? String ?: return@mapNotNull null
                             val amtStr = m["amt"] as? String ?: return@mapNotNull null
                             val amt = amtStr.toDoubleOrNull() ?: 1.0

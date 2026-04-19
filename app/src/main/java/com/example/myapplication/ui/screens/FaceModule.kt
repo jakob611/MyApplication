@@ -31,7 +31,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun FaceModuleScreen(
     onBack: () -> Unit = {},
-    onGoldenRatioClick: () -> Unit = {}
+
 ) {
     var showSkincare by remember { mutableStateOf(false) }
     var showExercises by remember { mutableStateOf(false) }
@@ -81,23 +81,6 @@ fun FaceModuleScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 32.dp)
-            )
-
-            // Golden Ratio Card
-            FaceFeatureCard(
-                title = "Golden Ratio Analysis",
-                description = "Discover your facial beauty score using the ancient golden ratio technique from medieval times",
-                icon = {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = "Golden Ratio",
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(50.dp)
-                    )
-                },
-                onClick = onGoldenRatioClick,
-                cardColor = MaterialTheme.colorScheme.surface,
-                borderColor = MaterialTheme.colorScheme.secondary
             )
 
             // Skincare Card

@@ -64,7 +64,6 @@ class NavigationViewModel : ViewModel() {
 
         when {
             hasSelectedPlan -> onClearSelectedPlan()
-            current is Screen.LevelPath || current is Screen.BadgesScreen ||
             current is Screen.MyAccount || current is Screen.Achievements -> {
                 val previous = stack.lastOrNull()
                 if (previous != null) {

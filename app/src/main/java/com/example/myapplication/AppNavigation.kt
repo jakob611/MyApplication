@@ -40,13 +40,10 @@ sealed class Screen {
     object Progress : Screen()
     object MyPlans : Screen()
     object Achievements : Screen()
-    object LevelPath : Screen()
-    object BadgesScreen : Screen()
 
     // Prehrana
     object Nutrition : Screen()
     object BarcodeScanner : Screen()
-    object EAdditives : Screen()
 
     // Skupnost
     object Community : Screen()
@@ -54,7 +51,6 @@ sealed class Screen {
 
     // Telo / obraz / lasje
     object FaceModule : Screen()
-    object GoldenRatio : Screen()
     object HairModule : Screen()
 
     // Pro / Shop
