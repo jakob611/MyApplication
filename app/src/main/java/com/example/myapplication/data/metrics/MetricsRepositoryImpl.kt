@@ -2,20 +2,18 @@
 
 import com.example.myapplication.domain.metrics.MetricsRepository
 import com.google.firebase.firestore.FieldValue
+import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
 
 /**
  * Android implementation of MetricsRepository using Firebase Firestore.
  */
 class MetricsRepositoryImpl : MetricsRepository {
-    private val db = Firebase.firestore
 
     override suspend fun saveWeight(uid: String, weightKg: Float, dateStr: String): Result<Unit> {
         return try {
-            val userRef = db.collection("users").document(uid)
+            val userRef = FirestoreHelper.getCurrentUserDocRef()
 
             // Save to weightLogs
             userRef.collection("weightLogs").document(dateStr).set(
@@ -45,7 +43,7 @@ class MetricsRepositoryImpl : MetricsRepository {
 
     override suspend fun getWeight(uid: String, dateStr: String): Result<Float> {
         return try {
-            val snap = db.collection("users").document(uid)
+            val snap = FirestoreHelper.getCurrentUserDocRef()
                 .collection("dailyMetrics").document(dateStr)
                 .get()
                 .await()

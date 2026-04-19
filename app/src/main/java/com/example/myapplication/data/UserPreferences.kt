@@ -44,7 +44,7 @@ object UserPreferences {
     private const val KEY_TOTAL_PLANS = "total_plans_created"
     private const val KEY_PROFILE_PICTURE = "profile_picture_url"
 
-    private val db = Firebase.firestore
+    private val db get() = com.example.myapplication.persistence.FirestoreHelper.getDb()
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

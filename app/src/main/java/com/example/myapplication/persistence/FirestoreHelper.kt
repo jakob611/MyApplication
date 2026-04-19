@@ -12,6 +12,9 @@ object FirestoreHelper {
     private val auth = Firebase.auth
     private const val TAG = "FirestoreHelper"
 
+    fun getDb() = db
+    fun getCollection(path: String) = db.collection(path)
+
     /**
      * Gets the latest weight for the user.
      */

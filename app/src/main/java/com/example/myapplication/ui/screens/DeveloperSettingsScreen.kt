@@ -20,7 +20,6 @@ import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.domain.WorkoutGenerationParams
 import com.example.myapplication.domain.WorkoutGenerator
-import kotlinx.datetime.toLocalDateTime
 import com.example.myapplication.domain.WorkoutGoal
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -229,7 +228,7 @@ fun DeveloperSettingsScreen(
             // ─── STREAK TESTER ────────────────────────────────────────────
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
-            Text("🧪 Streak / Plan Testing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(" Streak / Plan Testing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(8.dp))
 
             // Prikaži trenutni streak status
@@ -239,8 +238,7 @@ fun DeveloperSettingsScreen(
             val todayIsRest = prefs.getBoolean("today_is_rest", false)
             val workoutDoneToday = run {
                 val epoch = prefs.getLong("last_workout_epoch", 0L)
-                val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
-                if (epoch == 0L) false else kotlinx.datetime.LocalDate.fromEpochDays(epoch.toInt()) == today
+                if (epoch == 0L) false else java.time.LocalDate.ofEpochDay(epoch) == java.time.LocalDate.now()
             }
 
             Card(
@@ -248,9 +246,9 @@ fun DeveloperSettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("🔥 Streak: $currentStreak dni", fontWeight = FontWeight.Bold)
-                    Text("📅 Plan day: $currentPlanDay")
-                    Text("💤 Danes je rest day: $todayIsRest")
+                    Text(" Streak: $currentStreak dni", fontWeight = FontWeight.Bold)
+                    Text(" Plan day: $currentPlanDay")
+                    Text(" Danes je rest day: $todayIsRest")
                     Text("✅ Vadba danes opravljena: $workoutDoneToday")
                 }
             }
@@ -262,14 +260,14 @@ fun DeveloperSettingsScreen(
                     com.example.myapplication.workers.WeeklyStreakWorker.simulateDayPass(context)
                     android.widget.Toast.makeText(
                         context,
-                        "🧪 Simuliran prehod dneva — Worker bo preveril streak",
+                        " Simuliran prehod dneva — Worker bo preveril streak",
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF7C3AED))
             ) {
-                Text("🌙 Simuliraj prehod polnoči (test streak)")
+                Text(" Simuliraj prehod polnoči (test streak)")
             }
 
             Spacer(Modifier.height(8.dp))
@@ -285,11 +283,11 @@ fun DeveloperSettingsScreen(
                         .putBoolean("yesterday_was_rest", false)
                         .putLong("last_workout_epoch", 0L)
                         .apply()
-                    android.widget.Toast.makeText(context, "🔄 Streak in plan day resetirani na 0/1", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, " Streak in plan day resetirani na 0/1", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("🔄 Reset streak + plan day (test)")
+                Text(" Reset streak + plan day (test)")
             }
 
             Spacer(Modifier.height(8.dp))
@@ -304,12 +302,12 @@ fun DeveloperSettingsScreen(
                         .build()
                     androidx.work.WorkManager.getInstance(context)
                         .enqueue(request)
-                    android.widget.Toast.makeText(context, "🔔 Test streak reminder bo prikazana v ~5s", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, " Test streak reminder bo prikazana v ~5s", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF0F766E))
             ) {
-                Text("🔔 Test streak reminder (20:00 opomnik)")
+                Text(" Test streak reminder (20:00 opomnik)")
             }
 
             Spacer(Modifier.height(24.dp))

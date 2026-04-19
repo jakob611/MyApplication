@@ -4,7 +4,7 @@ import android.util.Log
 import java.util.Calendar
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.ktx.firestore
+import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.ktx.Firebase
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import kotlinx.coroutines.tasks.await
@@ -28,16 +28,8 @@ data class HealthGoals(
 
 object HealthStorage {
     private const val TAG = "HealthStorage"
-    private val db get() = Firebase.firestore
-    private val auth get() = Firebase.auth
-
-    private fun getUserDocId(): String? {
-        val user = auth.currentUser ?: return null
-        return user.email?.takeIf { it.isNotBlank() } ?: user.uid
-    }
 
     suspend fun getTodayAppExercisesCalories(): Int {
-        val docId = getUserDocId() ?: return 0
         return try {
             val calendar = Calendar.getInstance()
             calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -46,16 +38,14 @@ object HealthStorage {
             calendar.set(Calendar.MILLISECOND, 0)
             val startOfDay = calendar.time
 
-            val workouts = db.collection("users")
-                .document(docId)
+            val workouts = FirestoreHelper.getCurrentUserDocRef()
                 .collection("workoutSessions")
                 .whereGreaterThanOrEqualTo("date", startOfDay)
                 .get()
                 .await()
             val workoutCals = workouts.documents.sumOf { (it.get("totalKcal") as? Number)?.toInt() ?: 0 }
 
-            val logs = db.collection("users")
-                .document(docId)
+            val logs = FirestoreHelper.getCurrentUserDocRef()
                 .collection("exerciseLogs")
                 .whereGreaterThanOrEqualTo("date", startOfDay)
                 .get()
@@ -71,25 +61,21 @@ object HealthStorage {
     }
 
     suspend fun saveDailyStats(stats: DailyHealthStats) {
-        val docId = getUserDocId() ?: return
         try {
-            db.collection("users")
-                .document(docId)
+            FirestoreHelper.getCurrentUserDocRef()
                 .collection("daily_health")
                 .document(stats.date)
                 .set(stats)
                 .await()
-            Log.d(TAG, "Saved daily stats for ${stats.date} under $docId: $stats")
+            Log.d(TAG, "Saved daily stats for ${stats.date}: $stats")
         } catch (e: Exception) {
             Log.e(TAG, "Error saving daily stats", e)
         }
     }
 
     suspend fun getDailyStats(date: String): DailyHealthStats? {
-        val docId = getUserDocId() ?: return null
         return try {
-            val doc = db.collection("users")
-                .document(docId)
+            val doc = FirestoreHelper.getCurrentUserDocRef()
                 .collection("daily_health")
                 .document(date)
                 .get()
@@ -103,10 +89,8 @@ object HealthStorage {
     }
 
     suspend fun getAllDailyStats(): List<DailyHealthStats> {
-        val docId = getUserDocId() ?: return emptyList()
         return try {
-            val snap = db.collection("users")
-                .document(docId)
+            val snap = FirestoreHelper.getCurrentUserDocRef()
                 .collection("daily_health")
                 .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .get()
@@ -119,10 +103,8 @@ object HealthStorage {
     }
 
     suspend fun saveHealthGoals(goals: HealthGoals) {
-        val docId = getUserDocId() ?: return
         try {
-            db.collection("users")
-                .document(docId)
+            FirestoreHelper.getCurrentUserDocRef()
                 .collection("settings")
                 .document("healthGoals")
                 .set(goals)
@@ -134,10 +116,8 @@ object HealthStorage {
     }
 
     suspend fun getHealthGoals(): HealthGoals {
-        val docId = getUserDocId() ?: return HealthGoals()
         return try {
-            val doc = db.collection("users")
-                .document(docId)
+            val doc = FirestoreHelper.getCurrentUserDocRef()
                 .collection("settings")
                 .document("healthGoals")
                 .get()
@@ -152,10 +132,8 @@ object HealthStorage {
     private suspend fun doStoreDailyData(
         steps: Long, distanceMeters: Double, activeTimeMin: Long, date: String
     ) {
-        val uid = auth.currentUser?.uid ?: return
-        val docRef = db.collection("users").document(uid).collection("dailyLogs").document(date)
-
         try {
+            val docRef = FirestoreHelper.getCurrentUserDocRef().collection("dailyLogs").document(date)
             val nowMs = Clock.System.now().toEpochMilliseconds()
             val updates = mapOf(
                 "steps" to steps,

@@ -64,7 +64,7 @@ fun ActiveCaloriesBar(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.height(240.dp)
     ) {
-        Text("🔥", fontSize = 16.sp)
+        Text("", fontSize = 16.sp)
         Spacer(Modifier.height(4.dp))
         Box(
             modifier = Modifier
@@ -139,8 +139,8 @@ fun NutritionScreen(
                 val now = Clock.System.now().toJavaInstant()
                 val tz = TimeZone.currentSystemDefault()
                 val startOfDay = Clock.System.now().toLocalDateTime(tz).date
-                // Conversion to java.time.Instant is required for HealthConnect API
-                val startOfDayJavaObj = java.time.Instant.ofEpochMilli(kotlinx.datetime.LocalDateTime(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth, 0, 0).toInstant(kotlinx.datetime.TimeZone.currentSystemDefault()).toEpochMilliseconds())
+                // java.time mapping is needed only for HealthConnect client argument for now
+                val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
 
                 // 1. Health Connect (Active)
                 val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
@@ -600,7 +600,7 @@ fun NutritionScreen(
                 ) {
                     // Workout / Rest day oznaka
                     if (plan != null) {
-                        val dayLabel = if (isWorkoutDayToday) "🏋️ Workout day" else "😴 Rest day"
+                        val dayLabel = if (isWorkoutDayToday) "️ Workout day" else " Rest day"
                         val labelColor = if (isWorkoutDayToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         Text(
                             text = dayLabel,
@@ -661,7 +661,7 @@ fun NutritionScreen(
                     // Prilagojena voda pod grafom
                     if (userProfile.activityLevel != null || userProfile.gender != null) {
                         Text(
-                            text = "💧 Cilj: ${adjustedWaterTarget} ml",
+                            text = " Cilj: ${adjustedWaterTarget} ml",
                             color = MaterialTheme.colorScheme.primary,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp)

@@ -53,7 +53,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
-import kotlinx.datetime.LocalDate
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private lateinit var googleSignInClient: GoogleSignInClient
@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
             // First paint measurement
             LaunchedEffect(Unit) {
                 val timeToPaint = android.os.SystemClock.elapsedRealtime() - coldStartEpochMs
-                Log.i("AppPerf", "🚀 First paint arrived at: $timeToPaint ms")
+                Log.i("AppPerf", " First paint arrived at: $timeToPaint ms")
             }
 
             val context = LocalContext.current

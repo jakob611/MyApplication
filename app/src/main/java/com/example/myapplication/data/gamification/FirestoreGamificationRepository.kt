@@ -19,7 +19,7 @@ import kotlinx.datetime.toLocalDateTime
  */
 class FirestoreGamificationRepository : GamificationRepository {
 
-    private val db = FirebaseFirestore.getInstance()
+    private val db get() = FirestoreHelper.getDb()
 
     private fun getTodayStr(): String {
         return Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
