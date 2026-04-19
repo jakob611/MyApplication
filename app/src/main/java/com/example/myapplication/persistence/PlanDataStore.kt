@@ -342,7 +342,7 @@ object PlanDataStore {
                 experience = planMap["experience"] as? String,
                 goal = planMap["goal"] as? String,
                 weeks = weeks,
-                startDate = planMap["startDate"] as? String ?: java.time.LocalDate.now().toString(),
+                startDate = planMap["startDate"] as? String ?: com.example.myapplication.domain.DateFormatter.getTodayDateString(),
                 focusAreas = when (val fa = planMap["focusAreas"]) {
                     is List<*> -> fa.filterIsInstance<String>()
                     is String -> if (fa.isBlank()) emptyList() else fa.split(",").map { it.trim() }

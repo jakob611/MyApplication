@@ -163,3 +163,63 @@ Oba kličeta in pišeta v `"user_prefs"`. Prvi uporablja izvirni `Context.getSha
 | Identifikator (Datoteka) | Razlog |
 | :--- | :--- |
 | `auth/FirebaseAuthRepositoryImpl.kt` | Celotna vsebina datoteke je od 1. do 28. vrstice enostavno **zakomentirana** (`/* ... */`) in napisano je "Leftover file from KMP migration. Unused.". NUJNO izbrisati. |
+
+## 📂 `app/src/main/java/com/example/myapplication/ui`
+
+### 📝 AKTIVNE DATOTEKE (Active Components)
+
+**🖥️ Jedrni Zasloni (Core Screens / Dashboards)**
+*   **`DashboardScreen.kt` & `Indexscreen.kt`** - Glavna vhodna in nadzorna plošča.
+*   **`BodyModuleHomeScreen.kt` / `HairModuleScreen.kt`** - Moduli za specifične sekcije aplikacije.
+*   **`ActivityLogScreen.kt`** - Pregled zgodovine (aktivnosti, treningi).
+*   **`RunTrackerScreen.kt`** - Zaslon za sledenje teku in shranjevanje rut.
+*   **`WorkoutSessionScreen.kt` / `LoadingWorkoutScreen.kt` / `GenerateWorkoutScreen.kt`** - Potek same vadbe in pripravljalni ekrani.
+*   **`MyPlansScreen.kt`** - Pogled uporabnikovih planov.
+
+**🍎 Prehrana & Zdravje**
+*   **`NutritionScreen.kt`** - Glavni prehranski modul.
+*   **`AddFoodSheet.kt` / `NutritionDialogs.kt` / `NutritionComponents.kt`** - Pomožni UI in dialogi (vključuje FatSecret UI).
+*   **`BarcodeScannerScreen.kt`** - UI za črtno kodo hrane, povezan z instanco `AndroidMLKitBarcodeScanner`.
+*   **`HealthConnectScreen.kt`** - Integracija za sistemsko sinhronizacijo z Google Health Connect.
+
+**🎮 Igrifikacija (Gamification)**
+*   **`AchievementsScreen.kt`** - Zbirni prikaz dosežkov in XP zgodovine.
+*   **`DonutProgressView.kt`** - Komponenta za napredek kalorij.
+
+**⚙️ Nastavitve in Profili (Settings/Profile)**
+*   **`MyAccountScreen.kt` / `PublicProfileScreen.kt`** - Prikaz in urejanje osebnih/javnih podatkov.
+*   **`ShopScreen.kt`** - Trgovina z zamenjavami (navidezna valuta).
+*   **`DeveloperSettingsScreen.kt`** - Napreden pregled lokalnih KMP in Firestore stanj.
+*   **`AboutScreen.kt` / `ContactScreen.kt` / `PrivacyPolicyScreen.kt`** - Statične informativne strani.
+
+**🏗️ Arhitektura in Infrastruktura (UI Architecture)**
+*   **`MyViewModelFactory.kt`** - Tisti ultimativni DI router znotraj aplikacije, ki skrbi za vstavljanje KMP in Android-specific repozitorijev v ViewModele preden so ti dodani Compose Graphu.
+*   **`ui/theme/`** - Tema aplikacije (`theme.kt`, `MyApplicationTheme.kt`).
+*   **`ui/components/`** - (npr. `LoadingRetryView`, `XPPopup`, `OnboardingHint`).
+
+---
+
+### ⚠️ ANALIZA ODVISNOSTI IN KRITICNE NAPAKE V UI (Arhitekturni Prekrški)
+
+Na UI sloju smo našli nekaj ogromnih arhitekturnih "grehov", kjer so Compose funkcije mimo vseh ViewModelov prevzemale vlogo Data in Domain sloja! Prečistili smo tudi prekrške z `java.time` (sedaj zavedeno pod KMP inkompatibilnost).
+
+🚨 **ZASLONI ZA REFAKTORIRANJE LOGIKE (Nujno čiščenje):**
+
+| Zaslon | Opis Prekrška (Problem) | Zahtevan Ukrep (Refaktor) |
+| :--- | :--- | :--- |
+| `NutritionScreen.kt` | Vsebuje direktne klice `FirebaseFirestore.getInstance()` ali ročno branje `.collection("users")` neposredno v vmesniku baze! | Vso Firestore kodo preseliti v `NutritionViewModel` ter nato opazovati le UI state iz screena. |
+| `Progress.kt` | Podobno kot Nutrition, tudi ta sam inicializira bazo `val db = Firebase.firestore` in direktno kliče Firestore za dnevne metrike. | Premakniti kodo v relavantne `MetricsRepositoryImpl` in jo upravljati preko ViewModela (`ProgressViewModel`). |
+| `HealthConnectScreen.kt` | Prekršek `java.time` knjižnice – edini zaslon z ohranjeno dediščino standardne Jave (`java.time.Instant`), vendar je to dovoljeno in pričakovano **zaradi Health Connect SDK-ja**, ki eksplicitno zahteva te razrede. Tega modula ni mogoče deliti na KMP. | Ni možen KMP popravek. Izolacija na Android SourceSet preide skozi. |
+| Splošni KMP Prekrški | V UI so bile odpravljene vrstice na mrtve `java.time.LocalDate` (`DeveloperSettingsScreen.kt`, `PlanDataStore.kt`). Očiščeni `MainActivity.kt` importi. | Vsi splošni zasloni (ki niso HealthConnect) morajo uporabljati in že uporabljajo `kotlinx.datetime`. |
+
+---
+
+### 🗑️ POTENTIAL DEAD CODE (Mrtvi Zasloni in UI Smeti)
+
+| Identifikator (Datoteka) | Razlog |
+| :--- | :--- |
+| `LevelPathScreen.kt` (v `LevelPathScreen.kt`) | **Mrtva Koda:** Zaslon sicer obstaja v navigaciji (MainActivity in AppNavigation), vendar ga ne kliče nobena pot nobenega preostajajočega gumba (vsi usmerjajo na `AchievementsScreen`). Nikoli ga ni možno odpreti v produkcijski aplikaciji. |
+| `BadgesScreen.kt` (v `BadgesScreen.kt`) | **Mrtva Koda:** Identična usoda kot pri `LevelPath` – z obširno posodobitvijo uporabniškega vmesnika pod AchievementScreen so te originalne komponente postale izolirani otoki smeti. |
+| `GoldenRatioScreen.kt` | Sumljivo – ob pregledu se zdi izolirana komponenta. Potrebna natančna UI revizija. |
+| `EAdditivesScreen.kt` | Izpadla funkcionalnost ali nedokončan prototip skenerja "E-števil" in aditivov? Mrtva koda? |
+

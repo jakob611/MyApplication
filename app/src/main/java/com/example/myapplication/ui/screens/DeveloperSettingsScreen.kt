@@ -238,7 +238,7 @@ fun DeveloperSettingsScreen(
             val todayIsRest = prefs.getBoolean("today_is_rest", false)
             val workoutDoneToday = run {
                 val epoch = prefs.getLong("last_workout_epoch", 0L)
-                if (epoch == 0L) false else java.time.LocalDate.ofEpochDay(epoch) == java.time.LocalDate.now()
+                if (epoch == 0L) false else epoch == (System.currentTimeMillis() / 86400000L)
             }
 
             Card(
