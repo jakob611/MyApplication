@@ -49,22 +49,15 @@ Ta zemljevid predstavlja neizpodbitna dejstva, pridobljena z globinskim iskanjem
 ## 3. "Silent Write" Audit: Identifikacija bomb v kodi 💣
 Z iskanjem smo identificirali vse "tihe zapise", kjer koda uporablja `update()`, `set(..., SetOptions.merge())` ali `FieldValue.increment()` IZVEN `db.runTransaction()`. To povzroča prepisovanje ob istočasnih klicih!
 
-1. 💣 **`UpdateBodyMetricsUseCase.kt` vrstica 63:** 
-   `.set(mapOf("burnedCalories" to FieldValue.increment(totalKcal)), SetOptions.merge())`
-   *(Nevarnost: Če `SyncHealthConnectUseCase` zapiše delto v isto "dailyLogs" datoteko isto milisekundo, eden povozi drugega.)*
+1. 💣~~→✅~~ **`UpdateBodyMetricsUseCase.kt`:** ~~`.set(mapOf("burnedCalories" to FieldValue.increment(totalKcal)), SetOptions.merge())`~~ → **ODPRAVLJENO**: Zdaj uporablja `DailyLogRepository.updateDailyLog { data["burnedCalories"] = currentBurned + totalKcal }`.
 
-2. 💣 **`SyncHealthConnectUseCase.kt` vrstici 46 in 55:** 
-   Uporablja `FieldValue.increment(delta)` in `SetOptions.merge()`.
+2. 💣~~→✅~~ **`SyncHealthConnectUseCase.kt`:** ~~Uporablja `FieldValue.increment(delta)` in `SetOptions.merge()`. SharedPreferences kot referenca.~~ → **ODPRAVLJENO**: Eliminiran SharedPrefs. `hcBurnedCalories` referenca v Firestore. Transakcija via `DailyLogRepository`. Podpora negativni delti.
 
-3. 💣 **`WaterWidgetProvider.kt` vrstica 117:** 
-   `.set(data, SetOptions.merge())` narejen iz widgeta po klasičnem izračunu v pomnilniku.
+3. 💣~~→✅~~ **`WaterWidgetProvider.kt`:** ~~`.set(data, SetOptions.merge())`~~ → **ODPRAVLJENO**: `DailyLogRepository().updateDailyLog { data["waterMl"] = newVal }` znotraj `CoroutineScope(Dispatchers.IO)`.
 
-4. 💣 **`QuickMealWidgetProvider.kt` vrstica 134:** 
-   `.set(..., SetOptions.merge())`
-   *(Čeprav `FoodRepositoryImpl` uporablja varne transakcije za hrano, Widget tega NE počne!)*
+4. 💣 **`QuickMealWidgetProvider.kt`:** `.set(..., SetOptions.merge())` — **ŠE ČAKA** (naslednja faza)
 
-5. 💣 **`DailySyncManager.kt` vrstici 185 in 196:** 
-   `.set(payload, SetOptions.merge())`
+5. 💣 **`DailySyncManager.kt`:** `.set(payload, SetOptions.merge())` — **ŠE ČAKA** (naslednja faza)
 
 ---
 

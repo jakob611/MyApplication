@@ -22,9 +22,9 @@ Dokumentacija trenutnega stanja algoritmov v projektu. Vsebuje natančen popis v
 - Posodobi se `SharedPreferences` s trenutnimi HC kalorijami.
 
 **Kritična analiza (Težave):**
-- 🚨 **Podvajanje kalorij (Wipe Bug):** Če uporabnik izbriše podatke aplikacije ali gre na novo napravo, se `SharedPreferences` izbriše in postane 0. Ob prvem syncu bo `delta` enaka VSEM kalorijam iz HC, ki se bodo prišteli na *obstoječe* kalorije v bazi preko `increment()`. Uporabnik bo imel ogromno podvojenih kalorij.
-- 🚨 **Ignoriranje izbrisanih podatkov (Negative Delta):** Če uporabnik v Health Connect-u ročno pobriše napačen trening (kalorije v HC padejo), bo `delta` negativna. Skripta negativno delto ignorira in nikoli ne odšteje kalorij iz baze.
-- **Race Condition:** Funkcija ne uporablja Firestore Transakcij. Bere se `ref.get().await()`, nato se čez nekaj milisekund piše s `ref.set(..., merge())`. 
+- ✅ ~~**Podvajanje kalorij (Wipe Bug)**~~ — **ODPRAVLJENO** (commit: `fix(dailyLogs)`). Referenčna vrednost je zdaj v Firestore polju `hcBurnedCalories`, ne v SharedPreferences. Wipe/Reset naprave ne more povzročiti podvojitve.
+- ✅ ~~**Ignoriranje izbrisanih podatkov (Negative Delta)**~~ — **ODPRAVLJENO**. Nova logika podpira negativno delto: `(currentBurned + delta).coerceAtLeast(0.0)`.
+- ✅ ~~**Race Condition**~~ — **ODPRAVLJENO**. Celotna logika teče znotraj `DailyLogRepository.updateDailyLog()` → Firestore `runTransaction { }`. Brez `SetOptions.merge()` ali `FieldValue.increment()` izven transakcije.
 
 ---
 
@@ -88,9 +88,9 @@ Dokumentacija trenutnega stanja algoritmov v projektu. Vsebuje natančen popis v
 - 2. Asinhronski "fire and forget" zapis v `users/{uid}/dailyLogs/{todayId}` (`waterMl` polje).
 
 **Kritična analiza (Težave):**
-- 🚨 **Odsotnost Transakcij / Atomarnosti:** Predstavljaj si, da uporabnik v 2 sekundah pritisne "Plus" gumb 10-krat. Sprožilo se bo 10 `set(..., merge())` klicev v Firestore z inkrementalnimi vrednostmi pridobljenimi iz `SharedPreferences`. Če je lokalni cache sfalil ali se uničil, widget overwrite-a bazno stanje s povsem neusklajeno vrednostjo.
-- 🚨 **Network Race na DailyLogs dokument:** Če se widget voda popravlja hkrati, ko se v ozadju prenašajo kalorije (`SyncHealthConnectUseCase.kt`), in dokument se še ustvarja, lahko pride do kolizij.
-- 🚨 **Fail Silently:** Če Firestore `set` ne uspe (`addOnFailureListener`), je lokalni `SharedPreferences` vseeno uspešno napredoval. Uporabnik misli, da ima spito vodo, na bazi pa je ni.
+- ✅ ~~**Odsotnost Transakcij / Atomarnosti**~~ — **ODPRAVLJENO** (commit: `fix(dailyLogs)`). `handleDelta()` zdaj kliče `DailyLogRepository().updateDailyLog()` znotraj `CoroutineScope(Dispatchers.IO)`. Lokalni SharedPrefs ostane za optimistični UI odziv.
+- ✅ ~~**Network Race na DailyLogs dokument**~~ — **ODPRAVLJENO**. `DailyLogRepository` zagotavlja, da se `waterMl` in `burnedCalories` ne pišeta hkrati izven transakcije.
+- ⚠️ **Fail Silently**: Ob neuspehu Firestore transakcije ostane lokalni cache neusklajen. Widget prikazuje lokalno vrednost; ob naslednjem `REFRESH` gesti se prikliče prava vrednost iz baze. Sprejemljiv kompromis za widget UX.
 
 ---
 
