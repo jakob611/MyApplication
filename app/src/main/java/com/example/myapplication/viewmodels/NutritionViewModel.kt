@@ -17,6 +17,8 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.toJavaInstant
+import android.content.Context
+import android.util.Log
 
 data class DailyTotals(
     val consumed: Int = 0,
@@ -51,6 +53,8 @@ class NutritionViewModel(
                 if (uid != null) {
                     val todayId = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
                     com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
+                        Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
+                        
                         val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
                         val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
                         val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
@@ -66,8 +70,44 @@ class NutritionViewModel(
         }
     }
 
-    fun syncHealthConnectNow() {
-        _healthConnectSyncTrigger.value += 1
+    fun syncHealthConnectNow(context: Context) {
+        viewModelScope.launch {
+            val healthManager = HealthConnectManager.getInstance(context)
+            if (healthManager.isAvailable() && healthManager.hasAllPermissions()) {
+                try {
+                    val now = Clock.System.now().toJavaInstant()
+                    val tz = TimeZone.currentSystemDefault()
+                    val startOfDay = Clock.System.now().toLocalDateTime(tz).date
+                    val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+                    val todayId = startOfDay.toString()
+
+                    val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
+
+                    val prefs = context.getSharedPreferences("hc_sync_prefs", Context.MODE_PRIVATE)
+                    val lastSyncedKey = "hc_kcal_$todayId"
+                    val lastSyncedHcKcal = prefs.getInt(lastSyncedKey, 0)
+                    
+                    val delta = healthConnectCalories - lastSyncedHcKcal
+
+                    if (delta > 0) {
+                        val db = com.example.myapplication.persistence.FirestoreHelper.getDb()
+                        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                        if (uid != null) {
+                            val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
+                            ref.set(mapOf(
+                                "date" to todayId,
+                                "burnedCalories" to com.google.firebase.firestore.FieldValue.increment(delta.toDouble())
+                            ), com.google.firebase.firestore.SetOptions.merge()).await()
+                            
+                            prefs.edit().putInt(lastSyncedKey, healthConnectCalories).apply()
+                            Log.d("DEBUG_DATA", "Successfully synced Health Connect delta: $delta")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("NutritionViewModel", "Failed to sync health connect data", e)
+                }
+            }
+        }
     }
 
     fun updateDailyTotals(consumed: Int, burned: Int, water: Int) {

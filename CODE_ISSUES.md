@@ -151,7 +151,7 @@ P o p r a v l j e n   m a n j k a j o 
  P o p r a v l j e n   t e m n i   n a c i n   p o v s o d
  
  P r i p r a v a   r e f a c t o r - a   b a r v e   n a   c e l o t n o   a p l i k a c i j o .
-F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z e   t o   p r e v e n t   c u t t i n g   p o r t i o n s   o f   p a t h s .   T r a n s l a t e d   d e l e t e   d iаlog   i n   A c t i v i t y L o g S c r e e n .k t   t o   E n g l i s h . 
+F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z e   t o   p r e v e n t   c u t t i n g   p o r t i o n s   o f   p a t h s .   T r a n s l a t e d   d e l e t e   dіаlog   i n   A c t i v i t y L o g S c r e e n .k t   t o   E n g l i s h . 
  
  - **2026-04-04 (Mapbox speed graph & Settings)** � Popravljen izracun hitrosti in vpeljano glajenje (9 tock) za stare datoteke. Pravilno vstavljen Mapbox switch v MyAccountScreen.
 -   A c t i v i t y L o g S c r e e n :   F i x e d   s p e e d   c h a r t   j u m p i n g   a n d   f l a t   g r a p h s   f o r   o l d   c o r r u p t e d   M a p b o x   m a t c h e d   p o i n t s   b y   e v e n l y   d i s t r i b u t i n g   t i m e s t a m p s   o v e r   th e   d i s t a n c e   cоvеrеd . 
@@ -183,7 +183,7 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 
 -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
  
- -  * * 2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d .u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
+ -  * * 2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d .u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e  K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
  
    
  
@@ -197,46 +197,3 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
 i l   n a p a 
 e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   nаp o l   i z b r iša l   p r o j e k t .   S e d a j   s eｍ   nаzаj   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
- 
-- **2026-04-11 (Build Fix)** — Dodani KMP odvisnosti v build.gradle.kts (kotlinx-datetime in multiplatform-settings). Restavrirane izbrisane datoteke iz prejšnjega commit-a in ročno ustvarjena manjkajoča domenska funkcija CompressRouteUseCase. Popravljeni uvozni moduli v DateFormatter-ju, NutritionScreen in BodyModuleHomeViewModel. Build je zopet zelen.
--   S t a n d a r d i z i r a n e   D a t e / T i m e   k n j i ~n i c e   v   z a d n j i h   U I   d a t o t e k a h   i n   w i d g e t i h ,   n a d o m eа
-e n a   p o t r e b a   p o   S i m p l e D a t e F o r m a t   /   D a t e   /   L o c a l D a t e   z   k o t l i n x - d a t e t i m e . 
- 
- 
-- **2026-04-12 (MLKit Izolacija)** - Odstranjen ML Kit iz GoldenRatioScreen UI-ja. Logika premaknjena v AndroidMLKitFaceDetector v data plasti. Uporablja nov FaceDetector interfejs v domain plasti.
-
-- **2026-04-12 (Preverbe in DI)** - Vpeljan FaceDetectorProvider, popravljen resource leak v MLKit detectorju. BarcodeScannerScreen se vedno uporablja mlkit, ampak model za obraz je popolnoma izoliran.
-
-- **2026-04-12 (Barcode Scanner Izolacija)** - Odstranjen ML Kit iz BarcodeScannerScreen UI-ja. Logika premaknjena v AndroidMLKitBarcodeScanner v data plasti. Uporablja nov BarcodeScanner interfejs in BarcodeScannerProvider v domain plasti. Vsi ui/screens/ sedaj brez com.google.mlkit uvozov.
-
-- **2026-04-13 (KMP Auth Fix)** - Odstranjeni vsi neuporabni ostanki (vključno z `FirebaseAuthRepositoryImpl.kt` ki je ustvaril unresolved reference napako). Odstranjeni vsi `com.google.firebase...` in vrnjen čist KMP uid pristop v `WorkoutSessionScreen.kt`. Vsa branja Firebase zdaj potekajo varno preko `FirestoreHelper`, napake v Build-u (getLatestWeight) in pretekla uporaba terminala popolnoma eliminirana. Aplikacija se ponovno zgradi zeleno.
-
-- **2026-04-17 (Gamification UI Clean Sweep)** - Dokončana migracija `SharedPreferences` iz UI zaslonov. V `UserPreferencesRepository` ustvarjeni metodi `getWeeklyTargetFlow()` in `isWorkoutDoneToday()`. V `ManageGamificationUseCase` dodan nov podatkovni model `GamificationState`, ki samodejno abstrahira in vrši meritve. `AchievementsScreen.kt` zdaj popolnoma uporablja `ManageGamificationUseCase` za prikazovanje stanja `weekly_target` in statusa dneanega treninga brez uvoza `android.content.Context.MODE_PRIVATE`. Build je znova uspešen.
-
-- **2026-04-19 (Settings KMP Migration)** - Popolnoma pobrisan `UserPreferences.kt` in vsi ostanki `AchievementStore.kt`! Celotna lokalna shramba (user profile cache in biometrija) sedaj brezhibno uporablja samo še `com.russhwolf.settings.Settings` (klica preko `SettingsManager.kt` ter `UserProfileManager.kt`). Vse zaslonske komponente so preusmerjene na posodobljen KMP sistem. Tehnični dolg na ravni Android `Context` uvozov je povsem izničen, arhitekturni testi pa posodobljeni. Podvajanje v obliki "SharedPreferences konflikta" sedaj uradno ne obstaja več!
-
-### P1: SharedPreferences Migration
-*   **Stanje**: V teku
-*   **Problem**: Stara Android `SharedPreferences` logika (`UserPreferences.kt`) je delala konflikte z KMP zasnovo, ker je za vsak klic zahtevala `Context`.
-*   **Rešitev**: Zamenjati s `com.russhwolf.settings.Settings` iz multiplatform-settings.
-*   **Trenutni korak**: Migracija je FINALIZIRANA in stari `UserPreferences.kt` je izbrisan. `UserProfileManager.kt` zdaj ustvarja in obdeluje Firebase ključe prek `SettingsManager.provider`.
-
-### P2: Startup Crash (SettingsManager)
-*   **Stanje**: Rešeno
-*   **Problem**: Aplikacija se je sesula takoj po zagonu (java.lang.IllegalStateException: SettingsManager strictly needs to be initialized first), saj se je klicala prehitro iz `ViewModel` razredov.
-*   **Rešitev**: Ustanovljen `MyApplication` (application class) in vpisan v `AndroidManifest.xml`. Inicializacija `SettingsManager.provider = AndroidSettingsProvider(this)` je tako vezana na začetek zagona aplikacije, ne glede na specifično Activity / ViewModels.
-*   **Trenutni korak**: Popravek naložen in deluje.
-
-## RESOLVED
-*   **Nutrition Sync:** `NutritionScreen` is no longer directly pushing the calculated sum of `trackedFoods` to Firestore. It uses `FoodRepositoryImpl.logFood` with `FieldValue.increment` via runTransaction.
-*   **Daily Logistics:** `NutritionViewModel` maps `observeDailyLog` directly to `uiState`, giving instantaneous real-time UI updates to `DonutProgressView` and `ActiveCaloriesBar`.
-*   **BodyMetricsUseCase:** The `UpdateBodyMetricsUseCase` accurately pushes burned workout calories using `FieldValue.increment`. Health Connect activity sync seamlessly stacks on top without overriding.
-
-## Backlog
-## Orodja
-- **Firebase Emulator Suite**: Za lokalno testiranje Firestore, Authentication in drugih Firebase storitev.
-- **Android Studio Profiler**: Za analizo zmogljivosti in odkrivanje morebitnih težav s pomnilnikom ali CPU.
-- **Stetho**: Za pregledovanje in debugiranje omrežnih zahtev ter Firestore podatkov v realnem času.
-- **LeakCanary**: Za odkrivanje in analizo puščanja pomnilnika v aplikaciji.
-- **JUnit & Espresso**: Za enotske teste in teste uporabniškega vmesnika.
-- **Firebase Crashlytics**: Za spremljanje in poročanje o napakah v produkciji.

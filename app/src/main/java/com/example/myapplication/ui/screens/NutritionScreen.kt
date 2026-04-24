@@ -127,49 +127,13 @@ fun NutritionScreen(
         }
     }
 
-    // Active Calories (Health Connect) - load from SharedPreferences INSTANTLY
-    val healthManager = remember { HealthConnectManager.getInstance(context) }
-    val hcSyncState by nutritionViewModel.healthConnectSyncTrigger.collectAsState()
-
-    LaunchedEffect(hcSyncState) {
-        // Check permissions and load data
-        if (healthManager.isAvailable() && healthManager.hasAllPermissions()) {
-            while (true) {
-                val now = Clock.System.now().toJavaInstant()
-                val tz = TimeZone.currentSystemDefault()
-                val startOfDay = Clock.System.now().toLocalDateTime(tz).date
-                val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
-                val todayId = startOfDay.toString()
-
-                val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
-                
-                // Izračunaj samo razliko (delta) od zadnje sinhronizacije
-                val prefs = context.getSharedPreferences("hc_sync_prefs", Context.MODE_PRIVATE)
-                val lastSyncedKey = "hc_kcal_$todayId"
-                val lastSyncedHcKcal = prefs.getInt(lastSyncedKey, 0)
-                
-                val delta = healthConnectCalories - lastSyncedHcKcal
-
-                if (delta > 0) {
-                    try {
-                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid != null) {
-                            val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
-                            ref.set(mapOf(
-                                "date" to todayId,
-                                "burnedCalories" to com.google.firebase.firestore.FieldValue.increment(delta.toDouble())
-                            ), com.google.firebase.firestore.SetOptions.merge()).await()
-                            
-                            prefs.edit().putInt(lastSyncedKey, healthConnectCalories).apply()
-                        }
-                    } catch (e: Exception) {
-                        Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
-                    }
-                }
-
-                kotlinx.coroutines.delay(10000) // Refresh every 10s
-            }
+    // Active Calories (Health Connect) sync logic prenesena v ViewModel
+    LaunchedEffect(Unit) {
+        // Taksen loop avtomatsko sproži syncHealthConnectNow vsakih 5 sekund. 
+        // Sync funkcija preveri delto in updejta Firestore, kar nato osveži uiState.burned preko listenerja.
+        while (true) {
+            nutritionViewModel.syncHealthConnectNow(context)
+            kotlinx.coroutines.delay(5000)
         }
     }
 
