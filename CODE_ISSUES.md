@@ -46,6 +46,13 @@
 ---
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
+
+- **2026-04-24 (Faza 3: Socialni del + XP varnost)**
+  1. `FollowStore.kt`: Odstranjeni vsi `.update("followers", FieldValue.increment(1))` izven transakcij. Implementirana `db.runTransaction {}` z determinističnim doc ID `{followerId}_{followingId}` v kolekciji `follows`. Transakcija atomarno: preveri obstoječe sledenje, zapiše follow doc, posodobi oba števca. `unfollowUser` ima fallback za stare naključne ID-je. `isFollowing` preveri oba formata (O(1) deterministični + query fallback).
+  2. `FirestoreGamificationRepository.kt`: `awardXP()` transakcija sedaj atomarno posodablja `xp` IN `level` hkrati. `UserProfile.calculateLevel(newXp)` se kliče znotraj transakcije. Zamenjano `transaction.update()` s `transaction.set(..., SetOptions.merge())` — varno za nov in obstoječ dokument.
+  3. `UserProfileManager.kt`: Iz `saveProfileFirestore()` odstranjeni `xp`, `followers`, `following` — ti se smejo posodabljati IZKLJUČNO prek atomarnih transakcij. Preprečen "Silent Write" ki bi prepisal pravilno vrednost s stalo in-memory kopijo.
+  4. `ShopViewModel.kt`: `buyStreakFreeze()` in `buyCoupon()` tečeta v celoti znotraj `db.runTransaction {}`. Atomarno preverjanje XP + posodabljanje + XP history log. Hiter dvojni klik ne more porabiti XP dvakrat (double-spend zaščita).
+  5. `ALGO_AUDIT.md`: Posodobljeni razdelki 3 (XP), 6 (Follow), dodan razdelek 8 (Shop). Potrjeno: v celotnem projektu ni niti enega nevarnega Silent Write na kritičnih poljih.
 - **2026-04-02 (Activity Log Screening & Bug Fixes)** — `ActivityLogScreen.kt`: 
   1. Zmanjšana poraba pomnilnika in loopi ob dodajanju novih voženj v list (LazyColumn), ker smo dodali `key = { it.id }`.
   2. Implementirani do zdaj neuporabljeni TelemetryMiniCharts (višina in hitrost). Preprečeno sesutje grafov zaradi manjkajočega "timestamp", ki zdaj deluje kljub temu, da ga starejše poti nimajo. Dodan timestamp v `LocationPoint` in `RunTrackerScreen.kt` shranjevanje.
