@@ -60,16 +60,18 @@ Dokumentacija trenutnega stanja algoritmov v projektu. Vsebuje natančen popis v
 - **Kaloričen dodatek:** `calorieXP = caloriesBurned / 8`.
 - **Baza XP in Kriticizem:** `baseXP = 50`. Verjetnost, da je trening "Critical" je 10% (naključno generirano s `kotlin.random.Random.nextFloat() < 0.1f`). Če je critical, se `baseXP` podvoji.
 - **Skupni XP:** `finalBaseXP + calorieXP`.
+- **Level:** `UserProfile.calculateLevel(newXp)` — izračunano ZNOTRAJ transakcije in atomirano zapisano skupaj z XP.
 - **Streaki:** Ce je vadba uspesna (`isWorkoutSuccess`), se streak inkrementira za 1, razen ce je ze bil zabelezen danes. Ce pride do rest daya in se ob polnoci opravi provizija, algoritem preveri `user_plans` in se skuša zamenjati (Swap) s kasnejšim rest dnem. V skrajnem primeru porabi "Streak Freeze".
 
 **Izhod (Output):**
-- Ažurira se glavni dokument `users/{uid}` polje `xp` IN `login_streak`.
-- Ustvari se se log v podzbirki `users/{uid}/xp_history/` (v isti Firestore Transakciji!).
+- Ažurira se glavni dokument `users/{uid}` polji `xp` IN `level` — ATOMARNO v isti transakciji.
+- Ustvari se log v podzbirki `users/{uid}/xp_history/` (v isti Firestore Transakciji!).
 - Ustvari se log v podzbirki `users/{uid}/daily_logs/{date}`.
 
 **Kritična analiza (Težave):**
-- ⚠️ **Lokalni RNG v UseCase-u:** Množitelj "Critical" je generiran lokalno. Če klic propade na poti do baze oz. uporabnik prekine povezavo ter poskusi ponovno, se RNG generira znova in potencialno goljufa/spreminja sistem. 
-- ⚠️ **Complex Swap Logic (`checkIfFutureRestDaysExistAndSwap`):** Logika za samodejno prestavljanje Rest Daya zahteva prebiranje JSON-like struktur znotraj arraya planov. Manipulacija po večih Map listah nazaj v Firestore update je zelo krhka. Črkuje izjemno globoke modifikacije drevesa (`docRef.update("plans", plansList)`).  
+- ✅ **XP transakcija varno posodablja xp + level atomarno** — ODPRAVLJENO (Faza 3). `awardXP()` znotraj `db.runTransaction { }` sedaj bere `currentXp`, izračuna `newXp + newLevel` in piše oba polji z `SetOptions.merge()`. Ni možen level desync.
+- ⚠️ **Lokalni RNG v UseCase-u:** Množitelj "Critical" je generiran lokalno. Če klic propade, se RNG generira znova — sprejmljiv kompromis za gamification element.
+- ⚠️ **Complex Swap Logic (`checkIfFutureRestDaysExistAndSwap`):** Logika za samodejno prestavljanje Rest Daya zahteva prebiranje JSON-like struktur znotraj arraya planov. Manipulacija po večih Map listah nazaj v Firestore update je krhka.
 
 ---
 
@@ -125,11 +127,38 @@ Preostali `SetOptions.merge()` klici pišejo v **druge kolekcije** ali so že zn
 - Števec `followers` in `following` se za posamezna uporabnika poveča/zmanjša za 1.
 
 **Izhod (Output):**
-- `.update("followers", FieldValue.increment(1))`
-- `.update("following", FieldValue.increment(1))`
+- Follow dokument z determinističnim ID `{followerId}_{followingId}` v kolekciji `follows`.
+- Atomarno posodabljanje `followers` in `following` števcev znotraj `db.runTransaction { }`.
 
 **Kritična analiza (Težave):**
-- 🚨 **Manko transakcij ob inkrementaciji:** Če enemu (vplivnemu) uporabniku v 1 sekundi "Follow" gumb klikne 10 ljudi, preprosti `.update` (ponekod, posebej brez transakcij) lahko ne ujame vrstnega reda inkrementov pod visoko obremenitvijo. Na ravni uporabnika še niso klicane `db.runTransaction { }`.
+- ✅ **Manko transakcij ob inkrementaciji — ODPRAVLJENO (Faza 3)**. `followUser()` in `unfollowUser()` sedaj tečeta v celoti znotraj `db.runTransaction { }`. Deterministični doc ID `{followerId}_{followingId}` prepreči dvojni follow celo pri sočasnih klikih (race condition safe). Transakcija atomarno: (1) preveri obstoj follow doc, (2) zapiše follow doc, (3) posodobi oba števca.
+- ✅ **Backward compatibility**: `unfollowUser` vsebuje fallback za stare zapise z naključnimi ID-ji. `isFollowing` preveri oba formata (deterministični + query).
+
+---
+
+## 8. Shop — Nakupi z XP (Double-Spend zaščita)
+**Ime in lokacija:** `ShopViewModel.kt`
+
+**Vhodni podatki (Inputs):**
+- Klik na "Buy Streak Freeze" (300 XP) ali "Buy Coupon" (500 XP).
+
+**Kritična analiza (Težave):**
+- ✅ **Double-spend hrošč — ODPRAVLJENO (Faza 3)**. `buyStreakFreeze()` in `buyCoupon()` sedaj tečeta v celoti znotraj `db.runTransaction { }`. Transakcija atomarno: (1) prebere trenutni XP in zaloge, (2) preveri pogoje (zadostni XP, max freezes), (3) posodobi XP + level + streakFreezes + logira XP history — vse ali nič. Hiter dvojni klik ne more porabiti XP dvakrat.
+
+---
+
+## ✅ POTRJENO (Faza 3): V celotnem projektu ni niti enega nevarnega 'Silent Write' na kritičnih poljih.
+
+| Polje | Zaščita |
+|-------|---------|
+| `xp` | `FirestoreGamificationRepository.awardXP()` → `runTransaction` |
+| `level` | atomarno z `xp` v isti transakciji |
+| `followers` | `FollowStore.followUser/unfollowUser()` → `runTransaction` z determinističnim doc ID |
+| `following` | `FollowStore.followUser/unfollowUser()` → `runTransaction` z determinističnim doc ID |
+| `streak_freezes` (nakup) | `ShopViewModel.buyStreakFreeze()` → `runTransaction` |
+| `streak_freezes` (poraba) | `FirestoreGamificationRepository.consumeStreakFreeze()` → `runTransaction` |
+| `burnedCalories` / `waterMl` | `DailyLogRepository.updateDailyLog()` → `runTransaction` (Faza 1+2) |
+| Profil nastavitve | `UserProfileManager.saveProfileFirestore()` — **brez** xp/followers/following |
 
 ---
 

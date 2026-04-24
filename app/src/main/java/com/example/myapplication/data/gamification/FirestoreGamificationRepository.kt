@@ -1,9 +1,11 @@
 package com.example.myapplication.data.gamification
 
 import android.util.Log
+import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -38,22 +40,30 @@ class FirestoreGamificationRepository : GamificationRepository {
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(userRef)
 
-                // Branje trenutnega XP iz vira resnice baze
+                // Atomarno branje trenutnega XP in izračun novega nivoja — vse znotraj transakcije
                 val currentXp = snapshot.getLong("xp")?.toInt() ?: 0
                 val newXp = currentXp + amount
+                // Level je izračunan znotraj transakcije — atomarno posodabljamo xp IN level hkrati
+                val newLevel = UserProfile.calculateLevel(newXp)
 
-                transaction.update(userRef, "xp", newXp)
+                // Posodobi xp + level atomarno (set+merge varno za obstoječ in NOV dokument)
+                transaction.set(userRef, mapOf(
+                    "xp"    to newXp,
+                    "level" to newLevel
+                ), SetOptions.merge())
 
-                // Dodamo log v podzbirko xp_history
+                // Log v podzbirko xp_history (znotraj iste transakcije)
                 val logRef = userRef.collection("xp_history").document()
                 transaction.set(logRef, mapOf(
-                    "amount" to amount,
-                    "reason" to reason,
-                    "date" to getTodayStr(),
-                    "timestamp" to Clock.System.now().toEpochMilliseconds()
+                    "amount"    to amount,
+                    "reason"    to reason,
+                    "date"      to getTodayStr(),
+                    "timestamp" to Clock.System.now().toEpochMilliseconds(),
+                    "xpAfter"   to newXp,
+                    "levelAfter" to newLevel
                 ))
             }.await()
-            Log.d("GamificationRepo", "Uspešno dodeljeno $amount XP za $reason")
+            Log.d("GamificationRepo", "✅ Dodeljeno $amount XP za '$reason'")
         } catch (e: Exception) {
             Log.e("GamificationRepo", "Napaka pri beleženju XP-ja", e)
         }

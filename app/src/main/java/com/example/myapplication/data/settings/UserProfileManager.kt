@@ -174,14 +174,18 @@ object UserProfileManager {
         val uid = Firebase.auth.currentUser?.uid ?: return
         val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
 
+        // VARNO: xp, followers, following so IZVZETI iz tega merge-a.
+        // Ti podatki se smejo posodabljati IZKLJUČNO prek atomarnih Firestore transakcij:
+        //   - xp        → FirestoreGamificationRepository.awardXP()
+        //   - followers  → FollowStore.followUser() / unfollowUser()
+        //   - following  → FollowStore.followUser() / unfollowUser()
+        // Vsak neposredni merge bi lahko prepisal pravilno vrednost s stalo in-memory vrednostjo.
         val data = mutableMapOf<String, Any?>(
             KEY_USERNAME to profile.username,
             KEY_FIRST_NAME to profile.firstName,
             KEY_LAST_NAME to profile.lastName,
             KEY_ADDRESS to profile.address,
-            KEY_XP to profile.xp,
-            KEY_FOLLOWERS to profile.followers,
-            KEY_FOLLOWING to profile.following,
+            // ⛔ KEY_XP, KEY_FOLLOWERS, KEY_FOLLOWING — upravljano IZKLJUČNO prek transakcij
             KEY_BADGES to profile.badges,
             "streak_freezes" to profile.streakFreezes,
             KEY_EQUIPMENT to profile.equipment,

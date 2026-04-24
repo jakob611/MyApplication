@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.utils.AppToast
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.ktx.Firebase
@@ -53,6 +54,10 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Nakup Streak Freeze — zaščiteno pred double-spend z Firestore transakcijo.
+     * Transakcija atomarno prebere xp + streak_freezes, preveri pogoje in posodobi oba.
+     */
     fun buyStreakFreeze() {
         val email = currentUserEmail
         if (email.isBlank()) return
@@ -61,65 +66,68 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             _state.value = _state.value.copy(isLoading = true)
             try {
-                // 1. Load fresh profile
-                val profile = UserProfileManager.loadProfileFromFirestore(email)
-                    ?: UserProfileManager.loadProfile(email)
-
                 val PRICE = 300
                 val MAX_FREEZES = 3
 
-                if (profile.streakFreezes >= MAX_FREEZES) {
-                    withContext(Dispatchers.Main) {
-                        com.example.myapplication.utils.AppToast.showWarning(context, "Max 3 Streak Freezes allowed!")
+                val db = FirestoreHelper.getDb()
+                val userRef = FirestoreHelper.getCurrentUserDocRef()
+
+                var purchaseResult = "PENDING"
+                var finalXP = 0
+                var finalFreezes = 0
+
+                // Firestore transakcija prepreči double-spend ob hitrem kliku
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(userRef)
+                    val currentXP      = snapshot.getLong("xp")?.toInt()            ?: 0
+                    val currentFreezes = snapshot.getLong("streak_freezes")?.toInt() ?: 0
+
+                    when {
+                        currentFreezes >= MAX_FREEZES -> purchaseResult = "MAX_FREEZES"
+                        currentXP < PRICE             -> purchaseResult = "NOT_ENOUGH_XP"
+                        else -> {
+                            val newXP      = currentXP - PRICE
+                            val newFreezes = currentFreezes + 1
+                            val newLevel   = UserProfile.calculateLevel(newXP)
+
+                            // Atomarno posodobi xp, level in streak_freezes
+                            transaction.set(userRef, mapOf(
+                                "xp"             to newXP,
+                                "level"          to newLevel,
+                                "streak_freezes" to newFreezes
+                            ), SetOptions.merge())
+
+                            // XP history log (znotraj iste transakcije)
+                            val logRef = userRef.collection("xp_history").document()
+                            transaction.set(logRef, mapOf(
+                                "xp"          to -PRICE,
+                                "source"      to "SHOP_SPEND",
+                                "description" to "Bought Streak Freeze",
+                                "timestamp"   to System.currentTimeMillis()
+                            ))
+
+                            finalXP      = newXP
+                            finalFreezes = newFreezes
+                            purchaseResult = "SUCCESS"
+                        }
                     }
-                    return@launch
-                }
-
-                if (profile.xp < PRICE) {
-                    withContext(Dispatchers.Main) {
-                        com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need \$PRICE XP.")
-                    }
-                    return@launch
-                }
-
-                // 2. Transaction (Deduct XP, Add Freeze)
-                val newXP = profile.xp - PRICE
-                val newFreezes = profile.streakFreezes + 1
-                
-                val updatedProfile = profile.copy(
-                    xp = newXP,
-                    streakFreezes = newFreezes
-                )
-
-                // Save
-                UserProfileManager.saveProfile(updatedProfile)
-                UserProfileManager.saveProfileFirestore(updatedProfile)
-
-                // Log XP spend
-                try {
-                    FirestoreHelper.getCurrentUserDocRef()
-                        .collection("xp_history")
-                        .add(mapOf(
-                            "xp" to -PRICE,
-                            "source" to "SHOP_SPEND",
-                            "description" to "Bought Streak Freeze",
-                            "timestamp" to System.currentTimeMillis()
-                        ))
-                } catch (_: Exception) {}
+                }.await()
 
                 withContext(Dispatchers.Main) {
-                     com.example.myapplication.utils.AppToast.showSuccess(context, "Streak Freeze Purchased!")
+                    when (purchaseResult) {
+                        "MAX_FREEZES"   -> com.example.myapplication.utils.AppToast.showWarning(context, "Max 3 Streak Freezes allowed!")
+                        "NOT_ENOUGH_XP" -> com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need $PRICE XP.")
+                        "SUCCESS"       -> com.example.myapplication.utils.AppToast.showSuccess(context, "Streak Freeze Purchased!")
+                    }
                 }
-                
-                // Refresh local state
-                _state.value = _state.value.copy(
-                    userXP = newXP,
-                    streakFreezes = newFreezes
-                )
+
+                if (purchaseResult == "SUCCESS") {
+                    _state.value = _state.value.copy(userXP = finalXP, streakFreezes = finalFreezes)
+                }
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed: \${e.message}")
+                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed: ${e.message}")
                 }
             } finally {
                 _state.value = _state.value.copy(isLoading = false)
@@ -127,42 +135,68 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Nakup kupona — zaščiteno pred double-spend z Firestore transakcijo.
+     */
     fun buyCoupon() {
-        // Mock implementation for discount
         val email = currentUserEmail
         if (email.isBlank() || _state.value.isLoading) return
 
         viewModelScope.launch(Dispatchers.IO) {
             _state.value = _state.value.copy(isLoading = true)
             try {
-                 val profile = UserProfileManager.loadProfileFromFirestore(email)
-                    ?: UserProfileManager.loadProfile(email)
-
                 val PRICE = 500
-                if (profile.xp < PRICE) {
-                    withContext(Dispatchers.Main) {
-                        com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need \$PRICE XP.")
+
+                val db = FirestoreHelper.getDb()
+                val userRef = FirestoreHelper.getCurrentUserDocRef()
+
+                var purchaseResult = "PENDING"
+                var finalXP = 0
+
+                // Firestore transakcija — atomarno preveri XP in deduktiraj
+                db.runTransaction { transaction ->
+                    val snapshot   = transaction.get(userRef)
+                    val currentXP  = snapshot.getLong("xp")?.toInt() ?: 0
+
+                    if (currentXP < PRICE) {
+                        purchaseResult = "NOT_ENOUGH_XP"
+                        return@runTransaction
                     }
-                    return@launch
+
+                    val newXP    = currentXP - PRICE
+                    val newLevel = UserProfile.calculateLevel(newXP)
+
+                    transaction.set(userRef, mapOf(
+                        "xp"    to newXP,
+                        "level" to newLevel
+                    ), SetOptions.merge())
+
+                    val logRef = userRef.collection("xp_history").document()
+                    transaction.set(logRef, mapOf(
+                        "xp"          to -PRICE,
+                        "source"      to "SHOP_SPEND",
+                        "description" to "Bought Coupon PRO10",
+                        "timestamp"   to System.currentTimeMillis()
+                    ))
+
+                    finalXP = newXP
+                    purchaseResult = "SUCCESS"
+                }.await()
+
+                withContext(Dispatchers.Main) {
+                    when (purchaseResult) {
+                        "NOT_ENOUGH_XP" -> com.example.myapplication.utils.AppToast.showError(context, "Not enough XP! Need $PRICE XP.")
+                        "SUCCESS"       -> com.example.myapplication.utils.AppToast.showSuccess(context, "Coupon 'PRO10' Unlocked!")
+                    }
                 }
 
-                // Deduct XP
-                val newXP = profile.xp - PRICE
-                val updatedProfile = profile.copy(xp = newXP)
-                
-                UserProfileManager.saveProfile(updatedProfile)
-                UserProfileManager.saveProfileFirestore(updatedProfile)
-
-                // In real app, save coupon to database. Here just a toast.
-                 withContext(Dispatchers.Main) {
-                     com.example.myapplication.utils.AppToast.showSuccess(context, "Coupon 'PRO10' Unlocked!")
+                if (purchaseResult == "SUCCESS") {
+                    _state.value = _state.value.copy(userXP = finalXP)
                 }
-                
-                _state.value = _state.value.copy(userXP = newXP)
 
             } catch (e: Exception) {
-                 withContext(Dispatchers.Main) {
-                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed")
+                withContext(Dispatchers.Main) {
+                    com.example.myapplication.utils.AppToast.showError(context, "Purchase failed: ${e.message}")
                 }
             } finally {
                 _state.value = _state.value.copy(isLoading = false)
