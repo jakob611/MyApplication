@@ -143,8 +143,7 @@ ni wizard v NutritionDialogs.kt. Uporabnik sedaj lepo po vrsti izbere obrok, dod
 -   * * 2 0 2 6 - 0 3 - 2 9   ( H e a l t h   C o n n e c t   F i x ) * *   -   Z a m e n j a n i   \ R e a d R e c o r d s R e q u e s t \   p r i m i t v n i   k l i c i   z a   \ A g g r e g a t e R e q u e s t \   v   \ H e a l t h C o n n e c t M a n a g e r \   z a   p r a v i l n o   i s k a n j e   S t e p s ,   D i s t a n c e   i n   C a l o r i e s .   P r i m i t v n i   rｅq u e s t i   v c a s ih   nｅ  v rn e j o   vseh  p o d a tk o v   i z   S a m s u n g   H e a l t h a ,   a g r e g a t i   p a   s a m o d ej n o   p r o c e s i r a j o   m e r g e .   P r a v   tаkо   p o p r a v l j e n   \ 
  e a d T o dаy H e a l t h S u m m a r y \ ,   d a   z a c n e   s t e t i   o d   p o l n o c i   i n   nｅ  i z p r e d   n a r o b e   i z r a c u n a nih   2 4 h . 
 -   F i x e d   su spe n d   c a l l s   i n   M a n u a l E x e r c i s e L o g S c r e e n . k t ,   N u t r i t i o n D i a l o g s . k t   a n d   N u t r i t i o n S c r e e n . k t   t o   s a t i s f y   F i r e s t o r e H e l p e r . g e t C u r r e n t U s e r D o c R e f ( )   s u s p e n d  r e q i r e m e n t s .   R e s o l v e d   g e t _ e r r o r s   w a r n i n g s .
--   F i x e d   b u i l d   e r r o r   w i t h   s c o p e   i n   M a k e C u s t o m M e a l s D i a l o g
--   [ 2 0 2 6 - 0 4 - 0 1 ]   U X   I m p r o v e m e n t s :   T o p A p p B a r   h i d e s   o n   s̶c̶r̶o̶l̶l̶  i n   N u t r i t i o n ,   C o m m u n i t y ,   a n d   P r o g r e s s   s c r e e n s .   B a d g e   u n l o c k   a n i m a t i o n   iš  n o w   f u l l - s c r e e n   w i t h   C o n f e t t i   h a p t i c s . 
+-  * * 2 0 2 6 - 0 4 - 0 1   U X   I m p r o v e m e n t s :   T o p A p p B a r   h i d e s   o n   s̶c̶r̶o̶l̶l̶  i n   N u t r i t i o n ,   C o m m u n i t y ,   a n d   P r o g r e s s   s c r e e n s .   B a d g e   u n l o c k   a n i m a t i o n   iš  n o w   f u l l - s c r e e n   w i t h   C o n f e t t i   h a p t i c s . 
 P o p r a v l j e n   m a n j k a j o 
 i   i m p o r t   z a   F o n t W e i g h t 
  
@@ -158,42 +157,6 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  
  -   A c t i v i t y T y p e :   A l l o w e d   H I K E   t o   d i s p l a y   s p e e d   c h a r t . 
  
- -   S p e e d   C h a r t :   F i x e d   t h e   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t i n g   s p a r s e   pоi n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
+ -   S p e e d   C h a t :   F i x e d   t h e   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t i n g   s p a r s e   pоi n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
  
  -   M a p b o x   S m o o t h i n g :   I n c l u d e d   A c t i v i t y T y p e .H I K E   i n   t h e   s m o o t h i n g   p i p e l i n e . 
- 
- -   M a p b o x M a p M a t c h e r :   a p p l i e d   ' w a l k i n g '   p r o f i l e   i n s t e a d   o f   ' c y c l i n g '   d e f a u l t   c o n s t r a i n t   t o   m a p - m a t c h i n g   du
--   N o   i s s u e s 
- 
- -   N o   i s s u e s 
- 
- -   F i x e d   h a r d c o d e d   w a i t   t i m e   t o   1   s e c o n d 
-- **2026-04-06 (Progress Custom Chart Fix)** - Odstranil obrezovanje (clipRect) pik na dnu grafov in avtomati�no dvignil risalno povr�ino od X-osi, da posamezni podatki ve� ne posegajo v vizualne linije ali re�ejo krogov na pol
-- Dashboard cards fully expand and scale natively without descriptions.
-- DashboardScreen - odstranjen gumb in bar iz modulov (Fix)
-- PlanModels.kt: dodan isSwapped in isFrozen
-- WeeklyStreakWorker.kt: Swap in Freeze mehanika, na Rest dan stagnira, premik plan dni
-- PlanPathVisualizer.kt: Freeze in Swap markerji na nodih
-- BodyModuleHomeViewModel.kt: Rest activity da 10XP
-- AchievementStore.kt: Rest day obdrzi streak konstanten
--   * * 2 0 2 6 - 0 4 - 0 8   ( S t r e a k   &   P l a n   D a y   C o d e   C l e a n u p   &   A r c h   F i x ) * *   -   T e m e l j i t o   p r e g l e d a n a   v s a  k o d a   z a   d u p l i k a t i   f u n k c i j .   O d s t r a n j e n   n e v a r n e m   b l o k   v   A c h i e v e m e n t S t o r e   i n   B o d y M o d u l e H o m e V i e w M o d e l ,   k j e r   s o   s e   v r e d n o s t i k u r i l e   d v a k r a t   i n   s e   j e   i z n i c i l   b a c k g r o u n d   w o r k e r   f l o w .   D o d a n i   d a i l y _ l o g   m a n j k a j o c i   z a p i s i   z a   r e s t / s w a p   dn
-
-- **AddFoodSheet.kt**: Refactored to remove direct FatSecretApi calls and delegate them to `FoodRepositoryImpl.kt` to decouple UI from API.
-- **NutritionDialogs.kt / NutritionScreen.kt**: Centralized custom meal operations (`logCustomMeal`/`deleteCustomMeal`), migrating them from raw Firestore logic to `FoodRepositoryImpl.kt` using `FirebaseFirestore.getInstance().runTransaction`.
-
--   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
- 
- -  * * 2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d .u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   d i r e c t   F i r e b a s e . f i r e s t o r e   U I   c a l l s   f o r   p u r e  K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
- 
-   
- 
- -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
-i l   n a p a 
-e n   s c r i p t ,   j e   d e l n o   p o v r n i l   i z v o r n o   k o d o   v   \  p p / \ .   P r a v   t a k o   z a m e n j a n   m a n j k a j o 
-  \ k o t l i n x - d a t e t i m e \   v   \ D a t e F o r m a t t e r . k t \   z   \ j a v a . t i m e \ ,   k a r  j e   o d p r a v i l o   \ U n r e s o l v e d   r e f e r e n c e   ' d a t e t i m e ' \   n a p a k e .  A p p   sе   p o n o v n o   u s p e an o   z g r a d i . 
- 
-   
- 
- -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
-i l   n a p a 
-e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   nаp o l   i z b r iša l   p r o j e k t .   S e d a j   s eｍ   nаzаj   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
