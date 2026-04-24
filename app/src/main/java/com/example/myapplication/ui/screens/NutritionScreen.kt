@@ -139,26 +139,33 @@ fun NutritionScreen(
                 val tz = TimeZone.currentSystemDefault()
                 val startOfDay = Clock.System.now().toLocalDateTime(tz).date
                 val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+                val todayId = startOfDay.toString()
 
                 val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
-                val appExercisesCalories = HealthStorage.getTodayAppExercisesCalories()
+                
+                // Izračunaj samo razliko (delta) od zadnje sinhronizacije
+                val prefs = context.getSharedPreferences("hc_sync_prefs", Context.MODE_PRIVATE)
+                val lastSyncedKey = "hc_kcal_$todayId"
+                val lastSyncedHcKcal = prefs.getInt(lastSyncedKey, 0)
+                
+                val delta = healthConnectCalories - lastSyncedHcKcal
 
-                val newBurned = healthConnectCalories + appExercisesCalories
-
-                // POTISNI V FIRESTORE DA GRAFI TAKOJ OŽIVIJO NA DRUGIH ZASLONIH
-                val todayId = startOfDay.toString()
-                try {
-                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                    if (uid != null) {
-                        val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
-                        ref.set(mapOf(
-                            "date" to todayId,
-                            "burnedCalories" to newBurned
-                        ), com.google.firebase.firestore.SetOptions.merge()).await()
+                if (delta > 0) {
+                    try {
+                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid != null) {
+                            val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
+                            ref.set(mapOf(
+                                "date" to todayId,
+                                "burnedCalories" to com.google.firebase.firestore.FieldValue.increment(delta.toDouble())
+                            ), com.google.firebase.firestore.SetOptions.merge()).await()
+                            
+                            prefs.edit().putInt(lastSyncedKey, healthConnectCalories).apply()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("NutritionScreen", "Failed to sync burned to firestore", e)
                 }
 
                 kotlinx.coroutines.delay(10000) // Refresh every 10s
@@ -166,7 +173,7 @@ fun NutritionScreen(
         }
     }
 
-    // DanaĹˇnji vnosi (lokalni state) â€” takoj naloĹľi iz lokalnega cache-a
+    // Današnji vnosi (lokalni state) — takoj naloži iz lokalnega cache-a
     val initialFoods = remember {
         val cacheDate = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
         try {

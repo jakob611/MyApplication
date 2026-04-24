@@ -70,6 +70,19 @@ object DailySyncManager {
             .edit().putInt("calories_$date", calories).apply()
     }
 
+    /**
+     * Shrani kalorije in OZNACI, da sinhronizacija ni narejena
+     */
+    fun saveBurnedCaloriesLocally(context: Context, date: String, value: Int) {
+        context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
+            .edit()
+            .putInt("burned_$date", value)
+            .apply()
+
+        // OPOMBA: Ne kliči več markUnsynced za burned, ker se burnedCalories
+        // ne sinhronizira več z zamikom, ampak preko Firestore increment().
+    }
+
     // ───── Sync logika ──────────────────────────────────────────────────────
 
     /** Preveri ali je bil dani datum že sincirano. Internal — kliče ga tudi DailySyncWorker. */
@@ -144,13 +157,12 @@ object DailySyncManager {
     fun syncTodayNow(context: Context, uid: String) {
         val date = todayStr()
         val waterMl = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE).getInt("water_$date", 0)
-        val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE).getInt("burned_$date", 0)
         val foodsJson = loadFoodsJson(context, date)
 
         val payload = mutableMapOf<String, Any>(
             "date" to date,
             "waterMl" to waterMl,
-            "burnedCalories" to burnedKcal,
+            // Odstranjeno prepisovanje "burnedCalories"
             "syncedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
 
@@ -176,6 +188,7 @@ object DailySyncManager {
             }
 
         // Takojšnje posodabljanje tudi v daily_health, ker ga uporablja ProgressScreen
+        val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE).getInt("burned_$date", 0)
         if (burnedKcal > 0) {
             Firebase.firestore
                 .collection("users").document(uid)

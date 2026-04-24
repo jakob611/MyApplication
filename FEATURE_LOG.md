@@ -185,11 +185,11 @@
 - **Food Repository Integration**: Created `FoodRepositoryImpl.kt` to centralize all FatSecret API operations and Firestore logging (batch/transaction) for custom meals. This completely removes database/API writes from UI code (`AddFoodSheet`, `NutritionDialogs`, `NutritionScreen`), making the UI "dumb" and resilient against data loss.
 -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
  
- -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d   a n d r o i d .u t i l . L o g ,   j a v a . u t i l . D a t e ,   S i m p l e D a t e F o r m a t   a n d   di r e c t   F i r e b a s e . f i r e s t o r e   U I   ca l l s   f o r   p u r e   K o t l i n   K M P   r e a d i n e s s   v i a   L o g g e r   a n d   k o t l i n x - d a t e t i m e   i m p l e m e n t a t i o n . 
+ -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d  a n d r o i d . u t i l . L o g ,  j a v a . u t i l . D a t e ,  S i m p l e D a t e F o r m a t  a n d  d i r e c t  F i r e b a s e . f i r e s t o r e  U I  c a l l s  f o r  p u r e  K o t l i n  K M P  r e a d i n e s s  v i a  L o g g e r  a n d  k o t l i n x - d a t e t i m e  i m p l e m e n t a t i o n .  
  
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
 [   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
- [   ]   Vs i   W i d g e t i   p o   i s k a n j u   ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o ,   d a   i z p u a
+ [   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o  ,   d a  i z p u a
 a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
  [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
 n i m i   f o r m a t i ,   d a   n a t a n 
@@ -226,3 +226,10 @@
 ## [2026-04-18]
 *   **Settings Provider Multiplatform Overhaul:** Cleaned away legacy runtime SharedPreferences wrappers out of architecture. Moved into isolated primitive logic matching pure Jetpack Kotlin Multiplatform constraints (via `com.russhwolf.settings`). Application class bootstrapping fixes early initialization app-crashes.
 
+### Sprint 9 (Q2 2026) - KMP Stabilization & System Consolidation
+- **Architecture**: Removed all `android.util.Log` and `java.util.Date` instances from the UI layer, moving to `kotlinx-datetime` and `Logger`.
+- **Modularization**: Decoupled ML Kit completely. `FaceDetector` and `BarcodeScanner` now sit behind domain interfaces, keeping UI logic entirely KMP compatible.
+- **Data Layer Reform**: `SharedPreferences` fully removed and replaced with `multiplatform-settings`. Created `MyApplication` to handle `SettingsManager` initialization before ViewModel loading.
+- **Nutrition Sync Precision**: Reworked `consumedCalories` tracking to use `FieldValue.increment` with a precise `logFood` transaction inside `FoodRepositoryImpl`, removing unreliable local list sum calculations from the UI. `NutritionViewModel` now automatically maps and immediately renders `uiState` (consumed/burned calories) to the `DonutProgressView` and `ActiveCaloriesBar`.
+
+## Backlog / Planned Features

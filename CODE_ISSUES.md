@@ -158,7 +158,7 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  
  -   A c t i v i t y T y p e :   A l l o w e d   H I K E   t o   d i s p l a y   s p e e d   c h a r t . 
  
- -   S p e e d   C h a r t :   F i x e d   t h e   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t h i n g   s p a r s e   p o i n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
+ -   S p e e d   C h a r t :   F i x e d   t h e   f l a t   g r a p h   i s s u e   c a u s e d   b y   o v e r - s m o o t i n g   s p a r s e   pоi n t s   a n d   i n c o r r e c t l y   s c a l i n g   t i m e   a x e s   f o r   c o r r u p t e d   m a p b o x   t r a c k s . 
  
  -   M a p b o x   S m o o t h i n g :   I n c l u d e d   A c t i v i t y T y p e .H I K E   i n   t h e   s m o o t h i n g   p i p e l i n e . 
  
@@ -190,13 +190,13 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
  -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
 i l   n a p a 
 e n   s c r i p t ,   j e   d e l n o   p o v r n i l   i z v o r n o   k o d o   v   \  p p / \ .   P r a v   t a k o   z a m e n j a n   m a n j k a j o 
-  \ k o t l i n x - d a t e t i m e \   v   \ D a t e F o r m a t t e r . k t \   z   \ j a v a . t i m e \ ,   k a r  j e   o d p r a v i l o   \ U n r e s o l v e d   r e f e r e n c e   ' d a t e t i m e ' \   n a p a k e .  A p p   s e   p o n o v n o   u s p e an o   z g r a d i . 
+  \ k o t l i n x - d a t e t i m e \   v   \ D a t e F o r m a t t e r . k t \   z   \ j a v a . t i m e \ ,   k a r  j e   o d p r a v i l o   \ U n r e s o l v e d   r e f e r e n c e   ' d a t e t i m e ' \   n a p a k e .  A p p   sе   p o n o v n o   u s p e an o   z g r a d i . 
  
    
  
  -  * * 2 0 2 6 - 0 4 - 1 1   ( B u i l d   F i x ) * *      P o p r a v l j e n   z r u ae n   b u i l d :   G i g a - i z b r i s   d a t o t e k ,   k i   g a   j e   p o v z r o 
 i l   n a p a 
-e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   nаp o l   i z b r i s a l   p r o j e k t .   S e d a j   s eｍ   nаzаj   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
+e n   p r e p o v e d a n   P y t h o n   s c r i p t   z a   r e p l a c e   i m p o r t o v ,   j e   d a t o t e k e   p o v r n i l   v   z a d n j i   c o m m i t   i n   s   t e m   nаp o l   i z b r iša l   p r o j e k t .   S e d a j   s eｍ   nаzаj   r e s t o r i l   i z b r i s a n e   d a t o t e k e   i n   p o p r a v i l   D a t e F o r m a t t e r . k t   ( u p o r a b l j a   j a v a . t i m e  n a m e s t o   n e s k l i c a n e g a   k o t l i n x . d a t e t i m e ) .   P r o j e k t   s e   p o n o v n o   u s p e an o   z g r a d i   ( B U I L D   S U C C E S S F U L ) . 
  
 - **2026-04-11 (Build Fix)** — Dodani KMP odvisnosti v build.gradle.kts (kotlinx-datetime in multiplatform-settings). Restavrirane izbrisane datoteke iz prejšnjega commit-a in ročno ustvarjena manjkajoča domenska funkcija CompressRouteUseCase. Popravljeni uvozni moduli v DateFormatter-ju, NutritionScreen in BodyModuleHomeViewModel. Build je zopet zelen.
 -   S t a n d a r d i z i r a n e   D a t e / T i m e   k n j i ~n i c e   v   z a d n j i h   U I   d a t o t e k a h   i n   w i d g e t i h ,   n a d o m eа
@@ -227,11 +227,10 @@ F i x e s :   i m p r o v e d   M a p b o x   m a p p i n g   b a t c h   s i z 
 *   **Rešitev**: Ustanovljen `MyApplication` (application class) in vpisan v `AndroidManifest.xml`. Inicializacija `SettingsManager.provider = AndroidSettingsProvider(this)` je tako vezana na začetek zagona aplikacije, ne glede na specifično Activity / ViewModels.
 *   **Trenutni korak**: Popravek naložen in deluje.
 
-## Reworked / Fixed (2026 M04 19)
-- [x] **Nutrition UI Delay**: Converted `FoodRepositoryImpl.kt` methods (`observeCustomMeals`, `observeDailyLog`) to return `Flow` using `callbackFlow` emitting instantly via `addSnapshotListener`. Real-time data streams populated seamlessly.
-- [x] **State Flows in ViewModels**: Migrated state collections `.stateIn` operator within `NutritionViewModel` (for custom meals and Health Connect re-syncing triggers) and `ProgressViewModel` (for weight log states) for automatic Compose propagation.
-- [x] **Burned Calories Graph Issue**: Restructured `UpdateBodyMetricsUseCase.kt` to merge directly onto `burnCalories` in `dailyLogs`, preventing desync between exercise logs and vertical progress charts in the Nutrition page.
-- [x] **Pull-to-refresh / HC Manual Re-triggers**: Handled natively within the `NutritionViewModel` propagating down to Composable `LaunchedEffect`.
+## RESOLVED
+*   **Nutrition Sync:** `NutritionScreen` is no longer directly pushing the calculated sum of `trackedFoods` to Firestore. It uses `FoodRepositoryImpl.logFood` with `FieldValue.increment` via runTransaction.
+*   **Daily Logistics:** `NutritionViewModel` maps `observeDailyLog` directly to `uiState`, giving instantaneous real-time UI updates to `DonutProgressView` and `ActiveCaloriesBar`.
+*   **BodyMetricsUseCase:** The `UpdateBodyMetricsUseCase` accurately pushes burned workout calories using `FieldValue.increment`. Health Connect activity sync seamlessly stacks on top without overriding.
 
 ## Backlog
 ## Orodja

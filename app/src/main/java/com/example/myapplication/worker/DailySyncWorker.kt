@@ -90,15 +90,14 @@ class DailySyncWorker(
                 val waterMl = applicationContext
                     .getSharedPreferences(DailySyncManager.PREFS_WATER, Context.MODE_PRIVATE)
                     .getInt("water_$date", 0)
-                val burnedKcal = applicationContext
-                    .getSharedPreferences(DailySyncManager.PREFS_BURNED, Context.MODE_PRIVATE)
-                    .getInt("burned_$date", 0)
+                // OPOZORILO: Ne prepiši burnedCalories iz lokalnega cache-a, saj Firestore
+                // vsebuje Single Source of Truth (HealthConnect delta + Workout increments).
                 val foodsJson = DailySyncManager.loadFoodsJson(applicationContext, date)
 
                 val payload = mutableMapOf<String, Any>(
                     "date" to date,
                     "waterMl" to waterMl,
-                    "burnedCalories" to burnedKcal,
+                    // Odstranjeno prepisovanje burnedCalories!
                     "syncedAt" to FieldValue.serverTimestamp()
                 )
 
@@ -123,7 +122,7 @@ class DailySyncWorker(
 
                 // Označi kot sincirano šele po uspešnem upisu
                 DailySyncManager.markSynced(applicationContext, date)
-                Log.d(TAG, "OK [$date]: water=$waterMl ml, burned=$burnedKcal kcal, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
+                Log.d(TAG, "OK [$date]: water=$waterMl ml, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
             }
             Result.success()
 
