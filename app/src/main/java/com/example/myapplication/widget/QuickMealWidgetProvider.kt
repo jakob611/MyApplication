@@ -8,13 +8,14 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import com.example.myapplication.domain.DateFormatter
+import com.example.myapplication.data.daily.DailyLogRepository
 import java.util.UUID
-import kotlinx.datetime.TimeZone
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.toLocalDateTime
 
 class QuickMealWidgetProvider : AppWidgetProvider() {
@@ -58,93 +59,79 @@ class QuickMealWidgetProvider : AppWidgetProvider() {
         }
 
         Log.d(TAG, "Adding meal: $mealId")
-
         val mealType = getCurrentMealType()
         val today = todayId()
 
-        val db = Firebase.firestore
-        db.collection("users").document(uid)
-            .collection("customMeals").document(mealId)
-            .get()
-            .addOnSuccessListener { doc ->
-                if (!doc.exists()) {
+        // Uporabljamo CoroutineScope ker je onReceive na main threadu.
+        // Dejansko Firestore branje customMeals in atomarni zapis v dailyLogs
+        // potekata v IO dispatcherju brez callback pekla.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = Firebase.firestore
+
+                // KORAK 1: Preberi definicijo obroka (read-only, izven transakcije)
+                val mealDoc = db.collection("users").document(uid)
+                    .collection("customMeals").document(mealId)
+                    .get().await()
+
+                if (!mealDoc.exists()) {
                     Log.w(TAG, "Meal $mealId not found")
-                    return@addOnSuccessListener
+                    return@launch
                 }
 
-                val mealName = doc.getString("name") ?: "Unknown Meal"
-                val items = doc.get("items") as? List<*> ?: emptyList<Any>()
-
+                val mealName = mealDoc.getString("name") ?: "Unknown Meal"
+                val items = mealDoc.get("items") as? List<*> ?: emptyList<Any>()
                 Log.d(TAG, "Found meal: $mealName with ${items.size} items")
 
-                // Debug: Log first item to see structure
-                items.firstOrNull()?.let { firstItem ->
-                    Log.d(TAG, "First item structure: $firstItem")
-                }
-
-                // Convert items to tracked foods format
-                val trackedItems = items.mapNotNull { any ->
+                // KORAK 2: Pretvori items v TrackedFood format
+                val trackedItems: List<Map<String, Any>> = items.mapNotNull { any ->
                     val m = any as? Map<*, *> ?: return@mapNotNull null
-
-                    // Parse amount (stored as "amt" string)
                     val amtStr = m["amt"] as? String ?: "1.0"
                     val amount = amtStr.toDoubleOrNull() ?: 1.0
 
-                    // Build map with required fields + optional fields only if present
                     val baseMap = mutableMapOf<String, Any>(
-                        "id" to UUID.randomUUID().toString(),
-                        "name" to (m["name"] as? String ?: ""),
-                        "meal" to mealType.toString(),
-                        "amount" to amount,
-                        "unit" to (m["unit"] as? String ?: "servings"),
+                        "id"           to UUID.randomUUID().toString(),
+                        "name"         to (m["name"] as? String ?: ""),
+                        "meal"         to mealType.toString(),
+                        "amount"       to amount,
+                        "unit"         to (m["unit"] as? String ?: "servings"),
                         "caloriesKcal" to ((m["caloriesKcal"] as? Number)?.toDouble() ?: 0.0),
-                        "proteinG" to ((m["proteinG"] as? Number)?.toDouble() ?: 0.0),
-                        "carbsG" to ((m["carbsG"] as? Number)?.toDouble() ?: 0.0),
-                        "fatG" to ((m["fatG"] as? Number)?.toDouble() ?: 0.0)
+                        "proteinG"     to ((m["proteinG"]     as? Number)?.toDouble() ?: 0.0),
+                        "carbsG"       to ((m["carbsG"]       as? Number)?.toDouble() ?: 0.0),
+                        "fatG"         to ((m["fatG"]         as? Number)?.toDouble() ?: 0.0)
                     )
-
-                    // Add optional fields only if they exist and are not null
-                    (m["fiberG"] as? Number)?.toDouble()?.let { baseMap["fiberG"] = it }
-                    (m["sugarG"] as? Number)?.toDouble()?.let { baseMap["sugarG"] = it }
+                    (m["fiberG"]        as? Number)?.toDouble()?.let { baseMap["fiberG"]        = it }
+                    (m["sugarG"]        as? Number)?.toDouble()?.let { baseMap["sugarG"]        = it }
                     (m["saturatedFatG"] as? Number)?.toDouble()?.let { baseMap["saturatedFatG"] = it }
-                    (m["sodiumMg"] as? Number)?.toDouble()?.let { baseMap["sodiumMg"] = it }
-                    (m["potassiumMg"] as? Number)?.toDouble()?.let { baseMap["potassiumMg"] = it }
+                    (m["sodiumMg"]      as? Number)?.toDouble()?.let { baseMap["sodiumMg"]      = it }
+                    (m["potassiumMg"]   as? Number)?.toDouble()?.let { baseMap["potassiumMg"]   = it }
                     (m["cholesterolMg"] as? Number)?.toDouble()?.let { baseMap["cholesterolMg"] = it }
-
-                    baseMap.toMap() // Return immutable map
+                    baseMap.toMap()
                 }
 
-                // Get existing daily log
-                val dailyLogRef = db.collection("users").document(uid)
-                    .collection("dailyLogs").document(today)
+                Log.d(TAG, "Saving ${trackedItems.size} items. First item: ${trackedItems.firstOrNull()}")
 
-                dailyLogRef.get().addOnSuccessListener { dailyDoc ->
-                    val existingItems = (dailyDoc.get("items") as? List<*>) ?: emptyList<Any>()
-                    val newItems = existingItems + trackedItems
+                // KORAK 3: Atomarni zapis v Firestore — BREZ set(..., merge())!
+                // DailyLogRepository zagotovi transakcijski lock pred branjem obstoječih items,
+                // kar preprečuje izgubitev podatkov ob hkratnem vpisu WaterWidget/HealthConnect.
+                DailyLogRepository().updateDailyLog(today) { data ->
+                    // Preberi obstoječe items znotraj transakcije (ne pred njo!)
+                    val existingItems = (data["items"] as? List<*>) ?: emptyList<Any>()
+                    data["items"] = existingItems + trackedItems
 
-                    // Debug: Log what we're saving
-                    Log.d(TAG, "Saving ${trackedItems.size} items. First item: ${trackedItems.firstOrNull()}")
-
-                    dailyLogRef.set(
-                        mapOf(
-                            "date" to today,
-                            "items" to newItems,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    ).addOnSuccessListener {
-                        Log.d(TAG, "Successfully added meal $mealName to $mealType")
-
-                        // Refresh widget to update
-                        refreshAll(context)
-                    }.addOnFailureListener { e ->
-                        Log.e(TAG, "Failed to add meal", e)
-                    }
+                    // Posodobi consumedCalories na podlagi novih itemov
+                    val addedKcal = trackedItems.sumOf { (it["caloriesKcal"] as? Number)?.toDouble() ?: 0.0 }
+                    val currentConsumed = (data["consumedCalories"] as? Number)?.toDouble() ?: 0.0
+                    data["consumedCalories"] = currentConsumed + addedKcal
                 }
+
+                Log.d(TAG, "Uspešno dodan obrok $mealName → $mealType")
+                refreshAll(context)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Napaka pri dodajanju obroka $mealId", e)
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to fetch meal $mealId", e)
-            }
+        }
     }
 
     private fun openApp(context: Context) {

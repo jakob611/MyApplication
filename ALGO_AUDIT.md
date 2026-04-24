@@ -94,13 +94,23 @@ Dokumentacija trenutnega stanja algoritmov v projektu. Vsebuje natančen popis v
 
 ---
 
-## 5. Workout Burned Calories
-(Deloma pokrito pod "Health Connect Sync" in "XP sisteme", sicer v preteklih VM kot je `RunTrackerViewModel.kt`)
+## 5. Workout Burned Calories / QuickMealWidget / DailySyncManager
 
-**Logika:**
-Teče izrecna delitev med *prijavljenimi* / *znanimi* workouti uvoženimi ali zajetimi preko UI (kjer se ob zaključku pošlje podatek) in tistimi, ki se background synchronizirajo.
-**Kritična Napaka:**
-Pomanjkanje jasne razmejitve; kje točno Health Connect prepiše (ali dopolni) tiste treninge, ki jih aplikacija SAMA snema. Imamo odprta vrata za dvojno beleženje.
+**Kritična analiza (Težave):**
+- ✅ ~~**QuickMealWidgetProvider Silent Write**~~ — **ODPRAVLJENO (Faza 2)**. `handleAddMeal()` → coroutine + `DailyLogRepository`. Atomarno branje + append znotraj transakcije. Eliminiran callback pekel.
+- ✅ ~~**DailySyncManager.syncTodayNow Silent Write**~~ — **ODPRAVLJENO (Faza 2)**. `DailyLogRepository().updateDailyLog()` v `CoroutineScope`.
+- ✅ ~~**DailySyncWorker Silent Write**~~ — **ODPRAVLJENO (Faza 2)**. `DailyLogRepository().updateDailyLog()` direkten klic iz suspend `doWork()`.
+- ✅ ~~**HealthStorage.doStoreDailyData Silent Write**~~ — **ODPRAVLJENO (Faza 2)**. Migrirano na `DailyLogRepository`.
+
+---
+
+## ✅ POTRJENO: V celotnem projektu NI niti ene `.set(..., SetOptions.merge())` na `dailyLogs` izven transakcije.
+
+Preostali `SetOptions.merge()` klici pišejo v **druge kolekcije** ali so že znotraj `runTransaction { }`:
+- `DailySyncManager.kt` → `daily_health` (ProgressScreen prikaz — ločena kolekcija)
+- `UserProfileManager.kt` → korenski `users/` dokument (profil, darkMode)
+- `MetricsRepositoryImpl.kt` → `weightLogs` in `dailyMetrics`
+- `FoodRepositoryImpl.logWater/logFood` → `dailyLogs` **znotraj `db.runTransaction { }`** ✅
 
 ---
 

@@ -7,6 +7,10 @@ import java.util.Date
 import java.util.Locale
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
+import com.example.myapplication.data.daily.DailyLogRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * DailySyncManager — Local-first arhitektura za dnevne podatke.
@@ -153,41 +157,46 @@ object DailySyncManager {
     /**
      * Kliče se ob vsaki lokalni spremembi, da uporabnik TAKOJ vidi
      * posodobljene grafe v ProgressScreen (instant feedback).
+     *
+     * VARNO: Celoten zapis v dailyLogs poteka skozi DailyLogRepository.updateDailyLog()
+     * → Firestore Transaction. Ni več SetOptions.merge() izven transakcije.
+     * burnedCalories je namenoma izpuščen — za to skrbi SyncHealthConnectUseCase.
      */
     fun syncTodayNow(context: Context, uid: String) {
         val date = todayStr()
         val waterMl = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE).getInt("water_$date", 0)
         val foodsJson = loadFoodsJson(context, date)
 
-        val payload = mutableMapOf<String, Any>(
-            "date" to date,
-            "waterMl" to waterMl,
-            // Odstranjeno prepisovanje "burnedCalories"
-            "syncedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
-
-        if (!foodsJson.isNullOrBlank()) {
+        // Razčleni hrano PRED vstopom v transakcijo (JSON parsing je CPU-intenziven)
+        val parsedItems: List<Map<String, Any>> = if (!foodsJson.isNullOrBlank()) {
             runCatching {
                 val arr = org.json.JSONArray(foodsJson)
-                val items = (0 until arr.length()).map { i ->
+                (0 until arr.length()).map { i ->
                     val obj = arr.getJSONObject(i)
                     mutableMapOf<String, Any>().also { map ->
                         obj.keys().forEach { key -> map[key] = obj.get(key) }
                     }
                 }
-                if (items.isNotEmpty()) payload["items"] = items
+            }.getOrDefault(emptyList())
+        } else emptyList()
+
+        // Fire-and-forget transakcija (ne blokira UI threada)
+        CoroutineScope(Dispatchers.IO).launch {
+            DailyLogRepository().updateDailyLog(date) { data ->
+                data["waterMl"] = waterMl
+                // Items: posodobi samo če obstajajo lokalni podatki
+                if (parsedItems.isNotEmpty()) {
+                    data["items"] = parsedItems
+                }
+                // burnedCalories NI del tega synca — To je last-write-wins odgovornost
+                // SyncHealthConnectUseCase in UpdateBodyMetricsUseCase.
             }
+            markSynced(context, date)
+            Log.d(TAG, "syncTodayNow OK [$date]: water=$waterMl ml, foods=${parsedItems.size}")
         }
 
-        Firebase.firestore
-            .collection("users").document(uid)
-            .collection("dailyLogs").document(date)
-            .set(payload, com.google.firebase.firestore.SetOptions.merge())
-            .addOnSuccessListener {
-                markSynced(context, date)
-            }
-
         // Takojšnje posodabljanje tudi v daily_health, ker ga uporablja ProgressScreen
+        // (različna kolekcija od dailyLogs — ne zahteva transakcije z DailyLogRepo)
         val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE).getInt("burned_$date", 0)
         if (burnedKcal > 0) {
             Firebase.firestore

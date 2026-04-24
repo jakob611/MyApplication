@@ -55,9 +55,25 @@ Z iskanjem smo identificirali vse "tihe zapise", kjer koda uporablja `update()`,
 
 3. 💣~~→✅~~ **`WaterWidgetProvider.kt`:** ~~`.set(data, SetOptions.merge())`~~ → **ODPRAVLJENO**: `DailyLogRepository().updateDailyLog { data["waterMl"] = newVal }` znotraj `CoroutineScope(Dispatchers.IO)`.
 
-4. 💣 **`QuickMealWidgetProvider.kt`:** `.set(..., SetOptions.merge())` — **ŠE ČAKA** (naslednja faza)
+4. 💣~~→✅~~ **`QuickMealWidgetProvider.kt`:** ~~`.set(..., SetOptions.merge())`~~ → **ODPRAVLJENO**: `handleAddMeal()` prepisana na `CoroutineScope(Dispatchers.IO)` + `DailyLogRepository.updateDailyLog`. Items se dodajajo atomarno znotraj transakcije (branje obstoječih → append → pisanje). Eliminiran callback pekel.
 
-5. 💣 **`DailySyncManager.kt`:** `.set(payload, SetOptions.merge())` — **ŠE ČAKA** (naslednja faza)
+5. 💣~~→✅~~ **`DailySyncManager.kt`:** ~~`.set(payload, SetOptions.merge())`~~ → **ODPRAVLJENO**: `syncTodayNow()` zdaj kliče `DailyLogRepository().updateDailyLog()` v `CoroutineScope(Dispatchers.IO)`.
+
+6. 💣~~→✅~~ **`DailySyncWorker.kt`:** ~~`Firebase.firestore...set(payload, SetOptions.merge()).await()`~~ → **ODPRAVLJENO**: `doWork()` zdaj kliče `DailyLogRepository().updateDailyLog()` (suspend, direkten klic brez CoroutineScope).
+
+7. 💣~~→✅~~ **`HealthStorage.kt` (`doStoreDailyData`):** ~~`docRef.set(updates, SetOptions.merge())`~~ → **ODPRAVLJENO**: Migrirano na `DailyLogRepository().updateDailyLog()`.
+
+---
+
+## ✅ FINALNO STANJE: dailyLogs Silent Write Audit
+
+V celotnem projektu **NI NITI ENE** `.set(..., SetOptions.merge())` direktno na `dailyLogs` dokumentu izven transakcije.
+
+Preostali `SetOptions.merge()` klici v kodi pišejo v **različne kolekcije** (ne `dailyLogs`):
+- `DailySyncManager.kt:205` → `daily_health` kolekcija (steps prikaz za ProgressScreen)
+- `UserProfileManager.kt` → korenski `users/` dokument (profil, darkMode)
+- `MetricsRepositoryImpl.kt` → `weightLogs` in `dailyMetrics` kolekciji
+- `FoodRepositoryImpl.logWater/logFood` → `dailyLogs` **znotraj `db.runTransaction { }`** ✅
 
 ---
 

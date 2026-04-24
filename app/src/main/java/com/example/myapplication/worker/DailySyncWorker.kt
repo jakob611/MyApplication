@@ -11,10 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.persistence.DailySyncManager
 import com.example.myapplication.persistence.FirestoreHelper
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
+import com.example.myapplication.data.daily.DailyLogRepository
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import java.text.SimpleDateFormat
@@ -90,39 +87,36 @@ class DailySyncWorker(
                 val waterMl = applicationContext
                     .getSharedPreferences(DailySyncManager.PREFS_WATER, Context.MODE_PRIVATE)
                     .getInt("water_$date", 0)
-                // OPOZORILO: Ne prepiši burnedCalories iz lokalnega cache-a, saj Firestore
-                // vsebuje Single Source of Truth (HealthConnect delta + Workout increments).
+                // OPOZORILO: burnedCalories se NE sync-a iz lokalnega cache-a.
+                // Single Source of Truth za burned kalorije je Firestore (HC delta + Workout transakcija).
                 val foodsJson = DailySyncManager.loadFoodsJson(applicationContext, date)
 
-                val payload = mutableMapOf<String, Any>(
-                    "date" to date,
-                    "waterMl" to waterMl,
-                    // Odstranjeno prepisovanje burnedCalories!
-                    "syncedAt" to FieldValue.serverTimestamp()
-                )
-
-                if (!foodsJson.isNullOrBlank()) {
+                // Razčleni hrano PRED vstopom v transakcijo
+                val parsedItems: List<Map<String, Any>> = if (!foodsJson.isNullOrBlank()) {
                     runCatching {
                         val arr = JSONArray(foodsJson)
-                        val items = (0 until arr.length()).map { i ->
+                        (0 until arr.length()).map { i ->
                             val obj = arr.getJSONObject(i)
                             mutableMapOf<String, Any>().also { map ->
                                 obj.keys().forEach { key -> map[key] = obj.get(key) }
                             }
                         }
-                        if (items.isNotEmpty()) payload["items"] = items
-                    }
-                }
+                    }.getOrDefault(emptyList())
+                } else emptyList()
 
-                Firebase.firestore
-                    .collection("users").document(uid)
-                    .collection("dailyLogs").document(date)
-                    .set(payload, SetOptions.merge())
-                    .await()
+                // VARNO: Atomarni zapis skozi DailyLogRepository (Firestore Transaction)
+                // Ni več .set(payload, SetOptions.merge()) — ni tveganja za Race Condition.
+                DailyLogRepository().updateDailyLog(date) { data ->
+                    data["waterMl"] = waterMl
+                    if (parsedItems.isNotEmpty()) {
+                        data["items"] = parsedItems
+                    }
+                    // burnedCalories, hcBurnedCalories ostajata nedotaknjeni
+                }
 
                 // Označi kot sincirano šele po uspešnem upisu
                 DailySyncManager.markSynced(applicationContext, date)
-                Log.d(TAG, "OK [$date]: water=$waterMl ml, foods=${(payload["items"] as? List<*>)?.size ?: 0}")
+                Log.d(TAG, "OK [$date]: water=$waterMl ml, foods=${parsedItems.size}")
             }
             Result.success()
 

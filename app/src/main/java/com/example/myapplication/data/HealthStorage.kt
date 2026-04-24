@@ -133,15 +133,14 @@ object HealthStorage {
         steps: Long, distanceMeters: Double, activeTimeMin: Long, date: String
     ) {
         try {
-            val docRef = FirestoreHelper.getCurrentUserDocRef().collection("dailyLogs").document(date)
-            val nowMs = Clock.System.now().toEpochMilliseconds()
-            val updates = mapOf(
-                "steps" to steps,
-                "distanceMeters" to distanceMeters,
-                "activeTimeMins" to activeTimeMin,
-                "lastHealthSync" to nowMs
-            )
-            docRef.set(updates, SetOptions.merge()).await()
+            // VARNO: Zapis skozi DailyLogRepository → Firestore Transaction.
+            // Ni več .set(updates, SetOptions.merge()) izven transakcije na dailyLogs.
+            com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(date) { data ->
+                data["steps"]           = steps
+                data["distanceMeters"]  = distanceMeters
+                data["activeTimeMins"]  = activeTimeMin
+                data["lastHealthSync"]  = Clock.System.now().toEpochMilliseconds()
+            }
 
             // Update achievement progress for Steps
             val goals = getHealthGoals()
