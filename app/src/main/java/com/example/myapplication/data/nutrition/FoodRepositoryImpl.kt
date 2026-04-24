@@ -108,4 +108,29 @@ object FoodRepositoryImpl {
             null
         }.await()
     }
+
+    suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) {
+        val docRef = FirestoreHelper.getCurrentUserDocRef()
+        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+        val calories = (foodItem["caloriesKcal"] as? Number)?.toDouble() ?: 0.0
+
+        FirestoreHelper.getDb().runTransaction { transaction ->
+            val snapshot = transaction.get(dailyLogRef)
+            val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
+            val newConsumed = currentConsumed + calories
+
+            val data = mutableMapOf<String, Any>(
+                "consumedCalories" to newConsumed,
+                "items" to com.google.firebase.firestore.FieldValue.arrayUnion(foodItem),
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            // Ensure the date field is present
+            if (!snapshot.exists() || !snapshot.contains("date")) {
+                data["date"] = dateStr
+            }
+
+            transaction.set(dailyLogRef, data, com.google.firebase.firestore.SetOptions.merge())
+            null
+        }.await()
+    }
 }

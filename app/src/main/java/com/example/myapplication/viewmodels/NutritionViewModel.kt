@@ -41,6 +41,31 @@ class NutritionViewModel(
         else com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    init {
+        observeDailyTotals()
+    }
+
+    private fun observeDailyTotals() {
+        viewModelScope.launch {
+            uidFlow.collect { uid ->
+                if (uid != null) {
+                    val todayId = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
+                    com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
+                        val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
+                        val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
+                        val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+
+                        updateDailyTotals(
+                            consumed = serverConsumed,
+                            burned = serverBurned,
+                            water = serverWater
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun syncHealthConnectNow() {
         _healthConnectSyncTrigger.value += 1
     }

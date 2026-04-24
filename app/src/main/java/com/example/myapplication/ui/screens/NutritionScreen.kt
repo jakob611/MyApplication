@@ -328,15 +328,7 @@ fun NutritionScreen(
         if (uid != null) {
             com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId)
                 .collect { doc ->
-                    val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
-                    val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
-                    val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
-
-                    nutritionViewModel.updateDailyTotals(
-                        consumed = serverConsumed,
-                        burned = serverBurned,
-                        water = serverWater
-                    )
+                    // water, burned in consumed zdaj mapira sam ViewModel. Tukaj pustimo samo osveževanje lokalne liste živil:
 
                     val items = doc.get("items") as? List<*>
                     if (items != null) {
@@ -390,23 +382,10 @@ fun NutritionScreen(
         }
     }
 
-    // Lokalni zapis hrane â€” TAKOJ ob vsaki spremembi, brez ÄŤakanja na Firestore
+    // Lokalni zapis hrane — TAKOJ ob vsaki spremembi (za JSON cache na napravi in XP)
     LaunchedEffect(trackedFoods, todayId) {
         val calculatedConsumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
 
-        try {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-            if (userId != null) {
-                val ref = db.collection("users").document(userId).collection("dailyLogs").document(todayId)
-                ref.set(mapOf(
-                    "date" to todayId,
-                    "consumedCalories" to calculatedConsumedKcal
-                ), com.google.firebase.firestore.SetOptions.merge()).await()
-            }
-        } catch (e: Exception) {
-            Log.e("NutritionScreen", "Failed to sync consumed Kcal to firestore", e)
-        }
 
         // Serializiraj v JSON in shrani lokalno
         try {
@@ -790,7 +769,25 @@ fun NutritionScreen(
                 onAddTracked = { tf ->
                     trackedFoods = trackedFoods + tf
                     showAddedMessage = "Added ${tf.name} to ${tf.meal.title}" // immediate feedback
-                    onProductConsumed() // PoÄŤisti scanned product po dodajanju
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            val map = mutableMapOf<String, Any>(
+                                "id" to tf.id,
+                                "name" to tf.name,
+                                "meal" to tf.meal.name,
+                                "amount" to tf.amount,
+                                "unit" to tf.unit,
+                                "caloriesKcal" to tf.caloriesKcal
+                            )
+                            tf.proteinG?.let { map["proteinG"] = it }
+                            tf.carbsG?.let { map["carbsG"] = it }
+                            tf.fatG?.let { map["fatG"] = it }
+                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logFood(map, todayId)
+                        } catch (e: Exception) {
+                            Log.e("NutritionScreen", "Failed to log food", e)
+                        }
+                    }
+                    onProductConsumed() // Počisti scanned product po dodajanju
                 },
                 scannedProduct = scannedProduct,
                 onProductConsumed = onProductConsumed,
