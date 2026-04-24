@@ -2,15 +2,40 @@ package com.example.myapplication.domain.workout
 
 import android.content.Context
 import android.util.Log
+import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.health.HealthConnectManager
-import com.example.myapplication.persistence.FirestoreHelper
-import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaInstant
 import kotlinx.datetime.toLocalDateTime
 
+/**
+ * SyncHealthConnectUseCase — VARNO SINHRONIZIRA kalorije iz Health Connect v Firestore.
+ *
+ * ARHITEKTURNE ODLOČITVE:
+ * ─────────────────────────────────────────────────────────────────
+ * 1. BREZ SharedPreferences: Referenčna vrednost za delto je shranjena v
+ *    Firestore polju [hcBurnedCalories], ne lokalno. To preprečuje "Wipe Bug"
+ *    (brisanje podatkov aplikacije ali menjava naprave ne povzroči podvojitve).
+ *
+ * 2. ATOMARNA TRANSAKCIJA: Celotna logika (branje, izračun, pisanje) se izvede
+ *    znotraj [DailyLogRepository.updateDailyLog] → Firestore Transaction.
+ *    Ni več [SetOptions.merge()] ali [FieldValue.increment()] izven transakcije.
+ *
+ * 3. PODPORA NEGATIVNI DELTI: Če uporabnik izbriše trening v Health Connect,
+ *    se delta izračuna pravilno (negativna) in [burnedCalories] se ustrezno zmanjša.
+ *
+ * DATA FLOW:
+ *   HealthConnect API → totalHcKcal (dnevni seštevek)
+ *   Firestore [hcBurnedCalories] → previousHcKcal (referenca za delto)
+ *   delta = totalHcKcal - previousHcKcal
+ *   Firestore [burnedCalories] += delta  (nova skupna vrednost)
+ *   Firestore [hcBurnedCalories] = totalHcKcal  (posodobitev reference)
+ */
 class SyncHealthConnectUseCase {
+
+    private val dailyLogRepo = DailyLogRepository()
+
     suspend operator fun invoke(context: Context) {
         val healthManager = HealthConnectManager.getInstance(context)
         if (!healthManager.isAvailable() || !healthManager.hasAllPermissions()) {
@@ -21,44 +46,41 @@ class SyncHealthConnectUseCase {
             val now = Clock.System.now().toJavaInstant()
             val tz = TimeZone.currentSystemDefault()
             val startOfDay = Clock.System.now().toLocalDateTime(tz).date
-            val startOfDayJavaObj = java.time.LocalDate.of(startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+            val startOfDayJavaObj = java.time.LocalDate.of(
+                startOfDay.year, startOfDay.monthNumber, startOfDay.dayOfMonth
+            ).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
             val todayId = startOfDay.toString()
 
-            val uid = FirestoreHelper.getCurrentUserDocId() ?: return
-            val db = FirestoreHelper.getDb()
-            val ref = db.collection("users").document(uid).collection("dailyLogs").document(todayId)
+            // Preberi skupne HC kalorije za danes iz Health Connect API
+            val totalHcKcal = healthManager.readCalories(startOfDayJavaObj, now)
 
-            val doc = ref.get().await()
-            val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
+            // Če HC ne poroča nobenih kalorij, ni kar sinhronizirati
+            if (totalHcKcal <= 0) return
 
-            val healthConnectCalories = healthManager.readCalories(startOfDayJavaObj, now)
+            // Atomarna transakcija: branje + izračun + pisanje v enem koraku
+            dailyLogRepo.updateDailyLog(todayId) { data ->
 
-            val prefs = context.getSharedPreferences("hc_sync_prefs", Context.MODE_PRIVATE)
-            val lastSyncedKey = "hc_kcal_$todayId"
-            val lastSyncedHcKcal = prefs.getInt(lastSyncedKey, 0)
+                // Referenčna vrednost zadnje HC sinhronizacije — zdaj v FIRESTORE, ne SharedPrefs!
+                // Ob Wipe/Reset je vrednost 0 v bazi → delta = vse HC kalorije (pravilno)
+                val previousHcKcal = (data["hcBurnedCalories"] as? Number)?.toDouble() ?: 0.0
+                val currentBurned  = (data["burnedCalories"]   as? Number)?.toDouble() ?: 0.0
 
-            val delta = healthConnectCalories - lastSyncedHcKcal
+                // Delta podpira negativne vrednosti (brisanje treningov v Health Connect)
+                val delta = totalHcKcal.toDouble() - previousHcKcal
 
-            if (delta > 0) {
-                ref.set(mapOf(
-                    "date" to todayId,
-                    "burnedCalories" to com.google.firebase.firestore.FieldValue.increment(delta.toDouble())
-                ), com.google.firebase.firestore.SetOptions.merge()).await()
+                // Direktni overwrite reference (ne increment!) — vedno točna vrednost
+                data["hcBurnedCalories"] = totalHcKcal.toDouble()
 
-                prefs.edit().putInt(lastSyncedKey, healthConnectCalories).apply()
-                Log.d("DEBUG_DATA", "Successfully synced Health Connect delta: $delta")
-            } else if (healthConnectCalories > 0 && serverBurned == 0) {
-                // Initial sync fallback if delta logic failed previously
-                 ref.set(mapOf(
-                    "date" to todayId,
-                    "burnedCalories" to healthConnectCalories
-                ), com.google.firebase.firestore.SetOptions.merge()).await()
-                prefs.edit().putInt(lastSyncedKey, healthConnectCalories).apply()
-                Log.d("DEBUG_DATA", "Initial synced Health Connect: $healthConnectCalories")
+                // Prilagodi skupne kalorije za delto; ne more biti negativna
+                data["burnedCalories"] = (currentBurned + delta).coerceAtLeast(0.0)
+
+                Log.d("SyncHealthConnect",
+                    "HC Sync OK | previousHc=$previousHcKcal kcal → newHc=$totalHcKcal kcal | " +
+                    "delta=$delta | newBurned=${data["burnedCalories"]}")
             }
 
         } catch (e: Exception) {
-            Log.e("SyncHealthConnect", "Failed to sync health connect data", e)
+            Log.e("SyncHealthConnect", "Sinhronizacija Health Connect spodletela", e)
         }
     }
 }

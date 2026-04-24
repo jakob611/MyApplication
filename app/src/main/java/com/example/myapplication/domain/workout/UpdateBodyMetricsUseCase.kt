@@ -58,10 +58,10 @@ class UpdateBodyMetricsUseCase(
 
             // 6. Uskladi burnedCalories s tabelo dailyLogs (da takoj osveži graf NutritionScreen)
             val todayStr = now.toLocalDateTime(tz).date.toString()
-            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-                .collection("dailyLogs").document(todayStr)
-                .set(mapOf("burnedCalories" to com.google.firebase.firestore.FieldValue.increment(totalKcal.toDouble())), com.google.firebase.firestore.SetOptions.merge())
-                .await()
+            com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayStr) { data ->
+                val currentBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
+                data["burnedCalories"] = currentBurned + totalKcal.toDouble()
+            }
 
             Result.success(res)
         } catch (e: Exception) {

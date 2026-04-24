@@ -8,13 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import com.example.myapplication.domain.DateFormatter
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
+import com.example.myapplication.data.daily.DailyLogRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 
 class WaterWidgetProvider : AppWidgetProvider() {
@@ -88,37 +87,31 @@ class WaterWidgetProvider : AppWidgetProvider() {
     }
 
     private fun handleDelta(context: Context, delta: Int) {
-
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
         val today = todayId()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val key = "water_$today"
 
-        // INSTANT UPDATE: Read current value, update locally, refresh UI immediately
+        // KORAK 1: Takojšnja posodobitev lokalnega cache-a in UI (optimistično)
         val currentVal = prefs.getInt(key, 0)
         val newVal = (currentVal + delta).coerceAtLeast(0)
         prefs.edit().putInt(key, newVal).apply()
-
-        // Update widget UI instantly (no waiting for Firestore)
         refreshAll(context)
 
-        // Background sync to Firestore (if logged in)
-        if (uid != null) {
-            val db = Firebase.firestore
-            val ref = db.collection("users").document(uid)
-                .collection("dailyLogs").document(today)
-
-            // Use simple set (not transaction) for speed - eventual consistency is OK for widget
-            val data = mapOf(
-                "date" to today,
-                "waterMl" to newVal,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-            ref.set(data, com.google.firebase.firestore.SetOptions.merge())
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "Background sync failed for waterMl=$newVal", e)
-                    // UI already updated, user doesn't see failure
+        // KORAK 2: Atomarna transakcija v Firestore (ozadje) — brez SetOptions.merge() ali FieldValue!
+        // DailyLogRepository zagotovi, da se dokument ustvari, če še ne obstaja,
+        // ter da se waterMl ne povozi s hkratnim zapisom burnedCalories (Race Condition).
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                DailyLogRepository().updateDailyLog(today) { data ->
+                    // Znotraj transakcije: zapiši točno vrednost iz lokalnega cache-a
+                    // (lokalni cache je naš "optimistični" vir resnice za widget)
+                    data["waterMl"] = newVal
                 }
+                Log.d(TAG, "Transakcija OK: waterMl=$newVal za $today")
+            } catch (e: Exception) {
+                Log.w(TAG, "Transakcija za waterMl spodletela — cache ostaja na $newVal", e)
+                // UI ostane na optimistični vrednosti; ob naslednjem REFRESH se prikliče iz baze
+            }
         }
     }
 
