@@ -47,6 +47,12 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Faza 6: Data Budgeting — -35% Firestore branj)**
+  1. `NutritionViewModel.kt`: Dodan `_firestoreFoods: MutableStateFlow<List<TrackedFood>>` + `parseRawItemsToTrackedFoods()`. Items se parsajo ENKRAT v `observeDailyTotals()` collect bloku in delijo prek `internal val firestoreFoods: StateFlow`.
+  2. `NutritionScreen.kt`: Odstranjen `LaunchedEffect(uid, todayId) { FoodRepositoryImpl.observeDailyLog().collect {...} }` (~55 vrstic). Ta blok je bil DUPLIKAT NutritionViewModel-ovega Firestore listenerja. Zamenjan z `val firestoreFoods by nutritionViewModel.firestoreFoods.collectAsState()`.
+  3. `Progress.kt`: (a) `sessionListener` na `daily_health` odstranjen — ta kolekcija se po Fazi 5 ne piše več (mrtev listener). (b) `dailyLogs` listener posodobljen: bere `consumedCalories` direktno iz polja namesto iteracije `items` arraija. (c) `burnedByDay` se polni iz `dailyLogs.burnedCalories` namesto `daily_health.calories`.
+  **Rezultat:** Skupaj -2 Firestore listenerja (iz ~6 na ~4) = **~33% zmanjšanje aktivnih listenerjev**, kar presega cilj 30%.
+
 - **2026-04-25 (Faza 5: The Great Purge — Firestore Single Source of Truth)**
   1. `MyApplication.kt`: Firestore `PersistentCacheSettings` (100 MB) omogočen pred vsemi drugimi inicializacijami. SDK zdaj skrbi za offline delovanje sam.
   2. `DailySyncManager.kt`: Odstranjeni vsi lokalni write-i — `saveFoodsLocally()`, `saveWaterLocally()`, `saveBurnedLocally()`, `saveCaloriesLocally()`, `saveBurnedCaloriesLocally()`, `hasDataForDate()`, `loadFoodsJson()`, `syncTodayNow()`. Ostaneta le sync tracker (`isSynced`/`markSynced`) in nova migracijska funkcija `clearLegacyCache()`.

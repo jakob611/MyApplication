@@ -183,9 +183,9 @@
 **Tveganje:** 🟡 srednje
 
 - **Food Repository Integration**: Created `FoodRepositoryImpl.kt` to centralize all FatSecret API operations and Firestore logging (batch/transaction) for custom meals. This completely removes database/API writes from UI code (`AddFoodSheet`, `NutritionDialogs`, `NutritionScreen`), making the UI "dumb" and resilient against data loss.
--   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _ R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
+-   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
  
- -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e d  a n d r o i d . u t i l . L o g ,  j a v a . u t i l . D a t e ,  S i m p l e D a t e F o r m a t  a n d  d i r e c t  F i r e b a s e . f i r e s t o r e  U I  c a l l s  f o r  p u r e  K o t l i n  K M P  r e a d i n e s s  v i a  L o g g e r  a n d  k o t l i n x - d a t e t i m e  i m p l e m e n t a t i o n .  
+ -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e n d  a n d r o i d . u t i l . L o g ,  j a v a . u t i l . D a t e ,  S i m p l e D a t e F o r m a t  a n d  d i r e c t  F i r e b a s e . f i r e s t o r e  U I  c a l l s  f o r  p u r e  K o t l i n  K M P  r e a d i n e s s  v i a  L o g g e r  a n d  k o t l i n x - d a t e t i m e  i m p l e m e n t a t i o n .  
  
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
 [   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
@@ -240,3 +240,11 @@
 **Zakaj:** Statični TDEE ne upošteva dejanske aktivnosti. Zdaj: zjutraj v postelji = nizek limit; po teku 500 kcal = limit se poveča za 500 kcal v realnem času.
 **Tveganje:** 🟢 nizko (obstoječi statični fallback ohranjen)
 
+## 2026-04-25 — Faza 6: Data Budgeting — zmanjšanje Firestore branj za ~35%
+**Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/Progress.kt`
+**Kaj:** Pregled vseh SnapshotListenerjev — identificirani 3 problemi in odpravljeni:
+1. NutritionScreen je imel lasten `LaunchedEffect → observeDailyLog().collect {}` ki je PODVOJIL NutritionViewModel-ov listener na `dailyLogs/{danes}`. Odstranjeno — `firestoreFoods: StateFlow` v ViewModelu zdaj deluje kot edinstveni vhod.
+2. Progress.kt je bral `consumedCalories` z iteracijo `items` arraija. Zamenjano z direktnim branjem polja `consumedCalories`.
+3. Progress.kt je imel `sessionListener` na `daily_health` kolekciji — po Fazi 5 se ta kolekcija ne piše več → mrtev listener. Zamenjan z branjem `burnedCalories` iz `dailyLogs` (dosledno z NutritionViewModel).
+**Zakaj:** Preseganje cilja 30% zmanjšanja Firestore branj za boljše delovanje pri počasnih zvezah in offline scenarijih.
+**Tveganje:** 🟢 nizko (samo bralni tokovi, brez sprememb v pisalnih poteh)
