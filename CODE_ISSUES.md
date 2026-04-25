@@ -47,6 +47,13 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Refactor: EMA + AdaptiveTDEE → utils/NutritionCalculations.kt)**
+  1. `utils/NutritionCalculations.kt`: Dodani `calculateEMA(weights, period=7)` in `calculateAdaptiveTDEE(last7DaysCalories, emaWeightChangeDelta)`.
+     - `calculateEMA`: EMAₜ = α × wₜ + (1−α) × EMA_(t−1), α = 2/(period+1)
+     - `calculateAdaptiveTDEE`: TDEE = avgConsumed − (emaWeightChangeDelta × 7700 / activeDays). Min 800 kcal.
+  2. `Progress.kt`: Inline EMA koda zamenjena s klicem `calculateEMA(...)`. `computeWeightPrediction()` zdaj kliče obe utils funkciji. Dodan adaptivni TDEE izračun za WeightPredictorStore.
+  3. `domain/nutrition/NutritionCalculations.kt`: Prazna datoteka označena kot deprecated z opombo. Ročno jo izbriši.
+
 - **2026-04-25 (Faza 7: Weight Predictor — Termodinamični algoritem)**
   **Algoritem:**
   - `EMA(α=0.25, 7-day)`: gladi dnevne fluktuacije vode iz tedenskih weightLog vnosov
