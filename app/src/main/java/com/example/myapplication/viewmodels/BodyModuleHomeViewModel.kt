@@ -56,6 +56,8 @@ sealed class BodyHomeIntent {
         val totalKcal: Int = 0,
         val totalTimeMin: Double = 0.0,
         val exerciseResults: List<Map<String, Any>> = emptyList(),
+        /** Fokus mišic te seje — shranjeno v workoutDoc za fetchLastSessionForFocus() (Faza 12). */
+        val focusAreas: List<String> = emptyList(),
         val onCompletion: (WorkoutCompletionResult?) -> Unit = {}
     ) : BodyHomeIntent()
 }
@@ -110,7 +112,8 @@ class BodyModuleHomeViewModel(
                         exercisesCount = intent.exerciseResults.size,
                         planDay = _ui.value.planDay,
                         isExtra = intent.isExtraWorkout,
-                        exerciseResults = intent.exerciseResults
+                        exerciseResults = intent.exerciseResults,
+                        focusAreas = intent.focusAreas
                     )
 
                     result.onSuccess { completionResult ->

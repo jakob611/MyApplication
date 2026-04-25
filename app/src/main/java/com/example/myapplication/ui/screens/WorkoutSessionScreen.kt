@@ -49,7 +49,10 @@ import com.example.myapplication.domain.WorkoutGenerator
 import com.example.myapplication.data.AlgorithmPreferences
 import com.example.myapplication.domain.WorkoutGoal
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
+import com.example.myapplication.viewmodels.WorkoutGenerationState
+import com.example.myapplication.viewmodels.WorkoutSessionViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -77,7 +80,13 @@ private data class ExerciseResult(
     val activeMinutes: Double,
     val restMinutes: Double,
     val caloriesKcal: Int,
-    val difficultyRating: Int = 1
+    val difficultyRating: Int = 1,
+    /** Ponovitve opravljene v tej seji — shranjeno za Volume Progression (Faza 12). */
+    val reps: Int = 0,
+    /** Seti opravljeni v tej seji — shranjeno za Volume Progression (Faza 12). */
+    val sets: Int = 0,
+    /** Teža v kg (0f = telesna teža) — za prihodnje weight-tracking feature. */
+    val weightKg: Float = 0f
 )
 
 private data class ExerciseData(
@@ -148,6 +157,18 @@ fun WorkoutSessionScreen(
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
     // ✅ Firestore SSOT: collectiramo state enkrat za celoten composable
     val vmUiState by vm.ui.collectAsState()
+
+    // ── Faza 12: WorkoutSessionViewModel za Firestore Bridge + generiranje ───────
+    val workoutVm: WorkoutSessionViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as android.app.Application
+        )
+    )
+    val workoutGenState by workoutVm.state.collectAsState()
+    val isProgressiveOverload by workoutVm.isProgressiveOverload.collectAsState()
+
+    /** Shranjeni fokus te seje (za CompleteWorkoutSession → workoutDoc.focusAreas). */
+    var currentFocusAreas by remember { mutableStateOf(emptySet<String>()) }
 
     var userWeightKg by remember { mutableStateOf(70.0) }
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
@@ -360,30 +381,48 @@ fun WorkoutSessionScreen(
         android.util.Log.d("WorkoutSession", "Focus: $dailyFocus (from plan: ${currentPlan.focusAreas})")
         android.util.Log.d("WorkoutSession", "Equipment: $equipment (from plan: ${currentPlan.equipment})")
 
-        val params = com.example.myapplication.domain.WorkoutGenerationParams(
-            userExperienceLevel = experienceLevel,
-            targetDifficultyLevel = targetDifficulty,
-            availableEquipment = equipment,
-            goal = goal,
-            focusAreas = dailyFocus.toSet(),
-            exerciseCount = (currentPlan.sessionLength / 4).coerceAtLeast(4).coerceAtMost(15),
-            durationMinutes = currentPlan.sessionLength
+        // ── Shrani fokus za CompleteWorkoutSession (Faza 12) ────────────────────
+        currentFocusAreas = dailyFocus
+
+        // ── Reset + delegiraj generiranje na WorkoutSessionViewModel ────────────
+        // ViewModel: 1) fetch Firestore profil (gender) + zadnja seja (Memory Bridge)
+        //            2) loadParamsWithOverrides (SSOT)
+        //            3) generateWorkout + applyVolumeProgression
+        workoutVm.reset()  // Zagotovi Idle → LoadingHistory prehod brez race condition
+        workoutVm.prepareWorkout(
+            focusAreas         = dailyFocus,
+            equipment          = equipment,
+            planDay            = vmUiState.planDay.coerceAtLeast(1),
+            exerciseCount      = (currentPlan.sessionLength / 4).coerceAtLeast(4).coerceAtMost(15),
+            durationMinutes    = currentPlan.sessionLength,
+            targetDifficulty   = targetDifficulty,
+            goalFromPlan       = goal,
+            planExperience     = currentPlan.experience ?: ""
         )
 
-        val generator = WorkoutGenerator()
-        val result = generator.generateWorkout(params)
-        val generatedList = result.map { mapRefinedToExerciseData(it) }
+        // ── Počakaj na rezultat (suspending — dokler ni Ready ali Error) ────────
+        val genResult = workoutVm.state.first {
+            it is WorkoutGenerationState.Ready || it is WorkoutGenerationState.Error
+        }
 
-        if (generatedList.isEmpty()) {
-             state = WorkoutState.Error("Could not generate workout. Please check your settings.")
-        } else {
-            // Mark exercises as warmup (first 2) or main
-            currentSessionExercises = generatedList.mapIndexed { index, ex ->
-                ex.copy(isWarmup = index < 2)
+        when (genResult) {
+            is WorkoutGenerationState.Ready -> {
+                val generatedList = genResult.exercises.map { mapRefinedToExerciseData(it) }
+                if (generatedList.isEmpty()) {
+                    state = WorkoutState.Error("Could not generate workout. Please check your settings.")
+                } else {
+                    currentSessionExercises = generatedList.mapIndexed { index, ex ->
+                        ex.copy(isWarmup = index < 2)
+                    }
+                    val warmup = currentSessionExercises.filter { it.isWarmup }
+                    val main   = currentSessionExercises.filter { !it.isWarmup }
+                    state = WorkoutState.Preview(warmup, main)
+                }
             }
-            val warmup = currentSessionExercises.filter { it.isWarmup }
-            val main = currentSessionExercises.filter { !it.isWarmup }
-            state = WorkoutState.Preview(warmup, main)
+            is WorkoutGenerationState.Error -> {
+                state = WorkoutState.Error(genResult.message)
+            }
+            else -> state = WorkoutState.Error("Could not generate workout. Please check your settings.")
         }
     }
 
@@ -404,7 +443,33 @@ fun WorkoutSessionScreen(
                 }
             }
             is WorkoutState.Preview -> {
-                PreviewScreen(1, s.warmup, s.main, onStart = { state = WorkoutState.Exercise(0) }, onBack = onBack)
+                // 🔥 Faza 12: Progressive Overload badge — "Danes močneje!"
+                if (isProgressiveOverload) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(vertical = 8.dp, horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "🔥 Danes močneje! Napredek +5% detektiran",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            PreviewScreen(1, s.warmup, s.main,
+                                onStart = { state = WorkoutState.Exercise(0) },
+                                onBack = onBack
+                            )
+                        }
+                    }
+                } else {
+                    PreviewScreen(1, s.warmup, s.main, onStart = { state = WorkoutState.Exercise(0) }, onBack = onBack)
+                }
             }
             is WorkoutState.Rest -> {
                 RestScreen(s.restSeconds, onSkip = { state = WorkoutState.Exercise(s.nextIndex) }) {
@@ -468,13 +533,19 @@ fun WorkoutSessionScreen(
                         isExtraWorkout = isExtra,
                         exerciseResults = results.map { r ->
                             mapOf(
-                                "name" to r.name,
+                                "name"          to r.name,
                                 "activeMinutes" to r.activeMinutes,
-                                "restMinutes" to r.restMinutes,
-                                "caloriesKcal" to r.caloriesKcal,
-                                "difficulty" to r.difficultyRating
+                                "restMinutes"   to r.restMinutes,
+                                "caloriesKcal"  to r.caloriesKcal,
+                                "difficulty"    to r.difficultyRating,
+                                // Faza 12: reps/sets za Volume Progression (fetchLastSessionForFocus)
+                                "reps"          to r.reps,
+                                "sets"          to r.sets,
+                                "weightKg"      to r.weightKg
                             )
                         },
+                        // Faza 12: shrani fokus v workoutDoc za Memory Bridge iskanje
+                        focusAreas = currentFocusAreas.toList(),
                         totalKcal = results.sumOf { it.caloriesKcal },
                         totalTimeMin = results.sumOf { it.activeMinutes + it.restMinutes },
                         onCompletion = { result: com.example.myapplication.domain.gamification.WorkoutCompletionResult? ->
@@ -757,7 +828,10 @@ private fun ExerciseScreen(
                         activeMinutes = actualActiveMin,
                         restMinutes = actualRestMin,
                         caloriesKcal = actualKcal,
-                        difficultyRating = selectedDifficulty
+                        difficultyRating = selectedDifficulty,
+                        // Faza 12: shrani reps/sets za Volume Progression
+                        reps = exercise.reps.coerceAtLeast(0),
+                        sets = exercise.sets.coerceAtLeast(1)
                     ))
                 }
             }) {

@@ -19,7 +19,9 @@ class UpdateBodyMetricsUseCase(
         exercisesCount: Int,
         planDay: Int,
         isExtra: Boolean,
-        exerciseResults: List<Map<String, Any>>
+        exerciseResults: List<Map<String, Any>>,
+        /** Fokus mišic te seje — za fetchLastSessionForFocus() v Fazi 12. */
+        focusAreas: List<String> = emptyList()
     ): Result<WorkoutCompletionResult?> {
         return try {
             val tz = TimeZone.currentSystemDefault()
@@ -38,7 +40,9 @@ class UpdateBodyMetricsUseCase(
                 "totalTimeMin" to totalTimeMin,
                 "exercisesCount" to exercisesCount,
                 "planDay" to planDay,
-                "exercises" to exerciseResults
+                "exercises" to exerciseResults,
+                // Faza 12: focusAreas za fetchLastSessionForFocus() iskanje
+                "focusAreas" to focusAreas
             )
 
             // 3. Shranjevanje v bazo
