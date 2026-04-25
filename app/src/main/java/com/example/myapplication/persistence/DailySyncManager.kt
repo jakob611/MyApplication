@@ -5,34 +5,23 @@ import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.google.firebase.ktx.Firebase
-import com.google.firebase.firestore.ktx.firestore
-import com.example.myapplication.data.daily.DailyLogRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /**
- * DailySyncManager — Local-first arhitektura za dnevne podatke.
+ * DailySyncManager — Faza 5: Poenostavljen orkestrator sync workerja.
  *
- * Princip:
- *  - Vsak vnos hrane, vode, kalorij se TAKOJ zapiše lokalno (SharedPreferences).
- *  - Firestore sync se izvede z WorkManager (DailySyncWorker):
- *      → Ko aplikacija gre v ozadje (onPause) — zanesljivo, čaka na omrežje, retry ob napaki
- *      → Ob odprtju — za VČERAJŠNJE podatke (popravek zamujenih syncov)
+ * Faza 5 sprememba:
+ *  - Odstranjeni vsi lokalni cache write-i (saveFoodsLocally, saveWaterLocally itd.)
+ *  - Firestore SDK z isPersistenceEnabled = true skrbi za offline delovanje sam
+ *  - Ta razred zdaj služi SAMO kot:
+ *      1. Koordinator DailySyncWorkerja (schedule ob odprtju)
+ *      2. Tracker sinciiranih datumov (da ne dupliciramo requestov)
+ *      3. Migracijsko čiščenje starih SharedPrefs cachev
  */
 object DailySyncManager {
 
     private const val TAG = "DailySyncManager"
     private const val PREFS_SYNC = "daily_sync_prefs"
-    // Set sincranih datumov (zamenjuje stari single-string KEY_LAST_SYNCED_DATE)
     private const val KEY_SYNCED_DATES = "synced_dates_set"
-
-    // SharedPreferences ključi (deljeni z NutritionScreen)
-    const val PREFS_FOOD = "food_cache"
-    const val PREFS_WATER = "water_cache"
-    const val PREFS_BURNED = "burned_cache"
-    const val PREFS_CALORIES = "calories_cache" // NEW
 
     private fun todayStr() = dateStr(Date())
     private fun dateStr(d: Date) = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(d)
@@ -42,57 +31,11 @@ object DailySyncManager {
         return dateStr(cal.time)
     }
 
-    // ───── Lokalno shranjevanje ─────────────────────────────────────────────
-
-    /** Shrani seznam hrane (JSON) lokalno. Kliče se takoj ob vsaki spremembi. */
-    fun saveFoodsLocally(context: Context, foodsJson: String, date: String = todayStr()) {
-        context.getSharedPreferences(PREFS_FOOD, Context.MODE_PRIVATE)
-            .edit().putString("foods_$date", foodsJson).apply()
-    }
-
-    /** Preberi lokalno shranjeno hrano za dani dan. */
-    fun loadFoodsJson(context: Context, date: String = todayStr()): String? {
-        return context.getSharedPreferences(PREFS_FOOD, Context.MODE_PRIVATE)
-            .getString("foods_$date", null)
-    }
-
-    /** Shrani vodo lokalno. */
-    fun saveWaterLocally(context: Context, waterMl: Int, date: String = todayStr()) {
-        context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE)
-            .edit().putInt("water_$date", waterMl).apply()
-    }
-
-    /** Shrani porabljene kalorije lokalno. */
-    fun saveBurnedLocally(context: Context, burnedKcal: Int, date: String = todayStr()) {
-        context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
-            .edit().putInt("burned_$date", burnedKcal).apply()
-    }
-
-    /** Shrani vnesene (consumed) kalorije lokalno. */
-    fun saveCaloriesLocally(context: Context, calories: Int, date: String = todayStr()) {
-        context.getSharedPreferences(PREFS_CALORIES, Context.MODE_PRIVATE)
-            .edit().putInt("calories_$date", calories).apply()
-    }
-
-    /**
-     * Shrani kalorije in OZNACI, da sinhronizacija ni narejena
-     */
-    fun saveBurnedCaloriesLocally(context: Context, date: String, value: Int) {
-        context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
-            .edit()
-            .putInt("burned_$date", value)
-            .apply()
-
-        // OPOMBA: Ne kliči več markUnsynced za burned, ker se burnedCalories
-        // ne sinhronizira več z zamikom, ampak preko Firestore increment().
-    }
-
-    // ───── Sync logika ──────────────────────────────────────────────────────
+    // ───── Sync state tracking ──────────────────────────────────────────────
 
     /** Preveri ali je bil dani datum že sincirano. Internal — kliče ga tudi DailySyncWorker. */
     internal fun isSynced(context: Context, date: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
-        // Podpira Set datumov — yesterday in today sta oba lahko sincirani hkrati
         val synced = prefs.getStringSet(KEY_SYNCED_DATES, emptySet()) ?: emptySet()
         return date in synced
     }
@@ -100,10 +43,9 @@ object DailySyncManager {
     /** Označi dani datum kot sincirano. Internal — kliče ga tudi DailySyncWorker. */
     internal fun markSynced(context: Context, date: String) {
         val prefs = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE)
-        // Ohrani obstoječe sincirane datume, dodaj novega
         val existing = prefs.getStringSet(KEY_SYNCED_DATES, emptySet())?.toMutableSet() ?: mutableSetOf()
         existing.add(date)
-        // Počisti stare datume (starejše od 7 dni) da Set ne raste v neskončnost
+        // Počisti stare datume (starejše od 7 dni)
         val cutoff = run {
             val cal = java.util.Calendar.getInstance()
             cal.add(java.util.Calendar.DAY_OF_YEAR, -7)
@@ -113,96 +55,38 @@ object DailySyncManager {
         prefs.edit().putStringSet(KEY_SYNCED_DATES, existing).apply()
     }
 
-    /**
-     * Preveri ali obstajajo podatki za dani dan (ne pošiljamo praznih syncov).
-     * Internal — kliče ga tudi DailySyncWorker.
-     */
-    internal fun hasDataForDate(context: Context, date: String): Boolean {
-        val water = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE)
-            .getInt("water_$date", 0)
-        val burned = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE)
-            .getInt("burned_$date", 0)
-        // Check calories as well (optional, but consistent)
-        val cals = context.getSharedPreferences(PREFS_CALORIES, Context.MODE_PRIVATE)
-           .getInt("calories_$date", 0)
-
-        val foods = context.getSharedPreferences(PREFS_FOOD, Context.MODE_PRIVATE)
-            .getString("foods_$date", null)
-        
-        return water > 0 || burned > 0 || cals > 0 || (foods != null && foods != "[]")
-    }
+    // ───── Sync orchestration ────────────────────────────────────────────────
 
     /**
      * Kliče se ob ODPRTJU aplikacije (iz MainActivity).
-     *
-     * Razpored — Worker bo sinciiral vse nesincirane datume (yesterday + today):
-     *  - Pokliče Worker samo če obstaja vsaj en datum z nesinciranimi podatki
-     *  - Worker sam ugotovi katere datume mora sincirati (yesterday, today)
+     * Faza 5: Ker Firestore SDK sam skrbi za offline sync, ta funkcija le sproži
+     * DailySyncWorker ki označi datume kot sincirane.
      */
     fun syncOnAppOpen(context: Context, uid: String) {
-        val yesterday = yesterday()
-        val today = todayStr()
-
-        val needsSync = (!isSynced(context, yesterday) && hasDataForDate(context, yesterday)) ||
-                        (!isSynced(context, today) && hasDataForDate(context, today))
-
-        if (needsSync) {
-            Log.d(TAG, "syncOnAppOpen: queuing WorkManager (yesterday=$yesterday, today=$today)")
-            com.example.myapplication.worker.DailySyncWorker.schedule(context)
-        } else {
-            Log.d(TAG, "syncOnAppOpen: all data synced — nothing to do")
-        }
+        Log.d(TAG, "syncOnAppOpen: Firestore je Single Source of Truth — posredovanje DailySyncWorkerju")
+        com.example.myapplication.worker.DailySyncWorker.schedule(context)
     }
 
+    // ───── Faza 5: Migracijski čistilec ─────────────────────────────────────
+
     /**
-     * Kliče se ob vsaki lokalni spremembi, da uporabnik TAKOJ vidi
-     * posodobljene grafe v ProgressScreen (instant feedback).
+     * Faza 5 migracija — pobriše stare lokalne SharedPrefs cache datoteke.
+     * Kliči enkrat ob prvem zagonu po nadgradnji.
      *
-     * VARNO: Celoten zapis v dailyLogs poteka skozi DailyLogRepository.updateDailyLog()
-     * → Firestore Transaction. Ni več SetOptions.merge() izven transakcije.
-     * burnedCalories je namenoma izpuščen — za to skrbi SyncHealthConnectUseCase.
+     * Briše:
+     *  - water_cache       (waterMl po dnevih)
+     *  - burned_cache      (burnedCalories po dnevih)
+     *  - calories_cache    (consumedCalories po dnevih)
+     *  - food_cache        (foods JSON po dnevih)
+     *  - daily_sync_prefs  (sync tracker — počisti izpod starih ključev)
      */
-    fun syncTodayNow(context: Context, uid: String) {
-        val date = todayStr()
-        val waterMl = context.getSharedPreferences(PREFS_WATER, Context.MODE_PRIVATE).getInt("water_$date", 0)
-        val foodsJson = loadFoodsJson(context, date)
-
-        // Razčleni hrano PRED vstopom v transakcijo (JSON parsing je CPU-intenziven)
-        val parsedItems: List<Map<String, Any>> = if (!foodsJson.isNullOrBlank()) {
-            runCatching {
-                val arr = org.json.JSONArray(foodsJson)
-                (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i)
-                    mutableMapOf<String, Any>().also { map ->
-                        obj.keys().forEach { key -> map[key] = obj.get(key) }
-                    }
-                }
-            }.getOrDefault(emptyList())
-        } else emptyList()
-
-        // Fire-and-forget transakcija (ne blokira UI threada)
-        CoroutineScope(Dispatchers.IO).launch {
-            DailyLogRepository().updateDailyLog(date) { data ->
-                data["waterMl"] = waterMl
-                // Items: posodobi samo če obstajajo lokalni podatki
-                if (parsedItems.isNotEmpty()) {
-                    data["items"] = parsedItems
-                }
-                // burnedCalories NI del tega synca — To je last-write-wins odgovornost
-                // SyncHealthConnectUseCase in UpdateBodyMetricsUseCase.
-            }
-            markSynced(context, date)
-            Log.d(TAG, "syncTodayNow OK [$date]: water=$waterMl ml, foods=${parsedItems.size}")
+    fun clearLegacyCache(context: Context) {
+        val legacyPrefs = listOf("water_cache", "burned_cache", "calories_cache", "food_cache")
+        for (name in legacyPrefs) {
+            context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().apply()
         }
-
-        // Takojšnje posodabljanje tudi v daily_health, ker ga uporablja ProgressScreen
-        // (različna kolekcija od dailyLogs — ne zahteva transakcije z DailyLogRepo)
-        val burnedKcal = context.getSharedPreferences(PREFS_BURNED, Context.MODE_PRIVATE).getInt("burned_$date", 0)
-        if (burnedKcal > 0) {
-            Firebase.firestore
-                .collection("users").document(uid)
-                .collection("daily_health").document(date)
-                .set(mapOf("date" to date, "calories" to burnedKcal), com.google.firebase.firestore.SetOptions.merge())
-        }
+        // Počisti stari sync tracker da se fresh start pravilno izvede
+        context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE).edit().clear().apply()
+        Log.i(TAG, "✅ Faza 5: Stari lokalni SharedPrefs cache počiščen (water/burned/calories/food)")
     }
 }

@@ -110,9 +110,8 @@ class WaterInputActivity : ComponentActivity() {
                         coroutineScope.launch {
                             try {
                                 com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(w, today)
-                                // Posodobi lokalni cache — NutritionScreen bere iz tega
-                                com.example.myapplication.persistence.DailySyncManager
-                                    .saveWaterLocally(context, w, today)
+                                // Faza 5: Lokalni cache odstranjen — FoodRepositoryImpl.logWater() piše direktno v Firestore.
+                                // Firestore SDK (isPersistenceEnabled=true) skrbi za offline sinhronizacijo.
                                 // Update widget
                                 WaterWidgetProvider.updateWidgetFromApp(context, w)
                                 onSaved()

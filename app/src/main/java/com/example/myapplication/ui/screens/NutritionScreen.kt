@@ -139,42 +139,10 @@ fun NutritionScreen(
         }
     }
 
-    // Današnji vnosi (lokalni state) — takoj naloži iz lokalnega cache-a
-    val initialFoods = remember {
-        val cacheDate = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
-        try {
-            val json = com.example.myapplication.persistence.DailySyncManager.loadFoodsJson(context, cacheDate)
-            if (!json.isNullOrBlank()) {
-                val arr = org.json.JSONArray(json)
-                (0 until arr.length()).mapNotNull { i ->
-                    try {
-                        val obj = arr.getJSONObject(i)
-                        val mealStr = obj.optString("meal", "Breakfast")
-                        val meal = runCatching { MealType.valueOf(mealStr) }.getOrNull() ?: MealType.Breakfast
-                        TrackedFood(
-                            id = obj.optString("id", java.util.UUID.randomUUID().toString()),
-                            name = obj.optString("name", ""),
-                            meal = meal,
-                            amount = obj.optDouble("amount", 1.0),
-                            unit = obj.optString("unit", "servings"),
-                            caloriesKcal = obj.optDouble("caloriesKcal", 0.0),
-                            proteinG = obj.optDouble("proteinG", 0.0).takeIf { it > 0 },
-                            carbsG = obj.optDouble("carbsG", 0.0).takeIf { it > 0 },
-                            fatG = obj.optDouble("fatG", 0.0).takeIf { it > 0 },
-                            fiberG = obj.optDouble("fiberG", 0.0).takeIf { it > 0 },
-                            sugarG = obj.optDouble("sugarG", 0.0).takeIf { it > 0 },
-                            saturatedFatG = obj.optDouble("saturatedFatG", 0.0).takeIf { it > 0 },
-                            sodiumMg = obj.optDouble("sodiumMg", 0.0).takeIf { it > 0 },
-                            potassiumMg = obj.optDouble("potassiumMg", 0.0).takeIf { it > 0 },
-                            cholesterolMg = obj.optDouble("cholesterolMg", 0.0).takeIf { it > 0 },
-                            barcode = obj.optString("barcode", "").takeIf { it.isNotBlank() }
-                        )
-                    } catch (e: Exception) { null }
-                }
-            } else emptyList()
-        } catch (e: Exception) { emptyList() }
-    }
-    var trackedFoods by remember { mutableStateOf<List<TrackedFood>>(initialFoods) }
+    // Faza 5: Začenemo s praznim listom — Firestore snapshot listener (observeDailyLog)
+    // bo naložil podatke asinhrono. Firestore SDK z isPersistenceEnabled=true zagotavlja
+    // da so podatki dostopni takoj tudi brez omrežja (offline cache).
+    var trackedFoods by remember { mutableStateOf<List<TrackedFood>>(emptyList()) }
 
     // UI debounce za vode gumbe (preprečuje double-tap)
     val lastWaterClickState = remember { mutableStateOf(0L) }
@@ -369,42 +337,13 @@ fun NutritionScreen(
         }
     }
 
-    // Lokalni zapis hrane — TAKOJ ob vsaki spremembi (za JSON cache na napravi in XP)
+    // Faza 5: Lokalni JSON cache odstranjen — Firestore je Single Source of Truth.
+    // Ta LaunchedEffect zdaj skrbi SAMO za XP nagrado ob doseganju kaloričnega cilja.
     LaunchedEffect(trackedFoods, todayId) {
-        val calculatedConsumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
-
-
-        // Serializiraj v JSON in shrani lokalno
-        try {
-            val arr = org.json.JSONArray()
-            trackedFoods.forEach { tf ->
-                val obj = org.json.JSONObject().apply {
-                    put("id", tf.id)
-                    put("name", tf.name)
-                    put("meal", tf.meal.name)
-                    put("amount", tf.amount)
-                    put("unit", tf.unit)
-                    put("caloriesKcal", tf.caloriesKcal)
-                    put("proteinG", tf.proteinG ?: 0.0)
-                    put("carbsG", tf.carbsG ?: 0.0)
-                    put("fatG", tf.fatG ?: 0.0)
-                    put("fiberG", tf.fiberG ?: 0.0)
-                    put("sugarG", tf.sugarG ?: 0.0)
-                    put("saturatedFatG", tf.saturatedFatG ?: 0.0)
-                    put("sodiumMg", tf.sodiumMg ?: 0.0)
-                    put("potassiumMg", tf.potassiumMg ?: 0.0)
-                    put("cholesterolMg", tf.cholesterolMg ?: 0.0)
-                    if (tf.barcode != null) put("barcode", tf.barcode)
-                }
-                arr.put(obj)
-            }
-            com.example.myapplication.persistence.DailySyncManager.saveFoodsLocally(context, arr.toString(), todayId)
-        } catch (e: Exception) {
-            Log.e("NutritionLocal", "Failed to save foods locally", e)
-        }
+        val consumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
 
         // XP nagrada za dosežen kalorični cilj (anti-farming: enkrat na dan)
-        // Používa effectiveTargetCalories = dynamicTarget (real-time) ali statični fallback
+        // Uporablja efectiveTargetCalories = dynamicTarget (real-time) ali statični fallback
         val targetCal = if (dynamicTargetCalories > 0) dynamicTargetCalories else targetCalories
         val consumedCal = consumedKcal
         val difference = kotlin.math.abs(targetCal - consumedCal)

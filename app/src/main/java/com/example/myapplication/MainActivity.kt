@@ -190,6 +190,18 @@ class MainActivity : ComponentActivity() {
                     Log.d("MainActivity", "✅ Fresh start: bm_prefs reset")
                 }
 
+                // ── Faza 5: One-time migracija — pobriši stare lokalne SharedPrefs caches ──
+                // water_cache, burned_cache, calories_cache, food_cache so bili legaccy
+                // vmesni buffer za sync. Firestore SDK (isPersistenceEnabled=true) zdaj
+                // skrbi za offline delovanje sam — te datoteke niso več potrebne.
+                val migPrefs = context.getSharedPreferences("migration_flags", Context.MODE_PRIVATE)
+                if (!migPrefs.getBoolean("faza5_legacy_purge_done", false)) {
+                    com.example.myapplication.persistence.DailySyncManager.clearLegacyCache(context)
+                    migPrefs.edit().putBoolean("faza5_legacy_purge_done", true).apply()
+                    Log.i("MainActivity", "✅ Faza 5: Legacy lokalni cache počiščen → Firestore je Single Source of Truth")
+                }
+                // ──────────────────────────────────────────────────────────────────────────
+
                     if (accountEmail != null) {
                         userEmail = accountEmail
 

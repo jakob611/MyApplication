@@ -18,6 +18,7 @@ import com.example.myapplication.persistence.FirestoreHelper
 import com.example.myapplication.data.workout.FirestoreWorkoutRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -177,20 +178,38 @@ class StreakReminderWorker(
         return Result.success()
     }
 
-    private fun loadReminderContext(streak: Int, planDay: Int): ReminderContext {
+    /**
+     * Faza 5: Preberi dnevne totale IZ FIRESTORE (ne več iz lokalnih SharedPrefs cachev).
+     * Firestore SDK z isPersistenceEnabled = true zagotavlja offline delovanje.
+     */
+    private suspend fun loadReminderContext(streak: Int, planDay: Int): ReminderContext {
         val dateKey = LocalDate.now().toString()
-        val waterMl = context.getSharedPreferences("water_cache", Context.MODE_PRIVATE)
-            .getInt("water_$dateKey", 0)
-        val consumedCalories = context.getSharedPreferences("calories_cache", Context.MODE_PRIVATE)
-            .getInt("calories_$dateKey", 0)
-        val burnedCalories = context.getSharedPreferences("burned_cache", Context.MODE_PRIVATE)
-            .getInt("burned_$dateKey", 0)
+        var waterMl = 0
+        var consumedCalories = 0
+        var burnedCalories = 0
+
+        // Preberi iz Firestore dailyLogs (offline-safe — Firestore SDK cache)
+        val uid = FirestoreHelper.getCurrentUserDocId()
+        if (uid != null) {
+            try {
+                val db = FirestoreHelper.getDb()
+                val doc = db.collection("users").document(uid)
+                    .collection("dailyLogs").document(dateKey)
+                    .get().await()
+                waterMl          = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+                consumedCalories = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+                burnedCalories   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
+                Log.d(TAG, "Firestore dailyLog [$dateKey]: water=$waterMl, consumed=$consumedCalories, burned=$burnedCalories")
+            } catch (e: Exception) {
+                Log.e(TAG, "Napaka pri branju dailyLog iz Firestore: ${e.message}")
+            }
+        }
 
         val email = Firebase.auth.currentUser?.email
         // --- 6. PREBERI ŠTEVILO ZAMRZOVANJ (FROZEN DAYS) ---
         val streakFreezes = try {
             runCatching { UserProfileManager.loadProfile(email ?: "").streakFreezes }.getOrDefault(0)
-        } catch(e:Exception) {
+        } catch (e: Exception) {
             0
         }
 
