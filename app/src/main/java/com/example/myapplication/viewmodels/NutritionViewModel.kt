@@ -12,13 +12,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import com.example.myapplication.health.HealthConnectManager
+import kotlinx.coroutines.flow.combine
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.toJavaInstant
 import android.content.Context
 import android.util.Log
+import kotlin.math.roundToInt
 
 data class DailyTotals(
     val consumed: Int = 0,
@@ -43,6 +43,61 @@ class NutritionViewModel(
         else com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    // ── Dinamični TDEE ─────────────────────────────────────────────────────────
+
+    /**
+     * Sedentarna baza: BMR × 1.2.
+     * Nastavimo jo enkrat ob nalaganju plana/profila. Ne vključuje nobenega treninga —
+     * to je kalorični minimum za popolno mirovanje + NEAT.
+     */
+    private val _baseTdee = MutableStateFlow(0.0)
+
+    /**
+     * Ciljna prilagoditev glede na cilj:
+     *  -500 = hujšanje, 0 = vzdrževanje, +300 = mišična masa
+     */
+    private val _goalAdjustment = MutableStateFlow(0)
+
+    /**
+     * Dinamični dnevni kalorični limit (real-time):
+     *   baseTdee  (BMR × 1.2)
+     * + burnedCalories  (HC + Workout iz Firestore dailyLogs — posodablja se sproti)
+     * + goalAdjustment  (-500 / 0 / +300)
+     *
+     * Ko gre uporabnik na tek in pokuri 500 kcal → burnedCalories ↑ → dynamicTargetCalories ↑
+     * Zjutraj v postelji → samo baseTdee → limit je minimalen.
+     */
+    val dynamicTargetCalories: StateFlow<Int> = combine(
+        _baseTdee,
+        _uiState,
+        _goalAdjustment
+    ) { base, totals, goalAdj ->
+        if (base <= 0.0) return@combine 0   // Profil še ni naložen → UI bo uporabil statični fallback
+        val dynamic = base + totals.burned.toDouble() + goalAdj
+        dynamic.coerceAtLeast(1200.0).roundToInt()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * Nastavi BMR in cilj, ko je plan/profil naložen.
+     * Kliče se iz NutritionScreen z LaunchedEffect ob spremembi plana ali nutritionPlan.
+     *
+     * @param bmr     Bazalna presnova (kcal/dan) iz AlgorithmData plana
+     * @param goal    Cilj ("Lose fat", "Build muscle", "General health" …)
+     */
+    fun setUserMetrics(bmr: Double, goal: String) {
+        _baseTdee.value = bmr * 1.2
+        _goalAdjustment.value = when {
+            goal.contains("Lose", ignoreCase = true) ||
+            goal.contains("Cut",  ignoreCase = true) -> -500
+            goal.contains("Build", ignoreCase = true) ||
+            goal.contains("Gain",  ignoreCase = true) -> 300
+            else -> 0
+        }
+        Log.d("NutritionVM", "✅ setUserMetrics: BMR=${"%.0f".format(bmr)} → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+    }
+
+    // ── Obstoječa logika ───────────────────────────────────────────────────────
+
     init {
         observeDailyTotals()
     }
@@ -51,7 +106,7 @@ class NutritionViewModel(
         viewModelScope.launch {
             uidFlow.collect { uid ->
                 if (uid != null) {
-                    val todayId = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
+                    val todayId = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
                     com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
                         Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
                         

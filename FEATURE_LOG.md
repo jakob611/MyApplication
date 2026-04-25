@@ -233,3 +233,10 @@
 - **Nutrition Sync Precision**: Reworked `consumedCalories` tracking to use `FieldValue.increment` with a precise `logFood` transaction inside `FoodRepositoryImpl`, removing unreliable local list sum calculations from the UI. `NutritionViewModel` now automatically maps and immediately renders `uiState` (consumed/burned calories) to the `DonutProgressView` and `ActiveCaloriesBar`.
 
 ## Backlog / Planned Features
+
+## 2026-04-25 — Faza 4: Dinamični TDEE algoritem
+**Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `shared/.../CalculateBodyMetricsUseCase.kt`
+**Kaj:** Zamenjava statičnega aktivnostnega multiplikatorja (1.2–1.9) z dinamičnim TDEE: `baseTdee = BMR × 1.2` + `burnedCalories` (real-time iz Firestore dailyLogs) + `goalAdj`. UI prikaže `🔥 +X kcal boost` ko je aktivnost > 0. Fallback na statični target ko profil ni naložen.
+**Zakaj:** Statični TDEE ne upošteva dejanske aktivnosti. Zdaj: zjutraj v postelji = nizek limit; po teku 500 kcal = limit se poveča za 500 kcal v realnem času.
+**Tveganje:** 🟢 nizko (obstoječi statični fallback ohranjen)
+

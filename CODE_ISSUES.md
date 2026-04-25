@@ -47,6 +47,13 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Faza 4: Dinamični TDEE algoritem)**
+  1. `NutritionViewModel.kt`: Dodani `_baseTdee`, `_goalAdjustment` StateFlows in `dynamicTargetCalories: StateFlow<Int>` (combine iz baseTdee + burned + goalAdj). Nova funkcija `setUserMetrics(bmr, goal)` nastavi sedentarno bazo (BMR × 1.2) in cilj.
+  2. `NutritionScreen.kt`: `LaunchedEffect(nutritionPlan, plan)` kliče `setUserMetrics` ko je BMR naložen. Donut view zdaj prikazuje `effectiveTargetCalories` (dynamic če je naložen, fallback na statični). Dodan `🔥 +X kcal boost` indikator pod grafom. XP logika posodobljena na `effectiveTargetCalories`. `ActiveCaloriesBar` goal ni več hardcode 800 ampak dinamičen.
+  3. `CalculateBodyMetricsUseCase.kt` (KMP): Dodana metoda `calculateDynamicTdee(bmr, burnedCalories, goal)` — dokumentacija algoritma za KMP sloj.
+  **Formula:** `dynamicTarget = BMR × 1.2 + burnedCalories + goalAdj`
+  **Učinek:** Zjutraj v postelji → nizek limit. Po teku 500 kcal → limit se takoj poveča za 500 kcal.
+
 - **2026-04-24 (Faza 3: Socialni del + XP varnost)**
   1. `FollowStore.kt`: Odstranjeni vsi `.update("followers", FieldValue.increment(1))` izven transakcij. Implementirana `db.runTransaction {}` z determinističnim doc ID `{followerId}_{followingId}` v kolekciji `follows`. Transakcija atomarno: preveri obstoječe sledenje, zapiše follow doc, posodobi oba števca. `unfollowUser` ima fallback za stare naključne ID-je. `isFollowing` preveri oba formata (O(1) deterministični + query fallback).
   2. `FirestoreGamificationRepository.kt`: `awardXP()` transakcija sedaj atomarno posodablja `xp` IN `level` hkrati. `UserProfile.calculateLevel(newXp)` se kliče znotraj transakcije. Zamenjano `transaction.update()` s `transaction.set(..., SetOptions.merge())` — varno za nov in obstoječ dokument.

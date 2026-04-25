@@ -57,5 +57,27 @@ class CalculateBodyMetricsUseCase {
 
         return BodyMetricsResult(bmi, bmiCategory, targetCalories, tdee, bmr)
     }
+
+    /**
+     * Faza 4 — Dinamični TDEE:
+     * Izračuna sedentarno bazo (BMR × 1.2) brez vključenega treninga.
+     * Trening se prišteje dinamično prek burnedCalories iz dailyLogs.
+     *
+     * @param bmr            Bazalna presnova (kcal/dan)
+     * @param burnedCalories Kalorije porabljene danes (HC + Workout, real-time)
+     * @param goal           Cilj za prilagoditev (+300 mišice / -500 hujšanje / 0 vzdrž.)
+     * @return               Dinamični dnevni kalorični limit
+     */
+    fun calculateDynamicTdee(bmr: Double, burnedCalories: Int, goal: String): Double {
+        val baseTdee = bmr * 1.2  // Sedentarna baza — popolno mirovanje + NEAT
+        val goalAdjustment = when {
+            goal.contains("Lose", ignoreCase = true) ||
+            goal.contains("Cut",  ignoreCase = true) -> -500.0
+            goal.contains("Build", ignoreCase = true) ||
+            goal.contains("Gain",  ignoreCase = true) -> 300.0
+            else -> 0.0
+        }
+        return (baseTdee + burnedCalories + goalAdjustment).coerceAtLeast(1200.0)
+    }
 }
 

@@ -117,6 +117,8 @@ fun NutritionScreen(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
     val uiState by nutritionViewModel.uiState.collectAsState()
+    // Dinamični TDEE — real-time vrednost iz ViewModel (0 = profil še ni naložen)
+    val dynamicTargetCalories by nutritionViewModel.dynamicTargetCalories.collectAsState()
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -197,6 +199,20 @@ fun NutritionScreen(
         val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
         if (uid != null) {
             nutritionPlan = com.example.myapplication.persistence.NutritionPlanStore.loadNutritionPlan(uid)
+        }
+    }
+
+    // Nastavi dinamični TDEE: preberi BMR iz shranjenih algoritmičnih podatkov
+    // Prioriteta: nutritionPlan.algorithmData.bmr > plan.algorithmData.bmr
+    LaunchedEffect(nutritionPlan, plan) {
+        val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
+            ?: plan?.algorithmData?.bmr?.takeIf { it > 0.0 }
+        val goal = nutritionPlan?.let {
+            // goal ni shranjen v NutritionPlan — vzamemo iz userProfile ali plan
+            userProfile.workoutGoal.ifBlank { null }
+        } ?: plan?.goal ?: userProfile.workoutGoal
+        if (bmr != null && bmr > 0) {
+            nutritionViewModel.setUserMetrics(bmr, goal ?: "")
         }
     }
 
@@ -388,7 +404,8 @@ fun NutritionScreen(
         }
 
         // XP nagrada za dosežen kalorični cilj (anti-farming: enkrat na dan)
-        val targetCal = targetCalories
+        // Používa effectiveTargetCalories = dynamicTarget (real-time) ali statični fallback
+        val targetCal = if (dynamicTargetCalories > 0) dynamicTargetCalories else targetCalories
         val consumedCal = consumedKcal
         val difference = kotlin.math.abs(targetCal - consumedCal)
         val percentageDiff = if (targetCal > 0) (difference.toDouble() / targetCal.toDouble()) else 1.0
@@ -442,7 +459,7 @@ fun NutritionScreen(
         com.example.myapplication.utils.calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDayToday)
     }
 
-    // Prilagojene kalorije — workout day vs rest day
+    // Prilagojene kalorije — workout day vs rest day (statični fallback)
     val adjustedTargetCalories = remember(targetCalories, isWorkoutDayToday, userProfile) {
         if (isWorkoutDayToday) {
             targetCalories
@@ -452,6 +469,13 @@ fun NutritionScreen(
             com.example.myapplication.utils.calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
         }
     }
+
+    // ── Dinamični kalorični limit ──────────────────────────────────────────────
+    // dynamicTargetCalories = BMR×1.2 + burnedCalories + goalAdj (real-time)
+    // Fallback na statični adjustedTargetCalories, dokler profil ni naložen (dynamicTargetCalories == 0)
+    val effectiveTargetCalories = if (dynamicTargetCalories > 0) dynamicTargetCalories else adjustedTargetCalories
+    // Koliko "boost-a" smo dobili z aktivnostjo danes
+    val activityBoostKcal = if (dynamicTargetCalories > 0 && uiState.burned > 0) uiState.burned else 0
 
     // Water tracking — prilagojen cilj
     val waterTarget = adjustedWaterTarget.toFloat()
@@ -542,7 +566,7 @@ fun NutritionScreen(
                             }
                         },
                         modifier = Modifier.size(240.dp),
-                        update = { view ->
+                         update = { view ->
                             view.simpleMode = !userProfile.detailedCalories
                             view.fatProportion = fatProp
                             view.proteinProportion = proteinProp
@@ -551,13 +575,13 @@ fun NutritionScreen(
                             view.proteinCalories = proteinCals
                             view.carbsCalories = carbsCals
                             view.consumedCalories = uiState.consumed
-                            view.targetCalories = adjustedTargetCalories
+                            view.targetCalories = effectiveTargetCalories
                             view.innerProgress = waterProgress
                             view.textColor = textPrimary.toArgb()
                             view.waterColor = textPrimary.toArgb()
                             view.innerValue = uiState.water.toString()
                             view.weightUnit = userProfile.weightUnit
-                            view.centerValue = "${uiState.consumed}/$adjustedTargetCalories"
+                            view.centerValue = "${uiState.consumed}/$effectiveTargetCalories"
                             view.onSegmentClick = { clicked ->
                                 view.clickedSegment = clicked
                                 view.invalidate()
@@ -573,13 +597,30 @@ fun NutritionScreen(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
+                    // 🔥 Dinamični boost indikator — prikazuje se le, ko je aktivnost > 0
+                    if (activityBoostKcal > 0) {
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Text(
+                                text = "🔥 +$activityBoostKcal kcal boost",
+                                color = MaterialTheme.colorScheme.tertiary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
 
                 Box(
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
                 ) {
-                    // Active Calories Bar (Goal: 800 kcal)
-                    ActiveCaloriesBar(currentCalories = uiState.burned, goal = 800)
+                    // Active Calories Bar — cilj = dinamični bolj cilj ali 500 kcal minimalno
+                    val burnedGoal = if (dynamicTargetCalories > 0)
+                        (dynamicTargetCalories - (dynamicTargetCalories * 0.8).toInt()).coerceAtLeast(300)
+                    else 500
+                    ActiveCaloriesBar(currentCalories = uiState.burned, goal = burnedGoal)
                 }
             }
 
