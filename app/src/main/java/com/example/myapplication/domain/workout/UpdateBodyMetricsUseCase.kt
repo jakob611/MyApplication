@@ -53,10 +53,11 @@ class UpdateBodyMetricsUseCase(
                 )
             }
 
-            // 5. Posodobi dnevne kalorije v repozitoriju posameznikovih nastavitev
-            settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
+            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
+            // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
+            // settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
 
-            // 6. Uskladi burnedCalories s tabelo dailyLogs (da takoj osveži graf NutritionScreen)
+            // 6. Uskladi burnedCalories s tabelo dailyLogs (SSOT za dinamični TDEE)
             val todayStr = now.toLocalDateTime(tz).date.toString()
             com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayStr) { data ->
                 val currentBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0

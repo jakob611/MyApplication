@@ -710,7 +710,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                         val currentDay = uiState.planDay
                                         if (!uiState.isWorkoutDoneToday && !uiState.todayIsRest && finalDistance > 1000) {
                                             bodyVm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteWorkoutSession(
-                                                email = uiState.errorMessage ?: "", // TODO: proper email if needed
+                                                email = runEmail, // Firebase Auth — pravilni email
                                                 isExtraWorkout = false,
                                                 totalKcal = calories,
                                                 totalTimeMin = finalTime / 60.0

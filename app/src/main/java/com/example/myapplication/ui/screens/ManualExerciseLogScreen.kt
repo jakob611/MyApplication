@@ -883,6 +883,15 @@ private fun logExerciseToFirestore(context: Context, exercise: ExerciseInfo, set
                 caloriesKcal = caloriesRounded
             )
 
+            // ✅ SSOT: Zapiši burnedCalories v dailyLogs — enak vir kot WorkoutSession in RunTracker
+            val todayStr = kotlinx.datetime.Clock.System.now()
+                .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                .date.toString()
+            com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayStr) { data ->
+                val currentBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
+                data["burnedCalories"] = currentBurned + caloriesRounded.toDouble()
+            }
+
             val currentHour = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).hour
             val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(
                 com.example.myapplication.data.gamification.FirestoreGamificationRepository()
