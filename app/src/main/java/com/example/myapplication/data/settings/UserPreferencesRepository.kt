@@ -84,27 +84,24 @@ class UserPreferencesRepository(private val context: Context) {
         settings.putBoolean("fresh_start_on_login", freshStart)
     }
 
+    /**
+     * ⚠️ DELNO DEPRECATED (Faza 9.2): Ta funkcija piše v bm_prefs kot lokalni fallback cache.
+     * Resnični SSOT je Firestore prek UserProfileManager.saveWorkoutStats().
+     * Ostane funkcionalna samo za offline fallback v GetBodyMetricsUseCase.getPlanDay().
+     * TODO (Faza 10): Odstrani bm_prefs zapis ko GetBodyMetricsUseCase ne bo več potreboval localnega fallbacka.
+     */
     suspend fun updateWorkoutStats(completedDay: Int, timestamp: Long) {
         bmSettings.putInt("plan_day", completedDay)
-        bmSettings.putLong("last_workout_epoch", timestamp / 86400000L) // Store in epoch days to be backward compatible?
-        // Actually, older code stored EpochDay (from LocalDate).
-        // Let's ensure compatibility if needed, or just store the timestamp if that's what's asked.
-        // Wait, standard LocalDate.toEpochDay() is milliseconds / (1000*60*60*24). Let's do that.
         val epochDay = timestamp / (1000 * 60 * 60 * 24)
         bmSettings.putLong("last_workout_epoch", epochDay)
     }
 
+    /**
+     * ⚠️ NO-OP — DEPRECATED (Faza 9.1+9.2): Kalorije se zapisujejo prek DailyLogRepository.updateDailyLog().
+     * bm_prefs.daily_calories ni več SSOT. Klic je bil odstranjen iz UpdateBodyMetricsUseCase v Fazi 9.1.
+     */
     suspend fun updateDailyCalories(calories: Double, timestamp: Long) {
-        val todayEpochDay = timestamp / (1000 * 60 * 60 * 24)
-        val lastSavedEpochDay = bmSettings.getLong("daily_calories_epoch", 0L)
-        val currentCalories = if (todayEpochDay == lastSavedEpochDay) {
-            bmSettings.getFloat("daily_calories", 0f).toDouble()
-        } else {
-            0.0
-        }
-        val newCalories = currentCalories + calories
-        bmSettings.putLong("daily_calories_epoch", todayEpochDay)
-        bmSettings.putFloat("daily_calories", newCalories.toFloat())
+        // NO-OP: SSOT je DailyLogRepository. Bm_prefs zapis je bil ukinjen v Fazi 9.1.
     }
 
     fun getDailyCalories(): Double {

@@ -6,7 +6,6 @@ import com.example.myapplication.data.settings.UserPreferencesRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.coroutines.tasks.await
 
 class UpdateBodyMetricsUseCase(
     private val workoutRepo: WorkoutRepository,
@@ -33,12 +32,27 @@ class UpdateBodyMetricsUseCase(
 
             // 2. Priprava podatkov (BREZ FIREBASE IMPORTA)
             val workoutDoc = mutableMapOf(
-                "timestamp" to timestamp, // Čist Long tip, repozitorij naj ga pretvori
+                "timestamp" to timestamp,
                 "type" to if (isExtra) "extra" else "regular",
                 "totalKcal" to totalKcal,
                 "totalTimeMin" to totalTimeMin,
                 "exercisesCount" to exercisesCount,
-                "planDay" to planDay,AA            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
+                "planDay" to planDay,
+                "exercises" to exerciseResults
+            )
+
+            // 3. Shranjevanje v bazo
+            workoutRepo.saveWorkoutSession(email, workoutDoc)
+
+            // 4. Posodobitev lokalnega stanja (Streaki in zadnji trening)
+            if (!isExtra) {
+                settingsRepo.updateWorkoutStats(
+                    completedDay = planDay,
+                    timestamp = timestamp
+                )
+            }
+
+            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
             // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
             // settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
 

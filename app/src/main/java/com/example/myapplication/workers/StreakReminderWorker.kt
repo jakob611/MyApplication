@@ -144,14 +144,16 @@ class StreakReminderWorker(
             return Result.success()
         }
 
-        // --- 3. PREBERI PODATKE O VADBI IN STREAKU ---
-        val prefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-        val todayIsRest = prefs.getBoolean("today_is_rest", false)
-        val lastWorkoutEpoch = prefs.getLong("last_workout_epoch", 0L)
+        // --- 3. PREBERI PODATKE O VADBI IN STREAKU IZ FIRESTORE (ne bm_prefs) ---
+        val workerStats = UserProfileManager.getWorkoutStats(email)
+        val lastWorkoutEpoch = workerStats?.get("last_workout_epoch") as? Long ?: 0L
         val workoutDoneToday = if (lastWorkoutEpoch == 0L) false
             else LocalDate.ofEpochDay(lastWorkoutEpoch) == LocalDate.now()
-        val currentStreak = prefs.getInt("streak_days", 0)
-        val planDay = prefs.getInt("plan_day", 1)
+        val currentStreak = workerStats?.get("streak_days") as? Int ?: 0
+        val planDay = workerStats?.get("plan_day") as? Int ?: 1
+
+        // today_is_rest: preveri iz Firestore plana (ne bm_prefs ki tega nikoli ni zanesljivo shranil)
+        val todayIsRest = checkTodayIsRestFromFirestore(planDay)
         val reminderContext = loadReminderContext(currentStreak, planDay)
 
         Log.d(TAG, "Reminder check: todayIsRest=$todayIsRest, workoutDone=$workoutDoneToday, streak=$currentStreak")
@@ -176,6 +178,34 @@ class StreakReminderWorker(
         scheduleForTomorrow()
 
         return Result.success()
+    }
+
+    /**
+     * Preveri ali je trenutni plan dan REST dan, z branjem iz Firestore user_plans kolekcije.
+     * To je zanesljiv SSOT za today_is_rest (bm_prefs tega nikoli ni zanesljivo shranil).
+     */
+    private suspend fun checkTodayIsRestFromFirestore(planDay: Int): Boolean {
+        return try {
+            val uid = FirestoreHelper.getCurrentUserDocId() ?: return false
+            val db = FirestoreHelper.getDb()
+            val planDoc = db.collection("user_plans").document(uid).get().await()
+            @Suppress("UNCHECKED_CAST")
+            val weeks = planDoc.get("weeks") as? List<Map<String, Any>> ?: return false
+            for (week in weeks) {
+                @Suppress("UNCHECKED_CAST")
+                val days = week["days"] as? List<Map<String, Any>> ?: continue
+                for (day in days) {
+                    val dayNumber = (day["dayNumber"] as? Number)?.toInt() ?: continue
+                    if (dayNumber == planDay) {
+                        return day["isRestDay"] as? Boolean ?: false
+                    }
+                }
+            }
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "Napaka pri branju rest day iz Firestore: ${e.message}")
+            false
+        }
     }
 
     /**

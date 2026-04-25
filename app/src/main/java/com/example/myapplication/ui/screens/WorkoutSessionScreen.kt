@@ -146,6 +146,8 @@ fun WorkoutSessionScreen(
     LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AdvancedExerciseRepository.init(context.assets.open("exercises.json").bufferedReader().use { it.readText() }) } }
 
     val vm: BodyModuleHomeViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application))
+    // ✅ Firestore SSOT: collectiramo state enkrat za celoten composable
+    val vmUiState by vm.ui.collectAsState()
 
     var userWeightKg by remember { mutableStateOf(70.0) }
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
@@ -308,8 +310,8 @@ fun WorkoutSessionScreen(
             } else {
                 rawFocus
             }
-            val planDay = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                .getInt("plan_day", 1).coerceAtLeast(1)
+            // ✅ SSOT: beri plan_day iz BodyModuleHomeViewModel (Firestore) namesto bm_prefs
+            val planDay = vm.ui.value.planDay.coerceAtLeast(1)
             dailyFocus = if (allFocus.any {
                     it.equals("Full Body", ignoreCase = true) ||
                     it.equals("Balance", ignoreCase = true)
@@ -428,8 +430,8 @@ fun WorkoutSessionScreen(
             }
             is WorkoutState.Celebration -> {
                 // ADDED: P1 UX Improvement - Next day preview
-                val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-                val currentDay = prefs.getInt("plan_day", 1)
+                // ✅ SSOT: beri plan_day iz BodyModuleHomeViewModel (Firestore) namesto bm_prefs
+                val currentDay = vmUiState.planDay
                 val nextDayNumber = currentDay + 1
                 val nextDay = currentPlan?.weeks?.flatMap { it.days }?.firstOrNull { it.dayNumber == nextDayNumber }
                 val nextDayPreview = when {
@@ -441,6 +443,7 @@ fun WorkoutSessionScreen(
                 WorkoutCelebrationScreen(
                     isExtra = s.isExtra,
                     nextDayPreview = nextDayPreview,
+                    planDay = vmUiState.planDay,  // ✅ Firestore SSOT prek ViewModel
                     onContinue = { state = WorkoutState.Report(s.results, s.skipped) }
                 )
             }
@@ -985,6 +988,7 @@ private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<Str
 private fun WorkoutCelebrationScreen(
     isExtra: Boolean,
     nextDayPreview: String? = null,
+    planDay: Int = 0,         // ✅ Prejeto iz BodyModuleHomeViewModel (Firestore SSOT, ne bm_prefs)
     onContinue: () -> Unit
 ) {
     val scale = remember { Animatable(0f) }
@@ -1004,10 +1008,10 @@ private fun WorkoutCelebrationScreen(
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-    // Streak is read AFTER update, so it is the "new" streak.
+    // streak_days se bere iz bm_prefs (posodobljeno ob zaključku vadbe prek MainActivity/AchievementStore)
     val currentStreak = prefs.getInt("streak_days", 0)
-    val planDay = prefs.getInt("plan_day", 1)
-    
+    // planDay prejmemo kot parameter iz BodyModuleHomeViewModel (Firestore SSOT)
+
     // Animate from (current - 1) to (current)
     val startStreak = (currentStreak - 1).coerceAtLeast(0)
     val targetStreak = currentStreak

@@ -62,59 +62,38 @@ internal data class ExerciseInfo(
 
 // ─── Gender cache ──────────────────────────────────────────────────────────────
 
-/** Singleton za caching spola, opreme in user score-a — naložimo enkrat ob zagonu */
+/**
+ * In-memory cache za spol, opremo in user score.
+ * ✅ Faza 9.2: Odstranjen SharedPrefs ("gender_cache") sloj — podatki se berejo direktno
+ * iz UserProfileManager (Firestore SSOT prek KMP Settings). Brez zapisov v SharedPrefs.
+ */
 object GenderCache {
-    private const val PREFS_NAME = "gender_cache"
-    private const val KEY_GENDER = "gender"
-    private const val KEY_LOADED = "loaded"
-    private const val KEY_EQUIPMENT = "equipment"
-    private const val KEY_USER_SCORE = "user_score"
-    private const val KEY_FOCUS_AREAS = "focus_areas"
-
     private var cached: String? = null
     private var cachedEquipment: Set<String>? = null
     private var cachedUserScore: Float = 5f
     private var cachedFocusAreas: List<String>? = null
 
-    fun getGender(context: Context): String? {
-        if (cached != null) return cached
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_LOADED, false)) return null
-        cached = prefs.getString(KEY_GENDER, null)
-        return cached
-    }
+    fun getGender(context: Context): String? = cached
 
-    fun getEquipment(context: Context): Set<String> {
-        cachedEquipment?.let { return it }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val eq = prefs.getStringSet(KEY_EQUIPMENT, null)
-        return eq ?: setOf("bodyweight")
-    }
+    fun getEquipment(context: Context): Set<String> =
+        cachedEquipment ?: setOf("bodyweight")
 
-    fun getUserScore(context: Context): Float {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getFloat(KEY_USER_SCORE, 5f)
-    }
+    fun getUserScore(context: Context): Float = cachedUserScore
 
-    fun getFocusAreas(context: Context): List<String> {
-        cachedFocusAreas?.let { return it }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val fa = prefs.getString(KEY_FOCUS_AREAS, "") ?: ""
-        return if (fa.isBlank()) emptyList() else fa.split(",").filter { it.isNotBlank() }
-    }
+    fun getFocusAreas(context: Context): List<String> =
+        cachedFocusAreas ?: emptyList()
 
+    /**
+     * Naloži profil direktno iz UserProfileManager (Firestore/KMP Settings).
+     * Ni več SharedPrefs cahea — vedno sveži podatki iz SSOT.
+     */
     fun loadFromFirestoreIfNeeded(context: Context, onDone: (String?) -> Unit) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_LOADED, false)) {
-            cached = prefs.getString(KEY_GENDER, null)
-            cachedEquipment = prefs.getStringSet(KEY_EQUIPMENT, null)
-            cachedUserScore = prefs.getFloat(KEY_USER_SCORE, 5f)
-            cachedFocusAreas = prefs.getString(KEY_FOCUS_AREAS, "")
-                ?.split(",")?.filter { it.isNotBlank() }
+        // Če je in-memory cache že napolnjen, vrni takoj
+        if (cached != null && cachedEquipment != null) {
             onDone(cached)
             return
         }
-        
+
         CoroutineScope(Dispatchers.IO).launch {
             val email = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
             if (email.isBlank()) {
@@ -122,7 +101,6 @@ object GenderCache {
                 return@launch
             }
 
-            // Try fetching latest profile from Firestore mapping it via our domain
             val remoteProfile = com.example.myapplication.data.settings.UserProfileManager.loadProfileFromFirestore(email)
             val finalProfile = remoteProfile ?: com.example.myapplication.data.settings.UserProfileManager.loadProfile(email)
 
@@ -136,13 +114,7 @@ object GenderCache {
                 else -> 5f
             }
 
-            prefs.edit {
-                putString(KEY_GENDER, g)
-                putStringSet(KEY_EQUIPMENT, eqSet)
-                putFloat(KEY_USER_SCORE, userScore)
-                putString(KEY_FOCUS_AREAS, focusList.joinToString(","))
-                putBoolean(KEY_LOADED, true)
-            }
+            // Samo in-memory cache — brez SharedPrefs zapisa
             cached = g
             cachedEquipment = eqSet
             cachedUserScore = userScore
@@ -154,13 +126,13 @@ object GenderCache {
         }
     }
 
-    /** Pokliči pri odjavi za brisanje cache-a */
+    /** Pokliči pri odjavi ali ob zamenjavi opreme za reset in-memory cachea */
     fun clear(context: Context) {
         cached = null
         cachedEquipment = null
         cachedUserScore = 5f
         cachedFocusAreas = null
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { clear() }
+        // ✅ Faza 9.2: SharedPrefs "gender_cache" se ne čisti več (ni ga)
     }
 }
 
