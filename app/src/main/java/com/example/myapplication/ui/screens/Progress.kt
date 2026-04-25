@@ -109,9 +109,19 @@ fun ProgressScreen(
             showWeightDialog = true
         }
     }
+    // ── Data Budgeting (Faza 6) ────────────────────────────────────────────────────────────────
+    // PRED: 3 ločeni listenerji (weightLogs + dailyLogs + daily_health)
+    // PO:   2 listenerja (weightLogs + dailyLogs)
+    //
+    // Spremembe:
+    // 1. dailyLogs: consumedCalories bere direktno iz polja (ne iterira 'items' arraija)
+    // 2. dailyLogs: burnedCalories bere direktno iz polja (ne potrebuje separate daily_health)
+    // 3. sessionListener (daily_health) ODSTRANJEN — ta kolekcija se po Fazi 5 ne piše več,
+    //    burnedCalories je sedaj shranjeno v dailyLogs.burnedCalories
+    // Rezultat: -1 Firestore listener = -33% branj za Progress screen
+    // ─────────────────────────────────────────────────────────────────────────────────────────
     var dailyListener: ListenerRegistration? by remember { mutableStateOf(null) }
     var weightListener: ListenerRegistration? by remember { mutableStateOf(null) }
-    var sessionListener: ListenerRegistration? by remember { mutableStateOf(null) } // ADDED
     // No persistence for range while fixing build issues
 
     DisposableEffect(uid) {
@@ -129,37 +139,27 @@ fun ProgressScreen(
                 }
             dailyListener = userRef.collection("dailyLogs")
                 .addSnapshotListener { snap, _ ->
-                    dailyLogs = snap?.documents?.mapNotNull { d ->
-                        val dateStr = d.getString("date") ?: d.id
-                        val items = d.get("items") as? List<*> ?: emptyList<Any>()
-                        val caloriesTotal = items.sumOf { any ->
-                            val m = any as? Map<*, *> ?: return@sumOf 0.0
-                            (m["caloriesKcal"] as? Number)?.toDouble() ?: 0.0
-                        }
-                        val water = (d.get("waterMl") as? Number)?.toInt() ?: 0
-                        val date = runCatching { LocalDate.parse(dateStr) }.getOrElse { return@mapNotNull null }
-                        DailyLogSummary(date, caloriesTotal, water)
-                    }?.sortedBy { it.date } ?: emptyList()
-                    loading = false
-                }
-
-            // Listen to daily_health for burned calories
-            sessionListener = userRef.collection("daily_health")
-                .addSnapshotListener { snap, _ ->
+                    // Data Budgeting: beri consumedCalories direktno (ne iteriramo items!)
+                    val parsedLogs = mutableListOf<DailyLogSummary>()
                     val burnedMap = mutableMapOf<LocalDate, Double>()
                     snap?.documents?.forEach { d ->
                         val dateStr = d.getString("date") ?: d.id
-                        val date = runCatching { LocalDate.parse(dateStr) }.getOrNull() ?: return@forEach
-                        val kcal = (d.get("calories") as? Number)?.toDouble() ?: 0.0
-                        if (kcal > 0) {
-                            burnedMap[date] = kcal
-                        }
+                        val date = runCatching { LocalDate.parse(dateStr) }.getOrElse { return@forEach }
+                        // ⚡ Direktno polje — ne iteriramo items arraija
+                        val caloriesTotal = (d.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
+                        val water = (d.get("waterMl") as? Number)?.toInt() ?: 0
+                        parsedLogs.add(DailyLogSummary(date, caloriesTotal, water))
+                        // ⚡ burnedCalories iz dailyLogs (ne daily_health — ki se po Fazi 5 ne piše več)
+                        val burned = (d.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
+                        if (burned > 0) burnedMap[date] = burned
                     }
+                    dailyLogs = parsedLogs.sortedBy { it.date }
                     burnedByDay = burnedMap.entries.sortedBy { it.key }.map { it.key to it.value }
+                    loading = false
                 }
         }
         onDispose {
-            dailyListener?.remove(); weightListener?.remove(); sessionListener?.remove()
+            dailyListener?.remove(); weightListener?.remove()
         }
     }
 

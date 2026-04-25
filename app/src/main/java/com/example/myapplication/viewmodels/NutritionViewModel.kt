@@ -3,6 +3,8 @@ package com.example.myapplication.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
+import com.example.myapplication.ui.screens.MealType
+import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +44,19 @@ class NutritionViewModel(
         if (uid == null) flowOf(null)
         else com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // ── Data Budgeting: Skupni Firestore listener za hrano ─────────────────────
+    /**
+     * Data Budgeting (Faza 6):
+     * NutritionScreen je prej imel LASTEN LaunchedEffect > observeDailyLog().collect {},
+     * ki je PODVOJIL Firestore listener na istem dokumentu.
+     *
+     * Zdaj: items parsamo TUKAJ v ViewModel (en sam listener),
+     * NutritionScreen bere iz tega StateFlow — brez novega Firestore listenerja.
+     * Rezultat: -1 Firestore listener = -50% branj na dailyLogs/{danes}.
+     */
+    private val _firestoreFoods = MutableStateFlow<List<TrackedFood>>(emptyList())
+    internal val firestoreFoods: StateFlow<List<TrackedFood>> = _firestoreFoods.asStateFlow()
 
     // ── Dinamični TDEE ─────────────────────────────────────────────────────────
 
@@ -109,21 +124,67 @@ class NutritionViewModel(
                     val todayId = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
                     com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
                         Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
-                        
-                        val serverWater = (doc.get("waterMl") as? Number)?.toInt() ?: 0
-                        val serverBurned = (doc.get("burnedCalories") as? Number)?.toInt() ?: 0
+
+                        val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+                        val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
                         val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
 
                         updateDailyTotals(
                             consumed = serverConsumed,
-                            burned = serverBurned,
-                            water = serverWater
+                            burned   = serverBurned,
+                            water    = serverWater
                         )
+
+                        // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
+                        val rawItems = doc.get("items") as? List<*>
+                        if (rawItems != null) {
+                            val foods = parseRawItemsToTrackedFoods(rawItems)
+                            if (foods.isNotEmpty()) _firestoreFoods.value = foods
+                        }
+                        // ────────────────────────────────────────────────────────────────────
                     }
                 }
             }
         }
     }
+
+    /**
+     * Parsira Firestore "items" seznam v [TrackedFood] modele.
+     * Centralizirana logika — ne podvajamo v Screen.
+     */
+    internal fun parseRawItemsToTrackedFoods(rawItems: List<*>): List<TrackedFood> =
+        rawItems.mapNotNull { any ->
+            val m = any as? Map<*, *> ?: return@mapNotNull null
+            val name = m["name"] as? String ?: return@mapNotNull null
+            val mealStr = m["meal"] as? String ?: "Breakfast"
+            val meal = runCatching { MealType.valueOf(mealStr) }.getOrNull() ?: MealType.Breakfast
+            val amount = (m["amount"] as? Number)?.toDouble()
+                ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0
+            val unit = m["unit"] as? String ?: "servings"
+            val kcal = (m["caloriesKcal"] as? Number)?.toDouble()
+                ?: (m["caloriesKcal"] as? String)?.toDoubleOrNull() ?: 0.0
+            val p   = (m["proteinG"]   as? Number)?.toDouble() ?: (m["proteinG"]   as? String)?.toDoubleOrNull()
+            val c   = (m["carbsG"]     as? Number)?.toDouble() ?: (m["carbsG"]     as? String)?.toDoubleOrNull()
+            val f   = (m["fatG"]       as? Number)?.toDouble() ?: (m["fatG"]       as? String)?.toDoubleOrNull()
+            TrackedFood(
+                id              = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString(),
+                name            = name,
+                meal            = meal,
+                amount          = amount,
+                unit            = unit,
+                caloriesKcal    = kcal,
+                proteinG        = p,
+                carbsG          = c,
+                fatG            = f,
+                fiberG          = (m["fiberG"]        as? Number)?.toDouble() ?: (m["fiberG"]        as? String)?.toDoubleOrNull(),
+                sugarG          = (m["sugarG"]        as? Number)?.toDouble() ?: (m["sugarG"]        as? String)?.toDoubleOrNull(),
+                saturatedFatG   = (m["saturatedFatG"] as? Number)?.toDouble() ?: (m["saturatedFatG"] as? String)?.toDoubleOrNull(),
+                sodiumMg        = (m["sodiumMg"]      as? Number)?.toDouble() ?: (m["sodiumMg"]      as? String)?.toDoubleOrNull(),
+                potassiumMg     = (m["potassiumMg"]   as? Number)?.toDouble() ?: (m["potassiumMg"]   as? String)?.toDoubleOrNull(),
+                cholesterolMg   = (m["cholesterolMg"] as? Number)?.toDouble() ?: (m["cholesterolMg"] as? String)?.toDoubleOrNull(),
+                barcode         = m["barcode"] as? String
+            )
+        }
 
     fun syncHealthConnectNow(context: Context) {
         viewModelScope.launch {

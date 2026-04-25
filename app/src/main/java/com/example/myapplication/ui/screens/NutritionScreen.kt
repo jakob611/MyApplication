@@ -279,61 +279,14 @@ fun NutritionScreen(
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     val todayId = remember { kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString() }
 
-    LaunchedEffect(uid, todayId) {
-        if (uid != null) {
-            com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId)
-                .collect { doc ->
-                    // water, burned in consumed zdaj mapira sam ViewModel. Tukaj pustimo samo osveževanje lokalne liste živil:
-
-                    val items = doc.get("items") as? List<*>
-                    if (items != null) {
-                        val parsedFoods = items.mapNotNull { any ->
-                            val m = any as? Map<*, *> ?: return@mapNotNull null
-                            val name = m["name"] as? String ?: return@mapNotNull null
-                            val mealStr = m["meal"] as? String ?: "Breakfast"
-                            val meal = runCatching { MealType.valueOf(mealStr) }.getOrNull() ?: MealType.Breakfast
-                            val amount = (m["amount"] as? Number)?.toDouble()
-                                ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0
-                            val unit = m["unit"] as? String ?: "servings"
-                            val kcal = (m["caloriesKcal"] as? Number)?.toDouble()
-                                ?: (m["caloriesKcal"] as? String)?.toDoubleOrNull() ?: 0.0
-                            val p = (m["proteinG"] as? Number)?.toDouble()
-                                ?: (m["proteinG"] as? String)?.toDoubleOrNull()
-                            val c = (m["carbsG"] as? Number)?.toDouble()
-                                ?: (m["carbsG"] as? String)?.toDoubleOrNull()
-                            val f = (m["fatG"] as? Number)?.toDouble()
-                                ?: (m["fatG"] as? String)?.toDoubleOrNull()
-                            val barcode = m["barcode"] as? String
-                            TrackedFood(
-                                id = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString(),
-                                name = name,
-                                meal = meal,
-                                amount = amount,
-                                unit = unit,
-                                caloriesKcal = kcal,
-                                proteinG = p,
-                                carbsG = c,
-                                fatG = f,
-                                fiberG = (m["fiberG"] as? Number)?.toDouble()
-                                    ?: (m["fiberG"] as? String)?.toDoubleOrNull(),
-                                sugarG = (m["sugarG"] as? Number)?.toDouble()
-                                    ?: (m["sugarG"] as? String)?.toDoubleOrNull(),
-                                saturatedFatG = (m["saturatedFatG"] as? Number)?.toDouble()
-                                    ?: (m["saturatedFatG"] as? String)?.toDoubleOrNull(),
-                                sodiumMg = (m["sodiumMg"] as? Number)?.toDouble()
-                                    ?: (m["sodiumMg"] as? String)?.toDoubleOrNull(),
-                                potassiumMg = (m["potassiumMg"] as? Number)?.toDouble()
-                                    ?: (m["potassiumMg"] as? String)?.toDoubleOrNull(),
-                                cholesterolMg = (m["cholesterolMg"] as? Number)?.toDouble()
-                                    ?: (m["cholesterolMg"] as? String)?.toDoubleOrNull(),
-                                barcode = barcode
-                            )
-                        }
-                        if (parsedFoods.isNotEmpty()) {
-                            trackedFoods = parsedFoods
-                        }
-                    }
-                }
+    // ── Data Budgeting: brez novega Firestore listenerja ────────────────────────
+    // Items se parsajo enkrat v NutritionViewModel.observeDailyTotals() in delijo
+    // prek firestoreFoods StateFlow. NI novega addSnapshotListener() tukaj.
+    // Pred tem: 2× Firestore listener na dailyLogs/{danes}, zdaj: 1×.
+    val firestoreFoods by nutritionViewModel.firestoreFoods.collectAsState()
+    LaunchedEffect(firestoreFoods) {
+        if (firestoreFoods.isNotEmpty()) {
+            trackedFoods = firestoreFoods
         }
     }
 
