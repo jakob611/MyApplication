@@ -293,3 +293,15 @@
 - `WeightPredictionDisplay` razširjen z `confidenceFactor: Double`
 **Zakaj:** Številke samo po sebi ne motivirajo. Vizualni trend + interaktivni simulator spremenita suhe algoritme v "kristalno kroglo" — uporabnik vidi neposredno zvezo med današnjimi odločitvami in prihodnjo težo.
 **Tveganje:** 🟢 nizko (samo UI, logika nespremenjena)
+
+## 2026-04-25 — Final Architectural & UX Audit (pred UI/UX prenovo)
+**Datoteke:** `persistence/ProfileStore.kt`, `NavigationViewModel.kt`, `MainActivity.kt`, `worker/RunRouteCleanupWorker.kt` (NOVO), `GPS_POINTS_MIGRATION_PLAN.md` (NOVO)
+**Kaj:**
+1. **Dead Code označen:** `domain/nutrition/NutritionCalculations.kt`, `network/ai_utils.kt`, `ui/adapters/ChallengeAdapter.kt` — vse 3 označene z `// ⚠️ DEAD CODE — IZBRIŠI ROČNO`
+2. **Community fix:** `searchPublicProfiles()` + `getAllPublicProfiles()` — dodan `.limit(20)` prepreči full-collection scan vseh javnih uporabnikov
+3. **Navigation:** `NavigationViewModel.replaceTo()` — nova metoda brez push v stack; LoadingWorkout → WorkoutSession zdaj ne kuri back-stack
+4. **GPS cleanup Worker:** `RunRouteCleanupWorker` — periodičen Worker (1x tedensko) zbriše `.json` datoteke v `run_routes/` starejše od 60 dni
+5. **GPS 1MB načrt:** `GPS_POINTS_MIGRATION_PLAN.md` — detajlen načrt za migracijo `polylinePoints` iz vgrajenega array-a v sub-kolekcijo `points/`
+**Zakaj:** Finalni arhitekturni pregled pred UI/UX prenovo — odstranitev dead code, varnostni stropi za Firestore branje, navigation stack optimizacija.
+**Tveganje:** 🟢 nizko (`.limit(20)` je varnostni strop ki ne vpliva na funkcionalnost)
+

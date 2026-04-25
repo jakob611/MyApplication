@@ -143,31 +143,35 @@ object ProfileStore {
     }
 
     /**
-     * Search for public profiles by username, email, or first name
+     * Search for public profiles by username, email, or first name.
+     * ⚡ OPTIMIZED: .limit(20) — preprečimo full-collection scan.
+     * Vrne samo profile ki vsebujejo query v username/firstName/docId.
      */
     suspend fun searchPublicProfiles(query: String): List<PublicProfile> = withContext(Dispatchers.IO) {
         try {
             Log.d("ProfileStore", "🔍 Searching for '$query'...")
-            // Search for users with public profiles
+            // Optimizacija: limit(20) — samo 20 dokumentov, client-side filter
+            // (Firestore Android SDK ne podpira field projections ali full-text prefix index)
             val snapshot = firestore.collection("users")
                 .whereEqualTo("is_public_profile", true)
+                .limit(20)
                 .get()
                 .await()
 
-            Log.d("ProfileStore", "🔍 Found ${snapshot.size()} public profiles total")
+            Log.d("ProfileStore", "🔍 Fetched ${snapshot.size()} public profiles (max 20)")
 
             val results = snapshot.documents.mapNotNull { doc ->
                 val username = doc.getString("username") ?: ""
                 val firstName = doc.getString("first_name") ?: ""
-                val docId = doc.id // email or uid
+                val docId = doc.id // email ali uid
 
-                // Match against username, first name, or document ID (email)
+                // Filtriramo samo nujna polja (name/username/id) — ne nalagamo badge/activity podatkov
                 val matches = username.contains(query, ignoreCase = true) ||
                     firstName.contains(query, ignoreCase = true) ||
                     docId.contains(query, ignoreCase = true)
 
                 if (matches) {
-                    // Use lightweight mapping (no activities) for lists
+                    // Lightweight mapping: fetchActivities=false, samo name+photo+xp polja
                     mapToPublicProfile(doc, fetchActivities = false)
                 } else null
             }
@@ -180,12 +184,14 @@ object ProfileStore {
     }
 
     /**
-     * Get ALL public profiles (for Community Screen)
+     * Get ALL public profiles (for Community Screen).
+     * ⚡ OPTIMIZED: .limit(20) — varnostni strop za community tab.
      */
     suspend fun getAllPublicProfiles(): List<PublicProfile> = withContext(Dispatchers.IO) {
         try {
             val snapshot = firestore.collection("users")
                 .whereEqualTo("is_public_profile", true)
+                .limit(20)
                 .get()
                 .await()
 

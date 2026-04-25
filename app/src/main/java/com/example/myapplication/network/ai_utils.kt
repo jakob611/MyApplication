@@ -1,5 +1,15 @@
 package com.example.myapplication.network
 
+// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČNO.
+//
+// requestAIPlan() in parseWeeksFromJson() se nikjer ne klicata.
+// PlanDataStore.kt ima svojo lastno verzijo HTTP klica za generiranje plana.
+//
+// Verificirano z grep: grep -rn "requestAIPlan\|ai_utils\|parseWeeksFromJson" --include="*.kt"
+// → nič ne kliče teh funkcij izven te datoteke.
+//
+// TODO: rm app/src/main/java/com/example/myapplication/network/ai_utils.kt
+
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.data.WeekPlan

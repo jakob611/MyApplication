@@ -1,7 +1,7 @@
-// ⚠️ DEPRECATED — ta datoteka je bila prazna in je NE SMEŠ UPORABLJATI.
-// Vsa logika za EMA, adaptivni TDEE in BMR/makro izračune je v:
-//   com.example.myapplication.utils.NutritionCalculations.kt
-//
-// Prosim, izbriši to datoteko ročno (domain/nutrition/NutritionCalculations.kt).
+// ⚠️ DEPRECATED — DEAD CODE — TO DATOTEKO IZBRIŠI ROČNO.
+// Nič v projektu je ne importira. Prazna.
+// Vsa logika je v: com.example.myapplication.utils.NutritionCalculations.kt
+// Razlog obstoja: čaka na ročno brisanje (AI ne more brisati datotek).
+// TODO: rm app/src/main/java/com/example/myapplication/domain/nutrition/NutritionCalculations.kt
 package com.example.myapplication.domain.nutrition
 

@@ -35,6 +35,28 @@
 ## Trenutno Odprte Težave (Backlog)
 - [N/A] `ActivityLogScreen.kt` nima mehanizma za load-more paginacijo pri velikem številu map markers.
 
+### 🔴 NUJNI POPRAVKI (pred UI/UX prenovo) — Audit 2026-04-25
+
+#### Dead Code — treba ročno zbrisati (AI ne more brisati datotek):
+| Datoteka | Razlog brisanja |
+|---|---|
+| `domain/nutrition/NutritionCalculations.kt` | Prazna, eksplicitno DEPRECATED, vsa logika v `utils/NutritionCalculations.kt` |
+| `network/ai_utils.kt` | `requestAIPlan()` ni klicana nikjer; PlanDataStore ima lastno kopijo |
+| `ui/adapters/ChallengeAdapter.kt` | RecyclerView stari View sistem; cela app je Compose; `item_challenge_card.xml` ne obstaja |
+
+Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČNO.`
+
+#### GPS 1MB Limit (crash pri maratonih):
+- `RunSession.toFirestoreMap()` vgrajen `polylinePoints` array → crash pri tekih > ~2h
+- **Načrt migracije:** `GPS_POINTS_MIGRATION_PLAN.md` (sub-kolekcija `points/`)
+- **Zahtevnost:** ~5-6h dela (RunTrackerScreen + ViewModel + ActivityLogScreen)
+
+#### Community Search:
+- ✅ `searchPublicProfiles()` in `getAllPublicProfiles()` — dodano `.limit(20)`
+
+#### Navigation Stack:
+- ✅ `NavigationViewModel.replaceTo()` dodana — LoadingWorkout → WorkoutSession brez push v stack
+
 ## Nedavno Zaprte Težave (Rešeno)
 - [2026-04-02] `ActivityLogScreen.kt`: Odpravljeni Compose recomposition loopi pri infinite-scrollu z dodanim unikatnim parametrom `key = { it.id }`. Dodan fallback `Configuration.getInstance().load()` za preprečevanje OSMDroid inicializacijskih sesutij na nekaterih napravah in integrirana manjša telemetrija.
 - [2026-04-02] `WorkoutCelebrationScreen`: Zgornji meni/sistemska orodna vrstica je včasih preprečila klike na animacije ("Continue"). Dodan `WindowInsets.systemBars()` na zunanji `Box`.

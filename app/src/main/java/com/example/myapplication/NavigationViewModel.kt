@@ -35,6 +35,17 @@ class NavigationViewModel : ViewModel() {
         _stack.value = emptyList()
     }
 
+    /**
+     * Zamenja trenutni zaslon brez dodajanja v stack.
+     * Uporabi za LoadingWorkout → WorkoutSession, da preprečiš
+     * "prehod nazaj skozi loading" pri Back gumbu.
+     */
+    fun replaceTo(screen: Screen) {
+        // Zamenjamo current brez push na stack — back gre direktno na prejšnjo stran
+        _previousScreen.value = _currentScreen.value
+        _currentScreen.value = screen
+    }
+
     fun popTo(screen: Screen) {
         val currentStack = _stack.value
         val index = currentStack.indexOfLast { it == screen }

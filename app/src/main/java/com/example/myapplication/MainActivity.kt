@@ -267,6 +267,11 @@ class MainActivity : ComponentActivity() {
                         } catch (e: Exception) { Log.e("MainActivity", "WeeklyStreakWorker error: ${e.message}") }
                     }
 
+                    // Tedenski čistilec starih GPS run_routes .json datotek
+                    try {
+                        com.example.myapplication.worker.RunRouteCleanupWorker.ensureScheduled(context)
+                    } catch (e: Exception) { Log.e("MainActivity", "RunRouteCleanupWorker error: ${e.message}") }
+
                     delay(250)
                     scope.launch(Dispatchers.IO) {
                         try {
@@ -509,7 +514,9 @@ class MainActivity : ComponentActivity() {
                                         onLoadingComplete = {
                                             scope.launch {
                                                 isExtraWorkoutSession = false
-                                                navigateTo(Screen.WorkoutSession)
+                                                // replaceTo() namesto navigateTo() — LoadingWorkout NE gre v back-stack,
+                                                // Back iz WorkoutSession gre direktno na BodyModuleHome (popTo).
+                                                navViewModel.replaceTo(Screen.WorkoutSession)
                                             }
                                         }
                                     )
