@@ -47,6 +47,25 @@
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-04-25 — Faza 9.2: bm_prefs SSOT sanacija
+
+**Spremembe:**
+- `ui/screens/WorkoutSessionScreen.kt`:
+  - Dodan `val vmUiState by vm.ui.collectAsState()` za pravilno Compose StateFlow branje
+  - Vsi `bm_prefs.plan_day` klici (vrstica 311, 432, 1009) zamenjani z `vmUiState.planDay` / parameter
+  - `WorkoutCelebrationScreen` prejme `planDay: Int` kot parameter namesto bm_prefs
+- `data/settings/UserPreferencesRepository.kt`:
+  - `updateWorkoutStats()` označen DEPRECATED — ostane za offline fallback v GetBodyMetricsUseCase
+  - `updateDailyCalories()` je NO-OP — kalorije gredo prek DailyLogRepository (Faza 9.1)
+- `workers/StreakReminderWorker.kt`:
+  - `bm_prefs.streak_days`, `bm_prefs.plan_day`, `bm_prefs.last_workout_epoch` → Firestore prek `UserProfileManager.getWorkoutStats()`
+  - `bm_prefs.today_is_rest` → nova `checkTodayIsRestFromFirestore()` bere planDay dan iz `user_plans` Firestore kolekcije
+- `ui/screens/ManualExerciseLogScreen.kt`:
+  - `GenderCache` brez SharedPrefs sloja (`gender_cache` prefs odstranjeni) — samo in-memory cache
+  - `loadFromFirestoreIfNeeded()` vedno bere direktno iz `UserProfileManager` (Firestore SSOT)
+
+**Arhitekturna opomba:** bm_prefs ne vsebuje več biometričnih vrednosti (plan_day, streak_days, burned_calories) ki bi bile v konfliktu s Firestore. Ostanejo samo UI nastavitve (dark_mode, fresh_start) v user_prefs.
+
 ### 2026-04-25 — Faza 9.1: DailyLogRepository SSOT sanacija
 
 **Spremembe:**

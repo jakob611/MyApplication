@@ -232,6 +232,16 @@
 - **Data Layer Reform**: `SharedPreferences` fully removed and replaced with `multiplatform-settings`. Created `MyApplication` to handle `SettingsManager` initialization before ViewModel loading.
 - **Nutrition Sync Precision**: Reworked `consumedCalories` tracking to use `FieldValue.increment` with a precise `logFood` transaction inside `FoodRepositoryImpl`, removing unreliable local list sum calculations from the UI. `NutritionViewModel` now automatically maps and immediately renders `uiState` (consumed/burned calories) to the `DonutProgressView` and `ActiveCaloriesBar`.
 
+## 2026-04-25 — Faza 9.2: bm_prefs SSOT sanacija
+**Datoteke:** `ui/screens/WorkoutSessionScreen.kt`, `data/settings/UserPreferencesRepository.kt`, `workers/StreakReminderWorker.kt`, `ui/screens/ManualExerciseLogScreen.kt`
+**Kaj:**
+- **WorkoutSessionScreen**: `plan_day` bere iz `BodyModuleHomeViewModel` (Firestore) namesto `bm_prefs` — dodan `collectAsState()`, `WorkoutCelebrationScreen` prejme `planDay` kot parameter
+- **UserPreferencesRepository**: `updateWorkoutStats()` DEPRECATED comment, `updateDailyCalories()` NO-OP
+- **StreakReminderWorker**: `streak_days`, `plan_day`, `last_workout_epoch` migriran na Firestore prek `UserProfileManager.getWorkoutStats()`; `today_is_rest` prek nove `checkTodayIsRestFromFirestore()` iz `user_plans` kolekcije
+- **ManualExerciseLogScreen** `GenderCache`: odstranjen `gender_cache` SharedPrefs sloj, obdržan samo in-memory cache
+**Zakaj:** Po auditu (Faza 9.audit) so ostali `bm_prefs` zapisi za biometrične podatke v konfliktu s Firestore SSOT. Zdaj sta bm_prefs in Firestore konsistentna.
+**Tveganje:** 🟢 nizko (Firestore je SSOT, ni izgube podatkov)
+
 ## 2026-04-25 — Faza 9.1: DailyLogRepository SSOT sanacija
 **Datoteke:** `ui/screens/RunTrackerScreen.kt`, `ui/screens/ManualExerciseLogScreen.kt`, `domain/workout/UpdateBodyMetricsUseCase.kt`
 **Kaj:**
