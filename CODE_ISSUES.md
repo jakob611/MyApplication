@@ -47,7 +47,22 @@
 
 ## DNEVNIK POPRAVKOV
 
-### 2026-04-25 — Faza 9.2: bm_prefs SSOT sanacija
+### 2026-04-25 — Faza 11: Algorithm Upgrade (deterministična naključnost, gender bonus, volume progression)
+
+**Spremembe:**
+- `domain/WorkoutGenerator.kt`:
+  - `buildRandom(planDay)`: deterministični seed = `epochDay * 1000 + planDay` → isti nabor vaj cel dan
+  - `WorkoutGenerationParams`: dodano `gender: String = ""` in `planDay: Int = 1`
+  - `calculateScore()`: gender bonus — female +15% spodnji del (glutes/legs), male +10% zgornji del (chest/shoulders)
+  - `selectExercisesWeighted()`: `rng` parameter namesto globalnega `Random`
+  - `applyVolumeProgression(lastSession)`: nova funkcija — +5% reps/teža za vaje iz zadnje seje (The Memory Bridge, Faza 12 ready)
+  - `LastExerciseRecord` data class klase za hranjenje podatkov zadnje seje
+- `data/AlgorithmPreferences.kt`:
+  - `loadParamsWithOverrides()`: nova funkcija — sprejme podatke iz WorkoutViewModel / Firestore kot optional overrides (gender, difficulty, goal, focus, equipment, planDay)
+
+**Arhitekturna opomba:** Generator je zdaj deterministično ponovljiv (isti dan + planDay = isti workout). Gender in memory bridge sta pripravljena za Fazo 12 (Firestore progresija prek WorkoutViewModel).
+
+
 
 **Spremembe:**
 - `ui/screens/WorkoutSessionScreen.kt`:
