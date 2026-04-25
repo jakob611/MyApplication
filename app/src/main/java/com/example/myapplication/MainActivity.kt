@@ -437,6 +437,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToAchievements = { navigateTo(Screen.Achievements); scope.launch { drawerState.close() } },
                                 onNavigateToBadges = { navigateTo(Screen.Achievements); scope.launch { drawerState.close() } },
                                 onNavigateToHealthConnect = { navigateTo(Screen.HealthConnect); scope.launch { drawerState.close() } },
+                                onNavigateToDebugDashboard = { navigateTo(Screen.DebugDashboard); scope.launch { drawerState.close() } },
                                 onNavigateToMyAccount = { navigateTo(Screen.MyAccount); scope.launch { drawerState.close() } }
                             )
                         }
@@ -801,6 +802,9 @@ class MainActivity : ComponentActivity() {
                                         onBack = { navigateBack() },
                                         userProfile = userProfile,
                                         currentPlan = plans.maxByOrNull { it.createdAt }
+                                    )
+                                    currentScreen is Screen.DebugDashboard -> com.example.myapplication.ui.screens.DebugDashboardScreen(
+                                        onBack = { navigateBack() }
                                     )
                                     currentScreen is Screen.PrivacyPolicy -> PrivacyPolicyScreen(onBack = { navigateBack() })
                                     currentScreen is Screen.TermsOfService -> TermsOfServiceScreen(onBack = { navigateBack() })

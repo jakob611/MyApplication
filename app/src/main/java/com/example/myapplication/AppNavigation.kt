@@ -63,6 +63,9 @@ sealed class Screen {
     object DeveloperSettings : Screen()
     object HealthConnect : Screen()
 
+    // Debug (skrit — 5-klik na profilno sliko)
+    object DebugDashboard : Screen()
+
     // Pravne strani
     object PrivacyPolicy : Screen()
     object TermsOfService : Screen()

@@ -3,8 +3,37 @@ package com.example.myapplication.data.daily
 import android.util.Log
 import com.example.myapplication.persistence.FirestoreHelper
 import kotlinx.coroutines.tasks.await
+import java.util.Collections
+
+/**
+ * Zapisi posamezne Firestore transakcije za Debug Dashboard.
+ */
+data class TransactionRecord(
+    val operation: String,
+    val durationMs: Long,
+    val status: String,   // "✅ Success" ali "❌ Fail"
+    val timestamp: Long = System.currentTimeMillis()
+)
 
 class DailyLogRepository {
+
+    companion object {
+        /** Zadnjih 5 transakcij — thread-safe synchronized list */
+        val lastTransactions: MutableList<TransactionRecord> =
+            Collections.synchronizedList(mutableListOf())
+
+        private fun recordTransaction(op: String, durationMs: Long, success: Boolean) {
+            val record = TransactionRecord(
+                operation = op,
+                durationMs = durationMs,
+                status = if (success) "✅ Success" else "❌ Fail"
+            )
+            synchronized(lastTransactions) {
+                lastTransactions.add(0, record)
+                if (lastTransactions.size > 5) lastTransactions.removeAt(lastTransactions.size - 1)
+            }
+        }
+    }
     private val db get() = FirestoreHelper.getDb()
 
     /**
@@ -17,11 +46,11 @@ class DailyLogRepository {
         val uid = FirestoreHelper.getCurrentUserDocId() ?: return
         val ref = db.collection("users").document(uid).collection("dailyLogs").document(date)
 
+        val startMs = System.currentTimeMillis()
+        val opLabel = "updateDailyLog($date)"
         try {
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(ref)
-
-                // Parsing obstoječih podatkov, ali inicializacija novega dne
                 val data = if (snapshot.exists()) {
                     snapshot.data?.toMutableMap() ?: mutableMapOf()
                 } else {
@@ -33,18 +62,14 @@ class DailyLogRepository {
                         "items" to emptyList<Any>()
                     )
                 }
-
-                // Matematična pretvorba v varni "lock" transakciji brez FieldValue izjem
                 action(data)
-
-                // Posodobitev sledi (Timestamp) in zapis prepisanega objkta nazaj
                 data["updatedAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
-
                 transaction.set(ref, data)
             }.await()
-            // Log.d("DailyLogRepo", "Uspešno izvršena transakcija za dailyLog: $date")
+            recordTransaction(opLabel, System.currentTimeMillis() - startMs, true)
         } catch (e: Exception) {
             Log.e("DailyLogRepo", "Transakcija za dailyLog spodletela: $date", e)
+            recordTransaction(opLabel, System.currentTimeMillis() - startMs, false)
         }
     }
 }

@@ -108,6 +108,10 @@ class NutritionViewModel(
             goal.contains("Gain",  ignoreCase = true) -> 300
             else -> 0
         }
+        // Debug store — za DebugDashboard
+        com.example.myapplication.debug.NutritionDebugStore.lastBmr = bmr
+        com.example.myapplication.debug.NutritionDebugStore.lastGoal = goal
+        com.example.myapplication.debug.NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
         Log.d("NutritionVM", "✅ setUserMetrics: BMR=${"%.0f".format(bmr)} → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
     }
 
@@ -134,6 +138,10 @@ class NutritionViewModel(
                             burned   = serverBurned,
                             water    = serverWater
                         )
+                        // Debug store — posodobi surove vrednosti za DebugDashboard
+                        com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
+                        com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
+                        com.example.myapplication.debug.NutritionDebugStore.lastWaterMl = serverWater
 
                         // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
                         val rawItems = doc.get("items") as? List<*>

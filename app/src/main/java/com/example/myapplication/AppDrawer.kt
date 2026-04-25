@@ -115,6 +115,7 @@ fun FigmaDrawerContent(
     onNavigateToAchievements: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
     onNavigateToHealthConnect: () -> Unit = {},
+    onNavigateToDebugDashboard: () -> Unit = {},
     onNavigateToMyAccount: () -> Unit
 ) {
     val PrimaryBlue = MaterialTheme.colorScheme.primary
@@ -134,6 +135,10 @@ fun FigmaDrawerContent(
     var showChallengesPrivacy by remember { mutableStateOf(userProfile.showChallenges) }
     var showFollowersPrivacy by remember { mutableStateOf(userProfile.showFollowers) }
     var shareActivitiesPrivacy by remember { mutableStateOf(userProfile.shareActivities) }
+
+    // Debug Dashboard — 5-kratni klik na stickman avatar
+    var debugClickCount by remember { mutableIntStateOf(0) }
+    var lastDebugClickTime by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(userProfile) {
         editedProfile = userProfile
@@ -167,11 +172,28 @@ fun FigmaDrawerContent(
                 Spacer(Modifier.weight(1f))
             }
 
-            // 1. Stickman avatar
+            // 1. Stickman avatar — 5-klik aktivira Debug Dashboard
             Surface(
                 color = PrimaryBlue,
                 shape = MaterialTheme.shapes.large,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp).padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 160.dp)
+                    .padding(vertical = 8.dp)
+                    .clickable {
+                        val now = System.currentTimeMillis()
+                        if (now - lastDebugClickTime > 1500) {
+                            // Preveč časa med kliki — resetiraj števec
+                            debugClickCount = 1
+                        } else {
+                            debugClickCount++
+                        }
+                        lastDebugClickTime = now
+                        if (debugClickCount >= 5) {
+                            debugClickCount = 0
+                            onNavigateToDebugDashboard()
+                        }
+                    }
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
@@ -180,6 +202,26 @@ fun FigmaDrawerContent(
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(100.dp).padding(16.dp)
                     )
+                    // Indikator napredka klikov (prikaže se po 2. kliku)
+                    if (debugClickCount in 2..4) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                    shape = MaterialTheme.shapes.small
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "$debugClickCount/5",
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
 
