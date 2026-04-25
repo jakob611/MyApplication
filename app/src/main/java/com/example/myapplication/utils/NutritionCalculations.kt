@@ -290,3 +290,48 @@ fun calculateOptimalMacros(calories: Double, weight: Double, goal: String?, expe
 
     return Triple(totalProtein, totalCarbs, totalFat)
 }
+
+// ── Faza 7: EMA & Adaptive TDEE ─────────────────────────────────────────────
+
+/**
+ * Izračuna Exponential Moving Average (EMA) za seznam meritev teže.
+ *
+ * Formula: EMAₜ = α × wₜ + (1−α) × EMA_(t−1), kjer α = 2 / (period + 1)
+ *
+ * @param weights  Časovno urejen seznam meritev teže (kg)
+ * @param period   Širina drsečega okna (privzeto 7 dni)
+ * @return         EMA zadnje vrednosti (oz. first value pri 1-elementnem seznamu)
+ */
+fun calculateEMA(weights: List<Double>, period: Int = 7): Double {
+    if (weights.isEmpty()) return 0.0
+    val alpha = 2.0 / (period + 1)
+    var ema = weights[0]
+    for (i in 1 until weights.size) {
+        ema = alpha * weights[i] + (1.0 - alpha) * ema
+    }
+    return ema
+}
+
+/**
+ * Izračuna adaptivni TDEE iz opazovanih dnevnih kalorij in izmerjene spremembe EMA teže.
+ *
+ * Temelji na termodinamičnem zakonu ravnotežja kalorij:
+ *   balance_per_day = consumed_avg - TDEE
+ *   emaWeightChangeDelta ≈ balance_per_day × activeDays / 7700  [7700 kcal ≈ 1 kg]
+ * ⟹ TDEE = avgConsumed − (emaWeightChangeDelta × 7700 / activeDays)
+ *
+ * @param last7DaysCalories    Dnevno zaužite kalorije za aktivne dni zadnjega tedna
+ *                             (izključi dni brez vnosa)
+ * @param emaWeightChangeDelta Razlika EMA teže v tem obdobju (kg;
+ *                             negativno = hujšanje, pozitivno = pridobivanje)
+ * @return Ocenjeni dnevni TDEE v kcal (minimum 800 kcal kot varnostni prag)
+ */
+fun calculateAdaptiveTDEE(last7DaysCalories: List<Int>, emaWeightChangeDelta: Double): Int {
+    if (last7DaysCalories.isEmpty()) return 0
+    val activeDays = last7DaysCalories.size.toDouble()
+    val avgCalories = last7DaysCalories.average()
+    // Dnevna bilanca izpeljana iz opazovane spremembe EMA teže
+    val observedDailyBalance = (emaWeightChangeDelta * 7700.0) / activeDays
+    val estimatedTDEE = avgCalories - observedDailyBalance
+    return estimatedTDEE.toInt().coerceAtLeast(800)
+}

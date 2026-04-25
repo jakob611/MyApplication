@@ -44,6 +44,8 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import com.example.myapplication.utils.HapticFeedback
+import com.example.myapplication.utils.calculateEMA
+import com.example.myapplication.utils.calculateAdaptiveTDEE
 import java.util.Locale
 import com.example.myapplication.data.UserProfile
 
@@ -1137,16 +1139,9 @@ private fun computeWeightPrediction(
 ): WeightPredictionDisplay? {
     if (weightLogs.isEmpty()) return null
 
-    // ── EMA teže (7-dnevno okno) — inline implementacija (ne uvažamo KMP shared) ──
-    // Formula: EMA_t = α × w_t + (1-α) × EMA_(t-1),  α = 2/(period+1)
+    // ── EMA teže (7-dnevno okno) — delegira na utils/NutritionCalculations.kt ──
     val sortedWeights = weightLogs.sortedBy { it.date }.map { it.weightKg }
-    val period = 7
-    val alpha = 2.0 / (period + 1)
-    var ema = sortedWeights[0]
-    for (i in 1 until sortedWeights.size) {
-        ema = alpha * sortedWeights[i] + (1.0 - alpha) * ema
-    }
-    val emaWeightKg = ema
+    val emaWeightKg = calculateEMA(sortedWeights, period = 7)
 
     // ── Povprečni kalorični balans zadnjih 7 dni ──────────────────────────
     val today = LocalDate.now()
@@ -1190,6 +1185,14 @@ private fun computeWeightPrediction(
     }
 
     // 5. Shrani v WeightPredictorStore za Debug Dashboard
+    val prevEmaWeightKg = if (sortedWeights.size >= 2)
+        calculateEMA(sortedWeights.dropLast(1), period = 7)
+    else
+        emaWeightKg
+    val adaptiveTDEE = calculateAdaptiveTDEE(
+        last7DaysCalories = activeDaysWithData.map { it.calories.toInt() },
+        emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg
+    )
     com.example.myapplication.debug.WeightPredictorStore.lastEmaWeightKg = emaWeightKg
     com.example.myapplication.debug.WeightPredictorStore.lastAvgDailyBalanceKcal = avgDailyBalance
     com.example.myapplication.debug.WeightPredictorStore.last30DayPredictionKg = predictedWeightIn30Days
