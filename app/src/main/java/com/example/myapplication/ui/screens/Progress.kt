@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.screens
 
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -387,10 +390,10 @@ fun ProgressScreen(
                             rangeType = range
                         )
                     }
-                    // ── Faza 7: Prediction kartica (pod Weight grafom) ─────────────
+                    // ── Faza 7: Weight Destiny kartica (pod Weight grafom) ────────
                     if (weightPrediction != null) {
                         item {
-                            WeightPredictionCard(
+                            WeightDestinyCard(
                                 prediction = weightPrediction,
                                 isLbs = userProfile.weightUnit == "lb"
                             )
@@ -1124,7 +1127,8 @@ private data class WeightPredictionDisplay(
     val goalWeightKg: Double?,         // null = ni cilja nastavljenega
     val daysToGoal: Int?,              // null = ni dosegljivo
     val goalDateStr: String?,          // npr. "15 Jul 2026"
-    val activeDaysInLastWeek: Int
+    val activeDaysInLastWeek: Int,
+    val confidenceFactor: Double = 0.0 // C ∈ {0.0, 0.5, 1.0}
 )
 
 /**
@@ -1215,7 +1219,12 @@ private fun computeWeightPrediction(
         goalWeightKg = goalWeightKg,
         daysToGoal = daysToGoal,
         goalDateStr = goalDateStr,
-        activeDaysInLastWeek = activeDaysWithData.size
+        activeDaysInLastWeek = activeDaysWithData.size,
+        confidenceFactor = when {
+            activeDaysWithData.size < 3 -> 0.0
+            activeDaysWithData.size <= 5 -> 0.5
+            else -> 1.0
+        }
     )
 }
 
@@ -1225,28 +1234,53 @@ private fun monthName(month: Int): String = when (month) {
 }
 
 /**
- * Prediction kartica — prikazuje EMA težo, povprečni deficit in napoved.
+ * 🔮 Weight Destiny — motivacijska kartica z vizualnim trendom in What-if simulatorjem.
+ * Nadomešča staro WeightPredictionCard (Faza 7.1).
  */
 @Composable
-private fun WeightPredictionCard(
+private fun WeightDestinyCard(
     prediction: WeightPredictionDisplay,
     isLbs: Boolean
 ) {
     val convert: (Double) -> Double = { if (isLbs) it * 2.20462 else it }
     val unit = if (isLbs) "lb" else "kg"
     val balance = prediction.avgDailyBalanceKcal
-    val isDeficit = balance < -50
-    val isSurplus = balance > 50
+    val confidence = prediction.confidenceFactor
+
     val trendColor = when {
-        isDeficit -> Color(0xFF10B981)   // Verde — hujšanje
-        isSurplus -> Color(0xFFE11D48)   // Rdeča — pridobivanje
-        else      -> Color(0xFF6B7280)   // Siva — vzdrževanje
+        balance < -50 -> Color(0xFF10B981)
+        balance > 50  -> Color(0xFFE11D48)
+        else          -> Color(0xFF6B7280)
     }
-    val trendIcon = when {
-        isDeficit -> Icons.AutoMirrored.Filled.TrendingDown
-        isSurplus -> Icons.AutoMirrored.Filled.TrendingUp
-        else      -> Icons.AutoMirrored.Filled.TrendingFlat
+
+    // Dinamično sporočilo glede na C in trend
+    val (msgEmoji, msgText) = when {
+        confidence < 0.5 ->
+            "🧪" to "Spoznavam tvoj metabolizem… (${prediction.activeDaysInLastWeek}/7 dni podatkov)"
+        balance < -50 && prediction.goalDateStr != null ->
+            "🎯" to "Na dobri poti si! Predviden cilj: ${prediction.goalDateStr}"
+        balance < -50 ->
+            "✅" to "Na dobri poti si! Ohranjaj ta tempo."
+        balance > 50 && prediction.goalDateStr != null ->
+            "📈" to "Pridobivate maso. Predviden cilj: ${prediction.goalDateStr}"
+        balance > 50 ->
+            "📈" to "Pridobivate telesno maso. Prilagodite prehrano za cilj."
+        else ->
+            "⚖️" to "Si v energijskem ravnovesju. Ohranjaj ta tempo!"
     }
+
+    // What-if stanje
+    var whatIfDelta by remember { mutableStateOf(0f) }
+    val adjustedBalance = balance + whatIfDelta
+    val whatIfDaysToGoal: Int? = prediction.goalWeightKg?.let { goalKg ->
+        if (goalKg <= 0.0) return@let null
+        val kgDiff = goalKg - prediction.emaWeightKg
+        val adjKgPerDay = adjustedBalance / 7700.0
+        val correct = (kgDiff < 0.0 && adjKgPerDay < 0.0) || (kgDiff > 0.0 && adjKgPerDay > 0.0)
+        if (correct && abs(adjKgPerDay) > 0.00001) (kgDiff / adjKgPerDay).toInt().coerceIn(1, 3650) else null
+    }
+    val daysDelta: Int? = if (whatIfDaysToGoal != null && prediction.daysToGoal != null)
+        prediction.daysToGoal - whatIfDaysToGoal else null
 
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -1254,132 +1288,295 @@ private fun WeightPredictionCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Header
+
+            // ── Header ──────────────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(trendIcon, contentDescription = null, tint = trendColor, modifier = Modifier.size(22.dp))
+                Text("🔮", fontSize = 20.sp)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Weight Prediction",
+                    "Weight Destiny",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
+                ConfidenceIndicator(confidence = confidence)
+            }
+
+            // ── Dinamično sporočilo ──────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(trendColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(msgEmoji, fontSize = 16.sp)
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    "${prediction.activeDaysInLastWeek}/7d",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    msgText,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            // EMA teža + energijski balans
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("EMA Weight", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        String.format(Locale.US, "%.1f %s", convert(prediction.emaWeightKg), unit),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Avg daily balance", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "${if (balance >= 0) "+" else ""}${balance.toInt()} kcal",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = trendColor
-                    )
-                }
-            }
+            // ── Vizualizacija trenda ─────────────────────────────────────────────
+            WeightTrendLine(
+                currentWeightKg  = convert(prediction.emaWeightKg),
+                projectedWeightKg = convert(prediction.predictedWeightIn30Days),
+                goalWeightKg     = prediction.goalWeightKg?.let { convert(it) },
+                trendColor       = trendColor,
+                isDashed         = confidence < 0.5,
+                unit             = unit
+            )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            // Napoved
-            if (prediction.goalWeightKg != null && prediction.goalDateStr != null && prediction.daysToGoal != null) {
-                // Ciljna teža nastavljena → pokaži datum dosege
+            // ── What-if Simulator ────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = trendColor.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .padding(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🎲", fontSize = 14.sp)
+                        Spacer(Modifier.width(4.dp))
                         Text(
-                            "At this pace you'll reach",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            String.format(Locale.US, "%.1f %s", convert(prediction.goalWeightKg), unit),
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 20.sp,
-                            color = trendColor
+                            "What-if Simulator",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("by", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            prediction.goalDateStr,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            "in ${prediction.daysToGoal} days",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    val deltaLabel = when {
+                        whatIfDelta > 0f  -> "+${whatIfDelta.toInt()} kcal/dan"
+                        whatIfDelta < 0f  -> "${whatIfDelta.toInt()} kcal/dan"
+                        else              -> "0 kcal (zdaj)"
                     }
+                    Text(
+                        deltaLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            whatIfDelta < 0f -> Color(0xFF10B981)
+                            whatIfDelta > 0f -> Color(0xFFE11D48)
+                            else             -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 }
-            } else {
-                // Ni cilja → pokaži 30-dnevno napoved
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("In 30 days you'll weigh", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            String.format(Locale.US, "%.1f %s", convert(prediction.predictedWeightIn30Days), unit),
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 20.sp,
-                            color = trendColor
-                        )
+
+                Slider(
+                    value = whatIfDelta,
+                    onValueChange = { whatIfDelta = (it / 50f).toInt() * 50f },
+                    valueRange = -500f..500f,
+                    steps = 19,
+                    colors = SliderDefaults.colors(
+                        thumbColor = trendColor,
+                        activeTrackColor = trendColor,
+                        inactiveTrackColor = trendColor.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Rezultat what-if
+                val whatIfMsg = when {
+                    whatIfDelta == 0f ->
+                        "← Premakni drsnik za simulacijo scenarija"
+                    daysDelta != null && daysDelta > 0 -> {
+                        val goalStr = prediction.goalWeightKg?.let {
+                            String.format(Locale.US, "%.1f %s", convert(it), unit)
+                        } ?: ""
+                        "✅ Cilj $goalStr bi dosegel $daysDelta dni prej!"
                     }
-                    val changeIn30 = prediction.predictedWeightIn30Days - prediction.emaWeightKg
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "${if (changeIn30 >= 0) "+" else ""}${String.format(Locale.US, "%.1f", convert(changeIn30))} $unit",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = trendColor
-                        )
-                        Text("vs. now", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    daysDelta != null && daysDelta < 0 ->
+                        "⚠️ Cilj bi dosegel ${-daysDelta} dni pozneje."
+                    whatIfDaysToGoal != null ->
+                        "🎯 Nov čas do cilja: ~$whatIfDaysToGoal dni"
+                    else -> {
+                        val adj30 = prediction.emaWeightKg + (adjustedBalance * 30.0) / 7700.0
+                        "📊 Čez 30 dni: ${String.format(Locale.US, "%.1f %s", convert(adj30), unit)}"
                     }
                 }
                 Text(
-                    "💡 Set a goal weight in your profile to see a target date.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 2.dp)
+                    whatIfMsg,
+                    fontSize = 12.sp,
+                    color = when {
+                        whatIfDelta == 0f                       -> MaterialTheme.colorScheme.onSurfaceVariant
+                        daysDelta != null && daysDelta > 0      -> Color(0xFF10B981)
+                        daysDelta != null && daysDelta < 0      -> Color(0xFFE11D48)
+                        else                                    -> MaterialTheme.colorScheme.onSurface
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * Vizualni trendni graf: dve točki (zdaj → čez 30 dni) + ciljna linija.
+ */
+@Composable
+private fun WeightTrendLine(
+    currentWeightKg: Double,
+    projectedWeightKg: Double,
+    goalWeightKg: Double?,
+    trendColor: Color,
+    isDashed: Boolean,
+    unit: String
+) {
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val goalColor  = Color(0xFFF59E0B)
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            val padH = 36f
+            val padV = 16f
+
+            val allW = listOfNotNull(currentWeightKg, projectedWeightKg, goalWeightKg)
+            val minW = (allW.min() - 2.5)
+            val maxW = (allW.max() + 2.5)
+            val range = (maxW - minW).coerceAtLeast(0.1)
+
+            fun wy(kg: Double): Float =
+                (h - padV - ((kg - minW) / range * (h - 2 * padV))).toFloat()
+
+            val startX = padH
+            val endX   = w - padH
+            val startY = wy(currentWeightKg)
+            val endY   = wy(projectedWeightKg)
+            val midX   = (startX + endX) / 2f
+            val midY   = wy((currentWeightKg + projectedWeightKg) / 2.0)
+
+            // Horizontalna pomožna linija (sredina razpona)
+            val midRangeY = wy((minW + maxW) / 2.0)
+            drawLine(
+                color = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.12f),
+                start = Offset(padH, midRangeY),
+                end   = Offset(w - padH, midRangeY),
+                strokeWidth = 1f
+            )
+
+            // Ciljna linija (dashed, rumena)
+            if (goalWeightKg != null) {
+                val goalY = wy(goalWeightKg)
+                drawLine(
+                    color = goalColor.copy(alpha = 0.55f),
+                    start = Offset(padH, goalY),
+                    end   = Offset(w - padH, goalY),
+                    strokeWidth = 1.8f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f))
+                )
+            }
+
+            // Senčni trak pod glavno linijo
+            val shadowPath = androidx.compose.ui.graphics.Path().apply {
+                moveTo(startX, startY)
+                quadraticBezierTo(midX, midY, endX, endY)
+                lineTo(endX, h)
+                lineTo(startX, h)
+                close()
+            }
+            drawPath(
+                path = shadowPath,
+                color = trendColor.copy(alpha = 0.07f)
+            )
+
+            // Glavna bezier krivulja
+            val mainPathEffect = if (isDashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null
+            val mainPath = androidx.compose.ui.graphics.Path().apply {
+                moveTo(startX, startY)
+                quadraticBezierTo(midX, midY, endX, endY)
+            }
+            drawPath(
+                path = mainPath,
+                color = trendColor,
+                style = Stroke(width = 3.2f, cap = StrokeCap.Round, pathEffect = mainPathEffect)
+            )
+
+            // Točki na robovih
+            // Leva (zdaj)
+            drawCircle(color = trendColor,              radius = 9f,  center = Offset(startX, startY))
+            drawCircle(color = surfaceColor,            radius = 5f,  center = Offset(startX, startY))
+            // Desna (30 dni)
+            drawCircle(color = trendColor.copy(alpha = 0.7f), radius = 9f,  center = Offset(endX, endY))
+            drawCircle(color = surfaceColor,            radius = 5f,  center = Offset(endX, endY))
+        }
+
+        // Oznake pod grafom
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(horizontalAlignment = Alignment.Start) {
+                Text("Zdaj (EMA)", fontSize = 10.sp, color = labelColor)
+                Text(
+                    String.format(Locale.US, "%.1f %s", currentWeightKg, unit),
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                )
+            }
+            if (goalWeightKg != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🎯 Cilj", fontSize = 10.sp, color = goalColor)
+                    Text(
+                        String.format(Locale.US, "%.1f %s", goalWeightKg, unit),
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = goalColor
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("Čez 30 dni", fontSize = 10.sp, color = labelColor)
+                Text(
+                    String.format(Locale.US, "%.1f %s", projectedWeightKg, unit),
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Tri pike, ki vizualno kažejo zaupanje v napoved (C=0.0/0.5/1.0).
+ */
+@Composable
+private fun ConfidenceIndicator(confidence: Double) {
+    val activeHigh   = Color(0xFF10B981)
+    val activeMid    = Color(0xFFF59E0B)
+    val activeLow    = Color(0xFF9CA3AF)
+    val inactive     = Color(0xFFE5E7EB)
+
+    val dotColors = listOf(
+        if (confidence >= 0.5) activeMid else if (confidence > 0.0) activeLow else inactive,
+        if (confidence >= 0.5) activeMid else inactive,
+        if (confidence >= 1.0) activeHigh else inactive
+    )
+    val label = when {
+        confidence >= 1.0 -> "Visoko zaupanje"
+        confidence >= 0.5 -> "Srednje zaupanje"
+        else              -> "Malo podatkov"
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, fontSize = 9.sp, color = dotColors.last())
+        Spacer(Modifier.width(2.dp))
+        dotColors.forEach { c ->
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(c, RoundedCornerShape(50))
+            )
         }
     }
 }
