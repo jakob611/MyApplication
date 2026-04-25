@@ -47,6 +47,21 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Faza 7: Weight Predictor — Termodinamični algoritem)**
+  **Algoritem:**
+  - `EMA(α=0.25, 7-day)`: gladi dnevne fluktuacije vode iz tedenskih weightLog vnosov
+  - `avgDailyBalance = mean(consumed - burned)` za zadnjih 7 aktivnih dni (brez dni brez vnosa)
+  - `predictedChange = (avgBalance × days) / 7700` — 7700 kcal deficita ≈ 1 kg telesne mase
+  - `goalDate`: če `UserProfile.goalWeightKg` nastavlen in trend v pravi smeri → ciljni datum
+  1. `CalculateBodyMetricsUseCase.kt` (KMP shared): Dodan `calculateEMA(weights, period=7)` in `predictWeightChange(days, avgDailyBalance)` za dokumentacijo algoritma na KMP nivoju.
+  2. `WeightPredictorStore.kt` (nov singleton `/debug/`): Thread-safe @Volatile shramba za EMA težo, avg balans, 30-day napoved, goal dato in aktivne dni.
+  3. `UserProfile.kt`: Dodan `goalWeightKg: Double? = null` — opcijsko polje za ciljno težo.
+  4. `UserProfileManager.kt`: `documentToUserProfile()` + `saveProfileFirestore()` posodobljeni za `goalWeightKg`.
+  5. `Progress.kt`: Dodan `computeWeightPrediction()` (pure fn, brez Firestore klicev, porabi obstoječe `weightLogs`/`dailyLogs`/`burnedByDay`) + `WeightPredictionCard` composable pod Weight grafom.
+  6. `DebugViewModel.kt`: `WeightPredictorDebugInputs` data class + `_weightPredictorInputs` StateFlow, polling iz `WeightPredictorStore`.
+  7. `DebugDashboardScreen.kt`: Nova sekcija "⚖️ Weight Predictor — Algoritemska surovina" z vsemi surovimi vrednostmi.  
+  **UI:** Kartica prikazuje EMA težo, povprečni dnevni balans (zeleno=deficit, rdeče=surplus) in napoved. Če `goalWeightKg` ni nastavljen → 30-dnevna projekcija. Če je → ciljni datum z odštevanjem dni.
+
 - **2026-04-25 (Debug Dashboard — Diagnostično orodje za razvijalce)**
   1. `DailyLogRepository.kt`: Dodan `TransactionRecord` data class + `companion object { lastTransactions }`. `updateDailyLog()` zdaj beleži vsako transakcijo: ime operacije, trajanje v ms, status (✅/❌). Lista hrani zadnjih 5 zapisov.
   2. `NutritionDebugStore.kt` (nov singleton v `/debug/`): Shrani surove TDEE vrednosti — `lastBmr`, `lastGoal`, `lastGoalAdjustment`, `lastBurnedCalories`, `lastConsumedCalories`, `lastWaterMl`.
