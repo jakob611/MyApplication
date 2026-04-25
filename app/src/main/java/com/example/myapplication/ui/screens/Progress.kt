@@ -1189,9 +1189,12 @@ private fun computeWeightPrediction(
         calculateEMA(sortedWeights.dropLast(1), period = 7)
     else
         emaWeightKg
-    val adaptiveTDEE = calculateAdaptiveTDEE(
+    // Teoretični TDEE = BMR × 1.2 iz zadnjega nalaganja profila (NutritionDebugStore)
+    val theoreticalTDEE = (com.example.myapplication.debug.NutritionDebugStore.lastBmr * 1.2).toInt()
+    val tdeeResult = calculateAdaptiveTDEE(
         last7DaysCalories = activeDaysWithData.map { it.calories.toInt() },
-        emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg
+        emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg,
+        theoreticalTDEE = theoreticalTDEE
     )
     com.example.myapplication.debug.WeightPredictorStore.lastEmaWeightKg = emaWeightKg
     com.example.myapplication.debug.WeightPredictorStore.lastAvgDailyBalanceKcal = avgDailyBalance
@@ -1200,6 +1203,9 @@ private fun computeWeightPrediction(
     com.example.myapplication.debug.WeightPredictorStore.lastGoalDateStr = goalDateStr
     com.example.myapplication.debug.WeightPredictorStore.lastDaysToGoal = daysToGoal
     com.example.myapplication.debug.WeightPredictorStore.lastActiveDaysCount = activeDaysWithData.size
+    com.example.myapplication.debug.WeightPredictorStore.lastHybridTDEE = tdeeResult.hybridTDEE
+    com.example.myapplication.debug.WeightPredictorStore.lastAdaptiveTDEE = tdeeResult.adaptiveTDEE
+    com.example.myapplication.debug.WeightPredictorStore.lastConfidenceFactor = tdeeResult.confidenceFactor
     com.example.myapplication.debug.WeightPredictorStore.isReady = true
 
     return WeightPredictionDisplay(

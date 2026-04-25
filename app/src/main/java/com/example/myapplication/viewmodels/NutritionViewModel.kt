@@ -100,7 +100,13 @@ class NutritionViewModel(
      * @param goal    Cilj ("Lose fat", "Build muscle", "General health" …)
      */
     fun setUserMetrics(bmr: Double, goal: String) {
-        _baseTdee.value = bmr * 1.2
+        val staticBase = bmr * 1.2  // Mifflin-St Jeor sedentarni TDEE
+
+        // Če je hibridni TDEE že izračunan iz ProgressScreen (WeightPredictorStore),
+        // ga uporabimo namesto fiksnega Mifflin množilnika.
+        val hybridTDEE = com.example.myapplication.debug.WeightPredictorStore.lastHybridTDEE
+        _baseTdee.value = if (hybridTDEE > 800) hybridTDEE.toDouble() else staticBase
+
         _goalAdjustment.value = when {
             goal.contains("Lose", ignoreCase = true) ||
             goal.contains("Cut",  ignoreCase = true) -> -500
@@ -112,7 +118,19 @@ class NutritionViewModel(
         com.example.myapplication.debug.NutritionDebugStore.lastBmr = bmr
         com.example.myapplication.debug.NutritionDebugStore.lastGoal = goal
         com.example.myapplication.debug.NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics: BMR=${"%.0f".format(bmr)} → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+        Log.d("NutritionVM", "✅ setUserMetrics: BMR=${"%.0f".format(bmr)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+    }
+
+    /**
+     * Posodobi bazni TDEE iz hibridnega izračuna (adaptive × C + theoretical × (1−C)).
+     * Kliče se iz ProgressScreen po vsakem preračunu napovedi.
+     * Vrednosti > 800 kcal se sprejmejo kot veljavne.
+     */
+    fun applyHybridTDEE(hybridTDEE: Int) {
+        if (hybridTDEE > 800 && _baseTdee.value > 0.0) {
+            _baseTdee.value = hybridTDEE.toDouble()
+            Log.d("NutritionVM", "🔄 applyHybridTDEE: $hybridTDEE kcal → baseTdee updated")
+        }
     }
 
     // ── Obstoječa logika ───────────────────────────────────────────────────────

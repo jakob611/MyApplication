@@ -28,5 +28,19 @@ object WeightPredictorStore {
 
     /** true ko je napoved izračunana vsaj 1x */
     @Volatile var isReady: Boolean = false
+
+    // ── Hibridni TDEE (Faza 7.1) ──────────────────────────────────────────────
+
+    /** Hibridni TDEE (adaptivni × C + teoretični × (1−C)) v kcal */
+    @Volatile var lastHybridTDEE: Int = 0
+
+    /** Čisti adaptivni TDEE izpeljan iz opazovane telesne mase */
+    @Volatile var lastAdaptiveTDEE: Int = 0
+
+    /**
+     * Zaupanje (Confidence factor C) v adaptivni izračun:
+     *   0.0 = < 3 dni, 0.5 = 3–5 dni, 1.0 = 6+ dni
+     */
+    @Volatile var lastConfidenceFactor: Double = 0.0
 }
 

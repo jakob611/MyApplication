@@ -49,7 +49,11 @@ data class WeightPredictorDebugInputs(
     val daysToGoal: Int? = null,
     val goalDateStr: String? = null,
     val activeDaysInLastWeek: Int = 0,
-    val isReady: Boolean = false
+    val isReady: Boolean = false,
+    // ── Hibridni TDEE (Faza 7.1) ──────────────────────────────────────────
+    val hybridTDEE: Int = 0,
+    val adaptiveTDEE: Int = 0,
+    val confidenceFactor: Double = 0.0
 )
 
 /**
@@ -118,7 +122,10 @@ class DebugViewModel : ViewModel() {
                     daysToGoal = WeightPredictorStore.lastDaysToGoal,
                     goalDateStr = WeightPredictorStore.lastGoalDateStr,
                     activeDaysInLastWeek = WeightPredictorStore.lastActiveDaysCount,
-                    isReady = WeightPredictorStore.isReady
+                    isReady = WeightPredictorStore.isReady,
+                    hybridTDEE = WeightPredictorStore.lastHybridTDEE,
+                    adaptiveTDEE = WeightPredictorStore.lastAdaptiveTDEE,
+                    confidenceFactor = WeightPredictorStore.lastConfidenceFactor
                 )
                 delay(2000)
             }

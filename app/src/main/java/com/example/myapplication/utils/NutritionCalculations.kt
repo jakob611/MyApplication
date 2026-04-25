@@ -313,25 +313,72 @@ fun calculateEMA(weights: List<Double>, period: Int = 7): Double {
 }
 
 /**
- * Izračuna adaptivni TDEE iz opazovanih dnevnih kalorij in izmerjene spremembe EMA teže.
+ * Rezultat hibridnega TDEE izračuna.
  *
- * Temelji na termodinamičnem zakonu ravnotežja kalorij:
- *   balance_per_day = consumed_avg - TDEE
- *   emaWeightChangeDelta ≈ balance_per_day × activeDays / 7700  [7700 kcal ≈ 1 kg]
- * ⟹ TDEE = avgConsumed − (emaWeightChangeDelta × 7700 / activeDays)
+ * @param hybridTDEE       Končni dnevni kalorični cilj (kcal) — mešanica adaptivnega in teoretičnega
+ * @param adaptiveTDEE     Čisti adaptivni TDEE izpeljan iz opazovane spremembe teže
+ * @param confidenceFactor C ∈ {0.0, 0.5, 1.0} — zaupanje v adaptivni izračun glede na število dni podatkov
+ */
+data class AdaptiveTDEEResult(
+    val hybridTDEE: Int,
+    val adaptiveTDEE: Int,
+    val confidenceFactor: Double
+)
+
+/**
+ * Izračuna hibridni TDEE iz opazovanih dnevnih kalorij, izmerjene spremembe EMA teže
+ * in teoretičnega TDEE iz anketnih podatkov (Mifflin-St Jeor).
+ *
+ * ## Zaupanje v adaptivni izračun (Confidence factor C):
+ *  - C = 0.0  → < 3 dni podatkov  → uporabimo samo teoretični TDEE
+ *  - C = 0.5  → 3–5 dni podatkov  → enakovredno mešamo oba
+ *  - C = 1.0  → 6+ dni podatkov   → zaupamo samo adaptivnemu
+ *
+ * ## Hibridna formula:
+ *   hybridTDEE = C × adaptivni + (1 − C) × teoretični
+ *
+ * ## Adaptivni TDEE temelji na termodinamičnem zakonu:
+ *   TDEE_adaptivni = avgConsumed − (ΔmasaKg × 7700 / aktivniDni)
  *
  * @param last7DaysCalories    Dnevno zaužite kalorije za aktivne dni zadnjega tedna
- *                             (izključi dni brez vnosa)
- * @param emaWeightChangeDelta Razlika EMA teže v tem obdobju (kg;
- *                             negativno = hujšanje, pozitivno = pridobivanje)
- * @return Ocenjeni dnevni TDEE v kcal (minimum 800 kcal kot varnostni prag)
+ * @param emaWeightChangeDelta Razlika EMA teže v obdobju (kg; negativno = hujšanje)
+ * @param theoreticalTDEE      Teoretični TDEE iz vprašalnika (BMR × aktiv. množilnik)
+ * @return [AdaptiveTDEEResult] z vsemi vmesnimi vrednostmi za debug
  */
-fun calculateAdaptiveTDEE(last7DaysCalories: List<Int>, emaWeightChangeDelta: Double): Int {
-    if (last7DaysCalories.isEmpty()) return 0
-    val activeDays = last7DaysCalories.size.toDouble()
-    val avgCalories = last7DaysCalories.average()
-    // Dnevna bilanca izpeljana iz opazovane spremembe EMA teže
-    val observedDailyBalance = (emaWeightChangeDelta * 7700.0) / activeDays
-    val estimatedTDEE = avgCalories - observedDailyBalance
-    return estimatedTDEE.toInt().coerceAtLeast(800)
+fun calculateAdaptiveTDEE(
+    last7DaysCalories: List<Int>,
+    emaWeightChangeDelta: Double,
+    theoreticalTDEE: Int = 0
+): AdaptiveTDEEResult {
+    val activeDays = last7DaysCalories.size
+
+    // Confidence factor C
+    val confidence = when {
+        activeDays < 3 -> 0.0
+        activeDays <= 5 -> 0.5
+        else -> 1.0   // 6+ dni
+    }
+
+    // Adaptivni TDEE iz opazovane telesne mase (termodinamika)
+    val adaptiveTDEE: Int = if (activeDays == 0) {
+        theoreticalTDEE.coerceAtLeast(800)
+    } else {
+        val avgCalories = last7DaysCalories.average()
+        val observedDailyBalance = (emaWeightChangeDelta * 7700.0) / activeDays.toDouble()
+        (avgCalories - observedDailyBalance).toInt().coerceAtLeast(800)
+    }
+
+    // Hibridni TDEE: C × adaptivni + (1−C) × teoretični
+    val hybrid = if (theoreticalTDEE <= 0) {
+        adaptiveTDEE  // ni teoretičnih podatkov → samo adaptivni
+    } else {
+        (confidence * adaptiveTDEE + (1.0 - confidence) * theoreticalTDEE)
+            .toInt().coerceAtLeast(800)
+    }
+
+    return AdaptiveTDEEResult(
+        hybridTDEE = hybrid,
+        adaptiveTDEE = adaptiveTDEE,
+        confidenceFactor = confidence
+    )
 }
