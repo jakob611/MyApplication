@@ -232,7 +232,16 @@
 - **Data Layer Reform**: `SharedPreferences` fully removed and replaced with `multiplatform-settings`. Created `MyApplication` to handle `SettingsManager` initialization before ViewModel loading.
 - **Nutrition Sync Precision**: Reworked `consumedCalories` tracking to use `FieldValue.increment` with a precise `logFood` transaction inside `FoodRepositoryImpl`, removing unreliable local list sum calculations from the UI. `NutritionViewModel` now automatically maps and immediately renders `uiState` (consumed/burned calories) to the `DonutProgressView` and `ActiveCaloriesBar`.
 
-## Backlog / Planned Features
+## 2026-04-25 — Faza 9.1: DailyLogRepository SSOT sanacija
+**Datoteke:** `ui/screens/RunTrackerScreen.kt`, `ui/screens/ManualExerciseLogScreen.kt`, `domain/workout/UpdateBodyMetricsUseCase.kt`
+**Kaj:**
+- **RunTrackerScreen** vrstica 712: Email bug fix — `email = uiState.errorMessage ?: ""` → `email = runEmail` (Firebase Auth)
+- **ManualExerciseLogScreen** `logExerciseToFirestore()`: po `saveExerciseLog()` dodan `DailyLogRepository().updateDailyLog()` za atomarno posodobitev `burnedCalories` v `dailyLogs`
+- **UpdateBodyMetricsUseCase**: `settingsRepo.updateDailyCalories()` zakomentiran — `bm_prefs.daily_calories` ni več SSOT; edini vhod za burned kalorije je `dailyLogs` Firestore kolekcija
+**Zakaj:** Audit je odkril, da sta RunTracker in ManualExercise ignorirala `DailyLogRepository`, ki je SSOT za dinamični TDEE sistem. Burned Calories Delta v Debug Dashboardu ni bila pravilna za te vire aktivnosti.
+**Tveganje:** 🟢 nizko (samo dodajanje obstoječega klica, brez spremembe obstoječe logike)
+
+
 
 ## 2026-04-25 — Faza 4: Dinamični TDEE algoritem
 **Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `shared/.../CalculateBodyMetricsUseCase.kt`

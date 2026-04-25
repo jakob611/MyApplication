@@ -38,22 +38,7 @@ class UpdateBodyMetricsUseCase(
                 "totalKcal" to totalKcal,
                 "totalTimeMin" to totalTimeMin,
                 "exercisesCount" to exercisesCount,
-                "planDay" to planDay,
-                "exercises" to exerciseResults
-            )
-
-            // 3. Shranjevanje v bazo
-            workoutRepo.saveWorkoutSession(email, workoutDoc)
-
-            // 4. Posodobitev lokalnega stanja (Streaki in zadnji trening)
-            if (!isExtra) {
-                settingsRepo.updateWorkoutStats(
-                    completedDay = planDay,
-                    timestamp = timestamp
-                )
-            }
-
-            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
+                "planDay" to planDay,AA            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
             // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
             // settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
 

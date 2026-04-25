@@ -47,7 +47,14 @@
 
 ## DNEVNIK POPRAVKOV
 
-### 2026-04-25 — Faza 7.1: Hibridni TDEE z Confidence Faktorjem
+### 2026-04-25 — Faza 9.1: DailyLogRepository SSOT sanacija
+
+**Spremembe:**
+- `ui/screens/RunTrackerScreen.kt` vrstica 712–713: Email bug fix — `uiState.errorMessage ?: ""` zamenjano z `runEmail` (Firebase Auth `currentUser?.email`), ki je pravilno pridobljen že na vrstici 701
+- `ui/screens/ManualExerciseLogScreen.kt` funkcija `logExerciseToFirestore()`: Po `saveExerciseLog()` dodan klic `DailyLogRepository().updateDailyLog(todayStr)` ki atomarno prišteje `caloriesRounded` k `burnedCalories` v `dailyLogs`
+- `domain/workout/UpdateBodyMetricsUseCase.kt` vrstica 57: `settingsRepo.updateDailyCalories()` zakomentiran z `// [DEPRECATED — SSOT je dailyLogs]` — `bm_prefs.daily_calories` ni več pisan, edini SSOT je `dailyLogs`
+
+**Arhitekturna opomba:** Vsi trije viri aktivnosti (WorkoutSession, RunTracker, ManualExercise) zdaj pisejo `burnedCalories` izključno prek `DailyLogRepository.updateDailyLog()` Firestore transakcije. Debug Dashboard bo zato pravilno prikazoval skupne porabljene kalorije za vse tipe aktivnosti.
 
 **Spremembe:**
 - `utils/NutritionCalculations.kt`: `calculateAdaptiveTDEE()` razširjen z `theoreticalTDEE: Int`
