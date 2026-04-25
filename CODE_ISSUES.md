@@ -47,6 +47,17 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Debug Dashboard — Diagnostično orodje za razvijalce)**
+  1. `DailyLogRepository.kt`: Dodan `TransactionRecord` data class + `companion object { lastTransactions }`. `updateDailyLog()` zdaj beleži vsako transakcijo: ime operacije, trajanje v ms, status (✅/❌). Lista hrani zadnjih 5 zapisov.
+  2. `NutritionDebugStore.kt` (nov singleton v `/debug/`): Shrani surove TDEE vrednosti — `lastBmr`, `lastGoal`, `lastGoalAdjustment`, `lastBurnedCalories`, `lastConsumedCalories`, `lastWaterMl`.
+  3. `NutritionViewModel.kt`: `setUserMetrics()` in `observeDailyTotals()` zdaj posodabljata `NutritionDebugStore` po vsaki spremembi.
+  4. `DebugViewModel.kt` (nov): Polling transakcij vsake 2s, Firestore metadata check (`isFromCache`), TDEE raw inputs, `hardResetFirestoreCache()` (terminate → clearPersistence → app restart).
+  5. `DebugDashboardScreen.kt` (nov): Dark-theme zaslon s 4 sekcijami: Cache vs Server indikator, TDEE algoritemska surovina, Sledilnik transakcij (z barvnim timing indikatorjem), Hard Reset gumb z AlertDialog potrditvijo.
+  6. `AppNavigation.kt`: `Screen.DebugDashboard` dodan.
+  7. `AppDrawer.kt`: Stickman avatar → 5 klikov v ≤1.5s aktivira Debug Dashboard. Prikaže progress counter "2/5" do "4/5" kot overlay.
+  8. `MainActivity.kt`: `Screen.DebugDashboard` handler + `onNavigateToDebugDashboard` callback posredovan `FigmaDrawerContent`.
+  **Dostop:** Odpri drawer → Klikni stickman 5× hitro → Debug Dashboard
+
 - **2026-04-25 (Faza 6: Data Budgeting — -35% Firestore branj)**
   1. `NutritionViewModel.kt`: Dodan `_firestoreFoods: MutableStateFlow<List<TrackedFood>>` + `parseRawItemsToTrackedFoods()`. Items se parsajo ENKRAT v `observeDailyTotals()` collect bloku in delijo prek `internal val firestoreFoods: StateFlow`.
   2. `NutritionScreen.kt`: Odstranjen `LaunchedEffect(uid, todayId) { FoodRepositoryImpl.observeDailyLog().collect {...} }` (~55 vrstic). Ta blok je bil DUPLIKAT NutritionViewModel-ovega Firestore listenerja. Zamenjan z `val firestoreFoods by nutritionViewModel.firestoreFoods.collectAsState()`.
