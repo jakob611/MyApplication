@@ -69,7 +69,7 @@ class CalculateBodyMetricsUseCase {
      * @return               Dinamični dnevni kalorični limit
      */
     fun calculateDynamicTdee(bmr: Double, burnedCalories: Int, goal: String): Double {
-        val baseTdee = bmr * 1.2  // Sedentarna baza — popolno mirovanje + NEAT
+        val baseTdee = bmr * 1.2
         val goalAdjustment = when {
             goal.contains("Lose", ignoreCase = true) ||
             goal.contains("Cut",  ignoreCase = true) -> -500.0
@@ -78,6 +78,43 @@ class CalculateBodyMetricsUseCase {
             else -> 0.0
         }
         return (baseTdee + burnedCalories + goalAdjustment).coerceAtLeast(1200.0)
+    }
+
+    // ── Faza 7: Weight Predictor ───────────────────────────────────────────────
+
+    /**
+     * EMA (Exponential Moving Average) filter za telesno težo.
+     * Glajenje šuma iz kratkotrajnih fluktuacij vode.
+     * Formula: EMA_t = α × w_t + (1-α) × EMA_(t-1),  α = 2/(period+1)
+     *
+     * @param weights  Kronološko urejen seznam vrednosti teže (kg)
+     * @param period   Okno za EMA v dneh (privzeto 7)
+     * @return         EMA-sglajene vrednosti (enakih dimenzij kot vhod)
+     */
+    fun calculateEMA(weights: List<Double>, period: Int = 7): List<Double> {
+        if (weights.isEmpty()) return emptyList()
+        val alpha = 2.0 / (period + 1)
+        val result = mutableListOf<Double>()
+        var ema = weights[0]
+        result.add(ema)
+        for (i in 1 until weights.size) {
+            ema = alpha * weights[i] + (1 - alpha) * ema
+            result.add(ema)
+        }
+        return result
+    }
+
+    /**
+     * Napoved spremembe teže (termodinamični zakon).
+     * 7700 kcal deficita ≈ 1 kg manj telesne mase.
+     *
+     * @param days              Število napovedi dni v prihodnost
+     * @param avgDailyBalance   Povprečni dnevni kalorični balans v kcal
+     *                          (< 0 = deficit/hujšanje, > 0 = presežek/pridobivanje)
+     * @return                  Napovedana sprememba teže v kg (negativno = izguba)
+     */
+    fun predictWeightChange(days: Int, avgDailyBalance: Double): Double {
+        return (avgDailyBalance * days) / 7700.0
     }
 }
 

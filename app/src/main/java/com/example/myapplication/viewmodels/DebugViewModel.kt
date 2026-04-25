@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.daily.TransactionRecord
 import com.example.myapplication.debug.NutritionDebugStore
+import com.example.myapplication.debug.WeightPredictorStore
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.ktx.firestore
@@ -28,13 +29,27 @@ import kotlinx.datetime.toLocalDateTime
 data class TdeeDebugInputs(
     val bmr: Double = 0.0,
     val activityMultiplier: Double = 1.2,
-    val baseTdee: Double = 0.0,   // BMR × 1.2
+    val baseTdee: Double = 0.0,
     val burnedCaloriesDelta: Int = 0,
     val goalAdjustment: Int = 0,
-    val dynamicTarget: Int = 0,   // baseTdee + burned + goalAdj
+    val dynamicTarget: Int = 0,
     val goal: String = "—",
     val consumedCalories: Int = 0,
     val waterMl: Int = 0
+)
+
+/**
+ * Surove Weight Predictor vrednosti za Debug Dashboard.
+ */
+data class WeightPredictorDebugInputs(
+    val emaWeightKg: Double = 0.0,
+    val avgDailyBalanceKcal: Double = 0.0,
+    val predicted30DayKg: Double = 0.0,
+    val goalWeightKg: Double? = null,
+    val daysToGoal: Int? = null,
+    val goalDateStr: String? = null,
+    val activeDaysInLastWeek: Int = 0,
+    val isReady: Boolean = false
 )
 
 /**
@@ -52,9 +67,13 @@ class DebugViewModel : ViewModel() {
     private val _isFromCache = MutableStateFlow<Boolean?>(null)
     val isFromCache: StateFlow<Boolean?> = _isFromCache.asStateFlow()
 
-    // ── TDEE surove vrednosti ─────────────────────────────────────────────────
+    // ── TDEE surove vrednosti ─────────────────────────────────────────────
     private val _tdeeInputs = MutableStateFlow(TdeeDebugInputs())
     val tdeeInputs: StateFlow<TdeeDebugInputs> = _tdeeInputs.asStateFlow()
+
+    // ── Weight Predictor surove vrednosti ─────────────────────────────────
+    private val _weightPredictorInputs = MutableStateFlow(WeightPredictorDebugInputs())
+    val weightPredictorInputs: StateFlow<WeightPredictorDebugInputs> = _weightPredictorInputs.asStateFlow()
 
     // ── Hard Reset status ─────────────────────────────────────────────────────
     private val _hardResetStatus = MutableStateFlow("")
@@ -89,6 +108,17 @@ class DebugViewModel : ViewModel() {
                     goal = NutritionDebugStore.lastGoal,
                     consumedCalories = NutritionDebugStore.lastConsumedCalories,
                     waterMl = NutritionDebugStore.lastWaterMl
+                )
+                // Weight Predictor store
+                _weightPredictorInputs.value = WeightPredictorDebugInputs(
+                    emaWeightKg = WeightPredictorStore.lastEmaWeightKg,
+                    avgDailyBalanceKcal = WeightPredictorStore.lastAvgDailyBalanceKcal,
+                    predicted30DayKg = WeightPredictorStore.last30DayPredictionKg,
+                    goalWeightKg = WeightPredictorStore.lastGoalWeightKg,
+                    daysToGoal = WeightPredictorStore.lastDaysToGoal,
+                    goalDateStr = WeightPredictorStore.lastGoalDateStr,
+                    activeDaysInLastWeek = WeightPredictorStore.lastActiveDaysCount,
+                    isReady = WeightPredictorStore.isReady
                 )
                 delay(2000)
             }

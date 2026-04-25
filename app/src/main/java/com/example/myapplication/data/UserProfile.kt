@@ -50,7 +50,9 @@ data class UserProfile(
     val bodyFat: String? = null,
     val limitations: List<String> = emptyList(),
     val nutritionStyle: String? = null, // "Standard", "Vegetarian", "Vegan", "Keto/LCHF", "Intermittent fasting"
-    val sleepHours: String? = null // "Less than 6", "6-7", "7-8", "8-9", "9+"
+    val sleepHours: String? = null, // "Less than 6", "6-7", "7-8", "8-9", "9+"
+    // Faza 7 — Weight Predictor: ciljna teža (opcijsko)
+    val goalWeightKg: Double? = null  // e.g. 75.0 kg — napoved prikaže datum dosege
 ) {
     val level: Int
         get() = calculateLevel(xp)

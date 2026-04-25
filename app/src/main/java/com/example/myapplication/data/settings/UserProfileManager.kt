@@ -217,6 +217,7 @@ object UserProfileManager {
         if (!profile.bodyFat.isNullOrBlank()) data["bodyFat"] = profile.bodyFat
         if (!profile.nutritionStyle.isNullOrBlank()) data["nutritionStyle"] = profile.nutritionStyle
         if (!profile.sleepHours.isNullOrBlank()) data["sleepHours"] = profile.sleepHours
+        if (profile.goalWeightKg != null && profile.goalWeightKg > 0) data["goalWeightKg"] = profile.goalWeightKg
 
         try {
             if (batch != null) {
@@ -305,6 +306,7 @@ object UserProfileManager {
         }
         val nutritionStyle = doc.getString("nutritionStyle")
         val sleepHours = doc.getString("sleepHours")
+        val goalWeightKg = (doc.get("goalWeightKg") as? Number)?.toDouble()
         return UserProfile(
             username = username, email = email,
             firstName = firstName, lastName = lastName, address = address,
@@ -322,7 +324,8 @@ object UserProfileManager {
             totalPlansCreated = totalPlans, profilePictureUrl = profilePictureUrl,
             height = height, age = age, gender = gender,
             activityLevel = activityLevel, experience = experience, bodyFat = bodyFat,
-            limitations = limitations, nutritionStyle = nutritionStyle, sleepHours = sleepHours
+            limitations = limitations, nutritionStyle = nutritionStyle, sleepHours = sleepHours,
+            goalWeightKg = goalWeightKg
         )
     }
 

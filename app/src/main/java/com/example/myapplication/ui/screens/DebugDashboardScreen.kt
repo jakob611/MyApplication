@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.data.daily.TransactionRecord
 import com.example.myapplication.viewmodels.DebugViewModel
 import com.example.myapplication.viewmodels.TdeeDebugInputs
+import com.example.myapplication.viewmodels.WeightPredictorDebugInputs
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,6 +45,7 @@ fun DebugDashboardScreen(
     val isFromCache by vm.isFromCache.collectAsState()
     val tdeeInputs by vm.tdeeInputs.collectAsState()
     val hardResetStatus by vm.hardResetStatus.collectAsState()
+    val weightPredictorInputs by vm.weightPredictorInputs.collectAsState()
 
     var showHardResetDialog by remember { mutableStateOf(false) }
 
@@ -135,7 +137,12 @@ fun DebugDashboardScreen(
                 TdeeRawInputsTable(tdeeInputs)
             }
 
-            // ── 3. Sledilnik transakcij ────────────────────────────────────────
+            // ── 3. Weight Predictor surovina ──────────────────────────────────
+            DebugCard(title = "⚖️ Weight Predictor — Algoritemska surovina") {
+                WeightPredictorDebugTable(weightPredictorInputs)
+            }
+
+            // ── 4. Sledilnik transakcij ────────────────────────────────────────
             DebugCard(title = "📋 Sledilnik transakcij (zadnjih 5)") {
                 if (transactions.isEmpty()) {
                     Text(
@@ -152,7 +159,7 @@ fun DebugDashboardScreen(
                 }
             }
 
-            // ── 4. Hard Reset gumb ─────────────────────────────────────────────
+            // ── 5. Hard Reset gumb ─────────────────────────────────────────────
             DebugCard(title = "🚨 Nasilna sinhronizacija") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -278,8 +285,46 @@ private fun TdeeRawInputsTable(inputs: TdeeDebugInputs) {
 }
 
 @Composable
-private fun TransactionRow(record: TransactionRecord) {
-    val isSuccess = record.status.startsWith("✅")
+private fun WeightPredictorDebugTable(inputs: WeightPredictorDebugInputs) {
+    if (!inputs.isReady) {
+        Text(
+            "⏳ Napoved ni izračunana. Odpri Progress zaslon z vnosi za zadnjih 7 dni.",
+            color = Color.Gray,
+            fontSize = 12.sp
+        )
+        return
+    }
+    val balance = inputs.avgDailyBalanceKcal
+    val balanceColor = when {
+        balance < -50 -> Color(0xFF4CAF50)
+        balance > 50  -> Color(0xFFFF5252)
+        else          -> Color.Gray
+    }
+    val rows = listOf(
+        Triple("EMA Teža (7-day)",       "${"%.2f".format(inputs.emaWeightKg)} kg",       Color.White),
+        Triple("Avg dnevni balans",       "${if (balance >= 0) "+" else ""}${balance.toInt()} kcal",  balanceColor),
+        Triple("Formula",                "7700 kcal ≈ 1 kg",                               Color(0xFF888888)),
+        Triple("Napoved čez 30 dni",     "${"%.2f".format(inputs.predicted30DayKg)} kg",  Color(0xFF64B5F6)),
+        Triple("Aktivni dnevi (7d okno)", "${inputs.activeDaysInLastWeek}/7",              Color.White),
+        Triple("─────────────────",      "──────────",                                    Color(0xFF3A3A5E)),
+        Triple("Ciljna teža",            inputs.goalWeightKg?.let { "${"%.1f".format(it)} kg" } ?: "— (ni nastavljena)", Color(0xFFFFD700)),
+        Triple("Dnevi do cilja",         inputs.daysToGoal?.toString() ?: "—",            Color(0xFFFF9800)),
+        Triple("Datum cilja",            inputs.goalDateStr ?: "—",                       Color(0xFFFF9800)),
+    )
+    rows.forEach { (label, value, color) ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, color = Color.Gray, fontSize = 12.sp)
+            Text(value, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+@Composable
+private fun TransactionRow(record: TransactionRecord) {    val isSuccess = record.status.startsWith("✅")
     val timeStr = remember(record.timestamp) {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(record.timestamp))
     }

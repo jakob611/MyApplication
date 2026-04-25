@@ -10,6 +10,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -167,6 +170,13 @@ fun ProgressScreen(
     val dailyPairs = remember(dailyLogs) { dailyLogs.sortedBy { it.date }.map { it.date to it.calories } }
     val waterPairs = remember(dailyLogs) { dailyLogs.sortedBy { it.date }.map { it.date to it.waterMl.toDouble() } }
     val burnedPairs = remember(burnedByDay) { burnedByDay.sortedBy { it.first } }
+
+    // ── Faza 7: Weight Predictor ──────────────────────────────────────────────────────────────────
+    // Podatki: weightLogs (EMA) + dailyLogs zadnjih 7 dni (avg balance)
+    val weightPrediction: WeightPredictionDisplay? = remember(weightLogs, dailyLogs, burnedByDay, userProfile) {
+        computeWeightPrediction(weightLogs, dailyLogs, burnedByDay, userProfile)
+    }
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     val filteredDaily: List<DailyLogSummary> = remember(dailyLogs, range) { filterRange(dailyLogs, range) }
     val filteredWeight: List<WeightLog> = remember(weightLogs, range) { filterRange(weightLogs, range) }
@@ -375,6 +385,16 @@ fun ProgressScreen(
                             rangeType = range
                         )
                     }
+                    // ── Faza 7: Prediction kartica (pod Weight grafom) ─────────────
+                    if (weightPrediction != null) {
+                        item {
+                            WeightPredictionCard(
+                                prediction = weightPrediction,
+                                isLbs = userProfile.weightUnit == "lb"
+                            )
+                        }
+                    }
+                    // ──────────────────────────────────────────────────────────────
                     item {
                         ChartSectionWithAxis(
                             title = "Caloric intake", unit = "kcal", color = Color(0xFFF97316),
@@ -1089,3 +1109,269 @@ private fun <T> filterRange(list: List<T>, range: ProgressRange): List<T> where 
         }
     }
 }
+
+// ── Faza 7: Weight Predictor ──────────────────────────────────────────────────
+
+/**
+ * Podatki za prikaz napovedi teže v UI kartici.
+ */
+private data class WeightPredictionDisplay(
+    val emaWeightKg: Double,
+    val avgDailyBalanceKcal: Double,
+    val predictedWeightIn30Days: Double,
+    val goalWeightKg: Double?,         // null = ni cilja nastavljenega
+    val daysToGoal: Int?,              // null = ni dosegljivo
+    val goalDateStr: String?,          // npr. "15 Jul 2026"
+    val activeDaysInLastWeek: Int
+)
+
+/**
+ * Izračuna napoved teže iz obstoječe podatkovne baze stranke.
+ * Pokliče se v remember() bloku — samo ob spremembi podatkov.
+ */
+private fun computeWeightPrediction(
+    weightLogs: List<WeightLog>,
+    dailyLogs: List<DailyLogSummary>,
+    burnedByDay: List<Pair<LocalDate, Double>>,
+    userProfile: UserProfile
+): WeightPredictionDisplay? {
+    if (weightLogs.isEmpty()) return null
+
+    // ── EMA teže (7-dnevno okno) — inline implementacija (ne uvažamo KMP shared) ──
+    // Formula: EMA_t = α × w_t + (1-α) × EMA_(t-1),  α = 2/(period+1)
+    val sortedWeights = weightLogs.sortedBy { it.date }.map { it.weightKg }
+    val period = 7
+    val alpha = 2.0 / (period + 1)
+    var ema = sortedWeights[0]
+    for (i in 1 until sortedWeights.size) {
+        ema = alpha * sortedWeights[i] + (1.0 - alpha) * ema
+    }
+    val emaWeightKg = ema
+
+    // ── Povprečni kalorični balans zadnjih 7 dni ──────────────────────────
+    val today = LocalDate.now()
+    val sevenDaysAgo = today.minusDays(6)
+    val burnedMap = burnedByDay.associate { it.first to it.second }
+    val last7Days = dailyLogs.filter { it.date >= sevenDaysAgo && it.date <= today }
+    val activeDaysWithData = last7Days.filter { it.calories > 0.0 }
+
+    if (activeDaysWithData.isEmpty()) return null
+
+    val avgDailyBalance = activeDaysWithData.map { log ->
+        val burned = burnedMap[log.date] ?: 0.0
+        log.calories - burned
+    }.average()
+
+    // ── Napoved za 30 dni: 7700 kcal ≈ 1 kg ─────────────────────────────
+    val predictedChangeIn30Days = (avgDailyBalance * 30.0) / 7700.0
+    val predictedWeightIn30Days = emaWeightKg + predictedChangeIn30Days
+
+    // ── Datum dosega cilja ────────────────────────────────────────────────
+    val goalWeightKg = userProfile.goalWeightKg
+    val daysToGoal: Int?
+    val goalDateStr: String?
+
+    if (goalWeightKg != null && goalWeightKg > 0.0 && avgDailyBalance != 0.0) {
+        val kgDiff = goalWeightKg - emaWeightKg
+        val dailyKgChange = avgDailyBalance / 7700.0
+        val correctDirection = (kgDiff < 0.0 && dailyKgChange < 0.0) || (kgDiff > 0.0 && dailyKgChange > 0.0)
+        if (correctDirection && abs(dailyKgChange) > 0.00001) {
+            val days = (kgDiff / dailyKgChange).toInt().coerceIn(1, 3650)
+            daysToGoal = days
+            val goalDate = today.plusDays(days)
+            goalDateStr = "${goalDate.dayOfMonth} ${monthName(goalDate.monthNumber)} ${goalDate.year}"
+        } else {
+            daysToGoal = null
+            goalDateStr = null
+        }
+    } else {
+        daysToGoal = null
+        goalDateStr = null
+    }
+
+    // 5. Shrani v WeightPredictorStore za Debug Dashboard
+    com.example.myapplication.debug.WeightPredictorStore.lastEmaWeightKg = emaWeightKg
+    com.example.myapplication.debug.WeightPredictorStore.lastAvgDailyBalanceKcal = avgDailyBalance
+    com.example.myapplication.debug.WeightPredictorStore.last30DayPredictionKg = predictedWeightIn30Days
+    com.example.myapplication.debug.WeightPredictorStore.lastGoalWeightKg = goalWeightKg
+    com.example.myapplication.debug.WeightPredictorStore.lastGoalDateStr = goalDateStr
+    com.example.myapplication.debug.WeightPredictorStore.lastDaysToGoal = daysToGoal
+    com.example.myapplication.debug.WeightPredictorStore.lastActiveDaysCount = activeDaysWithData.size
+    com.example.myapplication.debug.WeightPredictorStore.isReady = true
+
+    return WeightPredictionDisplay(
+        emaWeightKg = emaWeightKg,
+        avgDailyBalanceKcal = avgDailyBalance,
+        predictedWeightIn30Days = predictedWeightIn30Days,
+        goalWeightKg = goalWeightKg,
+        daysToGoal = daysToGoal,
+        goalDateStr = goalDateStr,
+        activeDaysInLastWeek = activeDaysWithData.size
+    )
+}
+
+private fun monthName(month: Int): String = when (month) {
+    1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
+    7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; else -> "Dec"
+}
+
+/**
+ * Prediction kartica — prikazuje EMA težo, povprečni deficit in napoved.
+ */
+@Composable
+private fun WeightPredictionCard(
+    prediction: WeightPredictionDisplay,
+    isLbs: Boolean
+) {
+    val convert: (Double) -> Double = { if (isLbs) it * 2.20462 else it }
+    val unit = if (isLbs) "lb" else "kg"
+    val balance = prediction.avgDailyBalanceKcal
+    val isDeficit = balance < -50
+    val isSurplus = balance > 50
+    val trendColor = when {
+        isDeficit -> Color(0xFF10B981)   // Verde — hujšanje
+        isSurplus -> Color(0xFFE11D48)   // Rdeča — pridobivanje
+        else      -> Color(0xFF6B7280)   // Siva — vzdrževanje
+    }
+    val trendIcon = when {
+        isDeficit -> Icons.AutoMirrored.Filled.TrendingDown
+        isSurplus -> Icons.AutoMirrored.Filled.TrendingUp
+        else      -> Icons.AutoMirrored.Filled.TrendingFlat
+    }
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(trendIcon, contentDescription = null, tint = trendColor, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Weight Prediction",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    "${prediction.activeDaysInLastWeek}/7d",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // EMA teža + energijski balans
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("EMA Weight", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        String.format(Locale.US, "%.1f %s", convert(prediction.emaWeightKg), unit),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Avg daily balance", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${if (balance >= 0) "+" else ""}${balance.toInt()} kcal",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = trendColor
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            // Napoved
+            if (prediction.goalWeightKg != null && prediction.goalDateStr != null && prediction.daysToGoal != null) {
+                // Ciljna teža nastavljena → pokaži datum dosege
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = trendColor.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "At this pace you'll reach",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            String.format(Locale.US, "%.1f %s", convert(prediction.goalWeightKg), unit),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp,
+                            color = trendColor
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("by", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            prediction.goalDateStr,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "in ${prediction.daysToGoal} days",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                // Ni cilja → pokaži 30-dnevno napoved
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("In 30 days you'll weigh", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            String.format(Locale.US, "%.1f %s", convert(prediction.predictedWeightIn30Days), unit),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp,
+                            color = trendColor
+                        )
+                    }
+                    val changeIn30 = prediction.predictedWeightIn30Days - prediction.emaWeightKg
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${if (changeIn30 >= 0) "+" else ""}${String.format(Locale.US, "%.1f", convert(changeIn30))} $unit",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = trendColor
+                        )
+                        Text("vs. now", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text(
+                    "💡 Set a goal weight in your profile to see a target date.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+            }
+        }
+    }
+}
+
