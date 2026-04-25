@@ -47,6 +47,16 @@
 
 ## DNEVNIK POPRAVKOV (VSAK POPRAVEK DODAJ TUKAJ)
 
+- **2026-04-25 (Faza 5: The Great Purge — Firestore Single Source of Truth)**
+  1. `MyApplication.kt`: Firestore `PersistentCacheSettings` (100 MB) omogočen pred vsemi drugimi inicializacijami. SDK zdaj skrbi za offline delovanje sam.
+  2. `DailySyncManager.kt`: Odstranjeni vsi lokalni write-i — `saveFoodsLocally()`, `saveWaterLocally()`, `saveBurnedLocally()`, `saveCaloriesLocally()`, `saveBurnedCaloriesLocally()`, `hasDataForDate()`, `loadFoodsJson()`, `syncTodayNow()`. Ostaneta le sync tracker (`isSynced`/`markSynced`) in nova migracijska funkcija `clearLegacyCache()`.
+  3. `DailySyncWorker.kt`: Poenostavljen na minimalni no-op worker — ne bere več iz SharedPrefs. Samo označi datume kot sincirane in logira stanje.
+  4. `StreakReminderWorker.kt`: `loadReminderContext()` prepisana kot `suspend fun`. Bere `waterMl`, `consumedCalories`, `burnedCalories` direktno iz Firestore `dailyLogs` (ne več iz `water_cache`/`burned_cache`/`calories_cache` SharedPrefs). Offline-safe prek Firestore SDK cache.
+  5. `NutritionScreen.kt`: Odstranjen `loadFoodsJson()` inicializacijski blok (~30 vrstic) — `trackedFoods` začne prazen, popolni z obstoječim Firestore snapshot listenerjem. Odstranjen `saveFoodsLocally()` klic v `LaunchedEffect(trackedFoods)`.
+  6. `WaterInputActivity.kt`: Odstranjen `DailySyncManager.saveWaterLocally()` klic — `FoodRepositoryImpl.logWater()` že piše direktno v Firestore.
+  7. `MainActivity.kt`: One-time migracija z `migration_flags/faza5_legacy_purge_done` flag pobriše stare `water_cache`, `burned_cache`, `calories_cache`, `food_cache` SharedPrefs ob prvem zagonu po nadgradnji.
+  **Rezultat:** 100% Firestore Single Source of Truth. Aplikacija deluje offline brez kateregakoli lokalnega JSON/SharedPrefs vmesnega bufferja za dnevne podatke.
+
 - **2026-04-25 (Faza 4: Dinamični TDEE algoritem)**
   1. `NutritionViewModel.kt`: Dodani `_baseTdee`, `_goalAdjustment` StateFlows in `dynamicTargetCalories: StateFlow<Int>` (combine iz baseTdee + burned + goalAdj). Nova funkcija `setUserMetrics(bmr, goal)` nastavi sedentarno bazo (BMR × 1.2) in cilj.
   2. `NutritionScreen.kt`: `LaunchedEffect(nutritionPlan, plan)` kliče `setUserMetrics` ko je BMR naložen. Donut view zdaj prikazuje `effectiveTargetCalories` (dynamic če je naložen, fallback na statični). Dodan `🔥 +X kcal boost` indikator pod grafom. XP logika posodobljena na `effectiveTargetCalories`. `ActiveCaloriesBar` goal ni več hardcode 800 ampak dinamičen.
