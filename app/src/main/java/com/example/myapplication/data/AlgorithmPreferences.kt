@@ -134,6 +134,44 @@ object AlgorithmPreferences {
         )
     }
 
+    /**
+     * Napredna različica loadParams(), ki sprejme podatke iz WorkoutViewModel / Firestore.
+     * Parametri z vrednostjo != null imajo prednost pred lokalnimi SharedPrefs.
+     *
+     * Pripravljeno za Fazo 12 (Firestore progresija):
+     * WorkoutViewModel bo prebral težavnost, cilj in gender iz Firestore profila
+     * ter jih posredoval sem kot override vrednosti.
+     *
+     * @param difficultyOverride  Težavnost iz ViewModela (npr. iz Firestore profila)
+     * @param goalOverride        Cilj iz ViewModela
+     * @param focusOverride       Fokus mišic iz ViewModela
+     * @param equipmentOverride   Oprema iz ViewModela
+     * @param genderOverride      Spol iz Firestore profila ("male" / "female" / "")
+     * @param planDayOverride     Trenutni planDay (za deterministični seed)
+     */
+    fun loadParamsWithOverrides(
+        settings: Settings,
+        difficultyOverride: Float? = null,
+        goalOverride: WorkoutGoal? = null,
+        focusOverride: Set<String>? = null,
+        equipmentOverride: Set<String>? = null,
+        genderOverride: String? = null,
+        planDayOverride: Int? = null
+    ): WorkoutGenerationParams {
+        val base = loadParams(settings)
+        return WorkoutGenerationParams(
+            userExperienceLevel = base.userExperienceLevel,
+            targetDifficultyLevel = difficultyOverride ?: base.targetDifficultyLevel,
+            goal = goalOverride ?: base.goal,
+            focusAreas = focusOverride ?: base.focusAreas,
+            availableEquipment = equipmentOverride ?: base.availableEquipment,
+            exerciseCount = base.exerciseCount,
+            durationMinutes = base.durationMinutes,
+            gender = genderOverride ?: "",
+            planDay = planDayOverride ?: base.planDay
+        )
+    }
+
     // ─── User feedback ────────────────────────────────────────────────────
     fun saveGlobalFeedback(settings: Settings, adjustment: Int) {
         val currentOffset = settings.getFloat(KEY_LEVEL_OFFSET, 0f)

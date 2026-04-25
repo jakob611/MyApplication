@@ -4,7 +4,9 @@ import com.example.myapplication.data.AdvancedExerciseRepository
 import com.example.myapplication.data.RefinedExercise
 import com.example.myapplication.data.MuscleRole
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.random.Random
+import java.time.LocalDate
 
 data class WorkoutGenerationParams(
     val userExperienceLevel: Int,
@@ -13,7 +15,25 @@ data class WorkoutGenerationParams(
     val goal: WorkoutGoal,
     val focusAreas: Set<String>,
     val exerciseCount: Int = 10,
-    val durationMinutes: Int = 45
+    val durationMinutes: Int = 45,
+    /** Spol uporabnika ("male" / "female" / ""). Vpliva na score bonuse v calculateScore(). */
+    val gender: String = "",
+    /** Trenutni dan plana — uporablja se za izračun deterministične naključnosti (seed). */
+    val planDay: Int = 1
+)
+
+/**
+ * Zapis zadnje izvedene vaje iz Firestore (za progresijo volumna).
+ * @param exerciseName Ime vaje (case-insensitive primerjava)
+ * @param reps Ponovitve zadnje seje
+ * @param sets Seti zadnje seje
+ * @param weightKg Teža (0f = samo telesna teža)
+ */
+data class LastExerciseRecord(
+    val exerciseName: String,
+    val reps: Int,
+    val sets: Int,
+    val weightKg: Float = 0f
 )
 
 enum class WorkoutGoal {
@@ -21,6 +41,18 @@ enum class WorkoutGoal {
 }
 
 class WorkoutGenerator {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DETERMINISTIČNA NAKLJUČNOST
+    // Seed = (danes kot EpochDay) * 1000 + planDay
+    // Rezultat: isti nabor vaj cel dan, ne glede na to koliko krat generiramo.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun buildRandom(planDay: Int): Random {
+        val epochDay = LocalDate.now().toEpochDay()
+        val seed = epochDay * 1000L + planDay.toLong()
+        android.util.Log.d("WorkoutGenerator", "Deterministic seed=$seed (epochDay=$epochDay, planDay=$planDay)")
+        return Random(seed)
+    }
 
     /**
      * Mapa: fokus iz kviza → seznam ključev mišic točno kot so v exercises.json.
@@ -59,9 +91,10 @@ class WorkoutGenerator {
 
     fun generateWorkout(params: WorkoutGenerationParams): List<RefinedExercise> {
         val allExercises = AdvancedExerciseRepository.getAllExercises()
+        val rng = buildRandom(params.planDay)
 
         android.util.Log.d("WorkoutGenerator",
-            "Generating: focusAreas=${params.focusAreas}, equipment=${params.availableEquipment}, goal=${params.goal}, difficulty=${params.targetDifficultyLevel}")
+            "Generating: focusAreas=${params.focusAreas}, equipment=${params.availableEquipment}, goal=${params.goal}, difficulty=${params.targetDifficultyLevel}, gender=${params.gender}")
 
         // 1. Filter po opremi (znatno razširjen z fallback opcijami in aliasi)
         val userEquipment = params.availableEquipment.map { it.trim().lowercase() }.toSet()
@@ -106,7 +139,7 @@ class WorkoutGenerator {
 
         // 2. Izračunaj score za vsako vajo
         val scoredExercises = availableExercises.map { exercise ->
-            exercise to calculateScore(exercise, params)
+            exercise to calculateScore(exercise, params, rng)
         }
 
         // Ohrani samo vaje s score > 0 (fokus ujemanje)
@@ -134,7 +167,7 @@ class WorkoutGenerator {
 
         val count = params.exerciseCount.coerceAtMost(15)
 
-        val selected = selectExercisesWeighted(pool, count)
+        val selected = selectExercisesWeighted(pool, count, rng)
 
         // 3. APPLY PROGRESSION (Intensity & Level scaling)
         return selected.map { exercise ->
@@ -198,7 +231,7 @@ class WorkoutGenerator {
         )
     }
 
-    private fun calculateScore(exercise: RefinedExercise, params: WorkoutGenerationParams): Double {
+    private fun calculateScore(exercise: RefinedExercise, params: WorkoutGenerationParams, rng: Random): Double {
         var score = 10.0
 
         // A. Ujemanje težavnosti — bliže targetDifficulty = višji score
@@ -266,8 +299,35 @@ class WorkoutGenerator {
             WorkoutGoal.GENERAL_FITNESS -> { /* brez spremembe */ }
         }
 
-        // D. Naključni jitter ±10% — ohranja raznolikost med ponovitvami
-        score *= Random.nextDouble(0.9, 1.1)
+        // D. GENDER BONUS
+        // - female: spodnji del telesa (glutes, legs) → +15 % base score
+        // - male: zgornji del telesa (chest, shoulders) → +10 % base score
+        if (params.gender.isNotBlank()) {
+            val lowerBodyKeys = setOf("glute", "leg", "quad", "hamstring", "calf", "calves")
+            val upperBodyKeys = setOf("chest", "shoulder", "pectoral")
+
+            val muscleNames = exercise.muscleIntensities.keys.map { it.lowercase() }
+
+            when (params.gender.lowercase()) {
+                "female" -> {
+                    val hasLowerBody = muscleNames.any { m -> lowerBodyKeys.any { k -> m.contains(k) } }
+                    if (hasLowerBody) {
+                        score *= 1.15
+                        android.util.Log.d("WorkoutGenerator", "  GENDER female bonus +15%: ${exercise.name}")
+                    }
+                }
+                "male" -> {
+                    val hasUpperBody = muscleNames.any { m -> upperBodyKeys.any { k -> m.contains(k) } }
+                    if (hasUpperBody) {
+                        score *= 1.10
+                        android.util.Log.d("WorkoutGenerator", "  GENDER male bonus +10%: ${exercise.name}")
+                    }
+                }
+            }
+        }
+
+        // E. Deterministični jitter ±10% — ohranja raznolikost, a je ponovljiv (isti RNG za isti dan/planDay)
+        score *= rng.nextDouble(0.9, 1.1)
 
         return score
     }
@@ -277,10 +337,12 @@ class WorkoutGenerator {
      * Vsaka vaja ima verjetnost izbire sorazmerno svojemu score-u.
      * Vaja z score 8.0 ima ~4x večjo verjetnost kot vaja s score 2.0,
      * ampak vaja s score 2.0 ima še vedno realno možnost → raznolikost.
+     * @param rng Deterministični Random — zagotavlja enako selekcijo za isti dan/planDay.
      */
     private fun selectExercisesWeighted(
         scored: List<Pair<RefinedExercise, Double>>,
-        count: Int
+        count: Int,
+        rng: Random
     ): List<RefinedExercise> {
         val selected = mutableListOf<RefinedExercise>()
         val pool = scored.toMutableList()
@@ -293,14 +355,12 @@ class WorkoutGenerator {
             // Seštej vse pozitivne score-e
             val totalScore = pool.sumOf { (_, s) -> s.coerceAtLeast(0.0) }
             if (totalScore <= 0.0) {
-                // Ne bi se smelo zgoditi — pool ne sme vsebovati vaj s score 0
-                // Logiraj napako in preskoči to iteracijo
                 android.util.Log.e("WorkoutGenerator", "ERROR: totalScore=0 in pool of ${pool.size} exercises — skipping")
                 return@repeat
             }
 
-            // Zavrti kolo sreče
-            var rand = Random.nextDouble(0.0, totalScore)
+            // Zavrti kolo sreče (z deterministično rng)
+            var rand = rng.nextDouble(0.0, totalScore)
             var pickedPair = pool.last()  // fallback
             for (pair in pool) {
                 rand -= pair.second.coerceAtLeast(0.0)
@@ -320,5 +380,64 @@ class WorkoutGenerator {
         }
 
         return selected
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // VOLUME PROGRESSION — The Memory Bridge
+    // Pripravljeno za Firestore podatke (Faza 12).
+    // Kliči po generateWorkout(), ko imaš lastSession iz WorkoutViewModel / Firestore.
+    //
+    // Logika:
+    //   - Za vsako vajo v generiranem treningu poišči njen zapis iz zadnje seje.
+    //   - Če obstaja → predlagaj +5 % reps (zaokroženo navzgor) in zabeleži predlog.
+    //   - Teža: če je weightKg > 0 v zadnji seji, predlagaj +5 % (zaokroženo na 0.5 kg).
+    //   - MAX guard: reps ne sme preseči 1.5× parsedReps originalne vaje.
+    //
+    // Struktura: SAMO generator; shranjevanje in branje iz Firestore
+    //            bo dodano v WorkoutViewModel v Fazi 12.
+    // ─────────────────────────────────────────────────────────────────────────
+    fun applyVolumeProgression(
+        exercises: List<RefinedExercise>,
+        lastSession: List<LastExerciseRecord>?
+    ): List<RefinedExercise> {
+        if (lastSession.isNullOrEmpty()) {
+            android.util.Log.d("WorkoutGenerator", "applyVolumeProgression: no lastSession data — skipping")
+            return exercises
+        }
+
+        // Index po lowercase imenu za O(1) lookup
+        val lastSessionIndex = lastSession.associateBy { it.exerciseName.trim().lowercase() }
+
+        return exercises.map { exercise ->
+            val key = exercise.name.trim().lowercase()
+            val last = lastSessionIndex[key]
+
+            if (last == null) {
+                // Vaja ni bila opravljena v zadnji seji → ne spremenimo volumna
+                exercise
+            } else {
+                // +5 % reps (zaokroženo navzgor, min +1, max 1.5× original)
+                val rawNewReps = (last.reps * 1.05f).roundToInt().coerceAtLeast(last.reps + 1)
+                val maxReps = (exercise.parsedReps * 1.5f).roundToInt()
+                val newReps = rawNewReps.coerceAtMost(maxReps)
+
+                // +5 % teža (zaokroženo na 0.5 kg, samo če je teža bila > 0)
+                val newWeight = if (last.weightKg > 0f) {
+                    val raw = last.weightKg * 1.05f
+                    // Zaokroži na najbližjih 0.5 kg
+                    (kotlin.math.round(raw * 2) / 2.0f)
+                } else 0f
+
+                android.util.Log.d("WorkoutGenerator",
+                    "Progression ${exercise.name}: reps ${last.reps}→$newReps, weight ${last.weightKg}→$newWeight kg")
+
+                exercise.copy(
+                    parsedReps = newReps,
+                    repsDisplay = if (newReps != exercise.parsedReps) newReps.toString() else exercise.repsDisplay,
+                    // Opomba: weightKg ni del RefinedExercise (Faza 12 bo to razširila).
+                    // Za zdaj beležimo samo reps progresijo.
+                )
+            }
+        }
     }
 }
