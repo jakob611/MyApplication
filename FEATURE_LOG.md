@@ -189,7 +189,7 @@
  
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
 [   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
- [   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o d o b l j e n i   t a k o  ,   d a  i z p u a
+[   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o do b l j e n i   t a k o  ,   d a  i z p u a
 a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
  [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
 n i m i   f o r m a t i ,   d a   n a t a n 
@@ -247,4 +247,30 @@
 2. Progress.kt je bral `consumedCalories` z iteracijo `items` arraija. Zamenjano z direktnim branjem polja `consumedCalories`.
 3. Progress.kt je imel `sessionListener` na `daily_health` kolekciji — po Fazi 5 se ta kolekcija ne piše več → mrtev listener. Zamenjan z branjem `burnedCalories` iz `dailyLogs` (dosledno z NutritionViewModel).
 **Zakaj:** Preseganje cilja 30% zmanjšanja Firestore branj za boljše delovanje pri počasnih zvezah in offline scenarijih.
-**Tveganje:** 🟢 nizko (samo bralni tokovi, brez sprememb v pisalnih poteh)
+
+## 2026-04-25 — Faza 7.1: Hibridni TDEE z Confidence Faktorjem
+**Datoteke:** `utils/NutritionCalculations.kt`, `debug/WeightPredictorStore.kt`, `ui/screens/Progress.kt`, `viewmodels/NutritionViewModel.kt`, `viewmodels/DebugViewModel.kt`
+**Kaj:**
+- `calculateAdaptiveTDEE()` razširjen z `theoreticalTDEE: Int` parametrom in Confidence Faktorjem C
+- C = 0.0 (<3 dni data) → 100% Mifflin-St Jeor; C = 0.5 (3–5 dni) → 50/50; C = 1.0 (6+ dni) → 100% adaptivni
+- Hibridna formula: `C × adaptivni + (1−C) × teoretični`, vrača `AdaptiveTDEEResult` data class
+- `NutritionViewModel._baseTdee` zdaj prednostno uporablja hibridni TDEE iz `WeightPredictorStore` namesto fiksnega `BMR × 1.2`
+- `WeightPredictorStore` razširjen z `lastHybridTDEE`, `lastAdaptiveTDEE`, `lastConfidenceFactor`
+- `DebugDashboard` prikazuje vse tri hibridne vrednosti v realnem času
+**Zakaj:** Odpravlja odvisnost od fiksnega Mifflin-St Jeor množilnika. Z rastjo realnih podatkov se algoritem samodejno kalibrira na dejanski metabolizem uporabnika.
+**Tveganje:** 🟢 nizko (Mifflin fallback ohranjen ko hibridni TDEE ni na voljo)
+
+## 2026-04-25 — Faza 7.2: Weight Destiny kartica z vizualnim trendom in What-if simulatorjem
+**Datoteke:** `ui/screens/Progress.kt`
+**Kaj:**
+- `WeightPredictionCard` popolnoma zamenjan z `WeightDestinyCard` — tri novi kompozabli: `WeightDestinyCard`, `WeightTrendLine`, `ConfidenceIndicator`
+- **ConfidenceIndicator**: 3 pike (siva/rumena/zelena) glede na C = 0.0/0.5/1.0 + tekstovna oznaka zaupanja
+- **Dinamično sporočilo** glede na C in trend:
+  - `C < 0.5` → "🧪 Spoznavam tvoj metabolizem…"
+  - `C ≥ 0.5, deficit` → "🎯 Na dobri poti si! Predviden cilj: [Datum]"
+  - ravnovesje → "⚖️ Si v energijskem ravnovesju."
+- **WeightTrendLine**: Canvas bezier krivulja zdaj→čez 30 dni z gradientnim senčnim trakom + pikčasta ciljna linija (rumena)
+- **What-if Simulator**: Slider −500…+500 kcal/dan (koraki po 50 kcal) — v realnem času izračuna "X dni prej/pozneje do cilja" z isto hibridno matematiko
+- `WeightPredictionDisplay` razširjen z `confidenceFactor: Double`
+**Zakaj:** Številke samo po sebi ne motivirajo. Vizualni trend + interaktivni simulator spremenita suhe algoritme v "kristalno kroglo" — uporabnik vidi neposredno zvezo med današnjimi odločitvami in prihodnjo težo.
+**Tveganje:** 🟢 nizko (samo UI, logika nespremenjena)
