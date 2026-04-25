@@ -47,6 +47,30 @@
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-04-25 — Faza 12: Firestore Bridge (WorkoutSessionViewModel + Volume Progression)
+
+**Spremembe:**
+- `viewmodels/WorkoutSessionViewModel.kt` (NOVO):
+  - `WorkoutGenerationState`: Idle → LoadingHistory → Ready(isProgressiveOverload) / Error
+  - `prepareWorkout()`: orchestrira Firestore fetch + AlgorithmPreferences.loadParamsWithOverrides() + WorkoutGenerator
+  - `fetchLastSessionForFocus(focus)`: išče zadnjo workout sejo z ujemajočim focusAreas v Firestoreu
+  - gender, goal, difficulty se berejo iz Firestore profila (SSOT), SharedPrefs samo fallback
+- `ui/screens/WorkoutSessionScreen.kt`:
+  - `workoutVm.prepareWorkout()` nadomesti inline WorkoutGenerator klic v `LaunchedEffect`
+  - `StateFlow.first { Ready || Error }` čaka na rezultat (suspending, ne blokira UI)
+  - `ExerciseResult`: dodano `reps`, `sets`, `weightKg` za Volume Progression
+  - `exerciseResults` map: dodano `"reps"`, `"sets"`, `"weightKg"` — shranjeno v Firestore za naslednji fetch
+  - `"focusAreas"` shranjen v `workoutDoc` via `CompleteWorkoutSession` intent
+  - 🔥 Progressive Overload UI badge (Banner "Danes močneje!") v Preview stanju
+- `viewmodels/BodyModuleHomeViewModel.kt`: `CompleteWorkoutSession` + `focusAreas: List<String>`
+- `domain/workout/UpdateBodyMetricsUseCase.kt`: `focusAreas` parameter → `workoutDoc["focusAreas"]`
+
+**Arhitekturna opomba:** Generator je zdaj popolnoma pametno vezan na Firestore. Vsak workout fetch:
+1. Bere profil (gender, goal) iz Firestorea
+2. Poišče zadnjo sejo z ujemajočim fokusom
+3. Aplicira +5% volume progresijo za znane vaje
+4. Shrani reps/sets/focusAreas za naslednji klic (self-learning loop)
+
 ### 2026-04-25 — Faza 11: Algorithm Upgrade (deterministična naključnost, gender bonus, volume progression)
 
 **Spremembe:**
