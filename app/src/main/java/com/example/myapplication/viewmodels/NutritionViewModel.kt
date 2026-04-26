@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.TrackedFood
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +39,53 @@ class NutritionViewModel(
 
     private val _uiState = MutableStateFlow(DailyTotals())
     val uiState: StateFlow<DailyTotals> = _uiState.asStateFlow()
+
+    // ── Optimistična voda (Faza 13.1) ─────────────────────────────────────────
+    /** Lokalna override vrednost za vodo — UI se posodobi TAKOJ, Firestore sync je debounced. */
+    private val _localWaterMl = MutableStateFlow<Int?>(null)
+    val localWaterMl: StateFlow<Int?> = _localWaterMl.asStateFlow()
+
+    private var waterSyncJob: Job? = null
+
+    /** Optimistično posodobi vodo lokalno, nato debounce-aj Firestore zapis (800ms). */
+    fun updateWaterOptimistic(newValue: Int, todayId: String) {
+        _localWaterMl.value = newValue.coerceAtLeast(0)
+        waterSyncJob?.cancel()
+        waterSyncJob = viewModelScope.launch {
+            delay(800L)
+            try {
+                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newValue.coerceAtLeast(0), todayId)
+                Log.d("NutritionVM", "💧 Water synced to Firestore: ${newValue}ml")
+            } catch (e: Exception) {
+                Log.e("NutritionVM", "Failed to sync water to Firestore", e)
+                _localWaterMl.value = null // rollback na server vrednost
+            }
+            _localWaterMl.value = null // počisti override po uspešnem syncu
+        }
+    }
+
+    // ── Loading stanje za food operacije (Faza 13.1) ──────────────────────────
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    /**
+     * Shrani hrano v Firestore asinhronično.
+     * Nastavi [isLoading] = true med trajanjem operacije, da UI lahko onemogoči gumbe.
+     */
+    fun logFoodAsync(foodMap: Map<String, Any>, todayId: String, onDone: () -> Unit = {}) {
+        _isLoading.value = true
+        viewModelScope.launch {
+            try {
+                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logFood(foodMap, todayId)
+                Log.d("NutritionVM", "✅ Food logged: ${foodMap["name"]}")
+            } catch (e: Exception) {
+                Log.e("NutritionVM", "Failed to log food", e)
+            } finally {
+                _isLoading.value = false
+                onDone()
+            }
+        }
+    }
 
     private val uidFlow = MutableStateFlow<String?>(com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId())
 

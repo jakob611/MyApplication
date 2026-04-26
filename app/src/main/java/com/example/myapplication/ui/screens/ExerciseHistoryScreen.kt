@@ -42,8 +42,9 @@ import java.util.Locale
 fun ExerciseHistoryScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Workouts", "Runs", "Exercises")
-    
+    // Faza 13.1: Odstranjeni "Runs" tab — teki so izključno v ActivityLogScreen
+    val tabs = listOf("Workouts", "Exercises")
+
     // Set user agent for OSM
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -64,8 +65,7 @@ fun ExerciseHistoryScreen(onBack: () -> Unit) {
             }
             when (selectedTab) {
                 0 -> WorkoutsTab()
-                1 -> RunsTab()
-                2 -> ExercisesTab()
+                1 -> ExercisesTab()
             }
         }
     }
@@ -134,13 +134,17 @@ private fun WorkoutsTab() {
     LaunchedEffect(uid) {
         if (uid == null) return@LaunchedEffect
         FirestoreHelper.getUserRef(uid).collection("workoutSessions")
-            .orderBy("date", Query.Direction.DESCENDING).limit(100).get()
+            // Faza 13.1 fix: workoutDoc shranjuje "timestamp" (epoch ms), ne "date" (Firestore Timestamp)
+            .orderBy("timestamp", Query.Direction.DESCENDING).limit(100).get()
             .addOnSuccessListener { snap ->
                 entries = snap.documents.mapNotNull { d ->
                     try { 
                         WorkoutEntry(
                             id = d.id, 
-                            date = d.getTimestamp("date")?.toDate()?.time ?: System.currentTimeMillis(),
+                            // Prioriteta: "timestamp" (Long ms) > "date" (Firestore Timestamp)
+                            date = (d.get("timestamp") as? Number)?.toLong()
+                                ?: d.getTimestamp("date")?.toDate()?.time
+                                ?: System.currentTimeMillis(),
                             totalKcal = (d.get("totalKcal") as? Number)?.toInt() ?: 0,
                             totalTimeMin = (d.get("totalTimeMin") as? Number)?.toDouble() ?: 0.0, 
                             exercisesCount = (d.get("exercisesCount") as? Number)?.toInt() ?: 0

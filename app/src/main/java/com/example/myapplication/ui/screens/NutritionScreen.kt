@@ -119,6 +119,10 @@ fun NutritionScreen(
     val uiState by nutritionViewModel.uiState.collectAsState()
     // Dinamični TDEE — real-time vrednost iz ViewModel (0 = profil še ni naložen)
     val dynamicTargetCalories by nutritionViewModel.dynamicTargetCalories.collectAsState()
+    // Faza 13.1: optimistična voda (instant UI feedback, debounced Firestore sync)
+    val localWaterMl by nutritionViewModel.localWaterMl.collectAsState()
+    // Faza 13.1: loading stanje za food operacije
+    val isLoading by nutritionViewModel.isLoading.collectAsState()
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -370,8 +374,10 @@ fun NutritionScreen(
     val activityBoostKcal = if (dynamicTargetCalories > 0 && uiState.burned > 0) uiState.burned else 0
 
     // Water tracking — prilagojen cilj
+    // Faza 13.1: Prikaži lokalni override (optimistična voda) ali server vrednost
+    val effectiveWaterMl = localWaterMl ?: uiState.water
     val waterTarget = adjustedWaterTarget.toFloat()
-    val waterProgress = (uiState.water.toFloat() / waterTarget).coerceIn(0f, 1f)
+    val waterProgress = (effectiveWaterMl.toFloat() / waterTarget).coerceIn(0f, 1f)
 
     // Calculate macro calories
     val fatCals = (consumedFat * 9).roundToInt()
@@ -409,7 +415,6 @@ fun NutritionScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 12.dp)
             ) {
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Donut Progress View
             // Donut Progress View + Active Calories Bar
@@ -442,12 +447,12 @@ fun NutritionScreen(
                                 this.fatCalories = fatCals
                                 this.proteinCalories = proteinCals
                                 this.carbsCalories = carbsCals
-                                this.consumedCalories = uiState.consumed
-                                this.targetCalories = adjustedTargetCalories
-                                innerProgress = waterProgress
-                                textColor = textPrimary.toArgb()
-                                waterColor = textPrimary.toArgb()
-                                innerValue = uiState.water.toString()
+                                 this.consumedCalories = uiState.consumed
+                                 this.targetCalories = adjustedTargetCalories
+                                 innerProgress = waterProgress
+                                 textColor = textPrimary.toArgb()
+                                 waterColor = textPrimary.toArgb()
+                                 innerValue = effectiveWaterMl.toString()
                                 innerLabel = "ml"
                                 weightUnit = userProfile.weightUnit
                                 centerValue = "${uiState.consumed}/$adjustedTargetCalories"
@@ -468,10 +473,10 @@ fun NutritionScreen(
                             view.carbsCalories = carbsCals
                             view.consumedCalories = uiState.consumed
                             view.targetCalories = effectiveTargetCalories
-                            view.innerProgress = waterProgress
-                            view.textColor = textPrimary.toArgb()
-                            view.waterColor = textPrimary.toArgb()
-                            view.innerValue = uiState.water.toString()
+                             view.innerProgress = waterProgress
+                             view.textColor = textPrimary.toArgb()
+                             view.waterColor = textPrimary.toArgb()
+                             view.innerValue = effectiveWaterMl.toString()
                             view.weightUnit = userProfile.weightUnit
                             view.centerValue = "${uiState.consumed}/$effectiveTargetCalories"
                             view.onSegmentClick = { clicked ->
@@ -544,28 +549,18 @@ fun NutritionScreen(
 
             // Water controls
             WaterControlsRow(
-                waterConsumedMl = uiState.water,
+                waterConsumedMl = effectiveWaterMl,
                 textPrimary = textPrimary,
                 lastClickState = lastWaterClickState,
                 onMinus = { newVal ->
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
-                    kotlinx.coroutines.MainScope().launch {
-                        try {
-                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newVal, todayId)
-                        } catch (e: Exception) {
-                            Log.e("NutritionScreen", "Failed to sync water to firestore", e)
-                        }
-                    }
+                    // Faza 13.1: Optimistično posodobimo UI takoj, Firestore sync debounced (800ms)
+                    nutritionViewModel.updateWaterOptimistic(newVal, todayId)
                 },
                 onPlus = { newVal ->
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.LIGHT_CLICK)
-                    kotlinx.coroutines.MainScope().launch {
-                        try {
-                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newVal, todayId)
-                        } catch (e: Exception) {
-                            Log.e("NutritionScreen", "Failed to sync water to firestore", e)
-                        }
-                    }
+                    // Faza 13.1: Optimistično posodobimo UI takoj, Firestore sync debounced (800ms)
+                    nutritionViewModel.updateWaterOptimistic(newVal, todayId)
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
@@ -632,8 +627,11 @@ fun NutritionScreen(
                     surfaceVariantColor = surfaceVariantColor,
                     textPrimary = textPrimary,
                     onAddFood = {
-                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
-                        sheetMeal = mealType
+                        // Faza 13.1: onemogoči dodajanje, ko je food operacija v teku
+                        if (!isLoading) {
+                            com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
+                            sheetMeal = mealType
+                        }
                     },
                     onFoodClick = { showFoodDetailDialog = it },
                     onFoodDelete = { trackedFoods = trackedFoods.filterNot { t -> t.id == it.id } }
@@ -649,6 +647,17 @@ fun NutritionScreen(
             )
 
             Spacer(modifier = Modifier.height(80.dp)) // Bottom padding for snackbar
+        }
+        // Faza 13.1: Loading overlay — prikazuje se med food log operacijami
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
         }
     }
     } // Closes Scaffold!
@@ -673,25 +682,22 @@ fun NutritionScreen(
                 onAddTracked = { tf ->
                     trackedFoods = trackedFoods + tf
                     showAddedMessage = "Added ${tf.name} to ${tf.meal.title}" // immediate feedback
-                    kotlinx.coroutines.MainScope().launch {
-                        try {
-                            val map = mutableMapOf<String, Any>(
-                                "id" to tf.id,
-                                "name" to tf.name,
-                                "meal" to tf.meal.name,
-                                "amount" to tf.amount,
-                                "unit" to tf.unit,
-                                "caloriesKcal" to tf.caloriesKcal
-                            )
-                            tf.proteinG?.let { map["proteinG"] = it }
-                            tf.carbsG?.let { map["carbsG"] = it }
-                            tf.fatG?.let { map["fatG"] = it }
-                            com.example.myapplication.data.nutrition.FoodRepositoryImpl.logFood(map, todayId)
-                        } catch (e: Exception) {
-                            Log.e("NutritionScreen", "Failed to log food", e)
-                        }
+                    // Faza 13.1: logFoodAsync nastavi isLoading=true med Firestore zapisom
+                    val map = mutableMapOf<String, Any>(
+                        "id" to tf.id,
+                        "name" to tf.name,
+                        "meal" to tf.meal.name,
+                        "amount" to tf.amount,
+                        "unit" to tf.unit,
+                        "caloriesKcal" to tf.caloriesKcal
+                    )
+                    tf.proteinG?.let { map["proteinG"] = it }
+                    tf.carbsG?.let { map["carbsG"] = it }
+                    tf.fatG?.let { map["fatG"] = it }
+                    nutritionViewModel.logFoodAsync(map, todayId) {
+                        Log.d("NutritionScreen", "Food persisted: ${tf.name}")
                     }
-                    onProductConsumed() // Počisti scanned product po dodajanju
+                    onProductConsumed()
                 },
                 scannedProduct = scannedProduct,
                 onProductConsumed = onProductConsumed,
