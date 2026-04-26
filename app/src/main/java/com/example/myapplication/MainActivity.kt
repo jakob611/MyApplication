@@ -602,12 +602,18 @@ class MainActivity : ComponentActivity() {
                                             onProClick = {
                                                 errorMessage = null
                                                 navViewModel.navigateTo(Screen.ProFeatures)
-                                            }
+                                            },
+                                            // ✅ Faza 16.3: E-Additives navigacija
+                                            onOpenAdditives = { navigateTo(Screen.EAdditives) }
                                         )
                                     }
                                     currentScreen is Screen.BarcodeScanner -> BarcodeScannerScreen(
                                         onDismiss = { navigateBack() },
                                         onProductScanned = { product, barcode -> scannedProduct = Pair(product, barcode); navigateBack() }
+                                    )
+                                    // ✅ Faza 16.3: E-Additives zaslon
+                                    currentScreen is Screen.EAdditives -> com.example.myapplication.ui.screens.EAdditivesScreen(
+                                        onNavigateBack = { navigateBack() }
                                     )
 
                                     currentScreen is Screen.ExerciseHistory -> ExerciseHistoryScreen(onBack = { navigateBack() })

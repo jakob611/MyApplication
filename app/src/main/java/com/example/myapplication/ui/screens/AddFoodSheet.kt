@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +40,9 @@ import com.example.myapplication.network.FoodSummary
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.network.RecipeDetail
 import com.example.myapplication.network.RecipeSummary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController // Added import
 import com.example.myapplication.persistence.RecentFoodStore // Added import
 import androidx.compose.ui.platform.LocalContext // Added import
@@ -67,10 +70,12 @@ internal fun AddFoodSheet(    meal: MealType,
     var hasSearched by remember { mutableStateOf(false) }
     var clickedFoodSummary by remember { mutableStateOf<FoodSummary?>(null) } // Track which was clicked
 
-    // Load recent foods immediately if query is empty
+    // Faza 16.1: Load recent foods na IO threadu, da ne blokira Main Threada
     LaunchedEffect(Unit) {
         if (query.isEmpty() && !hasSearched && scannedProduct == null) {
-            results = RecentFoodStore.getRecentFoods(context)
+            results = withContext(Dispatchers.IO) {
+                RecentFoodStore.getRecentFoods(context)
+            }
         }
     }
 
@@ -286,8 +291,8 @@ internal fun AddFoodSheet(    meal: MealType,
 @Composable
 fun RecipesSearchSection(
     onScanBarcode: () -> Unit = {},
-
-    userProfile: com.example.myapplication.data.UserProfile
+    userProfile: com.example.myapplication.data.UserProfile,
+    onOpenAdditives: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -326,6 +331,19 @@ fun RecipesSearchSection(
                         contentDescription = "Scan", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.height(4.dp))
                     Text("Scan Barcode", color = MaterialTheme.colorScheme.background, fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            }
+            // ✅ Faza 16.3: E-Additives gumb — vizualno usklajen s skenerjem
+            Button(onClick = onOpenAdditives, modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                shape = RoundedCornerShape(12.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Filled.Info,
+                        contentDescription = "E-Additives", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("E-Additives", color = MaterialTheme.colorScheme.background, fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }

@@ -707,9 +707,8 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                     // ✅ Faza 15: Sync kalorij teka v dailyLogs/{today}/burnedCalories
                                     // Ko je vrednost zapisana, Snapshot Listenerja v NutritionViewModel in Progress.kt
                                     // samodejno zaznata spremembo in posodobita UI brez ponovnega zagona.
-                                    val todayDate = kotlinx.datetime.Clock.System.now()
-                                        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
-                                        .date.toString()
+                                    val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                        .format(java.util.Date())
                                     val runCalories = calories.toDouble()
                                     runCatching {
                                         com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayDate) { data ->

@@ -44,6 +44,7 @@ sealed class Screen {
     // Prehrana
     object Nutrition : Screen()
     object BarcodeScanner : Screen()
+    object EAdditives : Screen()
 
     // Skupnost
     object Community : Screen()

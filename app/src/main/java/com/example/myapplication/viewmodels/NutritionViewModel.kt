@@ -68,6 +68,15 @@ class NutritionViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    // ── Navigating stanje za meal sheet (Faza 16.1) ───────────────────────────
+    /** Takoj ob kliku na + postavi na true → UI prikaže overlay za takojšen odziv. */
+    private val _isNavigating = MutableStateFlow(false)
+    val isNavigating: StateFlow<Boolean> = _isNavigating.asStateFlow()
+
+    fun setNavigating(value: Boolean) {
+        _isNavigating.value = value
+    }
+
     /**
      * Shrani hrano v Firestore asinhronično.
      * Nastavi [isLoading] = true med trajanjem operacije, da UI lahko onemogoči gumbe.

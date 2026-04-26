@@ -110,7 +110,8 @@ fun NutritionScreen(
     userProfile: com.example.myapplication.data.UserProfile = com.example.myapplication.data.UserProfile(),
     isOnline: Boolean = true,
     onOpenMenu: () -> Unit = {},
-    onProClick: () -> Unit = {}
+    onProClick: () -> Unit = {},
+    onOpenAdditives: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
@@ -123,6 +124,8 @@ fun NutritionScreen(
     val localWaterMl by nutritionViewModel.localWaterMl.collectAsState()
     // Faza 13.1: loading stanje za food operacije
     val isLoading by nutritionViewModel.isLoading.collectAsState()
+    // Faza 16.1: navigating stanje za takojšen odziv ob kliku na +
+    val isNavigating by nutritionViewModel.isNavigating.collectAsState()
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -165,7 +168,7 @@ fun NutritionScreen(
 
     var showOtherMacros by remember { mutableStateOf(false) }
 
-    // ?? KRITIďż˝NO: Preberi nutrition plan iz NutritionPlanStore (posodobljiv plan)
+    // KRITIČNO: Preberi nutrition plan iz NutritionPlanStore (posodobljiv plan)
     var nutritionPlan by remember { mutableStateOf<com.example.myapplication.data.NutritionPlan?>(null) }
     LaunchedEffect(Unit) {
         val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
@@ -459,7 +462,7 @@ fun NutritionScreen(
                                 centerLabel = "kcal"
                                 startAngle = 135f
                                 sweepAngle = 270f
-                                onSegmentClick = { segment -> Log.d("DonutRing", "Clicked: $segment") }
+                                onSegmentClick = { segment -> /* segment click: ${segment} */ }
                             }
                         },
                         modifier = Modifier.size(240.dp),
@@ -630,6 +633,8 @@ fun NutritionScreen(
                         // Faza 13.1: onemogoči dodajanje, ko je food operacija v teku
                         if (!isLoading) {
                             com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
+                            // Faza 16.1: Takojšen odziv — setNavigating(true) pred odpiranjem sheeta
+                            nutritionViewModel.setNavigating(true)
                             sheetMeal = mealType
                         }
                     },
@@ -643,13 +648,14 @@ fun NutritionScreen(
             // Recipes search section
             RecipesSearchSection(
                 onScanBarcode = onScanBarcode,
-                userProfile = userProfile
+                userProfile = userProfile,
+                onOpenAdditives = onOpenAdditives
             )
 
             Spacer(modifier = Modifier.height(80.dp)) // Bottom padding for snackbar
         }
-        // Faza 13.1: Loading overlay — prikazuje se med food log operacijami
-        if (isLoading) {
+        // Faza 13.1 + 16.1: Loading/Navigating overlay — prikazuje se med food log operacijami in ob kliku na +
+        if (isLoading || isNavigating) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -664,6 +670,10 @@ fun NutritionScreen(
 
     // Sheet: iskanje hrane + dodajanje
     if (sheetMeal != null) {
+        // Faza 16.1: Ko se sheet dejansko odpre, resetiraj navigating overlay
+        LaunchedEffect(sheetMeal) {
+            if (sheetMeal != null) nutritionViewModel.setNavigating(false)
+        }
         ModalBottomSheet(
             onDismissRequest = {
                 sheetMeal = null
