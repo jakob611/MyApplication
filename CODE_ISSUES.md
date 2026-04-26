@@ -2,7 +2,7 @@
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
 **Zadnja posodobitev:** 2026-04-26  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Global Audit zaključen)**
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 15 zaključena)**
 
 ---
 
@@ -68,6 +68,17 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-04-26 — Faza 15: Community Privacy & Calorie Sync
+
+**Spremembe:**
+1. ✅ **`PublicProfile` data class** — Dodan `shareActivities: Boolean = false` za ekspliciten flag iz Firestore dokumenta gledanega uporabnika. Prej je `PublicProfileScreen` sklepal zasebnost posredno prek `recentActivities != null`.
+2. ✅ **`ProfileStore.mapToPublicProfile()`** — `shareActivities = shareActivities` nastavljeno v `return PublicProfile(...)`, tako da UI vedno bere iz dokumenta gledanega uporabnika.
+3. ✅ **`PublicProfileScreen.kt`** — `hasActivities = profile.shareActivities` (ne več `recentActivities != null`). `ActivitiesContent` prikazuje FitnessCenter ikono + "No activities yet" za prazen seznam (ne zavajajočo Lock ikono).
+4. ✅ **`RunTrackerScreen.kt`** — Po shranjevanju teka dodan `DailyLogRepository().updateDailyLog(todayDate)` klic, ki prišteje `calories` k `burnedCalories` v `dailyLogs/{today}`. Dodana importa `kotlinx.datetime.TimeZone` in `kotlinx.datetime.toLocalDateTime`.
+5. ✅ **NutritionViewModel + Progress.kt Snapshot Listenerji** — Oba že imata `addSnapshotListener` na `dailyLogs`. Ko RunTrackerScreen zapiše kalorije, se UI samodejno posodobi brez ponovnega zagona — ni bila potrebna sprememba.
+
+**Root cause (Task 2 — kalorije):** `RunTrackerScreen` je shranjeval tek v `runSessions` in `publicActivities` ter lokalne `.json` datoteke, nikoli pa ni posodobil `dailyLogs/{today}/burnedCalories`. `ManualExerciseLogScreen` in `WorkoutSession` sta to delala, RunTrackerScreen pa ne.
 
 ### 2026-04-26 — Global Audit & bm_prefs SharedPrefs Purge
 

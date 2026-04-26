@@ -316,6 +316,16 @@
 **Zakaj:** Pred iOS migracijo: koda mora biti čista, brez podvajanj in SharedPrefs odvisnosti za kritične podatke (streak, plan_day). Odkriti bug bi resetiral streak ob vsakem ustvarjanju novega plana.
 **Tveganje:** 🟡 srednje (bug fix za streak reset + SharedPrefs cleanup)
 
+## 2026-04-26 — Faza 15: Community Privacy & Calorie Sync
+**Datoteke:** `data/UserAchievements.kt`, `persistence/ProfileStore.kt`, `ui/screens/PublicProfileScreen.kt`, `ui/screens/RunTrackerScreen.kt`
+**Kaj:**
+- `PublicProfile` razširjen z `shareActivities: Boolean = false` — eksplicitten flag iz Firestore dokumenta gledanega uporabnika
+- `ProfileStore.mapToPublicProfile()` nastavi `shareActivities` v vrnjeni objekt
+- `PublicProfileScreen.kt`: tab "Activities" se prikaže ko `profile.shareActivities == true` (ne več `recentActivities != null`); prazna lista prikaže FitnessCenter ikono + "No activities yet" namesto Lock ikone
+- `RunTrackerScreen.kt`: po shranjevanju teka doda `DailyLogRepository().updateDailyLog()` klic za `burnedCalories` v `dailyLogs/{today}`; `NutritionViewModel` in `Progress.kt` Snapshot Listenerji samodejno zaznata spremembo
+**Zakaj:** `RunTrackerScreen` ni posodabljal `dailyLogs/burnedCalories` → kalorije iz tekov niso bile vidne v NutritionVM in Progress. `PublicProfileScreen` je posredno bral zasebnost prek `recentActivities != null` namesto eksplicitnega `shareActivities` flaga.
+**Tveganje:** 🟢 nizko (additive fix, brez spremembe obstoječe logike)
+
 ## 2026-04-26 — Faza 14: Map Performance & Cost Optimization
 **Datoteke:** `MyApplication.kt`, `ExerciseHistoryScreen.kt`, `ActivityLogScreen.kt`, `RunTrackerScreen.kt`
 **Kaj:**
