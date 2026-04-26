@@ -305,6 +305,24 @@ fun BodyModuleHomeScreen(
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                                // Faza 13.3: Streak Freeze prikaži, če ima uporabnik zamrznitve
+                                if (ui.streakFreezes > 0) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "❄️ × ${ui.streakFreezes}",
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = "Streak Freeze",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
 
                                 Button(
                                     onClick = {

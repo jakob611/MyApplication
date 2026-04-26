@@ -11,6 +11,18 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+/**
+ * Faza 13.3 — rezultat Streak Engine transakcije.
+ * Vrne se iz [UserProfileManager.updateUserProgressAfterWorkout].
+ */
+data class WorkoutProgressResult(
+    val newPlanDay: Int,
+    val newStreakDays: Int,
+    val newStreakFreezes: Int,
+    /** true = zamrznitev je bila porabljena za ohranitev streaka */
+    val freezeUsed: Boolean = false
+)
+
 object UserProfileManager {
     private const val PREFS_NAME = "user_prefs"
     private const val KEY_USERNAME = "username"
@@ -367,7 +379,9 @@ object UserProfileManager {
                     "weekly_done" to (doc.getLong("weekly_done")?.toInt() ?: 0),
                     "last_workout_epoch" to (doc.getLong("last_workout_epoch") ?: 0L),
                     "plan_day" to (doc.getLong("plan_day")?.toInt() ?: 1),
-                    "weekly_target" to (doc.getLong("weekly_target")?.toInt() ?: 0)
+                    "weekly_target" to (doc.getLong("weekly_target")?.toInt() ?: 0),
+                    // Faza 13.3 — Streak Freeze
+                    "streak_freezes" to (doc.getLong("streak_freezes")?.toInt() ?: 0)
                 )
             } else null
         } catch (e: Exception) {
@@ -421,25 +435,28 @@ object UserProfileManager {
     }
 
     /**
-     * Faza 13.2 — Streak Engine & Plan Progression
+     * Faza 13.3 — Streak Engine & Plan Progression + Streak Freeze
      *
-     * Atomarna Firestore transakcija, ki posodobi streak_days, plan_day in last_workout_epoch
-     * po zaključenem treningu. Bere in zapiše v eni transakciji — brez race conditionov.
+     * Atomarna Firestore transakcija, ki posodobi streak_days, plan_day, last_workout_epoch
+     * in streak_freezes po zaključenem treningu.
      *
-     * Logika:
-     *  - plan_day: +1 samo za redne treninge (ne "extra")
-     *  - streak_days: +1 če zadnji trening VČERAJ, reset=1 če >1 dan, brez spremembe če DANES
-     *  - last_workout_epoch: posodobi na današnji epochDay (format = epochDays, ne ms!)
+     * Streak Freeze logika:
+     *  - Če je dayDiff > 1 (prekinitev) IN ima uporabnik streak_freezes > 0:
+     *      → streak_freezes -= 1, streak_days ostane nespremenjen,
+     *        last_workout_epoch = todayEpoch (normalno)
+     *  - Če je dayDiff > 1 IN ni zamrznitev:
+     *      → streak_days = 1 (reset kot prej)
      *
      * @param incrementPlanDay false za "extra" treninge — streak se posodobi, plan_day pa ne
-     * @return Pair(newPlanDay, newStreakDays)
+     * @return [WorkoutProgressResult] z vsemi novimi vrednostmi
      */
-    suspend fun updateUserProgressAfterWorkout(incrementPlanDay: Boolean = true): Pair<Int, Int> {
+    suspend fun updateUserProgressAfterWorkout(incrementPlanDay: Boolean = true): WorkoutProgressResult {
         return try {
             val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
             val db  = com.example.myapplication.persistence.FirestoreHelper.getDb()
 
-            val todayEpoch = Clock.System.now()
+            // epochDays (Int→Long) — skladno z obstoječo logiko, NE epochMs!
+            val todayEpoch: Long = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .date.toEpochDays().toLong()
 
@@ -449,40 +466,65 @@ object UserProfileManager {
                 val oldPlanDay   = (doc.getLong("plan_day")           ?: 1L).toInt()
                 val oldStreak    = (doc.getLong("streak_days")        ?: 0L).toInt()
                 val oldLastEpoch =  doc.getLong("last_workout_epoch") ?: 0L
+                // Faza 13.3: preberi zamrznitve (default 0)
+                val oldFreezes   = (doc.getLong("streak_freezes")     ?: 0L).toInt()
 
                 // Plan Day: +1 samo za redne (ne extra) treninge
                 val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
 
                 // Streak: izračunaj na osnovi razlike epochDays
                 val dayDiff = todayEpoch - oldLastEpoch
+                var freezeUsed = false
+                var newFreezes = oldFreezes
+
                 val newStreak = when {
                     oldLastEpoch == 0L -> 1              // prvi trening kdajkoli
                     dayDiff == 0L      -> oldStreak      // danes že treniral — ohrani
                     dayDiff == 1L      -> oldStreak + 1  // včeraj → podaljšaj
-                    else               -> 1              // prekinitev → ponastavi
+                    else -> {
+                        // Prekinitev — preveri zamrznitve
+                        if (oldFreezes > 0) {
+                            freezeUsed = true
+                            newFreezes = oldFreezes - 1
+                            Log.d("UserProfileManager",
+                                "❄️ Streak Freeze porabljen! Ostalo: $newFreezes (streak ohranjen na $oldStreak)")
+                            oldStreak  // streak se ohrani, NE poveča
+                        } else {
+                            1          // ni zamrznitev → ponastavi
+                        }
+                    }
                 }
 
-                tx.set(
-                    ref,
-                    mapOf(
-                        "plan_day"           to newPlanDay,
-                        "streak_days"        to newStreak,
-                        "last_workout_epoch" to todayEpoch
-                    ),
-                    SetOptions.merge()
+                val updates = mutableMapOf<String, Any>(
+                    "plan_day"           to newPlanDay,
+                    "streak_days"        to newStreak,
+                    // last_workout_epoch vedno kot epochDays (Integer format v Long)
+                    "last_workout_epoch" to todayEpoch
                 )
+                // Posodobi streak_freezes samo, če je bila zamrznitev porabljena
+                if (freezeUsed) {
+                    updates["streak_freezes"] = newFreezes
+                }
 
-                Pair(newPlanDay, newStreak)
+                tx.set(ref, updates, SetOptions.merge())
+
+                WorkoutProgressResult(
+                    newPlanDay      = newPlanDay,
+                    newStreakDays   = newStreak,
+                    newStreakFreezes = newFreezes,
+                    freezeUsed      = freezeUsed
+                )
             }.await()
 
             Log.d("UserProfileManager",
-                "✅ Streak Engine: planDay=${result.first}, streak=${result.second} " +
+                "✅ Streak Engine (13.3): planDay=${result.newPlanDay}, streak=${result.newStreakDays}, " +
+                "freezes=${result.newStreakFreezes}, freezeUsed=${result.freezeUsed} " +
                 "(incrementPlan=$incrementPlanDay, epochDay=$todayEpoch)")
             result
         } catch (e: Exception) {
             Log.e("UserProfileManager",
                 "❌ updateUserProgressAfterWorkout failed: ${e.message}", e)
-            Pair(1, 0)
+            WorkoutProgressResult(newPlanDay = 1, newStreakDays = 0, newStreakFreezes = 0)
         }
     }
 

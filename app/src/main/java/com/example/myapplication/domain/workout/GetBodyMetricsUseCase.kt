@@ -26,6 +26,8 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
                 val weeklyTarget = stats["weekly_target"] as? Int ?: 3
                 val planDay = stats["plan_day"] as? Int ?: 1
                 val lastEpoch = stats["last_workout_epoch"] as? Long ?: 0L
+                // Faza 13.3: preberi število zamrznitev
+                val streakFreezes = stats["streak_freezes"] as? Int ?: 0
 
                 val isDoneToday = if (lastEpoch == 0L) false else {
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -41,6 +43,7 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
 
                 state = state.copy(
                     streakDays = streak,
+                    streakFreezes = streakFreezes,
                     weeklyDone = weeklyDone,
                     weeklyTarget = weeklyTarget,
                     planDay = planDay,

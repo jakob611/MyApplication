@@ -24,6 +24,8 @@ data class Challenge(
 
 data class BodyHomeUiState(
     val streakDays: Int = 0,
+    /** Faza 13.3: število razpoložljivih Streak Freeze zamrznitev */
+    val streakFreezes: Int = 0,
     val weeklyDone: Int = 0,
     val weeklyTarget: Int = 3,
     val planDay: Int = 1,
