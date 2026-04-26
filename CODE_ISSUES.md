@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-04-25  
+**Zadnja posodobitev:** 2026-04-26  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -68,6 +68,28 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-04-26 — Faza 13.1: UI Responsiveness & Persistence Fix
+
+**Spremembe:**
+- `viewmodels/NutritionViewModel.kt`:
+  - `_localWaterMl: MutableStateFlow<Int?>` — optimistični override za instant water UI
+  - `updateWaterOptimistic(newValue, todayId)`: posodobi UI takoj, debounce 800ms → en Firestore zapis (ne ves klik → zapis)
+  - `waterSyncJob: Job?` — predhodni zapis se cancela, ko pride novi klik
+  - `_isLoading: MutableStateFlow<Boolean>` — food log operacije
+  - `logFoodAsync(foodMap, todayId, onDone)`: isLoading=true med zapisom, finally isLoading=false
+- `ui/screens/NutritionScreen.kt`:
+  - `effectiveWaterMl = localWaterMl ?: uiState.water` — prikaže optimistično vrednost
+  - WaterControlsRow → `nutritionViewModel.updateWaterOptimistic()` namesto direktnega Firestore klica
+  - DonutProgressView `innerValue` → `effectiveWaterMl` (ne `uiState.water`)
+  - AddFoodSheet `onAddTracked` → `nutritionViewModel.logFoodAsync()` (ne MainScope().launch)
+  - `CircularProgressIndicator` overlay ko `isLoading == true`
+  - MealCard `onAddFood` onemogoočen ko `isLoading == true`
+- `ui/screens/ExerciseHistoryScreen.kt`:
+  - **Runs tab odstranjen** — `tabs = listOf("Workouts", "Exercises")`, ActivityLogScreen je edini SSOT za teke
+  - **Workout history bug fix**: `orderBy("date")` → `orderBy("timestamp")` + parsing: `(d.get("timestamp") as? Number)?.toLong()` s fallback na `getTimestamp("date")`
+
+**Root cause workout history bug:** `UpdateBodyMetricsUseCase` shranjuje `"timestamp"` (epoch ms Long), `ExerciseHistoryScreen.WorkoutsTab` pa je iskal `"date"` (Firestore Timestamp) → query ni vračal pravilno sortiranih rezultatov.
 
 ### 2026-04-25 — Faza 12: Firestore Bridge (WorkoutSessionViewModel + Volume Progression)
 
