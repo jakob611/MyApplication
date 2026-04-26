@@ -192,7 +192,7 @@
 [   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o do b l j e n i   t a k o  ,   d a  i z p u a
 a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
  [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
-n i m i   f o r m a t i ,   d a   n a t a n 
+n i m i   f o r m a t i ,   d a   n a t a n
 n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
  [   ]   P r e v e r j e n a   o d s t r a n i t e v   n e s m i s e l n i h   o d v i s n o s t i   ( j i h   n i ,   j a v a . t i m e   i n   j a v a . u t i l . D a t e   s t a   ~e   t a k o   d e l   J D K j a   i n   n i s t a   t e r j a l i  p o s e b n e  k n j i c e  v  g r a d l e) . 
 [ ] b u i l d  j e  a e l  s k o z i  b p .
@@ -315,3 +315,13 @@
 5. **GetBodyMetricsUseCase**: Odstranjen `settingsRepo.updateWorkoutStats()` klic z napačno epoch konverzijo (bm_prefs ne potrebuje več posodabljanja).
 **Zakaj:** Pred iOS migracijo: koda mora biti čista, brez podvajanj in SharedPrefs odvisnosti za kritične podatke (streak, plan_day). Odkriti bug bi resetiral streak ob vsakem ustvarjanju novega plana.
 **Tveganje:** 🟡 srednje (bug fix za streak reset + SharedPrefs cleanup)
+
+## 2026-04-26 — Faza 14: Map Performance & Cost Optimization
+**Datoteke:** `MyApplication.kt`, `ExerciseHistoryScreen.kt`, `ActivityLogScreen.kt`, `RunTrackerScreen.kt`
+**Kaj:**
+1. **Tile Cache (MyApplication.kt)**: Centralni osmdroid tile cache — 50MB persistenten disk cache, 100 tiles v RAM. Drastično zmanjša omrežne zahteve pri ponovnih obiskih istega območja.
+2. **Canvas Static Preview — 'Lite Mode' (ExerciseHistoryScreen.kt)**: `StaticRouteCanvas` composable zdaj zamenja polni `MapView` za majhne predoglede v `RunCard`. Canvas izriše traso brez nalaganja OSM ploščic — 0 omrežnih zahtev, instantni render. Fullscreen dialog ohrani polni interaktivni MapView.
+3. **Manuel Zoom Bounds (ActivityLogScreen.kt)**: `GlobalActivityOsmMap` `update` blok zdaj zoom-a na izbrani tek takoj ob selekciji (`mapv.tag` guard prepreči ponavljajoči zoom ob recomposition). Pri deselect se zoom vrne na vse teke.
+4. **Shrani/Obnovi Zadnjo Lokacijo (RunTrackerScreen.kt)**: Po zaključenem teku shrani zadnjo GPS točko v SharedPrefs (`last_run_lat`, `last_run_lng`). MapView se inicializira na shranjeni lokaciji namesto hardcoded Ljubljana — brez začetnega "skakanja".
+**Zakaj:** Zmanjšanje omrežnega prometa, hitrejši UI, celica podatkov varčevanje pri mobilnih napravah.
+**Tveganje:** 🟢 nizko (canvas preview je backward compatible, cache je additive, zoom guard je idempotenten)
