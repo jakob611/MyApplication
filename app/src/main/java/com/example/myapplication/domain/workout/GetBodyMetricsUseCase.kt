@@ -35,11 +35,8 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
                     lastDate == now
                 }
 
-                // Sync with local repository
-                settingsRepo.updateWorkoutStats(
-                    completedDay = planDay,
-                    timestamp = if (lastEpoch > 0) lastEpoch * 86400000L else 0L
-                )
+                // [Global Audit — Faza 13.3]: settingsRepo.updateWorkoutStats() klic odstranjen.
+                // bm_prefs lokalni cache ni več potreben — Firestore je SSOT za streak/planDay.
 
                 state = state.copy(
                     streakDays = streak,

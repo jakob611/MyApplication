@@ -735,24 +735,27 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                     com.example.myapplication.persistence.NutritionPlanStore.saveNutritionPlan(uid, nutritionPlan)
                                                 }
-                                                val bodyPrefs = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                                // Vzemi frequency direktno iz plana — ne iz userProfile ki se morda ni pravilno naložil
                                                 val freqFromPlan = plan.trainingDays.takeIf { it > 0 }
                                                 val actParsed = userProfile.activityLevel?.replace("x", "")?.replace("X", "")?.trim()?.toIntOrNull()
                                                 val weeklyTargetToSave = actParsed?.takeIf { it > 0 } ?: freqFromPlan ?: 3
-                                                bodyPrefs.edit().putInt("weekly_target", weeklyTargetToSave).apply()
-                                                // Shrani v Firestore POD EMAIL (ne UID) — ker getWorkoutStats bere users/{email}
+                                                // ✅ Global Audit (Faza 13.3): NE beremo streak/total/lastEpoch iz bm_prefs (deprecated).
+                                                // Ob novem planu posodabljamo SAMO plan-specifична polja: plan_day=1, weekly_target, weekly_done=0.
+                                                // streak_days ostane nespremenjen v Firestoreu — user ne izgubi streaka pri zamenjavi plana.
                                                 if (userEmail.isNotBlank()) {
-                                                    UserProfileManager.saveWorkoutStats(
-                                                        email = userEmail,
-                                                        streak = bodyPrefs.getInt("streak_days", 0),
-                                                        totalWorkouts = bodyPrefs.getInt("total_workouts_completed", 0),
-                                                        weeklyDone = bodyPrefs.getInt("weekly_done", 0),
-                                                        lastWorkoutEpoch = bodyPrefs.getLong("last_workout_epoch", 0L),
-                                                        planDay = bodyPrefs.getInt("plan_day", 1),
-                                                        weeklyTarget = weeklyTargetToSave
-                                                    )
-                                                    android.util.Log.d("MainActivity", "✅ weekly_target saved to Firestore users/$userEmail: $weeklyTargetToSave")
+                                                    try {
+                                                        com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                                                            .set(
+                                                                mapOf(
+                                                                    "plan_day"      to 1,
+                                                                    "weekly_target" to weeklyTargetToSave,
+                                                                    "weekly_done"   to 0
+                                                                ),
+                                                                com.google.firebase.firestore.SetOptions.merge()
+                                                            ).await()
+                                                        android.util.Log.d("MainActivity", "✅ New plan init: plan_day=1, weekly_target=$weeklyTargetToSave (streak preserved)")
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("MainActivity", "❌ New plan Firestore init failed: ${e.message}")
+                                                    }
                                                 }
                                                 bodyOverviewViewModel.refreshPlans()
                                                 navViewModel.navigateTo(Screen.BodyOverview)

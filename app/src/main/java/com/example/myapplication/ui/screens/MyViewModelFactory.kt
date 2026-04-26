@@ -54,7 +54,7 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             @Suppress("UNCHECKED_CAST")
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(workoutRepo, settingsRepo),
-                UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase, settingsRepo),
+                UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
                 SwapPlanDaysUseCase()
             ) as T
         }

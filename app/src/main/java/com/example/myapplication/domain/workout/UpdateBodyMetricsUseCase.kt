@@ -2,15 +2,14 @@ package com.example.myapplication.domain.workout
 
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
-import com.example.myapplication.data.settings.UserPreferencesRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 class UpdateBodyMetricsUseCase(
     private val workoutRepo: WorkoutRepository,
-    private val gamificationUseCase: ManageGamificationUseCase,
-    private val settingsRepo: UserPreferencesRepository
+    private val gamificationUseCase: ManageGamificationUseCase
+    // settingsRepo odstranjen — Global Audit Faza 13.3: bm_prefs ni več SSOT za streak/planDay
 ) {
     suspend operator fun invoke(
         email: String,
@@ -58,13 +57,9 @@ class UpdateBodyMetricsUseCase(
                 "streak=${progressResult.newStreakDays}, freezes=${progressResult.newStreakFreezes}, " +
                 "freezeUsed=${progressResult.freezeUsed}, isExtra=$isExtra")
 
-            // 4. Posodobitev lokalnega stanja (Streaki in zadnji trening)
-            if (!isExtra) {
-                settingsRepo.updateWorkoutStats(
-                    completedDay = planDay,
-                    timestamp = timestamp
-                )
-            }
+            // 4. [REMOVED — Faza 13.3 Global Audit] settingsRepo.updateWorkoutStats() je bil DEPRECATED.
+            //    plan_day, streak_days, last_workout_epoch — vse piše updateUserProgressAfterWorkout() v Firestore.
+            //    bm_prefs ni več relevanten za te podatke.
 
             // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
             // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository

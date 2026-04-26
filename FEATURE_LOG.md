@@ -190,7 +190,7 @@
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
 [   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
 [   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o do b l j e n i   t a k o  ,   d a  i z p u a
-a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
+a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
  [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
 n i m i   f o r m a t i ,   d a   n a t a n 
 n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
@@ -305,3 +305,13 @@
 **Zakaj:** Finalni arhitekturni pregled pred UI/UX prenovo — odstranitev dead code, varnostni stropi za Firestore branje, navigation stack optimizacija.
 **Tveganje:** 🟢 nizko (`.limit(20)` je varnostni strop ki ne vpliva na funkcionalnost)
 
+## 2026-04-26 — Global Audit & bm_prefs SharedPrefs Purge (pred iOS migracijo)
+**Datoteke:** `WorkoutSessionScreen.kt`, `UpdateBodyMetricsUseCase.kt`, `GetBodyMetricsUseCase.kt`, `MainActivity.kt`, `MyViewModelFactory.kt`
+**Kaj:**
+1. **SharedPrefs Purge — WeeklTarget/Done**: `WorkoutSessionScreen` je bral `weekly_target` in `weekly_done` iz deprecated `bm_prefs`. Zamenjano z `vm.ui.value.weeklyTarget` / `vm.ui.value.weeklyDone` (Firestore SSOT prek BodyModuleHomeViewModel).
+2. **SharedPrefs Purge — Streak v CelebrationScreen**: `WorkoutCelebrationScreen` je bral `streak_days` iz `bm_prefs` (vračal 0 ker bm_prefs ni več pisan). Dodal `streakDays: Int` parameter, kliče se z `vmUiState.streakDays`.
+3. **Redundancy Fix — UpdateBodyMetrics**: Odstranjen dvojni zapis — `settingsRepo.updateWorkoutStats()` je pisal STARI (pre-increment) `plan_day` v bm_prefs, medtem ko `updateUserProgressAfterWorkout()` že atomarno piše pravilne vrednosti v Firestore. `settingsRepo` odstranjen iz konstruktorja.
+4. **Kritični Bug Fix — Streak Reset pri novem planu**: `MainActivity.kt` `onFinish` je ob kreiranju novega plana bral `streak_days`, `total_workouts_completed`, `weekly_done`, `last_workout_epoch`, `plan_day` iz deprecated `bm_prefs` (vse vrednosti = 0) in jih zapisal v Firestore → **streak se je resetiral na 0!** Zamenjano z direktnim partial merge-om: samo `plan_day=1`, `weekly_target`, `weekly_done=0`. Streak ostane nespremenjen.
+5. **GetBodyMetricsUseCase**: Odstranjen `settingsRepo.updateWorkoutStats()` klic z napačno epoch konverzijo (bm_prefs ne potrebuje več posodabljanja).
+**Zakaj:** Pred iOS migracijo: koda mora biti čista, brez podvajanj in SharedPrefs odvisnosti za kritične podatke (streak, plan_day). Odkriti bug bi resetiral streak ob vsakem ustvarjanju novega plana.
+**Tveganje:** 🟡 srednje (bug fix za streak reset + SharedPrefs cleanup)

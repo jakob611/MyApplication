@@ -287,10 +287,9 @@ fun WorkoutSessionScreen(
 
         // Določi ciljno težavnost glede na recovery/catchup/normalen način
         val isRecovery = AlgorithmPreferences.isRecoveryMode(context.getAlgoSettings())
-        val weeklyTarget = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-            .getInt("weekly_target", 3)
-        val weeklyDone = context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-            .getInt("weekly_done", 0)
+        // ✅ SSOT: beri weeklyTarget/weeklyDone iz BodyModuleHomeViewModel (Firestore), ne bm_prefs
+        val weeklyTarget = vm.ui.value.weeklyTarget.takeIf { it > 0 } ?: 3
+        val weeklyDone = vm.ui.value.weeklyDone
 
         val targetDifficulty: Float = when {
             isRecovery -> {
@@ -509,6 +508,7 @@ fun WorkoutSessionScreen(
                     isExtra = s.isExtra,
                     nextDayPreview = nextDayPreview,
                     planDay = vmUiState.planDay,  // ✅ Firestore SSOT prek ViewModel
+                    streakDays = vmUiState.streakDays, // ✅ Firestore SSOT — ne bm_prefs
                     onContinue = { state = WorkoutState.Report(s.results, s.skipped) }
                 )
             }
@@ -1063,6 +1063,7 @@ private fun WorkoutCelebrationScreen(
     isExtra: Boolean,
     nextDayPreview: String? = null,
     planDay: Int = 0,         // ✅ Prejeto iz BodyModuleHomeViewModel (Firestore SSOT, ne bm_prefs)
+    streakDays: Int = 0,      // ✅ Firestore SSOT prek BodyModuleHomeViewModel.ui.streakDays
     onContinue: () -> Unit
 ) {
     val scale = remember { Animatable(0f) }
@@ -1079,11 +1080,10 @@ private fun WorkoutCelebrationScreen(
         streakScale.animateTo(1.0f, tween(200))
     }
 
-    val context = LocalContext.current
     val density = LocalDensity.current.density
-    val prefs = context.getSharedPreferences("bm_prefs", android.content.Context.MODE_PRIVATE)
-    // streak_days se bere iz bm_prefs (posodobljeno ob zaključku vadbe prek MainActivity/AchievementStore)
-    val currentStreak = prefs.getInt("streak_days", 0)
+    val context = LocalContext.current  // ← potrebno za HapticFeedback
+    // ✅ streakDays prejmemo kot parameter iz BodyModuleHomeViewModel (Firestore SSOT)
+    val currentStreak = streakDays
     // planDay prejmemo kot parameter iz BodyModuleHomeViewModel (Firestore SSOT)
 
     // Animate from (current - 1) to (current)
