@@ -83,7 +83,9 @@ fun PublicProfileScreen(
     ) { padding ->
         val context = LocalContext.current
         var selectedTab by remember { mutableStateOf(0) }
-        val hasActivities = profile.recentActivities != null
+        // ✅ Faza 15: Beremo shareActivities direktno iz Firestore dokumenta gledanega uporabnika
+        // (ne iz lokalnih nastavitev trenutnega uporabnika)
+        val hasActivities = profile.shareActivities
 
         Box(
             modifier = Modifier
@@ -382,22 +384,25 @@ private fun ActivitiesContent(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // ✅ Faza 15: Razlikujemo med "ni aktivnosti" in "privatne aktivnosti"
+                // Ker je ActivitiesContent klicana samo ko shareActivities=true (hasActivities=true),
+                // pomen praznega seznama je "uporabnik nima aktivnosti" — NE "privatno".
                 Icon(
-                    Icons.Filled.Lock,
+                    Icons.Filled.FitnessCenter,
                     contentDescription = null,
                     modifier = Modifier.size(64.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "No shared activities",
+                    "No activities yet",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = Color.White
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "This user hasn't shared any public activities yet.",
+                    "This user hasn't recorded any activities yet.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center

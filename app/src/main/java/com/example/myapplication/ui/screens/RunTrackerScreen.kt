@@ -48,6 +48,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
@@ -700,6 +702,23 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                     // Če je glajenje uspelo, shranimo dodaten file samo za risanje čudovite poti na mapi
                                     if (successfullySmoothed && finalLocationPoints.isNotEmpty()) {
                                         com.example.myapplication.persistence.RunRouteStore.saveRoute(context, sessionId + "_smoothed", finalLocationPoints)
+                                    }
+
+                                    // ✅ Faza 15: Sync kalorij teka v dailyLogs/{today}/burnedCalories
+                                    // Ko je vrednost zapisana, Snapshot Listenerja v NutritionViewModel in Progress.kt
+                                    // samodejno zaznata spremembo in posodobita UI brez ponovnega zagona.
+                                    val todayDate = kotlinx.datetime.Clock.System.now()
+                                        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                                        .date.toString()
+                                    val runCalories = calories.toDouble()
+                                    runCatching {
+                                        com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayDate) { data ->
+                                            val existingBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
+                                            data["burnedCalories"] = existingBurned + runCalories
+                                        }
+                                        Log.d("RunTrackerSave", "✅ dailyLogs burnedCalories posodobljen: +${runCalories.toInt()} kcal za $todayDate")
+                                    }.onFailure {
+                                        Log.e("RunTrackerSave", "❌ dailyLogs burnedCalories sync spodletel", it)
                                     }
 
                                     val xp = calculateXP(selectedActivity, finalDistance, finalTime)

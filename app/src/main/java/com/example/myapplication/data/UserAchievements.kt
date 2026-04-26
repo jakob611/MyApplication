@@ -54,10 +54,12 @@ data class PublicProfile(
     val displayName: String? = null,
     val level: Int? = null,
     val badges: List<Badge>? = null,
-    val streak: Int? = null, // Added streak
+    val streak: Int? = null,
     val followers: Int? = null,
     val following: Int? = null,
     val activePlanSummary: String? = null,
+    /** ✅ Faza 15: Eksplicitten flag iz Firestore dokumenta GLEDANEGA uporabnika (ne lokalnih nastavitev). */
+    val shareActivities: Boolean = false,
     val recentActivities: List<PublicActivity>? = null // Javne aktivnosti (samo če shareActivities=true)
 )
 

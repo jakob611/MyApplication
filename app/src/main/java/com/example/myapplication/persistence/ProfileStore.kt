@@ -122,6 +122,8 @@ object ProfileStore {
             userId = userId,
             username = username,
             displayName = displayName,
+            // ✅ Faza 15: shareActivities bere iz dokumenta GLEDANEGA uporabnika (ne lokalnih nastavitev)
+            shareActivities = shareActivities,
             level = if (showLevel) (doc.get("xp") as? Number)?.toInt()?.let { xp ->
                 com.example.myapplication.data.UserProfile.calculateLevel(xp)
             } else null,
