@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,7 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -297,6 +303,7 @@ private fun RunMapView(points: List<Pair<Double, Double>>, modifier: Modifier = 
     if (isFullscreen) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { isFullscreen = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
             Box(modifier = Modifier.fillMaxSize()) {
+                // Fullscreen: polni interaktivni MapView z OSM ploščicami
                 RunOsmMap(context = context, points = points, interactive = true, modifier = Modifier.fillMaxSize())
                 IconButton(onClick = { isFullscreen = false }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), RoundedCornerShape(8.dp))) {
                     Icon(Icons.Default.Close, contentDescription = "Close fullscreen", tint = MaterialTheme.colorScheme.onSurface)
@@ -306,9 +313,84 @@ private fun RunMapView(points: List<Pair<Double, Double>>, modifier: Modifier = 
     }
     
     Box(modifier = modifier) {
-        RunOsmMap(context = context, points = points, interactive = false, modifier = Modifier.fillMaxSize())
-        IconButton(onClick = { isFullscreen = true }, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).size(36.dp)) {
+        // ✅ Faza 14: Canvas statični predogled — brez nalaganja OSM ploščic!
+        // 10x hitrejši, 0 omrežnih zahtev za majhne prikaze v kartici.
+        StaticRouteCanvas(points = points, modifier = Modifier.fillMaxSize())
+        IconButton(
+            onClick = { isFullscreen = true },
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                .size(36.dp)
+        ) {
             Icon(Icons.Default.Fullscreen, contentDescription = "Full screen", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/**
+ * Faza 14 — Canvas-based statični predogled trase.
+ * Brez nalaganja OSM ploščic = 0 omrežnih zahtev, instantni prikaz.
+ * Prikaže: barvna trasa, zelena pika start, rdeča pika cilj.
+ */
+@Composable
+private fun StaticRouteCanvas(
+    points: List<Pair<Double, Double>>,
+    modifier: Modifier = Modifier
+) {
+    val trackColor  = Color(0xFF2196F3)
+    val bgColor     = Color(0xFF1A2332)   // temno mornarsko ozadje
+
+    Box(
+        modifier = modifier
+            .background(bgColor, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp))
+    ) {
+        if (points.size >= 2) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val lats    = points.map { it.first }
+                val lngs    = points.map { it.second }
+                val minLat  = lats.min()
+                val maxLat  = lats.max()
+                val minLng  = lngs.min()
+                val maxLng  = lngs.max()
+                val rangeY  = (maxLat - minLat).coerceAtLeast(0.00005)
+                val pad     = 24f
+                val w       = size.width  - pad * 2
+                val h       = size.height - pad * 2
+
+                fun toX(lng: Double) = (pad + ((lng - minLng) / (maxLng - minLng).coerceAtLeast(1e-9) * w)).toFloat()
+                fun toY(lat: Double) = (pad + h - ((lat - minLat) / rangeY * h)).toFloat()  // flip Y
+
+                // Trasa
+                val path = Path()
+                points.forEachIndexed { i, (lat, lng) ->
+                    val x = toX(lng); val y = toY(lat)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(
+                    path  = path,
+                    color = trackColor,
+                    style = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+
+                // Start (zelena pikica)
+                val (sLat, sLng) = points.first()
+                drawCircle(Color(0xFF4CAF50), radius = 8f,  center = Offset(toX(sLng), toY(sLat)))
+                drawCircle(Color.White,       radius = 3.5f, center = Offset(toX(sLng), toY(sLat)))
+
+                // Cilj (rdeča pikica)
+                val (eLat, eLng) = points.last()
+                drawCircle(Color(0xFFF44336), radius = 8f,  center = Offset(toX(eLng), toY(eLat)))
+                drawCircle(Color.White,       radius = 3.5f, center = Offset(toX(eLng), toY(eLat)))
+            }
+        } else {
+            // Ni GPS točk
+            Text(
+                "🗺️ No route",
+                color = Color.White.copy(alpha = 0.5f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }

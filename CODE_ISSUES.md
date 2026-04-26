@@ -2,7 +2,7 @@
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
 **Zadnja posodobitev:** 2026-04-26  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Global Audit zaključen)**
 
 ---
 
@@ -68,6 +68,31 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-04-26 — Global Audit & bm_prefs SharedPrefs Purge
+
+**Ugotovitve in popravki (Global Audit pred iOS migracijo):**
+
+1. ✅ **Streak Reset Bug (KRITIČNO)**: `MainActivity.onFinish` je ob novem planu bral streak iz `bm_prefs` (= 0) in ga zapisal v Firestore → ponastavitev streaka. Zamenjano s partial Firestore merge (samo `plan_day=1`, `weekly_target`, `weekly_done=0`).
+
+2. ✅ **CelebrationScreen streak iz bm_prefs**: `WorkoutCelebrationScreen` je bral `streak_days` iz `bm_prefs` (vedno 0 ker bm_prefs ni več pisan). Zamenjano s parametrom `streakDays: Int` iz `vmUiState.streakDays`.
+
+3. ✅ **weekly_target/done iz bm_prefs**: `WorkoutSessionScreen` je bral oba iz bm_prefs. Zamenjano z `vm.ui.value.weeklyTarget` in `vm.ui.value.weeklyDone`.
+
+4. ✅ **Redundantni settingsRepo.updateWorkoutStats()**: `UpdateBodyMetricsUseCase` je pisal stari (pre-increment) `plan_day` v deprecated bm_prefs. Odstranjeno. `settingsRepo` izbrisan iz konstruktorja + factory.
+
+5. ✅ **GetBodyMetricsUseCase bm_prefs cache**: Deprecated `settingsRepo.updateWorkoutStats()` klic z epoch konverzijo — odstranjeno.
+
+**Streak Freeze logika (Faza 13.3) — VERIFICIRANA:**
+- `dayDiff > 1` + freeze > 0: streak ohranjen, freeze -= 1, `last_workout_epoch = todayEpoch` ✅
+- `dayDiff > 1` + freeze == 0: streak = 1 (reset) ✅
+- `dayDiff == 0`: streak ohranjen ✅, `dayDiff == 1`: streak++ ✅
+- Naslednji dan je `dayDiff = 1` → streak se pravilno podaljša ✅
+
+**Data Model iOS-ready:**
+- `UserProfile` — brez Android odvisnosti ✅
+- `BodyHomeUiState`, `WorkoutProgressResult`, `DailyTotals` — brez Android odvisnosti ✅
+- `UserPreferencesRepository` ima `Context` (TODO za KMP migration: `expect/actual`) — dokumentirano
 
 ### 2026-04-26 — Faza 13.2: Streak Engine & Plan Progression
 

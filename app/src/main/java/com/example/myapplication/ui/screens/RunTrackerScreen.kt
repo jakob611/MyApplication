@@ -280,7 +280,12 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                         enableMyLocation(); enableFollowLocation(); setDrawAccuracyEnabled(true)
                     }
                     overlays.add(overlay); myLocationOverlay = overlay
-                    controller.setCenter(GeoPoint(46.0569, 14.5058))
+
+                    // ✅ Faza 14: Obnovi zadnjo znano lokacijo — brez tresenja na SLO center
+                    val lastLat = prefs.getFloat("last_run_lat", 46.0569f).toDouble()
+                    val lastLng = prefs.getFloat("last_run_lng", 14.5058f).toDouble()
+                    controller.setCenter(GeoPoint(lastLat, lastLng))
+
                     overlay.runOnFirstFix { post { overlay.myLocation?.let { controller.animateTo(it) } } }
                     mapView = this
 
@@ -724,9 +729,18 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                             }
                                         }
                                     }
-                                    withContext(Dispatchers.Main) {
-                                        showSummary = false; onBack()
-                                    }
+                                     // ✅ Faza 14: Shrani zadnjo GPS lokacijo za hitri začetni center mape
+                                     val lastPt = finalLocationPoints.lastOrNull() ?: mappedLocationPoints.lastOrNull()
+                                     if (lastPt != null) {
+                                         prefs.edit()
+                                             .putFloat("last_run_lat", lastPt.latitude.toFloat())
+                                             .putFloat("last_run_lng", lastPt.longitude.toFloat())
+                                             .apply()
+                                     }
+
+                                     withContext(Dispatchers.Main) {
+                                         showSummary = false; onBack()
+                                     }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),

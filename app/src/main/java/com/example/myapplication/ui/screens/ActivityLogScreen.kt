@@ -756,6 +756,34 @@ internal fun GlobalActivityOsmMap(
                     mapv.overlays.add(midMarker)
                 }
             }
+
+            // ✅ Faza 14: Manuel Zoom Bounds — zoom na izbrani tek takoj brez "skakanja"
+            // Shranjujemo zadnji selectedRunId v mapView.tag, da ne zoom-amo vsakič pri recompositionu
+            val prevSelectedId = mapv.tag as? String
+            if (selectedRunId != null && selectedRunId != prevSelectedId) {
+                mapv.tag = selectedRunId
+                val selectedPoints = allRoutes[selectedRunId]
+                if (!selectedPoints.isNullOrEmpty()) {
+                    val bbox = org.osmdroid.util.BoundingBox.fromGeoPoints(
+                        selectedPoints.map { (lat, lng) -> org.osmdroid.util.GeoPoint(lat, lng) }
+                    )
+                    mapv.post {
+                        mapv.zoomToBoundingBox(bbox.increaseByScale(1.6f), true)
+                        if (mapv.zoomLevelDouble > 17.0) mapv.controller.setZoom(16.0)
+                    }
+                }
+            } else if (selectedRunId == null && prevSelectedId != null) {
+                // Deselect — zoom nazaj na vse teke
+                mapv.tag = null
+                if (allGeoPoints.isNotEmpty()) {
+                    val bbox = org.osmdroid.util.BoundingBox.fromGeoPoints(allGeoPoints)
+                    mapv.post {
+                        mapv.zoomToBoundingBox(bbox.increaseByScale(1.2f), true)
+                        if (mapv.zoomLevelDouble > 15.0) mapv.controller.setZoom(15.0)
+                    }
+                }
+            }
+
             mapv.invalidate()
         },
         modifier = modifier
