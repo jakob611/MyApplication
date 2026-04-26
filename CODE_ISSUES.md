@@ -69,6 +69,23 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-04-26 — Faza 13.2: Streak Engine & Plan Progression
+
+**Spremembe:**
+- `data/settings/UserProfileManager.kt`:
+  - Nova funkcija `updateUserProgressAfterWorkout(incrementPlanDay: Boolean)` — Firestore `runTransaction`
+  - Atomarno bere in zapiše `plan_day`, `streak_days`, `last_workout_epoch` v en klic
+  - Logika: +1 včeraj, reset=1 prekinitev, ohrani danes; epochDays format (skladen z GetBodyMetricsUseCase)
+- `domain/workout/UpdateBodyMetricsUseCase.kt`:
+  - Po `workoutRepo.saveWorkoutSession()` pokliče `updateUserProgressAfterWorkout(incrementPlanDay = !isExtra)`
+  - Extra workoutji → streak se posodobi, plan_day pa ne
+- `viewmodels/BodyModuleHomeViewModel.kt`:
+  - `CompleteWorkoutSession` success handler kliče `getBodyMetrics.invoke()` za svež Firestore fetch
+  - UI takoj prikaže posodobljeni streak/planDay brez čakanja na naslednjo navigacijo
+  - Fallback: optimistični +1 lokalno, če Firestore fetch ne uspe
+
+**Root cause:** Po zaključenem treningu se `streak_days` in `plan_day` v Firestore dokument `users/{uid}` **nikoli nista posodabljala**. `settingsRepo.updateWorkoutStats()` je pisal samo SharedPrefs (deprecated), ne Firestore. Transakcija zdaj atomarno popravi obe vrednosti.
+
 ### 2026-04-26 — Faza 13.1: UI Responsiveness & Persistence Fix
 
 **Spremembe:**
