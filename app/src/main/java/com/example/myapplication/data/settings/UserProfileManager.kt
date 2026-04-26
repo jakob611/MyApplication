@@ -7,6 +7,9 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 object UserProfileManager {
     private const val PREFS_NAME = "user_prefs"
@@ -414,6 +417,72 @@ object UserProfileManager {
             } catch (_: Exception) {}
         } catch (e: Exception) {
             Log.e("UserProfileManager", "❌ Error deleting user data", e)
+        }
+    }
+
+    /**
+     * Faza 13.2 — Streak Engine & Plan Progression
+     *
+     * Atomarna Firestore transakcija, ki posodobi streak_days, plan_day in last_workout_epoch
+     * po zaključenem treningu. Bere in zapiše v eni transakciji — brez race conditionov.
+     *
+     * Logika:
+     *  - plan_day: +1 samo za redne treninge (ne "extra")
+     *  - streak_days: +1 če zadnji trening VČERAJ, reset=1 če >1 dan, brez spremembe če DANES
+     *  - last_workout_epoch: posodobi na današnji epochDay (format = epochDays, ne ms!)
+     *
+     * @param incrementPlanDay false za "extra" treninge — streak se posodobi, plan_day pa ne
+     * @return Pair(newPlanDay, newStreakDays)
+     */
+    suspend fun updateUserProgressAfterWorkout(incrementPlanDay: Boolean = true): Pair<Int, Int> {
+        return try {
+            val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            val db  = com.example.myapplication.persistence.FirestoreHelper.getDb()
+
+            val todayEpoch = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .date.toEpochDays().toLong()
+
+            val result = db.runTransaction { tx ->
+                val doc = tx.get(ref)
+
+                val oldPlanDay   = (doc.getLong("plan_day")           ?: 1L).toInt()
+                val oldStreak    = (doc.getLong("streak_days")        ?: 0L).toInt()
+                val oldLastEpoch =  doc.getLong("last_workout_epoch") ?: 0L
+
+                // Plan Day: +1 samo za redne (ne extra) treninge
+                val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
+
+                // Streak: izračunaj na osnovi razlike epochDays
+                val dayDiff = todayEpoch - oldLastEpoch
+                val newStreak = when {
+                    oldLastEpoch == 0L -> 1              // prvi trening kdajkoli
+                    dayDiff == 0L      -> oldStreak      // danes že treniral — ohrani
+                    dayDiff == 1L      -> oldStreak + 1  // včeraj → podaljšaj
+                    else               -> 1              // prekinitev → ponastavi
+                }
+
+                tx.set(
+                    ref,
+                    mapOf(
+                        "plan_day"           to newPlanDay,
+                        "streak_days"        to newStreak,
+                        "last_workout_epoch" to todayEpoch
+                    ),
+                    SetOptions.merge()
+                )
+
+                Pair(newPlanDay, newStreak)
+            }.await()
+
+            Log.d("UserProfileManager",
+                "✅ Streak Engine: planDay=${result.first}, streak=${result.second} " +
+                "(incrementPlan=$incrementPlanDay, epochDay=$todayEpoch)")
+            result
+        } catch (e: Exception) {
+            Log.e("UserProfileManager",
+                "❌ updateUserProgressAfterWorkout failed: ${e.message}", e)
+            Pair(1, 0)
         }
     }
 

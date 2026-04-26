@@ -117,12 +117,37 @@ class BodyModuleHomeViewModel(
                     )
 
                     result.onSuccess { completionResult ->
-                        _ui.value = _ui.value.copy(
-                            isLoading = false,
-                            isWorkoutDoneToday = true,
-                            showCompletionAnimation = !intent.isExtraWorkout,
-                            dailyKcal = _ui.value.dailyKcal + intent.totalKcal
-                        )
+                        // Faza 13.2: osveži stats iz Firestorea prek LoadMetrics takoj po shranjevanju.
+                        // updateUserProgressAfterWorkout() je že zapisal nove vrednosti v transakciji,
+                        // zdaj samo preberemo in posodobimo UI state.
+                        if (intent.email.isNotBlank()) {
+                            try {
+                                getBodyMetrics.invoke(intent.email).collect { freshState ->
+                                    _ui.value = freshState.copy(
+                                        showCompletionAnimation = !intent.isExtraWorkout,
+                                        isWorkoutDoneToday = true,
+                                        isLoading = false
+                                    )
+                                }
+                            } catch (_: Exception) {
+                                // Fallback: optimistično posodobi lokalno
+                                _ui.value = _ui.value.copy(
+                                    isLoading = false,
+                                    isWorkoutDoneToday = true,
+                                    showCompletionAnimation = !intent.isExtraWorkout,
+                                    planDay = _ui.value.planDay + if (!intent.isExtraWorkout) 1 else 0,
+                                    streakDays = _ui.value.streakDays + 1,
+                                    dailyKcal = _ui.value.dailyKcal + intent.totalKcal
+                                )
+                            }
+                        } else {
+                            _ui.value = _ui.value.copy(
+                                isLoading = false,
+                                isWorkoutDoneToday = true,
+                                showCompletionAnimation = !intent.isExtraWorkout,
+                                dailyKcal = _ui.value.dailyKcal + intent.totalKcal
+                            )
+                        }
                         intent.onCompletion(completionResult)
                     }
                     result.onFailure { error ->

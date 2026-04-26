@@ -48,6 +48,14 @@ class UpdateBodyMetricsUseCase(
             // 3. Shranjevanje v bazo
             workoutRepo.saveWorkoutSession(email, workoutDoc)
 
+            // 3b. Faza 13.2: Streak Engine + Plan Progression (atomarna transakcija)
+            // Posodobi streak_days, plan_day in last_workout_epoch v users/{uid}
+            // isExtra workouts -> incrementPlanDay=false (streak se posodobi, plan_day pa ne)
+            val (newPlanDay, newStreak) = com.example.myapplication.data.settings.UserProfileManager
+                .updateUserProgressAfterWorkout(incrementPlanDay = !isExtra)
+            android.util.Log.d("UpdateBodyMetrics",
+                "📈 Streak Engine result: planDay=$newPlanDay, streak=$newStreak, isExtra=$isExtra")
+
             // 4. Posodobitev lokalnega stanja (Streaki in zadnji trening)
             if (!isExtra) {
                 settingsRepo.updateWorkoutStats(

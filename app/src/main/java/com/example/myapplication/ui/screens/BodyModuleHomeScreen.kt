@@ -66,6 +66,9 @@ fun BodyModuleHomeScreen(
     }
 
     // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
+    // Faza 13.2: LaunchedEffect(Unit) se požene ob vsaki re-kompoziciji zaslona (po navigaciji nazaj).
+    // updateUserProgressAfterWorkout() je v tem trenutku že zaključil Firestore transakcijo,
+    // zato bomo tu prebrali sveže vrednosti plan_day in streak_days.
     LaunchedEffect(Unit) {
         val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
         vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail))
