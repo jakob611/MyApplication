@@ -2,7 +2,7 @@
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
 **Zadnja posodobitev:** 2026-04-26  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 15 zaključena)**
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 16 zaključena)**
 
 ---
 
@@ -223,3 +223,23 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 - `domain/nutrition/NutritionCalculations.kt`: označena DEPRECATED (prazna datoteka, čaka na ročno brisanje)
 
 **Arhitekturna opomba:** `NutritionViewModel._baseTdee` zdaj preferira hibridni TDEE pred statičnim `BMR × 1.2`, kar odpravi odvisnost od fiksnega Mifflin-St Jeor množilnika po zadostnih realnih podatkih.
+
+### 2026-04-26 — Faza 15 Build Fix + Faza 16: Nutrition UX Recovery & E-Additives
+
+**Faza 15 Build Fix:**
+- ✅ **`RunTrackerScreen.kt` vrstica 710**: Zamenjaj `kotlinx.datetime.Clock.System.now().toLocalDateTime(...)` z `java.text.SimpleDateFormat("yyyy-MM-dd").format(Date())` — odpravlja `Unresolved reference 'toLocalDateTime'` compile error.
+
+**Faza 16.1 — Ghost Latency Fix:**
+1. ✅ **`NutritionViewModel`**: Dodan `_isNavigating: MutableStateFlow<Boolean>` + `setNavigating(value: Boolean)`. Takoj ob kliku na + v NutritionScreen se postavi na `true` → overlay se pojavi TAKOJ brez zakasnitve.
+2. ✅ **`NutritionScreen.kt`**: `isNavigating` collect, loading overlay razširjen na `isLoading || isNavigating`. Ko se ModalBottomSheet odpre, `setNavigating(false)` resetira overlay. Odstranjen `Log.d("DonutRing", "Clicked: ...")` debug log. Popravljen garbled komentar `?? KRITIďż˝NO`.
+3. ✅ **`AddFoodSheet.kt`**: `RecentFoodStore.getRecentFoods(context)` premaknen iz `LaunchedEffect(Unit)` v `withContext(Dispatchers.IO)` → ne blokira Main Threada pri odpiranju sheeta.
+
+**Faza 16.2 — Custom Meal Engine:**
+- Custom meal funkcionalnost je bila ŽE implementirana (Faza 13+): `MakeCustomMealsDialog`, `SavedMealChip`, `ChooseMealDialog`, `nutritionViewModel.customMealsState`, Firestore `custom_meals` kolekcija. Ni bila potrebna nova implementacija.
+
+**Faza 16.3 — E-Additives Module:**
+4. ✅ **`AppNavigation.kt`**: Dodan `object EAdditives : Screen()`.
+5. ✅ **`AddFoodSheet.kt` / `RecipesSearchSection`**: Dodan `onOpenAdditives: () -> Unit = {}` parameter. Dodan E-Additives gumb (Info ikona, secondary barva) poleg Scan Barcode gumba.
+6. ✅ **`NutritionScreen.kt`**: Dodan `onOpenAdditives: () -> Unit = {}` parameter, posredovan v `RecipesSearchSection`.
+7. ✅ **`MainActivity.kt`**: Dodan handler za `Screen.EAdditives` → kliče `EAdditivesScreen(onNavigateBack = { navigateBack() })`. Dodan `onOpenAdditives = { navigateTo(Screen.EAdditives) }` v `NutritionScreen` klic.
+- ✅ **`EAdditivesScreen.kt`** + **`assets/e_additives_database.json`**: Oba sta že obstajala — samo povezana z navigacijo.
