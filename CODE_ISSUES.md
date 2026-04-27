@@ -156,7 +156,7 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
   - `workoutVm.prepareWorkout()` nadomesti inline WorkoutGenerator klic v `LaunchedEffect`
   - `StateFlow.first { Ready || Error }` čaka na rezultat (suspending, ne blokira UI)
   - `ExerciseResult`: dodano `reps`, `sets`, `weightKg` za Volume Progression
-  - `exerciseResults` map: dodano `"reps"`, `"sets"`, `"weightKg"` — shranjeno v Firestore za naslednji fetch
+  - `exerciseResults` map: dodano `"reps"`, `"sets"`, `"weightKg"` — shraneno v Firestore za naslednji fetch
   - `"focusAreas"` shranjen v `workoutDoc` via `CompleteWorkoutSession` intent
   -  Progressive Overload UI badge (Banner "Danes močneje!") v Preview stanju
 - `viewmodels/BodyModuleHomeViewModel.kt`: `CompleteWorkoutSession` + `focusAreas: List<String>`
@@ -242,4 +242,22 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 5. ✅ **`AddFoodSheet.kt` / `RecipesSearchSection`**: Dodan `onOpenAdditives: () -> Unit = {}` parameter. Dodan E-Additives gumb (Info ikona, secondary barva) poleg Scan Barcode gumba.
 6. ✅ **`NutritionScreen.kt`**: Dodan `onOpenAdditives: () -> Unit = {}` parameter, posredovan v `RecipesSearchSection`.
 7. ✅ **`MainActivity.kt`**: Dodan handler za `Screen.EAdditives` → kliče `EAdditivesScreen(onNavigateBack = { navigateBack() })`. Dodan `onOpenAdditives = { navigateTo(Screen.EAdditives) }` v `NutritionScreen` klic.
-- ✅ **`EAdditivesScreen.kt`** + **`assets/e_additives_database.json`**: Oba sta že obstajala — samo povezana z navigacijo.
+
+### 2026-04-27 — Faza 17: Pre-iOS Audit Popravki (GPS Sync, Weight Destiny, Custom Meals, Encoding, Sync Indicator)
+
+**GPS Cloud Sync:**
+1. ✅ **`FirestoreWorkoutRepository.kt`**: `polylinePoints = emptyList()` zamenjano z dejanskim parsanjem Firestore array-a. GPS poti so zdaj dostopne na vseh napravah (ne samo lokalno).
+
+**Weight Destiny Formula Fix:**
+2. ✅ **`Progress.kt` — `computeWeightPrediction()`**: `avgDailyBalance` preračunan z `log.calories - hybridTDEE` (ne več `log.calories - burned`). `hybridTDEE` vključuje BMR + activity factor. Negativna vrednost = kalorični deficit → napoved hujšanja je zdaj pravilna.
+
+**Custom Meals Workflow Restrukturiranje:**
+3. ✅ **`NutritionDialogs.kt` — `MakeCustomMealsDialog`**: Wizard koraki prestrukturirani: **Korak 1 = Sestavine**, **Korak 2 = Ime obroka**, **Korak 3 = Destinacija**. Dodan gumb "Save Only" (samo shrani brez dodajanja) poleg "Save & Add".
+
+**Encoding / Lokalizacija Cleanup:**
+4. ✅ **`AddFoodSheet.kt`**: Garbled Quick Add gumbi popravljeni: `"Banana đźŤ"` → `"Banana 🍌"` itd. (UTF-8 encoding bug).
+5. ✅ **`ActivityLogScreen.kt`**: `"Hitrost (km/h) / Čas"` → `"Speed (km/h) / Time"`.
+6. ✅ **`Progress.kt` — `WeightDestinyCard`**: Vsi Sloveniani nizi prevedeni v angleščino.
+
+**Initial Sync Indicator:**
+7. ✅ **`MainActivity.kt`**: Dodan `var isSyncing by remember { mutableStateOf(false) }`. Ob zagonu (ko se nalaga profil iz Firestore) prikaže overlay `"Syncing your fitness data…"` z `CircularProgressIndicator`. Ob uspešnem nalaganju (`isSyncing = false`) se overlay skrije.
