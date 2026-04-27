@@ -261,3 +261,14 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 **Initial Sync Indicator:**
 7. ✅ **`MainActivity.kt`**: Dodan `var isSyncing by remember { mutableStateOf(false) }`. Ob zagonu (ko se nalaga profil iz Firestore) prikaže overlay `"Syncing your fitness data…"` z `CircularProgressIndicator`. Ob uspešnem nalaganju (`isSyncing = false`) se overlay skrije.
+
+### 2026-04-27 — Faza 18: Meal Builder UI Fix + InitialSyncManager
+
+**Meal Builder Dialog Fix (`NutritionDialogs.kt`):**
+8. ✅ `MakeCustomMealsDialog`: `AlertDialog` zdaj pogojno skrit z `if (!showFoodSearch)`. Ko je `ModalBottomSheet` odprt (iskanje sestavin), je `AlertDialog` v celoti iz composable drevesa — brez scrim konflikta, brez `onDismissRequest` uhajanja. Stanje (ingredients, name, step) ohranjen ker je deklarirano zunaj obeh composablov.
+
+**InitialSyncManager (`MainActivity.kt`):**
+9. ✅ Nov `syncStatusMessage: String` state zamenja hardcoded `"Syncing your fitness data…"` v overlayu.
+10. ✅ Detekcija nove naprave: `initial_sync_done_<uid>` v `sync_prefs` SharedPreferences. Ob prvi prijavi (ključ odsoten) se nastavi `syncStatusMessage = "Downloading your fitness profile (XP, Plans & Progress)…"`.
+11. ✅ Vzporedni `async` fetch-i za: `users/{uid}` (XP/level), `user_plans/{uid}` (plani), `weightLogs` (zadnjih 10). Vsi tečejo hkrati — čakamo z `.await()`. Po uspešnem prenosu: `"Profile Ready! ✓"` (1.5s) → overlay izgine.
+12. ✅ Po intenzivnem prenosu se nastavi `initial_sync_done_<uid> = true` → nadaljnji zagoni gredo skozi normalni (varčni) tok.

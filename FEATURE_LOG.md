@@ -190,7 +190,7 @@
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
 [   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
 [   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o do b l j e n i   t a k o  ,   d a  i z p u a
-a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
+a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
  [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
 n i m i   f o r m a t i ,   d a   n a t a n
 n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
@@ -335,3 +335,11 @@
 4. **Shrani/Obnovi Zadnjo Lokacijo (RunTrackerScreen.kt)**: Po zaključenem teku shrani zadnjo GPS točko v SharedPrefs (`last_run_lat`, `last_run_lng`). MapView se inicializira na shranjeni lokaciji namesto hardcoded Ljubljana — brez začetnega "skakanja".
 **Zakaj:** Zmanjšanje omrežnega prometa, hitrejši UI, celica podatkov varčevanje pri mobilnih napravah.
 **Tveganje:** 🟢 nizko (canvas preview je backward compatible, cache je additive, zoom guard je idempotenten)
+
+## 2026-04-27 — Fix: Meal Builder UI Bug + InitialSyncManager (Nova naprava)
+**Datoteke:** `ui/screens/NutritionDialogs.kt`, `MainActivity.kt`
+**Kaj:**
+1. `MakeCustomMealsDialog`: `AlertDialog` se pogojno skrije (`if (!showFoodSearch)`) ko je `AddFoodSheet` odprt. `ModalBottomSheet` je edini aktivni composable — ni več prekrivanja scrimov. Klik na sestavino ne sproži več `onDismiss` staršev dialog.
+2. `InitialSyncManager`: Ob prvi prijavi na novi napravi (ključ `initial_sync_done_<uid>` ni v SharedPrefs) se z `async/await` vzporedno fetchajo: profil (XP/level), plani (`user_plans/{uid}`), teže (`weightLogs` zadnjih 10). Overlay prikazuje `"Downloading your fitness profile (XP, Plans & Progress)…"`. Po uspešnem prenosu prikaže `"Profile Ready! ✓"` (1.5s), nato se skrije. Normalni zagoni ostanejo nespremenjenj.
+**Zakaj:** Prekrivanje dialogov je povzročalo nehoteno zapiranje Custom Meal procesa. Nov sync manager odpravi zamude pri XP/Plans/BodyModule ob zagonu na novi napravi.
+**Tveganje:** 🟢 nizko (dialog fix je pogojno renderiranje brez spremembe logike; sync je additive, enkraten, z graceful fallback)
