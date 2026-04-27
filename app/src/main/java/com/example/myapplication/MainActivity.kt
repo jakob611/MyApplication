@@ -243,11 +243,14 @@ class MainActivity : ComponentActivity() {
             }
 
             // ----- Auth check ob zagonu -----
+            var isSyncing by remember { mutableStateOf(false) }
+
             LaunchedEffect(Unit) {
                 val user = Firebase.auth.currentUser
                 if (user != null && (user.isEmailVerified || user.providerData.any { it.providerId == "google.com" })) {
                     isLoggedIn = true
                     userEmail = user.email ?: ""
+                    isSyncing = true // show "Syncing your fitness data…" overlay
 
                     appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                     isDarkMode = UserProfileManager.isDarkMode(userEmail)
@@ -283,9 +286,16 @@ class MainActivity : ComponentActivity() {
                                     context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
                                         .edit().putInt("weekly_target", actParsed).apply()
                                 }
-                                withContext(Dispatchers.Main) { appViewModel.handleIntent(AppIntent.SetProfile(remote)) }
+                                withContext(Dispatchers.Main) {
+                                    appViewModel.handleIntent(AppIntent.SetProfile(remote))
+                                    isSyncing = false // ← data loaded, hide overlay
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) { isSyncing = false }
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            withContext(Dispatchers.Main) { isSyncing = false }
+                        }
                     }
                     scope.launch(Dispatchers.IO) {
                         delay(1500)
@@ -506,8 +516,6 @@ class MainActivity : ComponentActivity() {
                             Box(modifier = Modifier.fillMaxSize().then(if (shouldApplyPadding) Modifier.padding(innerPadding) else Modifier)) {
                                 // ============================================================
                                 // SCREEN ROUTING — vsak zaslon ima svojo vrstico
-                                // Za dodajanje novega zaslona: dodaj Screen objekt v AppNavigation.kt
-                                // in dodaj when blok tukaj.
                                 // ============================================================
                                 when {
                                     currentScreen is Screen.LoadingWorkout -> LoadingWorkoutScreen(
@@ -843,9 +851,29 @@ class MainActivity : ComponentActivity() {
                                         profileData?.let { PublicProfileScreen(profile = it, onBack = { navigateBack() }) }
                                             ?: Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                                     }
-                                    currentScreen is Screen.HealthConnect -> HealthConnectScreen(
+                                     currentScreen is Screen.HealthConnect -> HealthConnectScreen(
                                         onBack = { navigateBack() }
                                     )
+                                }
+
+                                // ── Initial Sync Overlay ─��────────────────────────────────────
+                                if (isSyncing) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.80f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                            Spacer(Modifier.height(16.dp))
+                                            Text(
+                                                "Syncing your fitness data…",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onBackground
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

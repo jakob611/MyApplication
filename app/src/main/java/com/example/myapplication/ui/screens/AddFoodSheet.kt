@@ -187,7 +187,7 @@ internal fun AddFoodSheet(    meal: MealType,
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Banana đźŤ", "Apple đźŤŽ", "Egg đźĄš").forEach { food ->
+                    listOf("Banana 🍌", "Apple 🍎", "Egg 🥚").forEach { food ->
                         OutlinedButton(
                             onClick = {
                                 query = food.split(" ")[0]

@@ -61,7 +61,22 @@ class FirestoreWorkoutRepository : WorkoutRepository {
                         distanceMeters = (data["distanceMeters"] as? Number)?.toDouble() ?: 0.0,
                         maxSpeedMps = (data["maxSpeedMps"] as? Number)?.toFloat() ?: 0.0f,
                         avgSpeedMps = (data["avgSpeedMps"] as? Number)?.toFloat() ?: 0.0f,
-                        polylinePoints = emptyList(), // Not returning full polyline array to save space
+                        polylinePoints = try {
+                            @Suppress("UNCHECKED_CAST")
+                            val rawPts = data["polylinePoints"] as? List<Map<String, Any>>
+                            rawPts?.mapNotNull { pt ->
+                                try {
+                                    com.example.myapplication.data.LocationPoint(
+                                        latitude  = (pt["latitude"]  as? Number)?.toDouble() ?: return@mapNotNull null,
+                                        longitude = (pt["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null,
+                                        altitude  = (pt["altitude"]  as? Number)?.toDouble() ?: 0.0,
+                                        speed     = (pt["speed"]     as? Number)?.toFloat()  ?: 0f,
+                                        accuracy  = (pt["accuracy"]  as? Number)?.toFloat()  ?: 0f,
+                                        timestamp = (pt["timestamp"] as? Number)?.toLong()   ?: 0L
+                                    )
+                                } catch (e: Exception) { null }
+                            } ?: emptyList()
+                        } catch (e: Exception) { emptyList() },
                         createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
                         caloriesKcal = (data["caloriesKcal"] as? Number)?.toInt() ?: 0,
                         elevationGainM = (data["elevationGainM"] as? Number)?.toFloat() ?: 0f,

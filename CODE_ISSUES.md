@@ -35,7 +35,7 @@
 ## Trenutno Odprte Težave (Backlog)
 - [N/A] `ActivityLogScreen.kt` nima mehanizma za load-more paginacijo pri velikem številu map markers.
 
-### 🔴 NUJNI POPRAVKI (pred UI/UX prenovo) — Audit 2026-04-25
+###  NUJNI POPRAVKI (pred UI/UX prenovo) — Audit 2026-04-25
 
 #### Dead Code — treba ročno zbrisati (AI ne more brisati datotek):
 | Datoteka | Razlog brisanja |
@@ -158,7 +158,7 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
   - `ExerciseResult`: dodano `reps`, `sets`, `weightKg` za Volume Progression
   - `exerciseResults` map: dodano `"reps"`, `"sets"`, `"weightKg"` — shranjeno v Firestore za naslednji fetch
   - `"focusAreas"` shranjen v `workoutDoc` via `CompleteWorkoutSession` intent
-  - 🔥 Progressive Overload UI badge (Banner "Danes močneje!") v Preview stanju
+  -  Progressive Overload UI badge (Banner "Danes močneje!") v Preview stanju
 - `viewmodels/BodyModuleHomeViewModel.kt`: `CompleteWorkoutSession` + `focusAreas: List<String>`
 - `domain/workout/UpdateBodyMetricsUseCase.kt`: `focusAreas` parameter → `workoutDoc["focusAreas"]`
 

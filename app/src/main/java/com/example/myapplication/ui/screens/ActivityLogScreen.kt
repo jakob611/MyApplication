@@ -419,8 +419,8 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                                         Pair(pair.first, avgSpd)
                                     }
 
-                                    if (speedData.size > 2 && run.activityType.showSpeed) {
-                                        SimpleLineChart(data = speedData, lineColor = color, label = "Hitrost (km/h) / Čas")
+                                     if (speedData.size > 2 && run.activityType.showSpeed) {
+                                        SimpleLineChart(data = speedData, lineColor = color, label = "Speed (km/h) / Time")
                                         Spacer(Modifier.height(16.dp))
                                     }
                                 }

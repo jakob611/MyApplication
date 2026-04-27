@@ -1156,9 +1156,18 @@ private fun computeWeightPrediction(
 
     if (activeDaysWithData.isEmpty()) return null
 
+    // ── Effective TDEE: hybridTDEE (from previous run) or theoretical fallback ──
+    // Formula: balance = calories_consumed − TDEE  (negative = deficit → weight loss)
+    val theoreticalTDEEEarly = (com.example.myapplication.debug.NutritionDebugStore.lastBmr * 1.2).toInt()
+    val prevHybridTDEE = com.example.myapplication.debug.WeightPredictorStore.lastHybridTDEE
+    val effectiveTDEE: Double = when {
+        prevHybridTDEE > 800 -> prevHybridTDEE.toDouble()
+        theoreticalTDEEEarly > 800 -> theoreticalTDEEEarly.toDouble()
+        else -> 2000.0 // safe default if no profile data yet
+    }
+
     val avgDailyBalance = activeDaysWithData.map { log ->
-        val burned = burnedMap[log.date] ?: 0.0
-        log.calories - burned
+        log.calories - effectiveTDEE
     }.average()
 
     // ── Napoved za 30 dni: 7700 kcal ≈ 1 kg ─────────────────────────────
@@ -1194,7 +1203,7 @@ private fun computeWeightPrediction(
     else
         emaWeightKg
     // Teoretični TDEE = BMR × 1.2 iz zadnjega nalaganja profila (NutritionDebugStore)
-    val theoreticalTDEE = (com.example.myapplication.debug.NutritionDebugStore.lastBmr * 1.2).toInt()
+    val theoreticalTDEE = theoreticalTDEEEarly // reuse already-computed value
     val tdeeResult = calculateAdaptiveTDEE(
         last7DaysCalories = activeDaysWithData.map { it.calories.toInt() },
         emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg,
@@ -1253,20 +1262,20 @@ private fun WeightDestinyCard(
         else          -> Color(0xFF6B7280)
     }
 
-    // Dinamično sporočilo glede na C in trend
+    // Dynamic message based on C (confidence) and trend
     val (msgEmoji, msgText) = when {
         confidence < 0.5 ->
-            "🧪" to "Spoznavam tvoj metabolizem… (${prediction.activeDaysInLastWeek}/7 dni podatkov)"
+            "🧪" to "Learning your metabolism… (${prediction.activeDaysInLastWeek}/7 days of data)"
         balance < -50 && prediction.goalDateStr != null ->
-            "🎯" to "Na dobri poti si! Predviden cilj: ${prediction.goalDateStr}"
+            "🎯" to "Great progress! Predicted goal date: ${prediction.goalDateStr}"
         balance < -50 ->
-            "✅" to "Na dobri poti si! Ohranjaj ta tempo."
+            "✅" to "You're on track! Keep up this pace."
         balance > 50 && prediction.goalDateStr != null ->
-            "📈" to "Pridobivate maso. Predviden cilj: ${prediction.goalDateStr}"
+            "📈" to "Gaining mass. Predicted goal date: ${prediction.goalDateStr}"
         balance > 50 ->
-            "📈" to "Pridobivate telesno maso. Prilagodite prehrano za cilj."
+            "📈" to "You are gaining body mass. Adjust nutrition to match your goal."
         else ->
-            "⚖️" to "Si v energijskem ravnovesju. Ohranjaj ta tempo!"
+            "⚖️" to "You are in energy balance. Keep it up!"
     }
 
     // What-if stanje

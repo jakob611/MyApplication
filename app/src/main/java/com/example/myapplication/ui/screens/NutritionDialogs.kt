@@ -415,7 +415,7 @@ internal fun MakeCustomMealsDialog(
     onSaved: (SavedCustomMeal, MealType) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var step by remember { mutableStateOf(1) } // 1: Choose Meal, 2: Ingredients, 3: Name & Confirm
+    var step by remember { mutableStateOf(1) } // 1: Ingredients, 2: Name, 3: Destination
     var selectedMeal by remember { mutableStateOf(MealType.Lunch) }
     var name by remember { mutableStateOf("") }
     var ingredients by remember { mutableStateOf<List<TrackedFood>>(emptyList()) }
@@ -432,9 +432,9 @@ internal fun MakeCustomMealsDialog(
         title = {
             Text(
                 when (step) {
-                    1 -> "Step 1: Choose Meal Type"
-                    2 -> "Step 2: Add Ingredients"
-                    else -> "Step 3: Save Custom Meal"
+                    1 -> "Step 1: Add Ingredients"
+                    2 -> "Step 2: Name Your Meal"
+                    else -> "Step 3: Where to Add?"
                 }
             )
         },
@@ -443,24 +443,7 @@ internal fun MakeCustomMealsDialog(
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()).fillMaxWidth()) {
                     when (targetStep) {
                         1 -> {
-                            Text("Which meal are you creating this for?", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.height(16.dp))
-                            MealType.entries.forEach { mt ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { selectedMeal = mt }
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(selected = selectedMeal == mt, onClick = { selectedMeal = mt })
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(mt.title, style = MaterialTheme.typography.bodyLarge)
-                                }
-                            }
-                        }
-                        2 -> {
-                            Text("Selected: ${selectedMeal.title}", fontWeight = FontWeight.Bold)
+                            Text("Search and add ingredients to your custom meal.", style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(16.dp))
                             ingredients.forEach { item ->
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -479,16 +462,36 @@ internal fun MakeCustomMealsDialog(
                                 Text("Protein: ${totalProtein.roundToInt()}g, Carbs: ${totalCarbs.roundToInt()}g, Fat: ${totalFat.roundToInt()}g", style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        3 -> {
-                            Text("Give your meal a name to save it for later.", style = MaterialTheme.typography.bodyMedium)
+                        2 -> {
+                            Text("Give your meal a name so you can reuse it with one tap.", style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(16.dp))
                             OutlinedTextField(
                                 value = name, onValueChange = { name = it },
-                                label = { Text("Meal Name") }, modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Meal Name (e.g. Morning Oats)") }, modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                             Spacer(Modifier.height(16.dp))
                             Text("Summary: ${ingredients.size} items, ${totalKcal.roundToInt()} kcal", style = MaterialTheme.typography.bodyMedium)
+                            Text("Protein: ${totalProtein.roundToInt()}g | Carbs: ${totalCarbs.roundToInt()}g | Fat: ${totalFat.roundToInt()}g", style = MaterialTheme.typography.bodySmall)
+                        }
+                        3 -> {
+                            Text("Where would you like to add \"${name}\" right now?", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(16.dp))
+                            MealType.entries.forEach { mt ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedMeal = mt }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(selected = selectedMeal == mt, onClick = { selectedMeal = mt })
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(mt.title, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text("Or tap \"Save Only\" to save without adding to today's log.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -496,49 +499,73 @@ internal fun MakeCustomMealsDialog(
         },
         confirmButton = {
             when (step) {
-                1 -> Button(onClick = { step = 2 }) { Text("Next") }
-                2 -> Button(onClick = { step = 3 }, enabled = ingredients.isNotEmpty()) { Text("Next") }
+                1 -> Button(onClick = { step = 2 }, enabled = ingredients.isNotEmpty()) { Text("Next") }
+                2 -> Button(onClick = { step = 3 }, enabled = name.isNotBlank()) { Text("Next") }
                 3 -> {
-                    Button(
-                        onClick = {
-                            if (isSaving) return@Button
-                            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
-                            if (uid != null) {
-                                isSaving = true
-                                val itemsList = ingredients.map { tf ->
-                                    mapOf(
-                                        "id" to tf.id, "name" to tf.name,
-                                        "amt" to tf.amount.toString(), "unit" to tf.unit,
-                                        "caloriesKcal" to tf.caloriesKcal,
-                                        "proteinG" to (tf.proteinG ?: 0.0), "carbsG" to (tf.carbsG ?: 0.0),
-                                        "fatG" to (tf.fatG ?: 0.0), "fiberG" to (tf.fiberG ?: 0.0),
-                                        "sugarG" to (tf.sugarG ?: 0.0), "saturatedFatG" to (tf.saturatedFatG ?: 0.0),
-                                        "sodiumMg" to (tf.sodiumMg ?: 0.0), "potassiumMg" to (tf.potassiumMg ?: 0.0),
-                                        "cholesterolMg" to (tf.cholesterolMg ?: 0.0)
-                                    )
-                                }
-                                val mealData = mapOf(
-                                    "name" to name,
-                                    "items" to itemsList,
-                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )
-                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                    try {
-                                        val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
-                                        onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal)
-                                        isSaving = false
-                                    } catch (e: Exception) {
-                                        isSaving = false
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Save only — don't add to today
+                        OutlinedButton(
+                            onClick = {
+                                if (isSaving) return@OutlinedButton
+                                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                if (uid != null) {
+                                    isSaving = true
+                                    val itemsList = ingredients.map { tf ->
+                                        mapOf(
+                                            "id" to tf.id, "name" to tf.name,
+                                            "amt" to tf.amount.toString(), "unit" to tf.unit,
+                                            "caloriesKcal" to tf.caloriesKcal,
+                                            "proteinG" to (tf.proteinG ?: 0.0), "carbsG" to (tf.carbsG ?: 0.0),
+                                            "fatG" to (tf.fatG ?: 0.0), "fiberG" to (tf.fiberG ?: 0.0),
+                                            "sugarG" to (tf.sugarG ?: 0.0), "saturatedFatG" to (tf.saturatedFatG ?: 0.0),
+                                            "sodiumMg" to (tf.sodiumMg ?: 0.0), "potassiumMg" to (tf.potassiumMg ?: 0.0),
+                                            "cholesterolMg" to (tf.cholesterolMg ?: 0.0)
+                                        )
+                                    }
+                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        try {
+                                            val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                            // Save only — pass MealType.Breakfast as placeholder; NutritionScreen checks askWhereToAdd
+                                            onSaved(SavedCustomMeal(newId, name, itemsList), MealType.Breakfast)
+                                            isSaving = false
+                                        } catch (e: Exception) { isSaving = false }
                                     }
                                 }
-                            }
-                        },
-                        enabled = name.isNotBlank() && !isSaving
-                    ) { 
-                        if (isSaving) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Text("Save & Add") 
+                            },
+                            enabled = !isSaving
+                        ) { Text("Save Only") }
+                        // Save & add now
+                        Button(
+                            onClick = {
+                                if (isSaving) return@Button
+                                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                if (uid != null) {
+                                    isSaving = true
+                                    val itemsList = ingredients.map { tf ->
+                                        mapOf(
+                                            "id" to tf.id, "name" to tf.name,
+                                            "amt" to tf.amount.toString(), "unit" to tf.unit,
+                                            "caloriesKcal" to tf.caloriesKcal,
+                                            "proteinG" to (tf.proteinG ?: 0.0), "carbsG" to (tf.carbsG ?: 0.0),
+                                            "fatG" to (tf.fatG ?: 0.0), "fiberG" to (tf.fiberG ?: 0.0),
+                                            "sugarG" to (tf.sugarG ?: 0.0), "saturatedFatG" to (tf.saturatedFatG ?: 0.0),
+                                            "sodiumMg" to (tf.sodiumMg ?: 0.0), "potassiumMg" to (tf.potassiumMg ?: 0.0),
+                                            "cholesterolMg" to (tf.cholesterolMg ?: 0.0)
+                                        )
+                                    }
+                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        try {
+                                            val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                            onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal)
+                                            isSaving = false
+                                        } catch (e: Exception) { isSaving = false }
+                                    }
+                                }
+                            },
+                            enabled = !isSaving
+                        ) {
+                            if (isSaving) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                            else Text("Save & Add")
                         }
                     }
                 }
@@ -559,7 +586,7 @@ internal fun MakeCustomMealsDialog(
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             AddFoodSheet(
-                meal = selectedMeal,
+                meal = MealType.Lunch, // placeholder — ingredient is not bound to a meal
                 titleOverride = "Add Ingredient",
                 onClose = { showFoodSearch = false },
                 onAddTracked = { tf -> 
