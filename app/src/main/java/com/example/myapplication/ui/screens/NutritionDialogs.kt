@@ -427,6 +427,9 @@ internal fun MakeCustomMealsDialog(
     val totalCarbs = ingredients.sumOf { it.carbsG ?: 0.0 }
     val totalFat = ingredients.sumOf { it.fatG ?: 0.0 }
 
+    // ── Ko je showFoodSearch=true, AlertDialog postane neviden (ne lovi klikov s scrimom).
+    // Stanje (ingredients, name, step) se ohrani, ker je deklarirano zunaj obeh composablov.
+    if (!showFoodSearch) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -579,6 +582,7 @@ internal fun MakeCustomMealsDialog(
             }
         }
     )
+    } // end if (!showFoodSearch) — AlertDialog skrit med iskanjem sestavin
 
     if (showFoodSearch) {
         ModalBottomSheet(

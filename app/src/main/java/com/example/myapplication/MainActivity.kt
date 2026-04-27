@@ -48,6 +48,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -244,6 +245,8 @@ class MainActivity : ComponentActivity() {
 
             // ----- Auth check ob zagonu -----
             var isSyncing by remember { mutableStateOf(false) }
+            // Besedilo prikazano v sync overlayu — dinamično glede na tip sinhronizacije
+            var syncStatusMessage by remember { mutableStateOf("Syncing your fitness data…") }
 
             LaunchedEffect(Unit) {
                 val user = Firebase.auth.currentUser
@@ -251,6 +254,17 @@ class MainActivity : ComponentActivity() {
                     isLoggedIn = true
                     userEmail = user.email ?: ""
                     isSyncing = true // show "Syncing your fitness data…" overlay
+
+                    // ── InitialSyncManager: Detekcija nove naprave ──────────────────────────
+                    // Preveri, ali je to prva prijava na tej napravi (prazni cache-i).
+                    val initialSyncUid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                    val syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                    val needsInitialSync = initialSyncUid != null &&
+                        !syncPrefs.getBoolean("initial_sync_done_$initialSyncUid", false)
+                    if (needsInitialSync) {
+                        syncStatusMessage = "Downloading your fitness profile (XP, Plans & Progress)…"
+                    }
+                    // ────────────────────────────────────────────────────────────────────────
 
                     appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                     isDarkMode = UserProfileManager.isDarkMode(userEmail)
@@ -278,20 +292,70 @@ class MainActivity : ComponentActivity() {
                     delay(250)
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
-                            if (remote != null) {
-                                UserProfileManager.saveProfile(remote)
-                                val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
-                                if (actParsed != null && actParsed > 0) {
-                                    context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                        .edit().putInt("weekly_target", actParsed).apply()
+                            if (needsInitialSync && initialSyncUid != null) {
+                                // ── InitialSyncManager: enkraten intenziven prenos ob novi napravi ──
+                                // Paralelno fetchamo: profil (XP/level), plane, zadnje teže
+                                val db = com.example.myapplication.persistence.FirestoreHelper.getDb()
+                                val userRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+
+                                val profileDeferred = async {
+                                    try { UserProfileManager.loadProfileFromFirestore(userEmail) }
+                                    catch (_: Exception) { null }
                                 }
+                                val plansDeferred = async {
+                                    try { db.collection("user_plans").document(initialSyncUid).get().await() }
+                                    catch (_: Exception) { null }
+                                }
+                                val weightDeferred = async {
+                                    try {
+                                        userRef?.collection("weightLogs")
+                                            ?.orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                                            ?.limit(10)?.get()?.await()
+                                    } catch (_: Exception) { null }
+                                }
+
+                                // Čakamo, da se VSI trije fetch-i zaključijo
+                                val remote = profileDeferred.await()
+                                plansDeferred.await()   // segreje Firestore cache za plane
+                                weightDeferred.await()  // segreje Firestore cache za teže
+
+                                if (remote != null) {
+                                    UserProfileManager.saveProfile(remote)
+                                    val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
+                                    if (actParsed != null && actParsed > 0) {
+                                        context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                            .edit().putInt("weekly_target", actParsed).apply()
+                                    }
+                                }
+
+                                // Označi, da je intenzivna sinhronizacija opravljena (samo enkrat)
+                                syncPrefs.edit().putBoolean("initial_sync_done_$initialSyncUid", true).apply()
+                                Log.i("MainActivity", "✅ InitialSync končan za uid=$initialSyncUid")
+
                                 withContext(Dispatchers.Main) {
-                                    appViewModel.handleIntent(AppIntent.SetProfile(remote))
-                                    isSyncing = false // ← data loaded, hide overlay
+                                    if (remote != null) appViewModel.handleIntent(AppIntent.SetProfile(remote))
+                                    bodyOverviewViewModel.refreshPlans() // aktivira plans flow s svežimi podatki
+                                    syncStatusMessage = "Profile Ready! ✓"
+                                    delay(1500)
+                                    isSyncing = false
                                 }
                             } else {
-                                withContext(Dispatchers.Main) { isSyncing = false }
+                                // ── Normalni zagon: samo profil (Firestore cache že topel) ──
+                                val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
+                                if (remote != null) {
+                                    UserProfileManager.saveProfile(remote)
+                                    val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
+                                    if (actParsed != null && actParsed > 0) {
+                                        context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                            .edit().putInt("weekly_target", actParsed).apply()
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        appViewModel.handleIntent(AppIntent.SetProfile(remote))
+                                        isSyncing = false // ← data loaded, hide overlay
+                                    }
+                                } else {
+                                    withContext(Dispatchers.Main) { isSyncing = false }
+                                }
                             }
                         } catch (_: Exception) {
                             withContext(Dispatchers.Main) { isSyncing = false }
@@ -868,7 +932,7 @@ class MainActivity : ComponentActivity() {
                                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                                             Spacer(Modifier.height(16.dp))
                                             Text(
-                                                "Syncing your fitness data…",
+                                                syncStatusMessage,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onBackground
                                             )
