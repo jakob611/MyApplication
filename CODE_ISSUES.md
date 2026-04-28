@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-04-26  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 16 zaključena)**
+**Zadnja posodobitev:** 2026-04-28  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 19 zaključena)**
 
 ---
 
@@ -255,12 +255,35 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 3. ✅ **`NutritionDialogs.kt` — `MakeCustomMealsDialog`**: Wizard koraki prestrukturirani: **Korak 1 = Sestavine**, **Korak 2 = Ime obroka**, **Korak 3 = Destinacija**. Dodan gumb "Save Only" (samo shrani brez dodajanja) poleg "Save & Add".
 
 **Encoding / Lokalizacija Cleanup:**
-4. ✅ **`AddFoodSheet.kt`**: Garbled Quick Add gumbi popravljeni: `"Banana đźŤ"` → `"Banana 🍌"` itd. (UTF-8 encoding bug).
+4. ✅ **`AddFoodSheet.kt`**: Garbled Quick Add gumbi popravljeni: `"Banana đźŤ"` → `"Banana "` itd. (UTF-8 encoding bug).
 5. ✅ **`ActivityLogScreen.kt`**: `"Hitrost (km/h) / Čas"` → `"Speed (km/h) / Time"`.
 6. ✅ **`Progress.kt` — `WeightDestinyCard`**: Vsi Sloveniani nizi prevedeni v angleščino.
 
 **Initial Sync Indicator:**
 7. ✅ **`MainActivity.kt`**: Dodan `var isSyncing by remember { mutableStateOf(false) }`. Ob zagonu (ko se nalaga profil iz Firestore) prikaže overlay `"Syncing your fitness data…"` z `CircularProgressIndicator`. Ob uspešnem nalaganju (`isSyncing = false`) se overlay skrije.
+
+### 2026-04-28 — Faza 19: Custom Meal Flow, Global Sync v AppViewModel, GPS Subcollection
+
+**1. Custom Meal Flow Fix (`NutritionDialogs.kt` — `MakeCustomMealsDialog`):**
+- ✅ **"Save Only" prestavljen na Korak 2** (Name step): Gumb takoj shrani obrok v `custom_meals` Firestore kolekcijo in pokliče `onDismiss()`. Brez navigacije na Korak 3.
+- ✅ **"Save & Add" na Koraku 2** → navigira na Korak 3 (izbira destinacije).
+- ✅ **Korak 3** zdaj vsebuje samo "Save & Add" gumb (brez redundantnega "Save Only").
+- **Root cause**: Prej je bil "Save Only" na Koraku 3 — kar je zahtevalo, da uporabnik prejde skozi Korak 3 za "samo shranjevanje", kar je bilo nesmiselno.
+
+**2. Global Sync Logic → AppViewModel (`AppViewModel.kt`, `MainActivity.kt`):**
+- ✅ **`AppViewModel.startInitialSync(context, email)`**: Nova suspending funkcija, ki vsebuje logiko `InitialSyncManager` (preseljenooiz `MainActivity` `LaunchedEffect`).
+- ✅ **`_isProfileReady: MutableStateFlow<Boolean>`** (default `false`) + **`_syncStatusMessage`**: Overlay se vrti čez cel zaslon dokler `isProfileReady != true`.
+- ✅ **`resetSyncState()`**: Pokliče se ob odjavi → naslednji login prikaže svež sync.
+- ✅ **MainActivity**: Zamenjani lokalni `var isSyncing` / `var syncStatusMessage` z `appViewModel.isProfileReady.collectAsState()` / `appViewModel.syncStatusMessage.collectAsState()`. Overlay pogoj spremenjen iz `isSyncing` v `!isProfileReady`.
+- **Root cause**: Sync logika je bila vgrajena neposredno v `LaunchedEffect(Unit)` v Composable → ni preživela configuration change (rotacija zaslona). ViewModel sync preživi.
+
+**3. GPS Firestore Data Link (`FirestoreWorkoutRepository.kt`):**
+- ✅ **`loadGpsPoints(sessionRef, inlinePoints)`**: Nova zasebna funkcija, ki poskusi (v vrstnem redu): `gps_points` subcollection → `points` subcollection (GPS_POINTS_MIGRATION_PLAN format) → inline `polylinePoints` (stari format, backwards compat).
+- ✅ **Vsi teki/kolesarjenja/hoja** (`CYCLING`, `WALKING`, `RUNNING`) in vsi dokumenti brez inline točk (`inlinePoints.isEmpty()`) avtomatično pridobijo GPS točke iz sub-kolekcije.
+- **Root cause**: Drugi telefon je videl trening metadata, ne pa GPS točk — ker jih ni bilo v glavnem dokumentu in ni bilo fallback branja sub-kolekcije.
+
+**4. Algorithm Audit:**
+- ✅ Ustvarjena `GLOW_UPP_LOGIC_AUDIT.md` z Markdown tabelami za Streak Logic, XP Calculation, PlanPath in Workout/Rest Days.
 
 ### 2026-04-27 — Faza 18: Meal Builder UI Fix + InitialSyncManager
 

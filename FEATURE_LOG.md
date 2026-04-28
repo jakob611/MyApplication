@@ -9,7 +9,7 @@
 **Datoteke:** seznam.kt, datoteke.kt
 **Kaj:** Kaj točno je bilo sprememnjeno (1-3 stavki)
 **Zakaj:** Zakaj je bila sprememba potrebna
-**Tveganje:** 🟢 nizko / 🟡 srednje / 🔴 visoko
+**Tveganje:**  nizko /  srednje /  visoko
 ```
 
 ---
@@ -20,49 +20,49 @@
 **Datoteke:** `data/AlgorithmData.kt`, `data/PlanModels.kt`, `domain/WorkoutPlanGenerator.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `ui/screens/PlanPathVisualizer.kt`, `ui/screens/PlanPathDialog.kt`, `ui/screens/KnowledgeHubScreen.kt`
 **Kaj:** Data modeli premaknjeni iz `ui/screens/` v `data/`. Algoritem za generiranje plana v `domain/`. ViewModel izluščen iz BodyModuleHomeScreen.
 **Zakaj:** Datoteke >600 vrstic povzročajo da AI pozabi kontekst. Premik vzpostavlja čisto arhitekturo.
-**Tveganje:** 🟡 srednje
+**Tveganje:**  srednje
 
 ## 2026-03-10 — Refactoring: poenotitev Firestore routing skozi FirestoreHelper
 **Datoteke:** `data/UserPreferences.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/WorkoutSessionScreen.kt`, `viewmodels/BodyModuleHomeViewModel.kt`
 **Kaj:** Vsi Firestore zapisi na profil uporabnika gredo zdaj skozi `FirestoreHelper.getCurrentUserDocRef()`. `addXPWithCallback()` označena `@Deprecated`.
 **Zakaj:** Direktni klici `collection("users").document(email/uid)` so pisali na napačen dokument za starejše uporabnike (pred migracijo UID→email).
-**Tveganje:** 🔴 visoko (podatki bi se shranjevali na napašen dokument)
+**Tveganje:**  visoko (podatki bi se shranjevali na napašen dokument)
 
 ## 2026-03-10 — Fix: dvojni badge check v recordWorkoutCompletion
 **Datoteke:** `persistence/AchievementStore.kt`
 **Kaj:** `recordWorkoutCompletion` je klical `checkAndUnlockBadges` dvakrat — enkrat znotraj `awardXP`, enkrat direktno. Popravljeno na enkratni klic.
 **Zakaj:** Podvojen klic je povzročal dvojno XP podeljevanje za badge in dvojni Firestore write.
-**Tveganje:** 🔴 visoko
+**Tveganje:**  visoko
 
 ## 2026-03-10 — Fix: manjkajoči badge ID-ji v getBadgeProgress
 **Datoteke:** `persistence/AchievementStore.kt`, `data/BadgeDefinitions.kt`
 **Kaj:** Dodani badge ID-ji `committed_250`, `committed_500`, `level_50`, `celebrity` v `getBadgeProgress()` in `BadgeDefinitions.ALL_BADGES`.
 **Zakaj:** Badge-i ki niso v `getBadgeProgress` vedno vrnejo 0 → nikoli ne odklenejo.
-**Tveganje:** 🔴 visoko
+**Tveganje:**  visoko
 
 ## 2026-03-10 — Fix: WeeklyStreakWorker direkten Firestore klic
 **Datoteke:** `workers/WeeklyStreakWorker.kt`
 **Kaj:** `saveStreakToFirestore()` je pisala direktno na `document(email)` → popravljeno na `FirestoreHelper.getCurrentUserDocRef()`.
 **Zakaj:** Za legacy uporabnike (UID-based dokumenti) bi se streak shranil na napačen dokument.
-**Tveganje:** 🟡 srednje
+**Tveganje:**  srednje
 
 ## 2026-03-10 — Fix: addXPWithCallback v RunTrackerScreen
 **Datoteke:** `ui/screens/RunTrackerScreen.kt`
 **Kaj:** Klic `addXPWithCallback` zamenjan z `AchievementStore.awardXP()`. Dodan `scope` in coroutine imports.
 **Zakaj:** `addXPWithCallback` je deprecated, ne preverja badge-ev in ne beleži xp_history.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-03-10 — Refactoring: swapDaysInPlan skozi PlanDataStore
 **Datoteke:** `viewmodels/BodyModuleHomeViewModel.kt`, `persistence/PlanDataStore.kt`
 **Kaj:** `swapDaysInPlan()` je ročno serializiral plan in pisal direktno na Firestore. Zdaj kliče `PlanDataStore.updatePlan()`. Dodan `updatePlan()` v `PlanDataStore`.
 **Zakaj:** Podvojena serializacijska logika — plan se je serializiral na dva različna načina.
-**Tveganje:** 🟡 srednje
+**Tveganje:**  srednje
 
 ## 2026-03-10 — Dodani arhitekturni testi
 **Datoteke:** `app/src/test/java/com/example/myapplication/ArchitectureTest.kt`
 **Kaj:** 5 unit testov ki preverjajo: badge konsistentnost, Firestore routing, deprecated XP klic, clearCache ob odjavi, XPSource enum.
 **Zakaj:** Preprečuje da AI pri popravku pokvari ključne invariante brez opozorila.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-03-11 — RDP Polyline kompresija + Activity Log + Share Activities
 **Datoteke:** `utils/RouteCompressor.kt`, `data/UserAchievements.kt`, `persistence/ProfileStore.kt`, `ui/screens/ActivityLogScreen.kt`, `ui/screens/PublicProfileScreen.kt`, `ui/screens/BodyModuleHomeScreen.kt`, `AppNavigation.kt`, `AppDrawer.kt`, `MainActivity.kt`, `ui/screens/RunTrackerScreen.kt`
@@ -70,39 +70,39 @@
 - **RouteCompressor** — RDP algoritem kompresira GPS traso ~450→~35 točk (~92% manj storage)
 - **PublicActivity** data class za Firestore javne aktivnosti (komprimirane)
 - **ActivityLogScreen** — nov zaslon s karticami po aktivnostih, vsaka barve glede na tip (Run=modra, Hike=rjava, Skiing=turkizna...), mini OSM mapa z barvno linijo pri razprtju
-- **BodyModuleHomeScreen** — gumb 🗺️ desno od "Start run" odpre ActivityLogScreen
+- **BodyModuleHomeScreen** — gumb ️ desno od "Start run" odpre ActivityLogScreen
 - **shareActivities** toggle v AppDrawer privacy nastavitvah
 - **RunTrackerScreen** — pri shranjevanju seje preveri `share_activities` flag in shrani komprimirano ruto v `publicActivities/{sessionId}` v Firestoreu
 - **PublicProfileScreen** — TabRow "Profile"/"Activities" ko ima shareActivities=true; Activities tab prikaže javne aktivnosti z barvnimi karticami in mapami
 - **ProfileStore.getPublicProfile** — bere `share_activities` in naloži `publicActivities` subcollection
 **Zakaj:** Storage optimizacija za deljenje tras med followerji (92% manj Firestore reads/writes)
-**Tveganje:** 🟡 srednje — nova Firestore kolekcija `publicActivities`
+**Tveganje:**  srednje — nova Firestore kolekcija `publicActivities`
 
 **Datoteke:** `ui/screens/ExerciseHistoryScreen.kt`, `viewmodels/RunTrackerViewModel.kt`
 **Kaj:** RunCard v ExerciseHistoryScreen prikazuje detajlne statistike ob razširitvi: Distance, Duration, Avg speed, Max speed, Pace, Ascent, Descent, Calories — vsak prilagojen tipu aktivnosti (npr. Hike nima hitrosti, Walk nima vzpona). Dodan `RunDetailRow` composable. ViewModel že bere `elevationGainM`, `elevationLossM`, `activityType` iz Firestore.
 **Zakaj:** Shranjeni podatki o vzponu, tempu in hitrosti se niso prikazali v zgodovini tekov.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 **Datoteke:** `data/RunSession.kt`, `ui/screens/RunTrackerScreen.kt`, `viewmodels/RunTrackerViewModel.kt`, `ui/screens/ExerciseHistoryScreen.kt`
 **Kaj:** Dodan `ActivityType` enum z 9 tipi aktivnosti (Run, Walk, Hike, Sprint, Cycling, Skiing, Snowboard, Skating, Nordic Walk). Vsak tip ima: MET vrednost za izračun kcal, zastavice za vzpon/tempo/hitrost, emoji in label. RunTrackerScreen dobi dropdown picker (klik na izbrani tip → horizontalni chip scroll). Kcal se izračunava z MET formulo (MET × kg × ure + vzpon bonus). Stats card in summary se prilagodita tipu. RunSession shrani `activityType`, `elevationGainM`, `elevationLossM`. ExerciseHistoryScreen RunCard prikazuje pravo ikono/ime in vzpon kjer je relevantno.
 **Zakaj:** Uporabnik želi slediti različnim aktivnostim, ne samo teku.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 **Datoteke:** `widget/PlanDayWidgetProvider.kt`, `res/layout/widget_plan_day.xml`, `res/xml/plan_day_widget_info.xml`, `AndroidManifest.xml`, `MainActivity.kt`
-**Kaj:** Nov home screen widget ki prikazuje: 🔥 streak, "Week X · Day Y", in focus area tega dne (npr. "Push", "Legs", "Rest 😴"). Klik na widget odpre aplikacijo direktno na BodyModuleHome. Podatki se preberejo iz Firestore (users/{email} za streak/plan_day, user_plans/{uid} za weeks strukturo). Widget se osveži: ob odprtju aplikacije, po končani vadbi, ob DATE_CHANGED.
+**Kaj:** Nov home screen widget ki prikazuje:  streak, "Week X · Day Y", in focus area tega dne (npr. "Push", "Legs", "Rest "). Klik na widget odpre aplikacijo direktno na BodyModuleHome. Podatki se preberejo iz Firestore (users/{email} za streak/plan_day, user_plans/{uid} za weeks strukturo). Widget se osveži: ob odprtju aplikacije, po končani vadbi, ob DATE_CHANGED.
 **Zakaj:** Uporabnik želi hitro videti kateri dan ima danes in kaj je fokus — brez odpiranja aplikacije.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 **Datoteke:** `utils/NutritionCalculations.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/BodyModuleHomeScreen.kt`
-**Kaj:** (1) Dve novi funkciji v NutritionCalculations: `calculateDailyWaterMl()` (35ml/kg, +500ml workout day, spol, aktivnost) in `calculateRestDayCalories()` (workout kalorije -150 do -250 kcal na rest day glede na cilj). NutritionScreen zdaj prikazuje prilagojen vodni cilj in prilagojene kalorije z oznako "🏋️ Workout day" / "😴 Rest day". (2) BodyModuleHomeScreen ob vstopu brez plana takoj preusmeri na BodyOverview ("No plans yet") prek LaunchedEffect.
+**Kaj:** (1) Dve novi funkciji v NutritionCalculations: `calculateDailyWaterMl()` (35ml/kg, +500ml workout day, spol, aktivnost) in `calculateRestDayCalories()` (workout kalorije -150 do -250 kcal na rest day glede na cilj). NutritionScreen zdaj prikazuje prilagojen vodni cilj in prilagojene kalorije z oznako "️ Workout day" / " Rest day". (2) BodyModuleHomeScreen ob vstopu brez plana takoj preusmeri na BodyOverview ("No plans yet") prek LaunchedEffect.
 **Zakaj:** Trdo kodirani cilji (2000ml vode, enake kalorije vsak dan) niso upoštevali individualnih podatkov iz kviza. Hkrati je pomanjkanje plana šele kazalo napako pri kliku na PlanPath, ne takoj ob vstopu.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-03-11 — Popravek po ugašanju računalnika — manjkajoče funkcije
 **Datoteke:** `utils/NutritionCalculations.kt`
 **Kaj:** `calculateDailyWaterMl()` in `calculateRestDayCalories()` sta manjkali — niso bile shranjene ob ugašanju računalnika med sejo. Ob preverjanju po ponovnem zagonu sesije je `NutritionScreen.kt` klical ti dve funkciji, a ti nista obstajali v `NutritionCalculations.kt`. Obe dodani nazaj.
 **Zakaj:** Računalnik se je ugasnil med sejo — datoteka je bila shranjena brez teh funkcij.
-**Tveganje:** 🔴 kritično — build bi padel brez teh funkcij
+**Tveganje:**  kritično — build bi padel brez teh funkcij
 
 ### [2026-03-12] Final Compilation Fixes & Cleanup ✅
 - **ExerciseHistoryScreen.kt**: Fixed broken string interpolation, cleaned up file structure (removed ~200 lines of spaghetti code, kept functionality).
@@ -120,31 +120,31 @@
 3. Prenovljen flow zaključevanja vadbe v UI (`WorkoutSessionScreen`), da se čaka na shranjevanje podatkov pred navigacijo (odprava race conditiona).
 4. Rest Day aktivnost v `BodyModuleHomeScreen` je zdaj funkcionalna: **avtomatsko napreduje plan na naslednji dan** (planDay++) in shrani statistiko v Firestore, tako da uporabnik ne ostane zataknjen na Rest Dayu.
 **Zakaj:** Uporabnik je želel povečati engagement z gamifikacijo in pametnimi opomniki, ter odpraviti UI hrošče pri zaključevanju vadbe. Fix za Rest Day je bil kritičen za napredovanje skozi plan.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-03-12 — Streak Animation & Haptics
 **Datoteke:** `ui/screens/BodyModuleHomeScreen.kt`
 **Kaj:** Implementiran `StreakCounter` composable, ki animira streak (N-1 -> N) s 3D flip efektom in preciznimi vibracijami ob vsaki spremembi številke. Zamenjan statičen tekst z animiranim števcem.
 **Zakaj:** Izboljšanje UX ob zaključku vadbe (občutek napredka, podobno Duolingo stilu).
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-03-12 — Fix Double Workout Submission
 **Datoteke:** `viewmodels/BodyModuleHomeViewModel.kt`
 **Kaj:** Dodal `AtomicBoolean` zaščito v `completeWorkoutSession` in `completeRestDayActivity` za preprečevanje hkratnega izvajanja.
 **Zakaj:** Uporabnik je prijavil, da se statistika poveča za +2 namesto za +1 po enem treningu (caused by double click / concurrency).
-**Tveganje:** 🟢 nizko (čista zaščita pred race-condition)
+**Tveganje:**  nizko (čista zaščita pred race-condition)
 
 ## 2026-03-12 — Gamification System & Face Module
 **Datoteke:** `ShopScreen.kt`, `ShopViewModel.kt`, `GoldenRatioScreen.kt`, `FaceModule.kt`, `AchievementStore.kt`
 **Kaj:** Dodana trgovina za XP (streak freeze), ML Kit face analysis (Golden Ratio), in dialogi za Skincare/Face Exercises.
 **Zakaj:** Uporabnik je želel funkcionalen shop in delujoč face module namesto placeholderjev.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-04-06 — Shop Card Move
 **Datoteke:** `DashboardScreen.kt`, `BodyModuleHomeScreen.kt`, `MainActivity.kt`
-**Kaj:** Dodana kartica Shop pod Face Module na DashboardScreen, ter odstranjen 🛒 gumb iz BodyModuleHomeScreen.
+**Kaj:** Dodana kartica Shop pod Face Module na DashboardScreen, ter odstranjen  gumb iz BodyModuleHomeScreen.
 **Zakaj:** Optimizacija menijev, da je Shop na bolj vidnem mestu in povezan s centralnim nadzornim delom.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-04-08 � Fix LoadingWorkout regular workout hijack
 **Datoteke:** MainActivity.kt 
@@ -155,7 +155,7 @@
 **Datoteke:** `NavigationViewModel.kt`, `MainActivity.kt`
 **Kaj:** Dodana metoda `popTo()` v NavigationViewModel in uporabljena namesto `navigateTo()` ob povratku iz WorkoutSession.
 **Zakaj:** Preprečuje, da bi univerzalni 'Back' gumb uporabnika vrgel na preskočene ekrane v backstacku (npr. GenerateWorkout).
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-04-08 � Video Loading Spinner & Activity Select Trace
 **Datoteke:** `WorkoutSessionScreen.kt`, `ActivityLogScreen.kt`
@@ -174,27 +174,27 @@
 3. `WorkoutSessionScreen` skrije `PlayerView` do `STATE_READY`, med nalaganjem ostane samo spinner, zato črn pravokotnik ni več viden.
 4. `UserPreferences.saveWorkoutStats` in `AchievementStore.checkAndUpdatePlanStreak` uporabljata `set(..., merge)` da streak write deluje tudi na prvem zapisu (ko user doc še ne obstaja).
 **Zakaj:** Uporabnik je poročal, da Firestore nima GPS točk/streak polj in da video loading overlay še vedno kaže črn blok; root cause je bil neenoten doc routing + ne-čakani zapisi + prikaz PlayerView pred prvim frameom.
-**Tveganje:** 🟡 srednje
+**Tveganje:**  srednje
 
 ## 2026-04-10 — Firestore email-first cleanup + debug logging (Option B + A)
 **Datoteke:** `persistence/FirestoreHelper.kt`, `ui/screens/RunTrackerScreen.kt`, `viewmodels/RunTrackerViewModel.kt`, `ui/screens/ActivityLogScreen.kt`, `worker/DailySyncWorker.kt`, `widget/WeightWidgetProvider.kt`, `widget/WaterWidgetProvider.kt`, `widget/QuickMealWidgetProvider.kt`, `widget/StreakWidgetProvider.kt`, `widget/PlanDayWidgetProvider.kt`, `widget/WeightInputActivity.kt`, `widget/WaterInputActivity.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/Progress.kt`, `persistence/DailySyncManager.kt`, `ui/screens/ExerciseHistoryScreen.kt`, `ui/screens/BodyModule.kt`, `ui/screens/LevelPathScreen.kt`, `persistence/ProfileStore.kt`
 **Kaj:** Poenoten je users document routing prek `FirestoreHelper` (email-first), odstranjeni so kriticni direktni `users/{uid}` klici v run/activity/widget/worker tokih, dodani diagnostični logi za write/read tocke, in v `ActivityLogScreen` je odstranjena podvojena logika z helperjem za `isSmoothed` update.
 **Zakaj:** Podatki so se deloma zapisovali v razlicne dokumente (`uid` vs `email`), zato v konzoli niso bili vidni na enem mestu in je bila diagnostika počasna.
-**Tveganje:** 🟡 srednje
+**Tveganje:**  srednje
 
 - **Food Repository Integration**: Created `FoodRepositoryImpl.kt` to centralize all FatSecret API operations and Firestore logging (batch/transaction) for custom meals. This completely removes database/API writes from UI code (`AddFoodSheet`, `NutritionDialogs`, `NutritionScreen`), making the UI "dumb" and resilient against data loss.
--   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p )   -   C r e a t e d   K M P _ A N D R O I D _ D E P E N D E N C Y _R E P O R T .m d   a n d   U s e r P r e f e r e n c e s R e p o s i t o r y .k t   f o r   s e t t i n g s   r e l o c a t i o n . 
- 
- -   2 0 2 6 - 0 4 - 1 1   ( C l e a n   S w e e p   F i n a l   F a z a )   -   C o m p l e t e l y   s c r u b b e n d  a n d r o i d . u t i l . L o g ,  j a v a . u t i l . D a t e ,  S i m p l e D a t e F o r m a t  a n d  d i r e c t  F i r e b a s e . f i r e s t o r e  U I  c a l l s  f o r  p u r e  K o t l i n  K M P  r e a d i n e s s  v i a  L o g g e r  a n d  k o t l i n x - d a t e t i m e  i m p l e m e n t a t i o n .  
- 
+- 2026-04-11 (Clean Sweep) - Created KMP_ANDROID_DEPENDENCY_REPORT.md and UserPreferencesRepository.kt for settings relocation.
+
+- 2026-04-11 (Clean Sweep Final Faza) - Completely s c r u b b e n d a n d r o i d . u t i l . L o g , j a v a . u t i l . D a t e , S i m p l e D a t e F o r m a t a n d d i r e c t F i r e b a s e . f i r e s t o r e U I c a l l s f o r p u r e K o t l i n K M P r e a d i n e s s v i a L o g g e r a n d k o t l i n x - d a t e t i m e i m p l e m e n t a t i o n . 
+
 - **2026-04-11 (KMP Dependencies & Sync)** — Aplikacija je uspešno sinhronizirana s KMP multiplatform-settings in kotlinx-datetime knjižnicami, build zopet deluje brezhibno po regresiji z giga-izbrisom datotek.
-[   ]   U I   d a t o t e k i   A c t i v i t y L o g S c r e e n . k t   i n   E x e r c i s e H i s t o r y S c r e e n . k t   m i g r i r a n i   n a   D a t e F o r m a t t e r   ( k o t l i n x - d a t e t i m e ) .
-[   ]   Vs i   W i d g e t i   p o   i s k a n j u  ( P l a n D a y ,   Q u i c k M e a l ,   W a t e r ,   W e i g h t ,   S t a t s ,   p r i l o ~e n  I n p u t A c t i v i t y )   i n   n j i h o v i   u v o z i   p o s o do b l j e n i   t a k o  ,   d a  i z p u a
-a j o   j a v a . t i m e . *   i n   j a v a . u t i l . D a t e . 
- [   ]   D a t e F o r m a t t e r . k t   j e   b i l   d o p o l n j e n   z   r a z l i 
-n i m i   f o r m a t i ,   d a   n a t a n
-n o   r e p l i c i r a   s t a r o   S i m p l e D a t e F o r m a t   o b l i k o . 
- [   ]   P r e v e r j e n a   o d s t r a n i t e v   n e s m i s e l n i h   o d v i s n o s t i   ( j i h   n i ,   j a v a . t i m e   i n   j a v a . u t i l . D a t e   s t a   ~e   t a k o   d e l   J D K j a   i n   n i s t a   t e r j a l i  p o s e b n e  k n j i c e  v  g r a d l e) . 
+[ ] UI datoteki ActivityLogScreen.kt in ExerciseHistoryScreen.kt migrirani na DateFormatter (kotlinx-datetime).
+[ ] Vsi Widgeti po i s k a n j u (P l a n D a y , Q u i c k M e a l , W a t e r , W e i g h t , S t a t s , p r i l o ~en InputActivity) in njihovi uvozi posodobljeni t a k o , d a i z p u a
+ajo java.time.* in java.ut i l.D a te.
+[ ] DateFormatter.kt je bil dopolnjen z razli
+nimi formati, da natan
+no replicira staro SimpleDateFormat obliko.
+[ ] Preverjena odstranitev nesmiselnih odvisnosti (jih ni, java.time in java.util.Date sta ~e tako del JDKja in nista t e r j a l i p o s e b n e k n j i c e v g r a d l e).
 [ ] b u i l d  j e  a e l  s k o z i  b p .
 
 
@@ -209,13 +209,13 @@
 **Datoteke:** `UserPreferences.kt` (deleted), `UserProfileManager.kt` (new), `SettingsManager.kt`, `MainActivity.kt`, `WorkoutSessionScreen.kt`, multiple viewmodels...
 **Kaj:** Celotna logika upravljanja z nastavitvami in pretekle stare Android `SharedPreferences` logike iz `UserPreferences.kt` je bila popolnoma migrirana na `com.russhwolf.settings.Settings`. Krojijo se neposredne instance znotraj singleton `UserProfileManager.kt`, stari `UserPreferences.kt` in `AchievementStore.kt` sta izbrisana. Arhitekturni testi prilagojeni.
 **Zakaj:** Tehnični dolg ("SharedPreferences konflikt") med Android `Context` zahtevki in preostalimi KMP strukturami. Enoten sistem brez Android UI uvozov v podatkovni domeni.
-**Tveganje:** 🟢 nizko (obstoječa baza pokrita z KMP Settings)
+**Tveganje:**  nizko (obstoječa baza pokrita z KMP Settings)
 
 ## 2026-04-19 — Fix SettingsManager Initialization Crash
 **Datoteke:** `MyApplication.kt`, `AndroidManifest.xml`
 **Kaj:** Ustvarjen razred `MyApplication` (ki deduje po `Application`), da se `SettingsManager.provider` inicializira z `AndroidSettingsProvider` takoj ob zagonu procesa, preden se ustvarijo dejavnosti in ViewModels. Prav tako posodobljen `AndroidManifest.xml`, da uporablja `.MyApplication`.
 **Zakaj:** Orodno okno `SettingsManager strictly needs to be initialized first.` `IllegalStateException` ob zagonu zaradi napačnega čakanja in poizkusov inicializacije med `ViewModel` in `Activity`.
-**Tveganje:** 🟢 nizko
+**Tveganje:**  nizko
 
 ## 2026-04-17 — Health Connect & Settings Provider Revamp
 **Datoteke:** `MainActivity.kt`, `ui/screens/BodyModuleHomeScreen.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/RunTrackerScreen.kt`, `ui/screens/SettingsScreen.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `viewmodels/SettingsViewModel.kt`, `persistence/AchievementStore.kt`, `persistence/ProfileStore.kt`, `data/HealthData.kt`, `data/UserAchievements.kt`, `data/UserPreferences.kt`
@@ -240,7 +240,7 @@
 - **StreakReminderWorker**: `streak_days`, `plan_day`, `last_workout_epoch` migriran na Firestore prek `UserProfileManager.getWorkoutStats()`; `today_is_rest` prek nove `checkTodayIsRestFromFirestore()` iz `user_plans` kolekcije
 - **ManualExerciseLogScreen** `GenderCache`: odstranjen `gender_cache` SharedPrefs sloj, obdržan samo in-memory cache
 **Zakaj:** Po auditu (Faza 9.audit) so ostali `bm_prefs` zapisi za biometrične podatke v konfliktu s Firestore SSOT. Zdaj sta bm_prefs in Firestore konsistentna.
-**Tveganje:** 🟢 nizko (Firestore je SSOT, ni izgube podatkov)
+**Tveganje:**  nizko (Firestore je SSOT, ni izgube podatkov)
 
 ## 2026-04-25 — Faza 9.1: DailyLogRepository SSOT sanacija
 **Datoteke:** `ui/screens/RunTrackerScreen.kt`, `ui/screens/ManualExerciseLogScreen.kt`, `domain/workout/UpdateBodyMetricsUseCase.kt`
@@ -249,15 +249,15 @@
 - **ManualExerciseLogScreen** `logExerciseToFirestore()`: po `saveExerciseLog()` dodan `DailyLogRepository().updateDailyLog()` za atomarno posodobitev `burnedCalories` v `dailyLogs`
 - **UpdateBodyMetricsUseCase**: `settingsRepo.updateDailyCalories()` zakomentiran — `bm_prefs.daily_calories` ni več SSOT; edini vhod za burned kalorije je `dailyLogs` Firestore kolekcija
 **Zakaj:** Audit je odkril, da sta RunTracker in ManualExercise ignorirala `DailyLogRepository`, ki je SSOT za dinamični TDEE sistem. Burned Calories Delta v Debug Dashboardu ni bila pravilna za te vire aktivnosti.
-**Tveganje:** 🟢 nizko (samo dodajanje obstoječega klica, brez spremembe obstoječe logike)
+**Tveganje:**  nizko (samo dodajanje obstoječega klica, brez spremembe obstoječe logike)
 
 
 
 ## 2026-04-25 — Faza 4: Dinamični TDEE algoritem
 **Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `shared/.../CalculateBodyMetricsUseCase.kt`
-**Kaj:** Zamenjava statičnega aktivnostnega multiplikatorja (1.2–1.9) z dinamičnim TDEE: `baseTdee = BMR × 1.2` + `burnedCalories` (real-time iz Firestore dailyLogs) + `goalAdj`. UI prikaže `🔥 +X kcal boost` ko je aktivnost > 0. Fallback na statični target ko profil ni naložen.
+**Kaj:** Zamenjava statičnega aktivnostnega multiplikatorja (1.2–1.9) z dinamičnim TDEE: `baseTdee = BMR × 1.2` + `burnedCalories` (real-time iz Firestore dailyLogs) + `goalAdj`. UI prikaže ` +X kcal boost` ko je aktivnost > 0. Fallback na statični target ko profil ni naložen.
 **Zakaj:** Statični TDEE ne upošteva dejanske aktivnosti. Zdaj: zjutraj v postelji = nizek limit; po teku 500 kcal = limit se poveča za 500 kcal v realnem času.
-**Tveganje:** 🟢 nizko (obstoječi statični fallback ohranjen)
+**Tveganje:**  nizko (obstoječi statični fallback ohranjen)
 
 ## 2026-04-25 — Faza 6: Data Budgeting — zmanjšanje Firestore branj za ~35%
 **Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/Progress.kt`
@@ -277,7 +277,7 @@
 - `WeightPredictorStore` razširjen z `lastHybridTDEE`, `lastAdaptiveTDEE`, `lastConfidenceFactor`
 - `DebugDashboard` prikazuje vse tri hibridne vrednosti v realnem času
 **Zakaj:** Odpravlja odvisnost od fiksnega Mifflin-St Jeor množilnika. Z rastjo realnih podatkov se algoritem samodejno kalibrira na dejanski metabolizem uporabnika.
-**Tveganje:** 🟢 nizko (Mifflin fallback ohranjen ko hibridni TDEE ni na voljo)
+**Tveganje:**  nizko (Mifflin fallback ohranjen ko hibridni TDEE ni na voljo)
 
 ## 2026-04-25 — Faza 7.2: Weight Destiny kartica z vizualnim trendom in What-if simulatorjem
 **Datoteke:** `ui/screens/Progress.kt`
@@ -285,14 +285,14 @@
 - `WeightPredictionCard` popolnoma zamenjan z `WeightDestinyCard` — tri novi kompozabli: `WeightDestinyCard`, `WeightTrendLine`, `ConfidenceIndicator`
 - **ConfidenceIndicator**: 3 pike (siva/rumena/zelena) glede na C = 0.0/0.5/1.0 + tekstovna oznaka zaupanja
 - **Dinamično sporočilo** glede na C in trend:
-  - `C < 0.5` → "🧪 Spoznavam tvoj metabolizem…"
-  - `C ≥ 0.5, deficit` → "🎯 Na dobri poti si! Predviden cilj: [Datum]"
+  - `C < 0.5` → " Spoznavam tvoj metabolizem…"
+  - `C ≥ 0.5, deficit` → " Na dobri poti si! Predviden cilj: [Datum]"
   - ravnovesje → "⚖️ Si v energijskem ravnovesju."
 - **WeightTrendLine**: Canvas bezier krivulja zdaj→čez 30 dni z gradientnim senčnim trakom + pikčasta ciljna linija (rumena)
 - **What-if Simulator**: Slider −500…+500 kcal/dan (koraki po 50 kcal) — v realnem času izračuna "X dni prej/pozneje do cilja" z isto hibridno matematiko
 - `WeightPredictionDisplay` razširjen z `confidenceFactor: Double`
 **Zakaj:** Številke samo po sebi ne motivirajo. Vizualni trend + interaktivni simulator spremenita suhe algoritme v "kristalno kroglo" — uporabnik vidi neposredno zvezo med današnjimi odločitvami in prihodnjo težo.
-**Tveganje:** 🟢 nizko (samo UI, logika nespremenjena)
+**Tveganje:**  nizko (samo UI, logika nespremenjena)
 
 ## 2026-04-25 — Final Architectural & UX Audit (pred UI/UX prenovo)
 **Datoteke:** `persistence/ProfileStore.kt`, `NavigationViewModel.kt`, `MainActivity.kt`, `worker/RunRouteCleanupWorker.kt` (NOVO), `GPS_POINTS_MIGRATION_PLAN.md` (NOVO)
@@ -303,7 +303,7 @@
 4. **GPS cleanup Worker:** `RunRouteCleanupWorker` — periodičen Worker (1x tedensko) zbriše `.json` datoteke v `run_routes/` starejše od 60 dni
 5. **GPS 1MB načrt:** `GPS_POINTS_MIGRATION_PLAN.md` — detajlen načrt za migracijo `polylinePoints` iz vgrajenega array-a v sub-kolekcijo `points/`
 **Zakaj:** Finalni arhitekturni pregled pred UI/UX prenovo — odstranitev dead code, varnostni stropi za Firestore branje, navigation stack optimizacija.
-**Tveganje:** 🟢 nizko (`.limit(20)` je varnostni strop ki ne vpliva na funkcionalnost)
+**Tveganje:**  nizko (`.limit(20)` je varnostni strop ki ne vpliva na funkcionalnost)
 
 ## 2026-04-26 — Global Audit & bm_prefs SharedPrefs Purge (pred iOS migracijo)
 **Datoteke:** `WorkoutSessionScreen.kt`, `UpdateBodyMetricsUseCase.kt`, `GetBodyMetricsUseCase.kt`, `MainActivity.kt`, `MyViewModelFactory.kt`
@@ -314,7 +314,7 @@
 4. **Kritični Bug Fix — Streak Reset pri novem planu**: `MainActivity.kt` `onFinish` je ob kreiranju novega plana bral `streak_days`, `total_workouts_completed`, `weekly_done`, `last_workout_epoch`, `plan_day` iz deprecated `bm_prefs` (vse vrednosti = 0) in jih zapisal v Firestore → **streak se je resetiral na 0!** Zamenjano z direktnim partial merge-om: samo `plan_day=1`, `weekly_target`, `weekly_done=0`. Streak ostane nespremenjen.
 5. **GetBodyMetricsUseCase**: Odstranjen `settingsRepo.updateWorkoutStats()` klic z napačno epoch konverzijo (bm_prefs ne potrebuje več posodabljanja).
 **Zakaj:** Pred iOS migracijo: koda mora biti čista, brez podvajanj in SharedPrefs odvisnosti za kritične podatke (streak, plan_day). Odkriti bug bi resetiral streak ob vsakem ustvarjanju novega plana.
-**Tveganje:** 🟡 srednje (bug fix za streak reset + SharedPrefs cleanup)
+**Tveganje:**  srednje (bug fix za streak reset + SharedPrefs cleanup)
 
 ## 2026-04-26 — Faza 15: Community Privacy & Calorie Sync
 **Datoteke:** `data/UserAchievements.kt`, `persistence/ProfileStore.kt`, `ui/screens/PublicProfileScreen.kt`, `ui/screens/RunTrackerScreen.kt`
@@ -324,7 +324,7 @@
 - `PublicProfileScreen.kt`: tab "Activities" se prikaže ko `profile.shareActivities == true` (ne več `recentActivities != null`); prazna lista prikaže FitnessCenter ikono + "No activities yet" namesto Lock ikone
 - `RunTrackerScreen.kt`: po shranjevanju teka doda `DailyLogRepository().updateDailyLog()` klic za `burnedCalories` v `dailyLogs/{today}`; `NutritionViewModel` in `Progress.kt` Snapshot Listenerji samodejno zaznata spremembo
 **Zakaj:** `RunTrackerScreen` ni posodabljal `dailyLogs/burnedCalories` → kalorije iz tekov niso bile vidne v NutritionVM in Progress. `PublicProfileScreen` je posredno bral zasebnost prek `recentActivities != null` namesto eksplicitnega `shareActivities` flaga.
-**Tveganje:** 🟢 nizko (additive fix, brez spremembe obstoječe logike)
+**Tveganje:**  nizko (additive fix, brez spremembe obstoječe logike)
 
 ## 2026-04-26 — Faza 14: Map Performance & Cost Optimization
 **Datoteke:** `MyApplication.kt`, `ExerciseHistoryScreen.kt`, `ActivityLogScreen.kt`, `RunTrackerScreen.kt`
@@ -334,7 +334,7 @@
 3. **Manuel Zoom Bounds (ActivityLogScreen.kt)**: `GlobalActivityOsmMap` `update` blok zdaj zoom-a na izbrani tek takoj ob selekciji (`mapv.tag` guard prepreči ponavljajoči zoom ob recomposition). Pri deselect se zoom vrne na vse teke.
 4. **Shrani/Obnovi Zadnjo Lokacijo (RunTrackerScreen.kt)**: Po zaključenem teku shrani zadnjo GPS točko v SharedPrefs (`last_run_lat`, `last_run_lng`). MapView se inicializira na shranjeni lokaciji namesto hardcoded Ljubljana — brez začetnega "skakanja".
 **Zakaj:** Zmanjšanje omrežnega prometa, hitrejši UI, celica podatkov varčevanje pri mobilnih napravah.
-**Tveganje:** 🟢 nizko (canvas preview je backward compatible, cache je additive, zoom guard je idempotenten)
+**Tveganje:**  nizko (canvas preview je backward compatible, cache je additive, zoom guard je idempotenten)
 
 ## 2026-04-27 — Fix: Meal Builder UI Bug + InitialSyncManager (Nova naprava)
 **Datoteke:** `ui/screens/NutritionDialogs.kt`, `MainActivity.kt`
@@ -342,4 +342,4 @@
 1. `MakeCustomMealsDialog`: `AlertDialog` se pogojno skrije (`if (!showFoodSearch)`) ko je `AddFoodSheet` odprt. `ModalBottomSheet` je edini aktivni composable — ni več prekrivanja scrimov. Klik na sestavino ne sproži več `onDismiss` staršev dialog.
 2. `InitialSyncManager`: Ob prvi prijavi na novi napravi (ključ `initial_sync_done_<uid>` ni v SharedPrefs) se z `async/await` vzporedno fetchajo: profil (XP/level), plani (`user_plans/{uid}`), teže (`weightLogs` zadnjih 10). Overlay prikazuje `"Downloading your fitness profile (XP, Plans & Progress)…"`. Po uspešnem prenosu prikaže `"Profile Ready! ✓"` (1.5s), nato se skrije. Normalni zagoni ostanejo nespremenjenj.
 **Zakaj:** Prekrivanje dialogov je povzročalo nehoteno zapiranje Custom Meal procesa. Nov sync manager odpravi zamude pri XP/Plans/BodyModule ob zagonu na novi napravi.
-**Tveganje:** 🟢 nizko (dialog fix je pogojno renderiranje brez spremembe logike; sync je additive, enkraten, z graceful fallback)
+**Tveganje:**  nizko (dialog fix je pogojno renderiranje brez spremembe logike; sync je additive, enkraten, z graceful fallback)
