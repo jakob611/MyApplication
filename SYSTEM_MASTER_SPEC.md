@@ -790,3 +790,386 @@ Potrebni (kompozitni) indeksi za delujoče poizvedbe:
 | `follows` | `followerId ==` | Single-field equality | `FollowStore.getFollowing()` |
 | `follows` | `followerId ==`, `followingId ==` | Kompozitni | `FollowStore.isFollowing()` fallback query |
 
+---
+
+## 8. AUTH & SYNC FLOW
+
+> **Faza 3 — samo dejstva. Nobenih popravkov.**  
+> Vsi vrstični sklici se nanašajo na `MainActivity.kt` (skupaj 985 vrstic).
+
+---
+
+### 8.1 Sequence Map — Celoten zagon od "Login klika" do "podatki naloženi"
+
+#### 8.1.1 Hladen zagon (app nikoli ni bil odprt)
+
+```
+T+0ms  — MainActivity.onCreate()
+         ├── coldStartEpochMs = elapsedRealtime()
+         ├── GlobalScope.launch(IO): AdvancedExerciseRepository.init()  [JSON vaje, asinhrono]
+         └── setContent { ... }
+
+T+~5ms — Compose composition začne
+
+T+~10ms — LaunchedEffect(Unit) #1  [vrstica 177]
+          ├── AppIntent.SetProfile(loadProfile(""))  ← PRAZEN email! Naloži prazen profil iz local
+          ├── Firebase.auth.currentUser?.email  → null za nov zagon
+          ├── fresh_start_on_login flag check + bm_prefs clear (če nastavljen)
+          ├── Faza5 legacy cache clear (one-time migration)
+          └── isCheckingAuth = false  ← UI preide iz "auth spinner" v pravo vsebino
+
+T+~10ms — DisposableEffect(Unit)  [vrstica 259]
+          └── auth.addAuthStateListener { fbUser →
+                  if (verified) → scope.launch { appViewModel.startInitialSync() }
+                  else          → appViewModel.resetSyncState()
+              }
+          ⚡ TAKOJ sproži authListener enkrat z obstoječim auth stanjem!
+
+T+~10ms — LaunchedEffect(Unit) #2  [vrstica 277]
+          ├── Firebase.auth.currentUser == null → navViewModel.navigateTo(Screen.Index)
+          └── isCheckingAuth = false  (že false iz #1 — podvojeno)
+
+T+~10ms — LaunchedEffect(isLoggedIn)  [vrstica 337]
+          └── if (isLoggedIn) → StreakReminderWorker.scheduleForToday()
+              (isLoggedIn == false → nič)
+
+         ── UI prikaže Screen.Index (splash) ──────────────────────────────
+```
+
+---
+
+#### 8.1.2 Email Login (user klikne "Login" v LoginScreen)
+
+```
+[User tip]
+Firebase.auth.signInWithEmailAndPassword(email, password)
+  └── .addOnCompleteListener { task →
+        if (success && email verified):
+          isLoggedIn = true
+          userEmail = email
+          AppIntent.SetProfile(loadProfile(email))  ← LOCAL profile
+          scope.launch { isDarkMode = isDarkMode(email) }  ← Firestore klic!
+          navViewModel.navigateTo(Screen.Dashboard)
+      }
+
+[AUTH STATE CHANGE sproži DisposableEffect authListener]
+  └── scope.launch {
+        appViewModel.startInitialSync(context, email)  ← ASYNC sync začne
+      }
+
+[LaunchedEffect(isLoggedIn) se sproži ker isLoggedIn → true]
+  └── StreakReminderWorker.scheduleForToday(context)
+
+         ── UI prikaže Screen.Dashboard + sync overlay (isProfileReady=false) ──
+```
+
+---
+
+#### 8.1.3 Google Sign-In (user klikne "Sign in with Google")
+
+```
+[User tap] → googleSignInLauncher.launch(signInIntent)
+[Google Activity vrne result] → googleSignInLauncher callback
+  └── firebaseAuthWithGoogle(account, onSuccess, onError)
+        └── Firebase.auth.signInWithCredential(credential)
+              └── onSuccess:
+                    isLoggedIn = true
+                    userEmail = user.email
+                    AppIntent.SetProfile(loadProfile(email))
+                    scope.launch { isDarkMode = isDarkMode(email) }
+                    navViewModel.navigateTo(Screen.Dashboard)
+
+[AUTH STATE sproži DisposableEffect authListener]  ← isto kot Email Login
+  └── scope.launch { appViewModel.startInitialSync(context, email) }
+```
+
+---
+
+#### 8.1.4 AppViewModel.startInitialSync() — Podroben tok
+
+```
+startInitialSync(context, userEmail):
+
+GUARD 1: if (isSyncStarted) return  ← session-lifetime boolean (ne StateFlow)
+GUARD 2: if (_isSyncing.value) return  ← coroutine-lifetime StateFlow
+
+isSyncStarted = true
+_isSyncing.value = true
+
+viewModelScope.launch {
+  try {
+    ├── getCurrentUserDocId()  ← sinhrono, iz Firebase.auth
+    ├── syncPrefs.getBoolean("initial_sync_done_{uid}", false)
+    │
+    ├── IF needsInitialSync (nova naprava):
+    │   ├── _syncStatusMessage = "Downloading your fitness profile..."
+    │   └── withContext(IO):
+    │       ╠══ async { UserProfileManager.loadProfileFromFirestore(email) }
+    │       ╠══ async { db.collection("user_plans").document(uid).get() }
+    │       ╠══ async { userRef.collection("weightLogs").limit(10).get() }
+    │       │     ↑ VSI TRIJE TEČEJO VZPOREDNO
+    │       ├── profileDeferred.await()  ← čaka na profil
+    │       ├── plansDeferred.await()    ← čaka na plane (segreje cache)
+    │       ├── weightDeferred.await()   ← čaka na teže (segreje cache)
+    │       │
+    │       ├── if (remote != null):
+    │       │   ├── UserProfileManager.saveProfile(remote)  ← local save
+    │       │   ├── bm_prefs.weekly_target = actParsed  ← SharedPrefs zapis!
+    │       │   └── withContext(Main) { _userProfile.value = remote }
+    │       │
+    │       ├── syncPrefs.putBoolean("initial_sync_done_{uid}", true)
+    │       ├── _syncStatusMessage = "Profile Ready! ✓"
+    │       └── delay(1500)  ← 1.5s prikaz sporočila
+    │
+    └── IF !needsInitialSync (znana naprava):
+        └── withContext(IO):
+            ├── UserProfileManager.loadProfileFromFirestore(email)
+            ├── saveProfile(remote)
+            ├── bm_prefs.weekly_target = actParsed
+            └── _userProfile.value = remote
+
+  } catch (e: Exception) {
+    Log.e(...)  ← NAPAKA TIHO ZALOGIRA, NE SPOROČI UI-ju
+  } finally {
+    _isSyncing.value = false
+    _isProfileReady.value = true  ← VEDNO se postavi na true (tudi pri napaki!)
+  }
+}
+```
+
+---
+
+#### 8.1.5 Vzporedni procesi ob zalogiranosti — LaunchedEffect(Unit) #2 [vrstica 277]
+
+Ko `Firebase.auth.currentUser != null`, se **HKRATI** (neodvisno od startInitialSync) izvajajo:
+
+```
+scope.launch(IO) {
+  useCase.recordLoginOnly()  ← XP za dnevno prijavo + streak posodobitev
+}
+
+scope.launch(IO) {
+  WeeklyStreakWorker.ensureScheduled(context, profile.startOfWeek)
+}
+
+scope.launch(IO) {
+  RunRouteCleanupWorker.ensureScheduled(context)
+}
+
+scope.launch(IO) {
+  delay(1500)
+  useCase.checkAndSyncBadgesOnStartup()  ← batch badge preverjanje po 1.5s
+}
+
+scope.launch {
+  PlanDataStore.migrateLocalPlansToFirestore(context)  ← enkratna migracija
+  StreakWidgetProvider.refreshAll(context)
+  PlanDayWidgetProvider.refreshAll(context)
+  DailySyncManager.syncOnAppOpen(context, uid)  ← sproži DailySyncWorker
+}
+
+appViewModel.handleIntent(AppIntent.StartListening(userEmail))  ← Firestore listener
+```
+
+---
+
+### 8.2 Concurrency (Vzporednost)
+
+#### 8.2.1 Vzporedno (simultano)
+
+| Operacija A | Operacija B | Razmerje |
+|-------------|-------------|----------|
+| `startInitialSync` (async profil+plani+teže) | `recordLoginOnly` (XP/streak) | ⚡ Vzporedno — oba tečeta neodvisno |
+| `startInitialSync` (async fetch) | `PlanDataStore.migrateLocalPlansToFirestore` | ⚡ Vzporedno — nista sinhronizirana |
+| `startInitialSync` | `checkAndSyncBadgesOnStartup` (po 1500ms) | ⚡ Vzporedno — badge sync ne čaka na sync |
+| `profileDeferred.await()` | `plansDeferred.await()` | ⚡ Vzporedno (oba `async`) |
+| `plansDeferred.await()` | `weightDeferred.await()` | ⚡ Vzporedno |
+| `AppIntent.StartListening` listener | celoten sync | ⚡ Vzporedno — listener se registrira med syncanjem |
+
+#### 8.2.2 Zaporedno (mora čakati)
+
+| Operacija | Čaka na |
+|-----------|---------|
+| `navViewModel.navigateTo(Screen.Dashboard)` | `isLoggedIn = true` (isti signin callback) |
+| `bodyOverviewViewModel.refreshPlans()` | `isProfileReady == true` (LaunchedEffect(isProfileReady)) |
+| Sync overlay izgine (`isProfileReady = true`) | `finally` blok v `startInitialSync` |
+| `isDarkMode` naložen | ViewModel compose klic (`scope.launch { isDarkMode = ... }`) — po Dashboard navigaciji |
+
+---
+
+### 8.3 The Loop Analysis — Ali isSyncing postane `false` v vseh primerih?
+
+#### Test 1: Normalen flow (internet OK)
+```
+startInitialSync() → finally { _isSyncing=false, _isProfileReady=true }  ✅ OK
+```
+
+#### Test 2: Firestore vrne napako (internet OK, napaka na Firestore)
+```
+startInitialSync() → try { ... loadProfileFromFirestore() throws Exception }
+                  → catch(e) { Log.e(...) }   ← napaka TIHO zalogirana
+                  → finally { _isSyncing=false, _isProfileReady=true }  ✅ OK
+                  Rezultat: overlay izgine, profil ostane prazen/lokalen
+```
+
+#### Test 3: Brez interneta, znana naprava (Firestore 100MB cache topel)
+```
+startInitialSync() → loadProfileFromFirestore() vrne iz Firestore OFFLINE CACHE
+                     (ker PersistentCacheSettings = 100MB v MyApplication.onCreate)
+                  → finally { _isSyncing=false, _isProfileReady=true }  ✅ OK
+                  Rezultat: profil naložen iz cache, overlay izgine hitro
+```
+
+#### Test 4: Brez interneta, NOVA naprava (nič ni v Firestore cache)
+```
+startInitialSync() → loadProfileFromFirestore() → Firestore SDK throws
+                     FirebaseFirestoreException(UNAVAILABLE) po timeoutu
+                     Timeout: privzeto ~60s za get() calls!
+                  → catch(e) { Log.e(...) }
+                  → finally { _isSyncing=false, _isProfileReady=true }  ✅ OK, a počasi
+                  
+  ⚠️ PROBLEM: Overlay lahko prikazan do ~60 sekund!
+  Uporabnik vidi spinner 1 minuto brez pojasnila da ni interneta.
+  syncStatusMessage ostane "Syncing your fitness data…" ves čas.
+  NetworkObserver (isOnline StateFlow) obstaja v MainActivity, a ni
+  integriran v startInitialSync — ne more prekiniti čakanja.
+```
+
+#### Test 5: Dvojni klic startInitialSync (authListener + drugi trigger)
+```
+1. authListener sproži scope.launch { startInitialSync() } → isSyncStarted=true, začne
+2. authListener se morda sproži znova (auth refresh) → startInitialSync() → GUARD: return  ✅ OK
+   Kljub temu scope.launch { } ustvari novo coroutino ki se takoj vrne — minimalen overhead.
+```
+
+#### Test 6: Rotacija zaslona (configuration change)
+```
+ViewModel preživi configuration change → isSyncStarted=true ostane
+AppViewModel.startInitialSync() NE bo poklican znova → overlay stanje ohranjeno  ✅ OK
+(DisposableEffect se resetira → authListener se doda znova → sproži startInitialSync()
+ → GUARD isSyncStarted=true → return takoj)
+```
+
+#### Test 7: Odjava in ponovna prijava v isti seji
+```
+Odjava: appViewModel.resetSyncState() → isSyncStarted=false, _isProfileReady=false
+Prijava: authListener → startInitialSync() → isSyncStarted=false → NOVA sinhronizacija  ✅ OK
+```
+
+**Zaključek:** `_isProfileReady` postane `true` v **vseh** primerih (finally blok je dosežen). Edina anomalija je **Test 4** — brez interneta na novi napravi overlay čaka do ~60 sekund.
+
+---
+
+### 8.4 Observer Patterns — Kdo posluša `userProfile` StateFlow
+
+#### 8.4.1 Direktni opazovalci
+
+| Opazovalec | Lokacija | Kaj naredi ob spremembi |
+|------------|----------|------------------------|
+| `val userProfile by appViewModel.userProfile.collectAsState()` | `MainActivity.kt` vrstica 123 | Recompose — posreduje `userProfile` v screene |
+
+#### 8.4.2 Screeni ki sprejemajo `userProfile` kot parameter
+
+| Screen | Parameter | Trigira sync? |
+|--------|-----------|---------------|
+| `DashboardScreen` | — (ne sprejme userProfile) | ❌ Ne |
+| `NutritionScreen` | `userProfile = userProfile` | ❌ Ne — samo prikaže |
+| `ProgressScreen` | `userProfile = userProfile` | ❌ Ne — samo prikaže |
+| `AchievementsScreen` | `userProfile = userProfile` | ❌ Ne — samo prikaže |
+| `MyAccountScreen` | `userProfile = userProfile` | ❌ Ne — samo prikaže |
+| `DeveloperSettingsScreen` | `userProfile = userProfile` | ❌ Ne |
+
+#### 8.4.3 Callback-i ki posodobijo `userProfile` (potencialne zanke)
+
+| Callback | Lokacija | Kaj naredi |
+|----------|----------|------------|
+| `onXPAdded` (WorkoutSession) | `AppIntent.SetProfile(loadProfile(userEmail))` | Naloži LOCAL profil (ne Firestore) — brez omrežnega klica — ❌ ni zanke |
+| `onBadgeUnlocked` (WorkoutSession) | `AppIntent.SetProfile(loadProfile(userEmail))` | Isto — LOCAL — ❌ ni zanke |
+| `onXPAdded` (NutritionScreen) | `AppIntent.SetProfile(loadProfile(userEmail))` | LOCAL — ❌ ni zanke |
+| `onProfileUpdate` (Drawer) | `AppIntent.SetProfile(updatedProfile)` + `saveProfileFirestore()` | Piše v Firestore → Firestore listener sproži `_userProfile.update` → UI recomposes → ❌ NI zanke (samo prikaz, brez ponovnega pisanja) |
+| `AppIntent.StartListening` | `ObserveUserProfileUseCase` → Firestore snapshot | Ob vsaki Firestore spremembi → `_userProfile.value = nova vrednost` → UI recompose → ❌ NI zanke |
+
+**Zaključek:** Nobena sprememba `userProfile` ne sproži ponovnega klica `startInitialSync`. **Sink Loop (pisanje iz observerja) ne obstaja.**
+
+---
+
+### 8.5 Problematični vzorci — "Kaotično stanje"
+
+#### 8.5.1 DVA `LaunchedEffect(Unit)` bloka v istem composable-u
+
+```kotlin
+// Vrstica 177:
+LaunchedEffect(Unit) {
+    // ... fresh_start check, local load, FIRST isCheckingAuth=false ...
+}
+
+// Vrstica 277:
+LaunchedEffect(Unit) {
+    // ... Firebase.auth check, navigacija, workers scheduling, SECOND isCheckingAuth=false ...
+}
+```
+
+**Dejstvo:** Oba se izvajata neodvisno. Compose jih obravnava kot dva ločena effect bloka na isti composable poziciji (oba imajo isti key `Unit` a **različno vrstno pozicijo** v composition tree). Oba korutinata **tečeta vzporedno**.
+
+**Posledice:**
+| Operacija | Blok 1 (vrstica 177) | Blok 2 (vrstica 277) |
+|-----------|---------------------|---------------------|
+| `AppIntent.SetProfile(loadProfile(email))` | ✅ Kliče | ✅ Kliče (podvojeno) |
+| `UserProfileManager.isDarkMode(email)` | ✅ Kliče | ✅ Kliče (podvojeno Firestore get) |
+| `checkAndSyncBadgesOnStartup()` | ✅ Takoj | ✅ Po 1500ms delay |
+| `PlanDataStore.migrateLocalPlansToFirestore` | ✅ Kliče | ✅ Kliče (podvojeno) |
+| `AppIntent.StartListening(email)` | ✅ Vrstica 241 | ✅ Vrstica 329 (guard v AppViewModel prepreči dvojni listener) |
+| `isCheckingAuth = false` | ✅ Vrstica 243 | ✅ Vrstica 333 (redundantno) |
+
+#### 8.5.2 Podvojeni Firestore klic za profil pri avtologinu
+
+Ko je user že prijavljen (hot start), se profil naloži **TRIKRAT**:
+1. `loadProfile(email)` (LOCAL, takoj) → vrstica 178 in 210
+2. `GlobalScope.launch { loadProfileFromFirestore(email) }` → vrstica 225
+3. `startInitialSync` (via authListener) → kliče `loadProfileFromFirestore(email)` znova
+
+**Skupaj: 2 lokalna + 2 Firestore fetch-a** pri vsakem hladnem zagonu z obstoječo prijavo.
+
+#### 8.5.3 `GlobalScope.launch` v vrstici 225
+
+```
+kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+    val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
+    // ... saveProfile, bm_prefs, _userProfile.value = remote
+}
+```
+
+**Dejstvo:** `GlobalScope` ni vezan na lifecycle — korutina preživi navigacijo, rotacijo, onPause. Ni mehanizma za cancel. Hkrati `startInitialSync` (ki teče VZPOREDNO) dela isto stvar. Race condition med `GlobalScope` in `startInitialSync`: eden od njiju zadnji prepiše `_userProfile.value`.
+
+#### 8.5.4 isCheckingAuth vs isProfileReady — prekrivanje
+
+```
+Stanje na zalogiranem hladnem zagonu:
+
+T+0ms:   isCheckingAuth=true  → prikaže isCheckingAuth spinner (Modifier.fillMaxSize)
+T+~15ms: isCheckingAuth=false → spinner izgine
+T+~15ms: isLoggedIn=true, isProfileReady=false → prikaže sync overlay (0.80 alpha Box)
+...
+T+~1800ms: isProfileReady=true (po sync + 1500ms delay) → overlay izgine
+
+PROBLEM: Med T=0 in T=15ms sta HKRATI aktiva isCheckingAuth spinner IN sync overlay (ker isLoggedIn
+postane true znotraj istega LaunchedEffect ki postavi isCheckingAuth=false).
+V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
+```
+
+---
+
+### 8.6 Offline Behavior — Povzetek
+
+| Scenarij | Overlay traja | Profil naložen | App deluje |
+|---------|--------------|----------------|------------|
+| Internet OK, znana naprava | ~300–800ms | Da (Firestore) | ✅ Normalno |
+| Internet OK, nova naprava | ~2–3s (fetch + 1500ms delay) | Da (Firestore) | ✅ Normalno |
+| Offline, znana naprava (cache topel) | ~300ms | Da (Firestore cache) | ✅ Brez interneta |
+| Offline, nova naprava (nič v cache) | **do ~60 sekund** | Ne (prazen profil) | ⚠️ Dolgo čakanje, nato prazen prif |
+| Firestore napaka (auth OK, Firestore down) | ~60s timeout | Ne (prazen) | ⚠️ Isto kot zgoraj |
+
+**Ključna zaščita:** `finally { _isProfileReady.value = true }` garantira, da overlay **vedno** izgine — aplikacija **nikoli ne obvisi** za vedno.
+
+**Manjkajoča zaščita:** `NetworkObserver` (ki obstaja v MainActivity kot `isOnline`) **ni integriran** v `startInitialSync`. Ob offline stanju bi lahko takoj prikazali sporočilo "No internet" in nastavili `_isProfileReady = true` brez ~60s čakanja.
+
