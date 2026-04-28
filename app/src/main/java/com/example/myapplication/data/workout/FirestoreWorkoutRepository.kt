@@ -154,12 +154,12 @@ class FirestoreWorkoutRepository : WorkoutRepository {
                         rawPts?.mapNotNull { pt ->
                             try {
                                 LocationPoint(
-                                    latitude  = (pt["latitude"]  as? Number)?.toDouble() ?: return@mapNotNull null,
-                                    longitude = (pt["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null,
-                                    altitude  = (pt["altitude"]  as? Number)?.toDouble() ?: 0.0,
-                                    speed     = (pt["speed"]     as? Number)?.toFloat()  ?: 0f,
-                                    accuracy  = (pt["accuracy"]  as? Number)?.toFloat()  ?: 0f,
-                                    timestamp = (pt["timestamp"] as? Number)?.toLong()   ?: 0L
+                                    latitude  = (pt["latitude"]  as? Number ?: pt["lat"]      as? Number)?.toDouble() ?: return@mapNotNull null,
+                                    longitude = (pt["longitude"] as? Number ?: pt["lng"]      as? Number)?.toDouble() ?: return@mapNotNull null,
+                                    altitude  = (pt["altitude"]  as? Number ?: pt["alt"]      as? Number)?.toDouble() ?: 0.0,
+                                    speed     = (pt["speed"]     as? Number ?: pt["spd"]      as? Number)?.toFloat()  ?: 0f,
+                                    accuracy  = (pt["accuracy"]  as? Number ?: pt["acc"]      as? Number)?.toFloat()  ?: 0f,
+                                    timestamp = (pt["timestamp"] as? Number ?: pt["ts"]       as? Number)?.toLong()   ?: 0L
                                 )
                             } catch (_: Exception) { null }
                         } ?: emptyList()
