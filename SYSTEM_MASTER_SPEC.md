@@ -514,7 +514,7 @@ Glavni profil — eden dokument na uporabnika.
 | Polje | Tip | Default | Opis | Piše |
 |-------|-----|---------|------|------|
 | `date` | String | `{date}` | Datum v formatu `"yyyy-MM-dd"` | `DailyLogRepository.updateDailyLog()`, `FoodRepositoryImpl.logFood()` |
-| `burnedCalories` | Double | `0.0` | Skupaj porabljene kalorije (vsote vseh aktivnosti) | `DailyLogRepository.updateDailyLog()` ← RunTrackerScreen, ManualExerciseLogScreen, ManageGamificationUseCase |
+| `burnedCalories` | Double | `0.0` | Skupaj porabljenih kalorij (vsote vseh aktivnosti) | `DailyLogRepository.updateDailyLog()` ← RunTrackerScreen, ManualExerciseLogScreen, ManageGamificationUseCase |
 | `waterMl` | Int | `0` | Zaužita voda v ml | `FoodRepositoryImpl.logWater()` prek `NutritionViewModel.updateWaterOptimistic()` |
 | `consumedCalories` | Double | `0.0` | Skupaj zaužite kalorije iz hrane | `FoodRepositoryImpl.logFood()` |
 | `items` | Array\<Map\> | `[]` | Lista vnesene hrane (glej 7.2.1) | `FoodRepositoryImpl.logFood()` (arrayUnion) |
@@ -833,7 +833,7 @@ T+~10ms — LaunchedEffect(isLoggedIn)  [vrstica 337]
           └── if (isLoggedIn) → StreakReminderWorker.scheduleForToday()
               (isLoggedIn == false → nič)
 
-         ── UI prikaže Screen.Index (splash) ──────────────────────────────
+         ── UI prikaže Screen.Index (splash) → Screen.Login → Login uspešen ─────────────────
 ```
 
 ---
@@ -1024,12 +1024,11 @@ startInitialSync() → loadProfileFromFirestore() vrne iz Firestore OFFLINE CACH
 ```
 startInitialSync() → loadProfileFromFirestore() → Firestore SDK throws
                      FirebaseFirestoreException(UNAVAILABLE) po timeoutu
-                     Timeout: privzeto ~60s za get() calls!
                   → catch(e) { Log.e(...) }
                   → finally { _isSyncing=false, _isProfileReady=true }  ✅ OK, a počasi
                   
   ⚠️ PROBLEM: Overlay lahko prikazan do ~60 sekund!
-  Uporabnik vidi spinner 1 minuto brez pojasnila da ni interneta.
+  Uporabnik vidi spinner 1 minuto brez popravila da ni interneta.
   syncStatusMessage ostane "Syncing your fitness data…" ves čas.
   NetworkObserver (isOnline StateFlow) obstaja v MainActivity, a ni
   integriran v startInitialSync — ne more prekiniti čakanja.
@@ -1039,7 +1038,7 @@ startInitialSync() → loadProfileFromFirestore() → Firestore SDK throws
 ```
 1. authListener sproži scope.launch { startInitialSync() } → isSyncStarted=true, začne
 2. authListener se morda sproži znova (auth refresh) → startInitialSync() → GUARD: return  ✅ OK
-   Kljub temu scope.launch { } ustvari novo coroutino ki se takoj vrne — minimalen overhead.
+   Kljub temu scope.launch { } ustvari novo corutino ki se takoj vrne — minimalen overhead.
 ```
 
 #### Test 6: Rotacija zaslona (configuration change)
@@ -1109,7 +1108,7 @@ LaunchedEffect(Unit) {
 }
 ```
 
-**Dejstvo:** Oba se izvajata neodvisno. Compose jih obravnava kot dva ločena effect bloka na isti composable poziciji (oba imajo isti key `Unit` a **različno vrstno pozicijo** v composition tree). Oba korutinata **tečeta vzporedno**.
+**Dejstvo:** Oba se izvajata neodvisno. Compose jih obravnava kot dva ločena effect bloka na isti composable poziciji (oba imata isti key `Unit` a **različno vrstno pozicijo** v composition tree). Oba korutinata **tečeta vzporedno**.
 
 **Posledice:**
 | Operacija | Blok 1 (vrstica 177) | Blok 2 (vrstica 277) |
@@ -1118,7 +1117,7 @@ LaunchedEffect(Unit) {
 | `UserProfileManager.isDarkMode(email)` | ✅ Kliče | ✅ Kliče (podvojeno Firestore get) |
 | `checkAndSyncBadgesOnStartup()` | ✅ Takoj | ✅ Po 1500ms delay |
 | `PlanDataStore.migrateLocalPlansToFirestore` | ✅ Kliče | ✅ Kliče (podvojeno) |
-| `AppIntent.StartListening(email)` | ✅ Vrstica 241 | ✅ Vrstica 329 (guard v AppViewModel prepreči dvojni listener) |
+| `AppIntent.StartListening` listener | ✅ Vrstica 241 | ✅ Vrstica 329 (guard v AppViewModel prepreči dvojni listener) |
 | `isCheckingAuth = false` | ✅ Vrstica 243 | ✅ Vrstica 333 (redundantno) |
 
 #### 8.5.2 Podvojeni Firestore klic za profil pri avtologinu
@@ -1132,7 +1131,7 @@ Ko je user že prijavljen (hot start), se profil naloži **TRIKRAT**:
 
 #### 8.5.3 `GlobalScope.launch` v vrstici 225
 
-```
+```kotlin
 kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
     val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
     // ... saveProfile, bm_prefs, _userProfile.value = remote
@@ -1173,3 +1172,385 @@ V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
 
 **Manjkajoča zaščita:** `NetworkObserver` (ki obstaja v MainActivity kot `isOnline`) **ni integriran** v `startInitialSync`. Ob offline stanju bi lahko takoj prikazali sporočilo "No internet" in nastavili `_isProfileReady = true` brez ~60s čakanja.
 
+---
+
+## 9. WORKOUT & GPS ENGINE
+
+> **Avditorski status:** Faza 4/10 — GPS & Workout Engine  
+> **Preiskovane datoteke:** `RunTrackingService.kt`, `RunTrackerScreen.kt`, `RunTrackerViewModel.kt`, `RunSession.kt`
+
+---
+
+### 9.1 Tracking Lifecycle
+
+#### 9.1.1 Tip storitve
+
+`RunTrackingService` je Android **Foreground Service** (deduje od `android.app.Service`).  
+Ko je sledenje aktivno, se kliče `startForeground(NOTIFICATION_ID, createNotification())`, kar zagotavlja, da Android storitve ne ubije prioritetno. Storitev ima **persistentno notifikacijo** z gumbi "Pause/Resume" in "Stop".
+
+#### 9.1.2 Zagon
+
+```
+UI (RunTrackerScreen)
+  └─ startForegroundService(Intent(context, RunTrackingService::class.java)
+         .also { it.action = ACTION_START; it.putExtra(EXTRA_ACTIVITY_TYPE, selectedActivity.name) })
+```
+
+1. `onStartCommand` sprejme `ACTION_START`.
+2. Prebere `currentActivityType` iz extra.
+3. Pridobi `PARTIAL_WAKE_LOCK` (CPU ne zaspi — brez timeout-a: `acquire()` brez parametra).
+4. Registrira barometer (senzor `TYPE_PRESSURE`) za merjenje nadmorske višine.
+5. Pokliče `startForeground(1001, notification)`.
+6. Izbere `GpsProfile` glede na tip aktivnosti (`resolveGpsProfile()`).
+7. Ustvari `LocationRequest` in `LocationCallback`.
+8. Pokliče `fusedLocationClient.requestLocationUpdates(...)`.
+9. Zažene timer (korutina na `Dispatchers.Main`).
+
+#### 9.1.3 Ustavitev
+
+Ustavitev se sproži iz UI ali iz gumba "Stop" v notifikaciji (PendingIntent → `ACTION_STOP`):
+
+1. `_isTracking.value = false`
+2. Prekine timerJob (`.cancel()`).
+3. Odjavi barometer.
+4. Pokliče `fusedLocationClient.removeLocationUpdates(locationCallback)`.
+5. Sprosti wake lock (`it.release()`).
+6. `stopForeground(STOP_FOREGROUND_REMOVE)` — notifikacija se odstrani.
+7. `stopSelf()` — storitev se uniči.
+
+#### 9.1.4 Pavza / Nadaljevanje
+
+```
+ACTION_PAUSE:
+  → _isPaused.value = true
+  → lastAltitudeM = null   // reset barometer baseline (preprečuje lažni vzpon)
+  → timerJob?.cancel()
+  → updateNotification()    // pokaže "Paused"
+
+ACTION_RESUME:
+  → _isPaused.value = false
+  → startTimer()
+  → updateNotification()
+```
+
+GPS posodobitve med pavzo **NE** ustavijo — LocationCallback se prejema, a je ignoriran: `if (_isPaused.value) return`.
+
+#### 9.1.5 Timer
+
+Timer je simpel 1-sekundni loop na `Dispatchers.Main`:
+
+```kotlin
+while (isActive && _isTracking.value && !_isPaused.value) {
+    delay(1000)
+    _elapsedSeconds.value++
+    if (_elapsedSeconds.value % 5 == 0L) updateNotification()
+}
+```
+
+Notifikacija se posodablja **vsakih 5 sekund** (varčevanje z baterijo).
+
+---
+
+### 9.2 Location Logic (GPS)
+
+#### 9.2.1 GPS Provider
+
+`FusedLocationProviderClient` iz Google Play Services.  
+Fiksna vrednost: `Priority.PRIORITY_HIGH_ACCURACY` za **vse** tipe aktivnosti.
+
+#### 9.2.2 Activity-Aware GPS Profili
+
+Interval GPS posodobitev je odvisen od tipa aktivnosti (`resolveGpsProfile()`):
+
+| ActivityType | interval (ms) | minInterval (ms) | maxDelay (ms) | minDistance (m) |
+|---|---|---|---|---|
+| `SPRINT` | 1 000 | 500 | 1 500 | 0 |
+| `RUN` | 2 000 | 1 000 | 3 000 | 1.5 |
+| `CYCLING`, `SKATING` | 3 000 | 1 500 | 5 000 | 3 |
+| `WALK`, `HIKE`, `NORDIC` | 6 000 | 3 000 | 9 000 | 6 |
+| `SKIING`, `SNOWBOARD` | 4 000 | 2 000 | 6 000 | 4 |
+
+#### 9.2.3 Filtriranje točk
+
+V `processLocationUpdate(location)` sta dva filtri:
+
+1. **Natančnost:** točke z `location.accuracy > 20` metrih se **zavrženejo**.
+2. **Nerealni skoki:** razdalja med zaporednima točkama > 100 m se **zavrže** (preprečuje GPS "teleport").
+
+```kotlin
+if (location.accuracy > 20) return          // točnost slaba
+if (distance < 100) totalDistance += distance  // ok
+else Log.d(TAG, "Skipping unrealistic distance jump")
+```
+
+#### 9.2.4 Hramba GPS točk
+
+Točke se shranjujejo **izključno v RAM** (v `MutableStateFlow<List<Location>>`):
+
+```kotlin
+private val _locationPoints = MutableStateFlow<List<Location>>(emptyList())
+```
+
+**Ni začasne datoteke, ni direktnega pisanja v Firestore med tekom.**  
+Ob koncu teka UI prebere `locationPoints` in jih pretvori v `List<LocationPoint>` (serializabilen data class), ki ga shrani v Firestore kot `polylinePoints` array v dokumentu RunSession.
+
+#### 9.2.5 Hitrost
+
+- **Trenutna hitrost:** bere se direktno iz `location.speed` (m/s) — vrednost, ki jo zagotovi GPS.
+- **Povprečna hitrost:** aritmetična sredina vseh `speedReadings` (dodan vsak odčitek, kjer `speed > 0.5 m/s`).
+- **Maksimalna hitrost:** `max(dosedanji max, novo)`.
+
+---
+
+### 9.3 Math Formula Audit
+
+#### 9.3.1 Razdalja med GPS točkami
+
+Funkcija: **`Location.distanceTo(other: Location)`** — Androidova vgrajena metoda.
+
+To je **wrapper nad Haversine formulo** implementiranem v Android SDK (WGS84 sferoid). Ni lastne implementacije Haversine formule. Formula računa geodetično razdaljo ("great-circle") v metrih.
+
+```kotlin
+val distance = last.distanceTo(location)   // v metrih, float
+```
+
+#### 9.3.2 Kalkulacija kalorij — MET formula
+
+Funkcija `calculateCaloriesMet()` v `RunTrackerScreen.kt` (vrstice 68–121):
+
+**Osnovna formula:**
+```
+kcal = MET × teža_kg × čas_v_urah + pribitek_za_vzpon
+```
+
+**Vzpon pribitek:**
+```
+elevBonus = elevationGainM × 0.8 × (teža_kg / 70.0)
+```
+- Vzpon omejen: `elevationGainM.coerceIn(0f, 2000f)` (preprečuje GPS lažni vzpon)
+- Skala glede na težo (referenca: 70 kg = 0.8 kcal/m)
+
+**MET vrednosti (dinamične, linearno interpolirane po hitrosti):**
+
+`RUN (safeSpeed v km/h)`:
+| Hitrost | MET izračun |
+|---|---|
+| < 4 km/h | `safeSpeed` (linearno 0–4) |
+| 4–8 km/h | `4.0 + (speed-4) × 0.5` → [4.0–6.0] |
+| 8–10 km/h | `6.0 + (speed-8) × 1.0` → [6.0–8.0] |
+| 10–12 km/h | `8.0 + (speed-10) × 1.0` → [8.0–10.0] |
+| 12–14 km/h | `10.0 + (speed-12) × 0.75` → [10.0–11.5] |
+| > 14 km/h | `11.5 + (speed-14) × 0.4` |
+
+`WALK (safeSpeed v km/h)`:
+| Hitrost | MET izračun |
+|---|---|
+| < 3 km/h | `2.0 + (speed/3) × 0.5` |
+| 3–5 km/h | `2.5 + (speed-3) × 0.5` |
+| 5–7 km/h | `3.5 + (speed-5) × 0.5` |
+| > 7 km/h | `4.5 + (speed-7) × 0.3` |
+
+`SPRINT (safeSpeed v km/h)`:
+| Hitrost | MET izračun |
+|---|---|
+| < 10 km/h | `8.0` |
+| 10–16 km/h | `8.0 + (speed-10) × 0.83` → [8.0–13.0] |
+| 16–20 km/h | `13.0 + (speed-16) × 0.75` → [13.0–16.0] |
+| > 20 km/h | `16.0 + (speed-20) × 0.5` |
+
+`HIKE`:
+```
+MET = 6.0 + (elevationGainM / 100.0) × 0.5
+```
+(Vzpon direktno vpliva na MET za hribolazce.)
+
+`CYCLING (safeSpeed v km/h)`:
+| Hitrost | MET |
+|---|---|
+| < 15 km/h | 4.0 |
+| 15–20 km/h | 6.0 |
+| 20–25 km/h | 8.0 |
+| > 25 km/h | 10.0 |
+
+**Varnostne omejitve:**
+```kotlin
+val safeSpeed  = avgSpeedKmh.coerceIn(0f, 35f)       // max 35 km/h
+val safeWeight = weightKg.coerceIn(30.0, 200.0)       // 30–200 kg
+val safeElev   = elevationGainM.coerceIn(0f, 2000f)   // max 2000m
+return (base + elevBonus).toInt().coerceAtLeast(0)    // ne more biti negativno
+```
+
+**Opomba:** `ActivityType.metValue` (enum polje: RUN=8.0, SPRINT=14.0 ...) se v `calculateCaloriesMet()` **ne uporablja direktno** — MET se računa dinamično glede na hitrost. Enum vrednost `metValue` je definirana na tipu (npr. kot referenčna osnova pri zmerni intenzivnosti), a `calculateCaloriesMet` reimplementira logiko z interpolacijo.
+
+---
+
+### 9.4 Auto-Pause & Battery
+
+#### 9.4.1 Auto-Pause
+
+**Ne obstaja.** Aplikacija nima samodejne pavze, ki bi se sprožila ob zaznanem mirovanju (npr. speed ≈ 0). Pavza je **izključno manualna** (gumb v UI ali notifikaciji).
+
+GPS točke z `speed > 0.5 m/s` se ne upoštevajo pri povprečni hitrosti, a čas teče naprej — to NI auto-pause.
+
+#### 9.4.2 Battery Saver način
+
+Ni eksplicitne logike za detekcijo `PowerManager.isPowerSaveMode`. Ko Android vstopi v Battery Saver:
+
+- `PARTIAL_WAKE_LOCK` ostane aktiven (CPU ne zaspi).
+- `FusedLocationProvider` z `PRIORITY_HIGH_ACCURACY` **se prilagodi** — operacijski sistem lahko poveča interval GPS-a. To pomeni, da v Battery Saver načinu GPS posodobitve prihajajo **redkeje** kot nastavljen interval, kar vpliva na natančnost razdalje.
+- Notifikacija se posodablja vsakih 5 sekund (ne vsakih 1s) — ta optimizacija je vgrajena.
+
+**Ni implementirane strategije za Battery Saver** (npr. preklopiti na `PRIORITY_BALANCED_POWER_ACCURACY`).
+
+---
+
+### 9.5 State Recovery (System Kill)
+
+#### 9.5.1 onStartCommand return value
+
+```kotlin
+return START_STICKY
+```
+
+`START_STICKY` pomeni: **sistem ZNOVA zažene storitev** po uboju (OOM killer), toda `intent` bo `null`. V `onStartCommand`:
+
+```kotlin
+when (intent?.action) {
+    ACTION_START -> { ... }
+    ACTION_STOP  -> stopTracking()
+    ...
+}
+```
+
+Če je `intent == null` (restart po uboju), nobena `when` veja se ne izvede. Storitev se zažene brez inicializacije — `_isTracking.value` ostane `false`, `startForeground()` se **ne pokliče**. Rezultat: **prikazovanja slepe storitve brez sledenja** ali Android jo takoj uniči (ker ni `startForeground` v roku 5s za task-killed storitev).
+
+#### 9.5.2 Izguba podatkov
+
+Vsi GPS podatki živijo v RAM (`MutableStateFlow`). Ko sistem ubije proces:
+- **Vsi GPS točke se izgubijo** — ni trajnega vmesnega shranjevanja.
+- **Tek ni mogoče nadaljevati** — ob ponovnem odprtju UI-ja `isBound = false`, `service = null`, prikaže se začetni zaslon.
+
+#### 9.5.3 Singleton pattern
+
+```kotlin
+companion object {
+    private var instance: RunTrackingService? = null
+    fun getInstance(): RunTrackingService? = instance
+}
+```
+
+`instance` se postavi v `onCreate` in počisti v `onDestroy`. UI ga ne uporablja direktno — raje `bindService`. Ta singleton je dostopen le iz iste JVM instance.
+
+#### 9.5.4 Povzetek odpornosti
+
+| Scenarij | Rezultat |
+|---|---|
+| App gre v ozadje | ✅ Tek se nadaljuje (Foreground Service + WakeLock) |
+| Zaslon se izklopi | ✅ Tek se nadaljuje (WakeLock aktiven) |
+| Sistem ubije app (OOM, nizek RAM) | ⚠️ `START_STICKY` znova zažene storitev, a brez podatkov. Tek je izgubljen |
+| Battery Saver aktiviran | ⚠️ GPS interval avtomatsko redkejši (OS odločitev), razdalja manj natančna |
+| Crash v UI (ne v serviceu) | ✅ Storitev živi dalje, podatki v RAM so varni |
+
+---
+
+### 9.6 Barometer & Elevation
+
+Poleg GPS se za merjenje vzpona/spusta uporablja **fizični barometski senzor** (`Sensor.TYPE_PRESSURE`):
+
+```kotlin
+val altitudeM = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressureHpa)
+```
+
+**Prag:** minimalna sprememba 3 m (`ELEVATION_THRESHOLD_M = 3f`) — spremembe pod 3 m se ignorirajo (filtrira šum senzorja).
+
+**Logika:**
+```
+if (diff >= +3m) → totalElevationGainM += diff; lastAltitudeM = altitudeM
+if (diff <= -3m) → totalElevationLossM += (-diff); lastAltitudeM = altitudeM
+```
+
+Med pavzo se `lastAltitudeM = null` (reset baze), da se izogne lažnemu vzponu pri nadaljevanju.
+
+Registracija:
+```kotlin
+sensorManager?.registerListener(barometerListener, sensor, SensorManager.SENSOR_DELAY_UI)
+```
+(`SENSOR_DELAY_UI` ≈ 60 ms interval — optimalno za prikaz, ne za analizo.)
+
+Barometer se odjavi pri `stopTracking()`:
+```kotlin
+sensorManager?.unregisterListener(barometerListener)
+```
+
+---
+
+### 9.7 XP Formula (po koncu teka)
+
+```kotlin
+fun calculateXP(activityType: ActivityType, distanceMeters: Double, timeSeconds: Long): Int {
+    val baseFromDistance = distanceMeters / 100.0
+    val baseFromTime     = timeSeconds / 60.0
+    val multiplier = when (activityType) {
+        ActivityType.RUN, ActivityType.SPRINT   -> 1.5
+        ActivityType.HIKE, ActivityType.NORDIC  -> 1.3
+        ActivityType.WALK, ActivityType.SKATING -> 1.0
+        ActivityType.CYCLING                    -> 0.6
+        ActivityType.SKIING, ActivityType.SNOWBOARD -> 0.5
+    }
+    return ((baseFromDistance + baseFromTime) * multiplier).toInt().coerceAtLeast(10)
+}
+```
+
+**Minimum:** 10 XP za vsak zaključen trening.
+
+**Primeri:**
+| Aktivnost | Razdalja | Čas | Izračun | XP |
+|---|---|---|---|---|
+| RUN | 5 km | 30 min | `(50 + 30) × 1.5` | 120 XP |
+| WALK | 3 km | 45 min | `(30 + 45) × 1.0` | 75 XP |
+| CYCLING | 20 km | 60 min | `(200 + 60) × 0.6` | 156 XP |
+| SPRINT | 1 km | 5 min | `(10 + 5) × 1.5` | 22 XP |
+
+---
+
+### 9.8 Data Flow Diagram (konec teka)
+
+```
+RunTrackingService (RAM)
+  ├─ _locationPoints (List<Location>)
+  ├─ _elapsedSeconds (Long)
+  ├─ _distanceMeters (Double)
+  ├─ _maxSpeed / _avgSpeed (Float)
+  └─ _elevationGain / _elevationLoss (Float)
+        │
+        ▼ (UI bere ob STOP, vse naenkrat)
+RunTrackerScreen.kt
+  ├─ calculateCaloriesMet(activityType, durationSeconds, weightKg, elevationGainM, avgKmh)
+  │     → caloriesKcal: Int
+  ├─ calculateXP(activityType, distanceMeters, elapsedSeconds)
+  │     → xp: Int
+  ├─ CompressRouteUseCase.compress(locationPoints)
+  │     → polylinePoints: List<LocationPoint>  (RDP kompresija ~450→~35 točk za publicActivities)
+  └─ RunSession(id, userId, startTime, endTime, durationSeconds, distanceMeters,
+                avgSpeedMps, maxSpeedMps, caloriesKcal, elevationGainM, elevationLossM,
+                activityType, polylinePoints, isSmoothed=false)
+        │
+        ├─ Firestore: users/{uid}/runSessions/{docId}   ← polni zapis včasnih tekov
+        │     (polylinePoints INLINE — ⚠️ potencialni >1MB crash pri dolgih tekih)
+        │
+        ├─ Firestore: users/{uid}/publicActivities/{docId}   ← SAMO če share_activities=true
+        │     (komprimirane točke routePoints[].lat/.lng, ~35 točk)
+        │
+        ├─ DailyLogRepository.updateDailyLog(date, burnedCalories=caloriesKcal)
+        │     → users/{uid}/dailyLogs/{yyyy-MM-dd}.burnedCalories
+        │
+        └─ viewModel.awardRunXP(xp)
+              → ManageGamificationUseCase.awardXP(xp, "RUN_COMPLETED")
+                    → FirestoreGamificationRepository (Firestore transakcija: xp, level, badge check)
+```
+
+**Neposrednega pisanja med tekom (live Firestore streaming) ni** — samo enkratni zapis ob koncu.
+
+**Teža uporabnika** se ob zagonu screena prebere iz `users/{uid}/weightLogs` (zadnji dokument, descending po `date`). Fallback vrednost: 70 kg.
+
+---
