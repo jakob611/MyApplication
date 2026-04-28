@@ -1413,3 +1413,235 @@ T+500ms: isDarkMode=true vrne iz Firestorea → MyApplicationTheme(darkTheme=tru
 
 ---
 
+---
+
+## Poglavje 13 — PERFORMANCE & DATA ARCHITECTURE
+
+> **Faza 9 od 10** — Audit izveden: 2026-04-28  
+> **Cilj:** Dokumentirati, kako aplikacija preživi brez interneta, kako se čistijo pomnilniška sredstva in kje so bottlenecki zmogljivosti.
+
+---
+
+### 13.1 Offline Persistence (Firestore Cache)
+
+#### Konfiguracija
+
+Firestore offline persistenca je konfigurirana v `MyApplication.kt` (vrstice 34–48) ob startu aplikacije:
+
+```kotlin
+// MyApplication.kt, vrstice 37–44
+val persistentCache = PersistentCacheSettings.newBuilder()
+    .setSizeBytes(100L * 1024 * 1024) // 100 MB
+    .build()
+Firebase.firestore.firestoreSettings =
+    FirebaseFirestoreSettings.Builder()
+        .setLocalCacheSettings(persistentCache)
+        .build()
+```
+
+- Uporabljena je novejša `PersistentCacheSettings` API (ne `isPersistenceEnabled` — ta je deprecated).
+- Velikost cache-a: **100 MB** na disku naprave.
+- `FirestoreHelper.kt` sam **ne konfigurira** nobenih cache nastavitev — edina konfiguracija je v `MyApplication`.
+
+#### OSMdroid (karte)
+
+`MyApplication.kt` (vrstice 20–28) ločeno konfigurira osmdroid tile cache za RunTracker karte:
+
+```kotlin
+osmConfig.tileFileSystemCacheMaxBytes  = 50L * 1024 * 1024   // 50 MB disk
+osmConfig.tileFileSystemCacheTrimBytes = 40L * 1024 * 1024   // trim pri 40 MB
+osmConfig.cacheMapTileCount            = 100.toShort()        // 100 tiles v RAM
+osmConfig.cacheMapTileOvershoot        = 16.toShort()         // pred-naloži 16 ekstra
+```
+
+#### Vedenje med odsotnostjo omrežja (mid-workout)
+
+Ko uporabnik sredi gozda izgubi LTE signal:
+
+| Operacija | Vedenje offline | Razlog |
+|---|---|---|
+| `awardXP()`, `FieldValue.increment()` | Write se shrani lokalno → samodejno posla ob reconect | Firestore SDK buffer |
+| `updateStreak()`, `.set()` polj | Write shranjen lokalno → samodejno posla ob reconnect | Firestore SDK buffer |
+| `logFood()`, `logWater()` | Write shranjen lokalno → samodejno posla | Firestore SDK buffer |
+| `addSnapshotListener` (real-time) | Vrne zadnje cached stanje iz diska (100 MB cache) | SDK offline mode |
+| FatSecret API klic (iskanje hrane) | **Takoj vrne napako** — OkHttp ne pozna offline cachea | Ni implementiranega HTTP cachea |
+| Health Connect sync | **Takoj vrne napako** — Health Connect je lokalna Android baza, klic uspe; Firestore write se shrani v cache | Odvisno od dela |
+
+#### Conflict Resolution
+
+Aplikacija **nima eksplicitnega koda za conflict resolution**. Zanašanje je na Firebase SDK-jevo strategijo:
+
+- **`FieldValue.increment()`** (XP, burned calories) — atomarno na serverju → pravilno setvari pri off+on reconnect.
+- **`set()` in `update()`** (streak, streak_freeze, profil) — **last-write-wins**: local write prišel zadnji → server vrednost bo prepisana z offline vrednostjo. Možen scenarij: dve napravni off-line spremenita streak različno → druga, ki se je sinhronizirala pozneje, bo prepisala prvo.
+
+---
+
+### 13.2 Memory Leaks — Snapshot Listener Lifecycle
+
+#### FirestoreUserProfileRepository — Race Condition
+
+`FirestoreUserProfileRepository.kt` (vrstice 14–40) odpre Firestore listener znotraj `callbackFlow`:
+
+```kotlin
+// FirestoreUserProfileRepository.kt, vrstice 14–39
+override fun observeUserProfile(email: String): Flow<UserProfile> = callbackFlow {
+    var listener: ListenerRegistration? = null  // ← inicializiran kot null
+    launch {                                     // ← asinhroni launch
+        try {
+            val userRef = FirestoreHelper.getCurrentUserDocRef()   // ← network klic (~200–500ms)
+            listener = userRef.addSnapshotListener { snap, error -> ... }
+        } catch (e: Exception) { close(e) }
+    }
+    awaitClose { listener?.remove() }           // ← zaklene se zdaj, listener še null
+}
+```
+
+**Race condition:** Če se flow prekliče (npr. ViewModel uničen) preden `getCurrentUserDocRef()` vrne rezultat (~200–500ms), velja:
+1. `awaitClose` se izvede z `listener == null` → `listener?.remove()` ne naredi ničesar.
+2. `launch` coroutine je bil cancelled → `addSnapshotListener` se **ne registrira** (korutina je preklicana pred klicem).
+
+Rezultat: V tem bestem primeru se listener **nikoli ne registrira**, ni leaka. V najslabšem primeru (overload na thread poolerju, kjer `launch` uspe registrirati listener tik pred cancellom) bi listener ostal aktiven.
+
+#### FoodRepositoryImpl — Pravilna Implementacija
+
+`FoodRepositoryImpl.observeCustomMeals()` (vrstice 42–55) in `observeDailyLog()` (vrstice 57–71):
+
+```kotlin
+// Pravilno — listener dodeljen SINHRONO pred awaitClose
+val listener = docRef.addSnapshotListener { ... }
+awaitClose { listener.remove() }   // ← listener je vedno non-null ✅
+```
+
+Oba listnerjeva sta pravilno registrirana in odstranjena ob preklicu flow-a. ✅
+
+#### NutritionViewModel — Dvojni Collect Vzorec
+
+`NutritionViewModel.observeDailyTotals()` (vrstice 200–233):
+
+```kotlin
+viewModelScope.launch {
+    uidFlow.collect { uid ->                    // ← zunanji collect
+        if (uid != null) {
+            observeDailyLog(uid, todayId).collect { doc -> ... }  // ← notranji collect
+        }
+    }
+}
+```
+
+**Problem:** Ob vsaki spremembi `uid` (npr. ob logout/login ciklu brez restart ViewModel-a) se **odpre nov notranji collect** na `observeDailyLog`, medtem ko prejšnji inner collect ni eksplicitno prekinjen. Stari `callbackFlow` se zapre šele, ko se zapre korutina starša (`viewModelScope.launch`), kar pomeni **hkratno aktivnih dva Firestore listenerja** na istem dokumentu.
+
+> ⚠️ **Anomalija**: `NutritionViewModel.observeDailyTotals()` puede imeti aktivna 2 `addSnapshotListener` na `dailyLogs/{danes}` ob ponovnem login brez rekreacije ViewModel-a.
+
+---
+
+### 13.3 Image Loading
+
+#### Deklaracija brez uporabe
+
+`app/build.gradle.kts` (vrstica 120) deklarira:
+
+```kotlin
+implementation("io.coil-kt:coil-compose:2.5.0")
+```
+
+**Grep rezultat:** Nobena Kotlin datoteka v projektu ne kliče `AsyncImage()`, `rememberAsyncImagePainter()`, ali katerekoli druge Coil API.
+
+#### Profil slike
+
+`UserProfile` data class (`data/UserProfile.kt`) **nima polja za URL slike profila** (`photoUrl`, `avatarUrl` ali podobnega). Google Sign-In sicer vrne `FirebaseUser.photoUrl`, toda to polje ni nikjer prebrano ali prikazano.
+
+**Sklep:** Funkcionalnost profilnih slik **ne obstaja v produkcijskem kodu**. Coil knjižnica je naložena in poveča APK za ~1.2 MB brez učinka.
+
+---
+
+### 13.4 Firestore Poizvedbe in Indeksi
+
+#### Aktivne Poizvedbe
+
+| Lokacija | Poizvedba | Tip indeksa | Status |
+|---|---|---|---|
+| `WorkoutSessionViewModel.fetchLastSessionForFocus()` vrstica 219 | `workoutSessions.orderBy("timestamp", DESC).limit(10)` | Eno-poljna | Auto-index ✅ |
+| `AppViewModel.startInitialSync()` vrstica 119 | `weightLogs.orderBy("date", DESC).limit(10)` | Eno-poljna | Auto-index ✅ |
+| `FirestoreHelper.fetchLatestWeightKg()` vrstica 24 | `weightLogs.orderBy("date", DESC).limit(1)` | Eno-poljna | Auto-index ✅ |
+| `FoodRepositoryImpl.observeCustomMeals()` vrstica 43 | `customMeals` full snapshot listener brez filtra | Ni poizvedbe | N/A |
+| `FoodRepositoryImpl.observeDailyLog()` vrstica 58 | `dailyLogs/{dateId}` direct document read | Ni poizvedbe | N/A |
+
+**Ugotovitev:** Aplikacija ne izvaja nobene sestavljene poizvedbe (`whereEqualTo` + `orderBy` ali multi-where), ki bi zahtevala ročno kreirani kompozitni indeks. **Ni nevarnosti za `FirebaseFirestoreException: FAILED_PRECONDITION: The query requires an index`** pri obstoječih poizvedbah.
+
+#### Iskanje hrane
+
+Iskanje hrane (FatSecret API) je REST klic prek `OkHttp` na zunanji strežnik — **ne Firestore**. `FoodRepositoryImpl.searchFoodByName()` (vrstica 22) delegira na `FatSecretApi.searchFoods()`. Ni lokalnega cachea za rezultate iskanja — vsak znak v search boxu sproži nov network klic, razen če je implementiran debounce v UI sloju.
+
+#### Leaderboard
+
+**Leaderboard funkcionalnost ne obstaja** v kodi. Ni nobenih poizvedb tipa `users.orderBy("xp", DESC).limit(10)`. Pojem se pojavlja le v dokumentaciji, ne v implementaciji.
+
+---
+
+### 13.5 Težki Izračuni — Niti in Dispatchers
+
+#### Pregled vseh korutinskih kontekstov
+
+| Operacija | Datoteka | Dispatcher | Ocena |
+|---|---|---|---|
+| `prepareWorkout()` — workout generiranje | `WorkoutSessionViewModel.kt` vrstica 115 | `Dispatchers.IO` | ✅ Varno |
+| `AdvancedExerciseRepository.init()` — JSON parsanje | `AdvancedExerciseRepository.kt` vrstica 30 | `Dispatchers.Default` | ✅ Varno |
+| `startInitialSync()` — 3× vzporeden Firestore fetch | `AppViewModel.kt` vrstica 101 | `Dispatchers.IO` | ✅ Varno |
+| `CompressRouteUseCase.invoke()` — decimacija GPS točk | `CompressRouteUseCase.kt` vrstica 3 | **Noben (synchronous)** | ✅ O(100) — trivialno |
+| `syncHealthConnectNow()` — HC branje + Firestore transakcija | `NutritionViewModel.kt` vrstica 273 | **`Dispatchers.Main` (default)** | ❌ Blokira UI nit |
+| `observeDailyTotals()` — Firestore listener setup | `NutritionViewModel.kt` vrstica 200 | `viewModelScope` (Main) | ✅ Setup je non-blocking |
+| `fetchLastSessionForFocus()` — Firestore `.get().await()` | `WorkoutSessionViewModel.kt` vrstica 216 | Znotraj `Dispatchers.IO` launch-a | ✅ Varno |
+
+#### Kritična Anomalija: syncHealthConnectNow()
+
+```kotlin
+// NutritionViewModel.kt, vrstice 273–278
+fun syncHealthConnectNow(context: Context) {
+    viewModelScope.launch {                       // ← Dispatchers.Main (implicitno)
+        val syncUseCase = SyncHealthConnectUseCase()
+        syncUseCase(context)                      // ← Health Connect read + Firestore transaction
+    }
+}
+```
+
+`viewModelScope.launch { }` brez eksplicitnega dispatcherja privzeto teče na **`Dispatchers.Main`** (UI nit). `SyncHealthConnectUseCase.invoke()` izvaja:
+1. `HealthConnectManager.readCalories()` — Android Health Connect API klici
+2. `DailyLogRepository.updateDailyLog()` — Firestore transakcija (`.await()`)
+
+`kotlinx.coroutines.tasks.await()` je sicer non-blocking (suspends, ne blocks), toda če `readCalories()` interno ne suspendira (odvisno od implementacije), bi blokiral Main nit.
+
+> ⚠️ **Anomalija**: `NutritionViewModel.syncHealthConnectNow()` sproži Health Connect branje + Firestore transakcijo na `Dispatchers.Main` brez eksplicitnega `withContext(Dispatchers.IO)`.
+
+#### CompressRouteUseCase — Brez Dispatcherja
+
+```kotlin
+// CompressRouteUseCase.kt — celotna implementacija
+class CompressRouteUseCase {
+    operator fun invoke(points: List<Pair<Double, Double>>): List<Pair<Double, Double>> {
+        val limit = 100
+        if (points.size <= limit) return points
+        val step = points.size / limit.toDouble()
+        // O(100) loop — fiksno
+        ...
+    }
+}
+```
+
+Algoritem je **vedno O(100)** (ne O(n)) — ne glede na dolžino GPS rute. Če je vhodnih 50.000 točk, zanka vseeno naredi natanko 100 iteracij. Ni nevarnosti blokiranja Main niti pri realističnih vhodih.
+
+---
+
+### 13.6 Povzetek Anomalij
+
+| # | Tip | Lokacija | Opis | Resnost |
+|---|---|---|---|---|
+| 1 | Threading | `NutritionViewModel.kt` vrstica 273 | `syncHealthConnectNow()` brez `Dispatchers.IO` | 🔴 |
+| 2 | Memory | `NutritionViewModel.kt` vrstica 200 | Dvojni inner collect — potencialno 2 Firestore listenerja ob uid spremembi | 🔴 |
+| 3 | Race Condition | `FirestoreUserProfileRepository.kt` vrstica 16 | `listener` dodeljen znotraj async `launch` — null ob zgodnjem cancel | 🟡 |
+| 4 | Dead Dep. | `app/build.gradle.kts` vrstica 120 | Coil `2.5.0` deklariran, nič ne kliče API-ja | 🟢 |
+| 5 | Offline | `FoodRepositoryImpl.searchFoodByName()` | Iskanje hrane brez HTTP cache — vedno network, brez offline fallback | 🟡 |
+| 6 | Offline | `set()` streak/profil polja | Last-write-wins brez conflict resolution — multi-device off-line scenariji | 🟡 |
+| 7 | Feature Gap | `UserProfile.kt` | Ni `photoUrl` polja — profilne slike niso implementirane kljub Coil odvisnosti | 🟢 |
+
+---
+
