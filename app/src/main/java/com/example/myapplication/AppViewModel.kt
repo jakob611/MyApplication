@@ -43,6 +43,10 @@ class AppViewModel(
     private val _isProfileReady = MutableStateFlow(false)
     val isProfileReady: StateFlow<Boolean> = _isProfileReady.asStateFlow()
 
+    /** true = sync je aktivno v teku — hard guard proti ponovnemu vstopu */
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     /** Besedilo prikazano v sync overlayu */
     private val _syncStatusMessage = MutableStateFlow("Syncing your fitness data…")
     val syncStatusMessage: StateFlow<String> = _syncStatusMessage.asStateFlow()
@@ -77,8 +81,11 @@ class AppViewModel(
      * Ko je sync končan, nastavi isProfileReady = true → overlay izgine.
      */
     fun startInitialSync(context: Context, userEmail: String) {
+        // Double guard: isSyncStarted (session-lifetime) + _isSyncing (coroutine-lifetime)
         if (isSyncStarted) return
+        if (_isSyncing.value) return
         isSyncStarted = true
+        _isSyncing.value = true
 
         viewModelScope.launch {
             try {
@@ -152,6 +159,7 @@ class AppViewModel(
             } catch (e: Exception) {
                 Log.e("AppViewModel", "InitialSync napaka: ${e.message}")
             } finally {
+                _isSyncing.value = false
                 _isProfileReady.value = true
             }
         }
@@ -160,6 +168,7 @@ class AppViewModel(
     /** Ponastavi sync stanje ob odjavi — naslednji login bo izvedel svež sync. */
     fun resetSyncState() {
         isSyncStarted = false
+        _isSyncing.value = false
         _isProfileReady.value = false
         _syncStatusMessage.value = "Syncing your fitness data…"
     }

@@ -64,7 +64,8 @@ class DailyLogRepository {
                 }
                 action(data)
                 data["updatedAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                transaction.set(ref, data)
+                // SetOptions.merge() — nikoli ne prepiše polj, ki jih action ni modificiral
+                transaction.set(ref, data, com.google.firebase.firestore.SetOptions.merge())
             }.await()
             recordTransaction(opLabel, System.currentTimeMillis() - startMs, true)
         } catch (e: Exception) {
