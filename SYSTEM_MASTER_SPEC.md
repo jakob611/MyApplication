@@ -1645,3 +1645,253 @@ Algoritem je **vedno O(100)** (ne O(n)) — ne glede na dolžino GPS rute. Če j
 
 ---
 
+---
+
+## Poglavje 14 — RELEASE INTEGRITY & FINAL AUDIT
+
+> **Faza 10 od 10** — Audit izveden: 2026-04-28
+> **Cilj:** Zadnji pregled pred produkcijsko objavo — dead code, skrita logiranja, R8 pokritost, in finalna ocena zrelosti.
+
+---
+
+### 14.1 Dead Code — Preostale Datoteke za Rocno Brisanje
+
+Vse tri datoteke so ze oznacene z `// DEAD CODE — IZBRISI TO DATOTEKO ROCNO.` v glavi, toda **ostajajo v projektu** ker AI ne more brisati datotek. R8 jih sicer izstrize iz release APK-ja, ampak povzrocajo motnjo pri grep preiskave in bremenijo cas kompilacije.
+
+| Datoteka | Vrstice | Razlog | Locirana |
+|---|---|---|---|
+| `domain/nutrition/NutritionCalculations.kt` | 8 | Prazna duplikat — vsa logika v `utils/NutritionCalculations.kt` | Oznacena |
+| `network/ai_utils.kt` | 116 | `requestAIPlan()` ni klicana nikjer; `PlanDataStore` ima svojo kopijo | Oznacena |
+| `ui/adapters/ChallengeAdapter.kt` | 68 | RecyclerView adapter v cistem Compose projektu; `item_challenge_card.xml` ne obstaja | Oznacena |
+
+#### Poseben primer: TestDate.kt
+
+```kotlin
+// TestDate.kt — brez package deklaracije, v korenem paketu com.example.myapplication
+fun main() {
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    val past = today.minus(DatePeriod(days = 6))
+    val diff = past.daysUntil(today)
+    println(past)
+    println(diff)
+}
+```
+
+- Datoteka **ni oznacena** kot dead code.
+- `fun main()` je razredu brez package deklaracije — kompilira se kot del `default` paketa.
+- Na Androidu `fun main()` nikoli ni klicana; `println()` gre v /dev/null.
+- Ni nobenih `@Test` anotacij — to ni unit test.
+
+#### WeeklyStreakWorker — Opuscena Metoda
+
+```kotlin
+// WeeklyStreakWorker.kt, vrstice 48–50
+fun scheduleTomorrowFlags(context, prefs, currentPlanDay) {
+    // Keep this interface alive if called by other files for now
+}
+```
+
+Grep potrjuje: `scheduleTomorrowFlags` **ni klicana nikjer** v projektu. Metoda je prazna stub z arhivskim komentarjem.
+
+---
+
+### 14.2 Hardcoded Vrednosti
+
+#### Google OAuth Client ID v strings.xml
+
+```xml
+<!-- strings.xml, vrstica 10 -->
+<string name="default_web_client_id">551351477998-t69spragd7bmfe0so7823utfca8io89a.apps.googleusercontent.com</string>
+```
+
+- To je standardni Firebase pristop — vrednost je enaka tisti v `google-services.json`.
+- Vrednost je **javna** (Android OAuth Client ID ni skrivnost) in je namenoma v resources.
+- Resnost: Nizka (namerno)
+
+#### Nerabljeni strings.xml Vnosi
+
+strings.xml vsebuje 7 template privzetih vrednosti iz Android Studio novega projekta:
+
+```
+nav_header_desc, nav_header_title, nav_header_subtitle,
+menu_home, menu_gallery, menu_slideshow, action_settings
+```
+
+**Noben od teh `R.string.*` virov ni dejansko klican** v Compose kodi. Cel UI uporablja hardcoded Kotlin nize namesto `stringResource()`.
+
+> Anomalija: Celoten UI aplikacije (vsi gumbi, naslovi, sporocila) uporablja hardcoded Kotlin string literale, ne `R.string.*` vire. Lokalizacija (i18n) ni mozna brez refaktoriranja.
+
+#### Simulacijska Koda v Produkciji
+
+```kotlin
+// WeeklyStreakWorker.kt, vrstice 72–79
+fun simulateDayPass(context: Context) {
+    val request = OneTimeWorkRequestBuilder<WeeklyStreakWorker>()
+        .setInitialDelay(0, TimeUnit.SECONDS)
+        .build()
+    WorkManager.getInstance(context)
+        .enqueueUniqueWork("simulate_day_pass", ExistingWorkPolicy.REPLACE, request)
+    Log.d(TAG, "Simulating day pass for testing")
+}
+```
+
+`simulateDayPass()` je **dostopna metoda v produkcijskem razredu**. Ni zascitena z `BuildConfig.DEBUG` guardom. Ni oznacena `@VisibleForTesting`. Klicati jo je mozno iz kateregakoli dela kode ali prek obratnega inzeniringa Release APK-ja.
+
+---
+
+### 14.3 ProGuard / R8 Pregled
+
+#### Stanje: Obsezno Pokrito
+
+| Knjiznica | Pravilo | Status |
+|---|---|---|
+| Firebase (auth, firestore, storage) | `-keep class com.google.firebase.** { *; }` | OK |
+| Google Play Services (GMS) | `-keep class com.google.android.gms.** { *; }` | OK |
+| Firestore Data Models | `-keep class com.example.myapplication.data.** { *; }` | OK |
+| OkHttp | `-keep class okhttp3.** { *; }` | OK |
+| Gson | `-keep class com.google.gson.** { *; }` | OK |
+| Coil | `-keep class coil.** { *; }` | OK (kljub neuporabi) |
+| Compose | `-keep class androidx.compose.** { *; }` | OK |
+| osmdroid | `-keep class org.osmdroid.** { *; }` | OK |
+| Health Connect | `-keep class androidx.health.connect.** { *; }` | OK |
+| WorkManager + Workers | `-keep class * extends androidx.work.CoroutineWorker` | OK |
+| CameraX + ML Kit | Oba `-keep` bloka prisotna | OK |
+| ExoPlayer / Media3 | `-keep class androidx.media3.** { *; }` | OK |
+| TFLite / LiteRT | `-keep class org.tensorflow.lite.** { *; }` | OK |
+| Widget classes | `-keep class com.example.myapplication.widget.**` | OK |
+| Enum values/valueOf | `-keepclassmembers enum * { ... }` | OK |
+
+#### Kriticna Vrzel: Manjkajoca -assumenosideeffects Pravila
+
+`proguard-rules.pro` **nima** naslednjega pravila:
+
+```proguard
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** i(...);
+    public static *** v(...);
+}
+```
+
+Posledica: vsi `Log.d()`, `Log.i()` klici (vkljucno s tistimi, ki izpisejo email in Firestore dokument vsebino) **ostanejo aktivni v Release APK-ju**. Kdor ima USB ADB priklopljen na produkcijsko napravo, vidi vse.
+
+Podobno: `domain/Logger.kt` uporablja `println()` ki na Androidu grejo v LogCat z oznako `System.out`. Ni `-assumenosideeffects` za `System.out.println` v pravilih.
+
+---
+
+### 14.4 Logging Audit — Obcutljivi Podatki
+
+#### Pregled vseh Log klicev s PII
+
+| Datoteka | Vrstica | Log klic | Vsebina | Resnost |
+|---|---|---|---|---|
+| `WeeklyStreakWorker.kt` | 28 | `Log.d(TAG, "Daily streak check running for $email")` | **Polni email naslov** | Kriticno |
+| `FoodRepositoryImpl.kt` | 60 | `Log.d("DEBUG_DATA", "Poslušam dokument: ${docRef.path}")` | **Firestore pot = vsebuje email** | Kriticno |
+| `FoodRepositoryImpl.kt` | 66 | `Log.d("DEBUG_DATA", "Novo stanje iz baze (dailyLog): ${doc.data}")` | **Polna vsebina dnevnega dnevnika** (kalorije, hrana, voda) | Kriticno |
+| `FirestoreHelper.kt` | 96 | `Log.i(TAG, "Legacy UID document found. Migrating to Email: $email")` | **Email naslov** | Kriticno |
+| `AppViewModel.kt` | 138 | `Log.i("AppViewModel", "InitialSync za uid=$initialSyncUid")` | UID (manj obcutljivo) | Srednje |
+| `Progress.kt` | 1047 | `Log.d("ProgressScreen", "recalculation for uid=$uid, weight=$wKg")` | UID + **telesna teza** | Srednje |
+| `NutritionPlanStore.kt` | 111 | `Log.d("NutritionPlanStore", "recalculation for userId=$userId, weight=$newWeightKg")` | userId + **telesna teza** | Srednje |
+| `fatsecret_api_service.kt` | 93–95 | `Log.d(TAG, "BACKEND_API_KEY: ***SET***")` | API URL (ne kljuc) | Nizko |
+
+#### Logger.kt — println brez DEBUG Zascite
+
+```kotlin
+// domain/Logger.kt — velja za Release in Debug enako
+object Logger {
+    fun d(tag: String, message: String) {
+        println("DEBUG [$tag]: $message")   // vedno, brez BuildConfig.DEBUG guard-a
+    }
+}
+```
+
+`Logger` se uporablja v `AdvancedExerciseRepository` za logiranje inicializacije knjiznice vaj. `println()` na Androidu pise v LogCat z oznako `System.out`. Ni locevanja med debug in release izhodom.
+
+---
+
+### 14.5 Finalni Risk Matrix — Vse Preostale Kriticne Anomalije
+
+Zbrane iz vseh 10 faz audita:
+
+| # | Faza | Kategorija | Datoteka / Lokacija | Opis Anomalije | Ocena |
+|---|---|---|---|---|---|
+| R-01 | Faza 7 | Gamification | `ManageGamificationUseCase.kt` vrstica 86 | `unlockedBadges` vedno vrne `emptyList()` — badge animacija nikoli ne bo sprozena | Kriticno |
+| R-02 | Faza 7 | Gamification | `UserProfileManager.kt` + `FirestoreGamificationRepository.kt` | Dva vzporedna streak sistema piseta na **razlicna Firestore polja** (`streak_days` vs `login_streak`) — nikoli zbrana | Kriticno |
+| R-03 | Faza 8 | Navigation | `NavigationViewModel.kt` | Logout **ne pocisti navigation stack-a** — `clearStack()` obstaja ampak ni klicana ob odjavi | Kriticno |
+| R-04 | Faza 8 | UI/UX | `XPPopup.kt` vrstica 66 | `Color.White` na `primary=#DCE4FF` v dark modu — kontrast 1.5:1, WCAG AA fail | Kriticno |
+| R-05 | Faza 8 | UI/UX | `theme.kt` + `MainActivity.kt` | Dark mode `isDarkMode=false` ob zagonu — 500ms light mode flash pri vsakem zagonu | Kriticno |
+| R-06 | Faza 9 | Threading | `NutritionViewModel.kt` vrstica 273 | `syncHealthConnectNow()` brez `Dispatchers.IO` — Health Connect + Firestore transakcija na Main niti | Kriticno |
+| R-07 | Faza 9 | Memory | `NutritionViewModel.kt` vrstica 200 | Dvojni inner collect — potencialno 2 socasna Firestore listenerja na istem dokumentu ob uid spremembi | Kriticno |
+| R-08 | Faza 10 | Security | `FoodRepositoryImpl.kt` vrstici 60, 66 | `Log.d("DEBUG_DATA")` izpise Firestore document path in polno vsebino dnevnega dnevnika — aktivno v Release | Kriticno |
+| R-09 | Faza 10 | Security | `WeeklyStreakWorker.kt` vrstica 28 | `Log.d` izpise polni email naslov — aktiven v Release APK | Kriticno |
+| R-10 | Faza 10 | Security | `FirestoreHelper.kt` vrstica 96 | `Log.i` izpise email naslov med migracijo — aktiven v Release | Kriticno |
+| R-11 | Faza 10 | Security | `proguard-rules.pro` | Manjka `-assumenosideeffects` za `Log.d/i/v` — vsi debug logi aktivni v Release APK | Kriticno |
+| R-12 | Faza 10 | Dead Code | `network/ai_utils.kt`, `domain/nutrition/NutritionCalculations.kt`, `ui/adapters/ChallengeAdapter.kt` | 3 mrtve datoteke cakajo na rocno brisanje | Srednje |
+| R-13 | Faza 10 | Testing | `WeeklyStreakWorker.simulateDayPass()` | Testna metoda brez DEBUG guard-a dostopna v produkcijskem APK | Srednje |
+| R-14 | Faza 7 | Gamification | `WeeklyStreakWorker.kt` | Streak worker tece samo ob mrezni povezavi — telefon brez LTE ob polnoci = streak ne pade in freeze se ne porabi | Srednje |
+| R-15 | Faza 7 | Gamification | `ManageGamificationUseCase.kt` | Ni dnevnega XP stropa — neomejeno farmanje XP z ponavljanjem workout start/finish | Srednje |
+| R-16 | Faza 8 | State | `AppViewModel.kt` | `UserProfile` (40+ polj) kot enoten StateFlow — vsako polje sprozi re-kompozicijo vseh screen-ov | Srednje |
+| R-17 | Faza 10 | i18n | Celoten UI | Vsi UI nizi so hardcoded Kotlin literali — lokalizacija ni mozna brez refaktoriranja | Srednje |
+| R-18 | Faza 9 | Dead Dep. | `app/build.gradle.kts` vrstica 120 | Coil 2.5.0 v odvisnostih, nicesar ga ne klice — `UserProfile` nima `photoUrl` polja | Nizko |
+
+---
+
+### 14.6 Final Verdict
+
+```
+GLOW UPP — FINAL VERDICT
+============================================================
+  Skupno kriticnih (R-01 do R-11):   11
+  Skupno srednje (R-12 do R-17):      6
+  Skupno nizko (R-18):                1
+============================================================
+
+  Arhitektura:     ****  Zmogljiva, Clean Architecture z SSOT
+                         nacelom. Slabost: monolitni UserProfile
+                         StateFlow.
+
+  Gamification:    ***   XP sistem deluje; streak motor ima
+                         paralelo implementacijo na dveh poljih.
+                         Badge animacija je mrtva koda.
+
+  Varnost:         **    Email naslovi in HC zdravstveni podatki
+                         v LogCat brez DEBUG zascite.
+                         R8 ne strize Log.d klicev.
+
+  Zmogljivost:     ***   Firestore offline 100 MB OK
+                         OSMdroid tile cache OK
+                         HealthConnect sync na Main niti FAIL
+
+  UX:              ***   Konsistentna Material3 tema.
+                         Dark mode flash ob zagonu.
+                         XPPopup kontrast WCAG fail.
+
+============================================================
+  OCENA ZA PRODUKCIJSKO OBJAVO:
+
+  NI PRIPRAVLJENO — 4 blokatorji pred objavo:
+
+  1. R-11: Dodaj -assumenosideeffects v proguard-rules.pro
+     Prepreci izpis email/PII v produkcijskem APK
+
+  2. R-08/R-09/R-10: Odstrani ali zasciti Log.d klice s PII
+     (FoodRepositoryImpl, WeeklyStreakWorker, FirestoreHelper)
+
+  3. R-02: Poenoti streak implementacijo — izberi ENO polje
+     (streak_days ali login_streak) in eliminiraj duplikat
+
+  4. R-03: Implementiraj clearStack() ob odjavi
+     NavigationViewModel.onLogout() mora poklicati clearStack()
+
+  Ko so ta 4 popravki izvedeni, je Glow Upp PRIMEREN za beta
+  distribucijo prek Google Play Internal Testing Track.
+============================================================
+```
+
+---
+
+*Dokument zakljucen: 2026-04-28*
+*Skupaj poglavij: 14*
+*Skupaj faz audita: 10/10 ZAKLJUCENO*
+
+---
