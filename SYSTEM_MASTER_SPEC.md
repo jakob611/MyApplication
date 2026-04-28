@@ -406,3 +406,387 @@ AppViewModel.startInitialSync()
 
 **Opomba:** Arhitektura ni striktna clean-architecture — nekatere UI datoteke (RunTrackerScreen, ManualExerciseLogScreen) kličejo repository/store sloj direktno brez use case posrednika. To je znan kompromis dokumentiran v CODE_ISSUES.md.
 
+---
+
+## 7. FIRESTORE DATA MODEL
+
+> **Legenda tipov:** `String`, `Int`, `Long`, `Double`, `Float`, `Boolean`, `Array<T>`, `Map`, `Timestamp` (Firestore server timestamp), `EpochMs` (Long, epoch milliseconds), `EpochDays` (Long — DNI od 1970-01-01, NE millisekunde!)
+
+> **Doc ID format:** `users/{docId}` kjer je `docId` = email (primarna pot) ali UID (fallback). Reši ga `FirestoreHelper.getCurrentUserDocRef()`.
+
+---
+
+### 7.1 Kolekcija: `users/{docId}`
+
+Glavni profil — eden dokument na uporabnika.
+
+#### 7.1.1 Identifikacija in osnova
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `username` | String | `""` | Prikazno ime | `UserProfileManager.saveProfileFirestore()` |
+| `first_name` | String | `""` | Ime | `UserProfileManager.saveProfileFirestore()` |
+| `last_name` | String | `""` | Priimek | `UserProfileManager.saveProfileFirestore()` |
+| `address` | String | `""` | Naslov | `UserProfileManager.saveProfileFirestore()` |
+| `profilePictureUrl` | String? | `null` | URL slike profila v Firebase Storage | `UserProfileManager.saveProfileFirestore()` |
+| `darkMode` | Boolean | `false` | Temni način | `UserProfileManager.setDarkMode()` |
+
+> ⚠️ **DATA MISMATCH:** `saveProfileFirestore()` piše s ključem `"profilePictureUrl"` (camelCase), toda `documentToUserProfile()` bere s `KEY_PROFILE_PICTURE = "profile_picture_url"` (snake_case). **Slika se nikoli ne naloži nazaj iz Firestore.**
+
+#### 7.1.2 Gamifikacija
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `xp` | Int | `0` | Skupni XP — upravljano IZKLJUČNO prek transakcije | `FirestoreGamificationRepository.awardXP()` |
+| `level` | Int | `1` | Izračunan nivel (= `UserProfile.calculateLevel(xp)`) — atomarno z `xp` | `FirestoreGamificationRepository.awardXP()` |
+| `badges` | Array\<String\> | `[]` | Lista odklepljenih badge ID-jev (npr. `"first_workout"`) | `UserProfileManager.saveProfileFirestore()` |
+| `streak_days` | Int | `0` | Streak v dneh — **kanonični ključ** | `UserProfileManager.updateUserProgressAfterWorkout()`, `saveWorkoutStats()` |
+| `login_streak` | Int | `0` | ⚠️ **REDUNDANTNO** — isti podatek kot `streak_days`, piše `FirestoreGamificationRepository.updateStreak()` | `FirestoreGamificationRepository` |
+| `streak_freezes` | Int | `0` | Število preostalih Streak Freeze uporab | `UserProfileManager.updateUserProgressAfterWorkout()`, `FirestoreGamificationRepository.consumeStreakFreeze()` |
+| `last_workout_epoch` | EpochDays | `0` | Zadnji trening v **epochDays** (NE ms!) — za streak izračun | `UserProfileManager.updateUserProgressAfterWorkout()` |
+| `last_login_date` | String | `null` | Datum zadnje prijave (`"yyyy-MM-dd"`) | `UserProfileManager.saveProfileFirestore()` |
+| `last_streak_update_date` | String | `null` | Datum zadnje streak posodobitve (`"yyyy-MM-dd"`) | `FirestoreGamificationRepository.updateStreak()` |
+| `total_workouts_completed` | Int | `0` | Skupaj zaključenih treningov | `UserProfileManager.saveWorkoutStats()` |
+| `total_calories` | Double | `0.0` | Skupaj porabljenih kalorij skozi ves čas | `UserProfileManager.saveProfileFirestore()` |
+| `early_bird_workouts` | Int | `0` | Treningi pred 7:00 | `UserProfileManager.saveProfileFirestore()` |
+| `night_owl_workouts` | Int | `0` | Treningi po 21:00 | `UserProfileManager.saveProfileFirestore()` |
+| `total_plans_created` | Int | `0` | Skupaj ustvarjenih planov | `UserProfileManager.saveProfileFirestore()` |
+
+#### 7.1.3 Napredek in plan
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `plan_day` | Int | `1` | Aktualni dan v 4-tedenskem planu (1–28+) | `UserProfileManager.updateUserProgressAfterWorkout()`, `saveWorkoutStats()` |
+| `weekly_done` | Int | `0` | Število treningov ta teden | `UserProfileManager.saveWorkoutStats()` |
+| `weekly_target` | Int | `0` | Cilj treningov na teden (iz kviza: 2–6) | `UserProfileManager.saveWorkoutStats()` |
+
+#### 7.1.4 Telesne metrike (iz kviza)
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `height` | Double | `null` | Višina v cm | `UserProfileManager.saveProfileFirestore()` |
+| `age` | Int | `null` | Starost | `UserProfileManager.saveProfileFirestore()` |
+| `gender` | String | `null` | `"Male"` ali `"Female"` | `UserProfileManager.saveProfileFirestore()` |
+| `activityLevel` | String | `null` | `"2x"`, `"3x"`, `"4x"`, `"5x"`, `"6x"` | `UserProfileManager.saveProfileFirestore()` |
+| `experience` | String | `null` | `"Beginner"`, `"Intermediate"`, `"Advanced"` | `UserProfileManager.saveProfileFirestore()` |
+| `bodyFat` | String | `null` | Odstotek maščobe (npr. `"15-20%"`) | `UserProfileManager.saveProfileFirestore()` |
+| `limitations` | Array\<String\> | `[]` | Telesne omejitve | `UserProfileManager.saveProfileFirestore()` |
+| `nutritionStyle` | String | `null` | `"Standard"`, `"Vegetarian"`, `"Vegan"`, `"Keto/LCHF"`, `"Intermittent fasting"` | `UserProfileManager.saveProfileFirestore()` |
+| `sleepHours` | String | `null` | `"Less than 6"`, `"6-7"`, `"7-8"`, `"8-9"`, `"9+"` | `UserProfileManager.saveProfileFirestore()` |
+| `goalWeightKg` | Double | `null` | Ciljna teža v kg za Weight Destiny prediktor | `UserProfileManager.saveProfileFirestore()` |
+| `workoutGoal` | String | `""` | Cilj treninga (`"Lose weight"`, `"Build muscle"`, ...) | `UserProfileManager.saveProfileFirestore()` |
+| `focusAreas` | Array\<String\> | `[]` | Fokusna področja | `UserProfileManager.saveProfileFirestore()` |
+| `equipment` | Array\<String\> | `[]` | Razpoložljiva oprema | `UserProfileManager.saveProfileFirestore()` |
+
+#### 7.1.5 Socialno in zasebnost
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `followers` | Int | `0` | Število sledilcev — upravljano IZKLJUČNO prek transakcije | `FollowStore.followUser()` / `unfollowUser()` |
+| `following` | Int | `0` | Število sledenih — upravljano IZKLJUČNO prek transakcije | `FollowStore.followUser()` / `unfollowUser()` |
+| `is_public_profile` | Boolean | `false` | Javni profil omogočen | `ProfileStore.updatePrivacySettings()`, `UserProfileManager.saveProfileFirestore()` |
+| `show_level` | Boolean | `false` | Pokaži level na javnem profilu | ProfileStore + UserProfileManager |
+| `show_badges` | Boolean | `false` | Pokaži badge-e na javnem profilu | ProfileStore + UserProfileManager |
+| `show_streak` | Boolean | `false` | Pokaži streak na javnem profilu | ProfileStore + UserProfileManager |
+| `show_plan_path` | Boolean | `false` | Pokaži plan path na javnem profilu | ProfileStore + UserProfileManager |
+| `show_challenges` | Boolean | `false` | Pokaži izzive na javnem profilu | ProfileStore + UserProfileManager |
+| `show_followers` | Boolean | `false` | Pokaži followers/following na javnem profilu | ProfileStore + UserProfileManager |
+| `share_activities` | Boolean | `false` | Deli GPS aktivnosti s skupnostjo | ProfileStore + UserProfileManager |
+
+#### 7.1.6 Nastavitve in preferenčne
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `weight_unit` | String | `"kg"` | Enota teže | `UserProfileManager.saveProfileFirestore()` |
+| `speed_unit` | String | `"km/h"` | Enota hitrosti | `UserProfileManager.saveProfileFirestore()` |
+| `start_of_week` | String | `"Monday"` | Začetek tedna | `UserProfileManager.saveProfileFirestore()` |
+| `quiet_hours_start` | String | `"22:00"` | Začetek tihega časa za obvestila | `UserProfileManager.saveProfileFirestore()` |
+| `quiet_hours_end` | String | `"07:00"` | Konec tihega časa | `UserProfileManager.saveProfileFirestore()` |
+| `mute_streak_reminders` | Boolean | `false` | Utišaj streak opomnik | `UserProfileManager.saveProfileFirestore()` |
+| `detailed_calories` | Boolean | `false` | Segmentiran prikaz kalorij (fat/protein/carbs) | `UserProfileManager.saveProfileFirestore()` |
+
+---
+
+### 7.2 Sub-kolekcija: `users/{docId}/dailyLogs/{date}`
+
+`{date}` = `"yyyy-MM-dd"` (npr. `"2026-04-28"`). En dokument na dan.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `date` | String | `{date}` | Datum v formatu `"yyyy-MM-dd"` | `DailyLogRepository.updateDailyLog()`, `FoodRepositoryImpl.logFood()` |
+| `burnedCalories` | Double | `0.0` | Skupaj porabljene kalorije (vsote vseh aktivnosti) | `DailyLogRepository.updateDailyLog()` ← RunTrackerScreen, ManualExerciseLogScreen, ManageGamificationUseCase |
+| `waterMl` | Int | `0` | Zaužita voda v ml | `FoodRepositoryImpl.logWater()` prek `NutritionViewModel.updateWaterOptimistic()` |
+| `consumedCalories` | Double | `0.0` | Skupaj zaužite kalorije iz hrane | `FoodRepositoryImpl.logFood()` |
+| `items` | Array\<Map\> | `[]` | Lista vnesene hrane (glej 7.2.1) | `FoodRepositoryImpl.logFood()` (arrayUnion) |
+| `updatedAt` | Timestamp | server | Čas zadnje posodobitve | `DailyLogRepository`, `FoodRepositoryImpl` |
+
+#### 7.2.1 Struktura posameznega food item v `items[]`
+
+| Polje | Tip | Opis |
+|-------|-----|------|
+| `name` | String | Ime živila |
+| `caloriesKcal` | Double | Kalorije |
+| `protein` | Double | Beljakovine v g |
+| `carbs` | Double | Ogljikovi hidrati v g |
+| `fat` | Double | Maščobe v g |
+| `mealType` | String | `"Breakfast"`, `"Lunch"`, `"Dinner"`, `"Snacks"` |
+| `quantity` | Double | Količina (v g ali ml) |
+| `unit` | String | Enota (`"g"`, `"ml"`) |
+| `timestamp` | EpochMs | Čas vnosa |
+
+---
+
+### 7.3 Sub-kolekcija: `users/{docId}/runSessions/{sessionId}`
+
+Celotna tek/aktivnost sesija. `{sessionId}` = Firestore auto-generated ID.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `id` | String | `""` | Interni ID (= doc ID) | `RunSession.toFirestoreMap()` prek `RunTrackerScreen` |
+| `userId` | String | `""` | User doc ID | `RunSession.toFirestoreMap()` |
+| `startTime` | EpochMs | `0` | Čas začetka aktivnosti (ms) | `RunSession.toFirestoreMap()` |
+| `endTime` | EpochMs | `0` | Čas konca aktivnosti (ms) | `RunSession.toFirestoreMap()` |
+| `durationSeconds` | Int | `0` | Trajanje v sekundah | `RunSession.toFirestoreMap()` |
+| `distanceMeters` | Double | `0.0` | Razdalja v metrih | `RunSession.toFirestoreMap()` |
+| `avgSpeedMps` | Float | `0.0` | Povprečna hitrost m/s | `RunSession.toFirestoreMap()` |
+| `maxSpeedMps` | Float | `0.0` | Maksimalna hitrost m/s | `RunSession.toFirestoreMap()` |
+| `caloriesKcal` | Int | `0` | Porabljene kalorije | `RunSession.toFirestoreMap()` |
+| `elevationGainM` | Float | `0.0` | Skupni vzpon v metrih | `RunSession.toFirestoreMap()` |
+| `elevationLossM` | Float | `0.0` | Skupni spust v metrih | `RunSession.toFirestoreMap()` |
+| `activityType` | String | `"RUN"` | Enum name: `"RUN"`, `"WALK"`, `"HIKE"`, `"SPRINT"`, `"CYCLING"`, `"SKIING"`, `"SNOWBOARD"`, `"SKATING"`, `"NORDIC"` | `RunSession.toFirestoreMap()` |
+| `isSmoothed` | Boolean | `false` | Ali so GPS točke glajene | `RunSession.toFirestoreMap()` |
+| `createdAt` | EpochMs | now | Čas ustvarjanja dokumenta | `RunSession.toFirestoreMap()` |
+| `polylinePoints` | Array\<Map\> | `[]` | ⚠️ **STARI FORMAT** — inline GPS točke (potential 1MB crash pri tekih >2h) | `RunSession.toFirestoreMap()` |
+
+#### 7.3.1 GPS točke — `polylinePoints[]` (STARI inline format)
+
+| Polje | Tip | Opis |
+|-------|-----|------|
+| `latitude` | Double | Geografska širina |
+| `longitude` | Double | Geografska dolžina |
+| `altitude` | Double | Nadmorska višina (m) |
+| `speed` | Float | Hitrost (m/s) |
+| `accuracy` | Float | GPS natančnost (m) |
+| `timestamp` | EpochMs | Čas točke |
+
+#### 7.3.2 GPS točke — `gps_points/{chunk}` ali `points/{chunk}` (NOVI sub-format)
+
+| Polje | Tip | Opis |
+|-------|-----|------|
+| `chunkIndex` | Int | Vrstni red chunka (za orderBy) |
+| `pts` | Array\<Map\> | Komprimirane točke |
+| `pts[].lat` | Double | Geografska širina (**kratica!**) |
+| `pts[].lng` | Double | Geografska dolžina (**kratica!**) |
+| `pts[].alt` | Double | Nadmorska višina |
+| `pts[].spd` | Float | Hitrost |
+| `pts[].ts` | EpochMs | Čas točke |
+
+> ⚠️ **KLJUČNA RAZLIKA:** Inline format uporablja `latitude`/`longitude`, sub-kolekcija pa `lat`/`lng`. `FirestoreWorkoutRepository` podpira oba formata z fallback logiko.
+
+---
+
+### 7.4 Sub-kolekcija: `users/{docId}/publicActivities/{sessionId}`
+
+Komprimirana javna aktivnost za prikaz na javnem profilu (samo če `share_activities = true`). GPS točke so stisnjene z **RDP algoritmom** (~450 → ~35 točk).
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `activityType` | String | `"RUN"` | Tip aktivnosti (enako kot runSessions) | `RunTrackerScreen` |
+| `distanceMeters` | Double | `0.0` | Razdalja v metrih | `RunTrackerScreen` |
+| `durationSeconds` | Int | `0` | Trajanje v sekundah | `RunTrackerScreen` |
+| `caloriesKcal` | Int | `0` | Porabljene kalorije | `RunTrackerScreen` |
+| `elevationGainM` | Float | `0.0` | Vzpon v metrih | `RunTrackerScreen` |
+| `elevationLossM` | Float | `0.0` | Spust v metrih | `RunTrackerScreen` |
+| `avgSpeedMps` | Float | `0.0` | Povprečna hitrost m/s | `RunTrackerScreen` |
+| `maxSpeedMps` | Float | `0.0` | Maksimalna hitrost m/s | `RunTrackerScreen` |
+| `startTime` | EpochMs | `0` | Čas začetka | `RunTrackerScreen` |
+| `routePoints` | Array\<Map\> | `[]` | Komprimirane GPS točke (RDP, ~35 točk) | `RunTrackerScreen` + `RouteCompressor.compress()` |
+| `routePoints[].lat` | Double | — | Geografska širina (**kratica** `lat`, ne `latitude`) | `RunTrackerScreen` |
+| `routePoints[].lng` | Double | — | Geografska dolžina (**kratica** `lng`, ne `longitude`) | `RunTrackerScreen` |
+
+---
+
+### 7.5 Sub-kolekcija: `users/{docId}/workoutSessions/{sessionId}`
+
+Zaključena vadba sesija.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `timestamp` | EpochMs | now | Čas zaključka vadbe (**NOVI format**) | `UpdateBodyMetricsUseCase` |
+| `date` | Timestamp | — | Firestore Timestamp (**STARI format** — samo v starih dokumentih) | stari `WorkoutSessionScreen` |
+| `type` | String | `"regular"` | `"regular"` ali `"extra"` | `UpdateBodyMetricsUseCase` |
+| `totalKcal` | Int | `0` | Porabljene kalorije pri vadbi | `UpdateBodyMetricsUseCase` |
+| `totalTimeMin` | Double | `0.0` | Trajanje vadbe v minutah | `UpdateBodyMetricsUseCase` |
+| `exercisesCount` | Int | `0` | Število vaj v vadbi | `UpdateBodyMetricsUseCase` |
+| `planDay` | Int | `1` | Plan dan te vadbe | `UpdateBodyMetricsUseCase` |
+| `focusAreas` | Array\<String\> | `[]` | Fokusna področja (za progressive overload) | `UpdateBodyMetricsUseCase` |
+| `exercises` | Array\<Map\> | `[]` | ExerciseResult-i (seznam telesnih vaj z reps/sets/weightKg) | `UpdateBodyMetricsUseCase` |
+
+#### 7.5.1 Struktura posameznega exercise v `exercises[]`
+
+| Polje | Tip | Opis |
+|-------|-----|------|
+| `name` | String | Ime vaje |
+| `reps` | Int | Število ponovitev |
+| `sets` | Int | Število serij |
+| `weightKg` | Float | Teža v kg (0 = bodyweight) |
+
+> ⚠️ **TIMESTAMP NESKLADJE:** `getWeeklyDoneCount()` query-ja po polju `"date"` (Firestore Timestamp), toda `UpdateBodyMetricsUseCase` piše samo `"timestamp"` (Long). Stari dokumenti imajo `date`, novi pa `timestamp`. Poizvedba ne najde novih dokumentov.
+
+---
+
+### 7.6 Sub-kolekcija: `users/{docId}/xp_history/{autoId}`
+
+XP log vsake podelitve. Uporablja se za AchievementsScreen prikaz.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `amount` | Int | — | Količina podeljenih XP | `FirestoreGamificationRepository.awardXP()` |
+| `reason` | String | — | Vzrok (`"workout_complete"`, `"daily_login"`, ...) | `FirestoreGamificationRepository.awardXP()` |
+| `date` | String | today | Datum (`"yyyy-MM-dd"`) | `FirestoreGamificationRepository.awardXP()` |
+| `timestamp` | EpochMs | now | Čas podelitve (epoch ms) | `FirestoreGamificationRepository.awardXP()` |
+| `xpAfter` | Int | — | XP po podelitvi | `FirestoreGamificationRepository.awardXP()` |
+| `levelAfter` | Int | — | Level po podelitvi | `FirestoreGamificationRepository.awardXP()` |
+
+---
+
+### 7.7 Sub-kolekcija: `users/{docId}/weightLogs/{autoId}`
+
+Teža skozi čas.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `date` | Timestamp | — | Datum meritve (Firestore Timestamp, za orderBy) | `SaveWeightUseCase` / `Progress.kt` |
+| `weightKg` | Double | — | Teža v kg | `SaveWeightUseCase` / `Progress.kt` |
+
+---
+
+### 7.8 Sub-kolekcija: `users/{docId}/customMeals/{mealId}`
+
+Custom obroki (ustvarjeni z MakeCustomMealsDialog).
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `name` | String | — | Ime custom obroka | `FoodRepositoryImpl.logCustomMeal()` |
+| `items` | Array\<Any\> | `[]` | Seznam sestavin (food item mape) | `FoodRepositoryImpl.logCustomMeal()` |
+| `createdAt` | Timestamp | server | Čas ustvarjanja | `FoodRepositoryImpl.logCustomMeal()` |
+
+> ⚠️ **OPOMBA:** Pot je `users/{docId}/customMeals` (v kodi `"customMeals"`), toda v `deleteUserData()` se izbriše `"customMeals"`. V `UserProfileManager.deleteUserData()` se pojavlja tudi `"meal_feedback"` — ta kolekcija ni dokumentirana drugje.
+
+---
+
+### 7.9 Sub-kolekcija: `users/{docId}/daily_logs/{date}` ⚠️
+
+**POZOR:** To je RAZLIČNA kolekcija od `dailyLogs`!  
+`daily_logs` (snake_case) piše `FirestoreGamificationRepository.updateStreak()` — stara streaklogika.  
+`dailyLogs` (camelCase) piše `FoodRepositoryImpl` in `DailyLogRepository` — nova hrana/voda logika.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `date` | String | `{date}` | Datum (`"yyyy-MM-dd"`) | `FirestoreGamificationRepository` |
+| `status` | String | — | `"WORKOUT_DONE"`, `"REST_DONE"`, `"FROZEN"`, `"REST_SWAPPED"` | `FirestoreGamificationRepository` |
+| `timestamp` | EpochMs | now | Čas vpisa | `FirestoreGamificationRepository` |
+
+---
+
+### 7.10 Kolekcija: `user_plans/{docId}`
+
+En dokument na uporabnika. Vsi plani shranjeni kot polje `plans: Array`.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `plans` | Array\<Map\> | `[]` | Lista vseh shranjenih planov | `PlanDataStore.savePlans()` |
+
+#### 7.10.1 Struktura PlanResult v `plans[]`
+
+| Polje | Tip | Opis |
+|-------|-----|------|
+| `id` | String | UUID plana |
+| `name` | String | Ime plana |
+| `calories` | Int | Dnevni kalorični cilj |
+| `protein` | Int | Dnevni protein cilj (g) |
+| `carbs` | Int | Dnevni ogljikohidratni cilj (g) |
+| `fat` | Int | Dnevni maščobni cilj (g) |
+| `trainingPlan` | String | Opis plana (tekst) |
+| `trainingDays` | Int | Število treningov na teden |
+| `sessionLength` | Int | Dolžina sesije v minutah |
+| `tips` | Array\<String\> | Nasveti za plan |
+| `createdAt` | EpochMs | Čas ustvarjanja plana |
+| `trainingLocation` | String | `"Home"`, `"Gym"`, `"Outdoor"` |
+| `experience` | String? | `"Beginner"`, `"Intermediate"`, `"Advanced"` |
+| `goal` | String? | Cilj treninga |
+| `startDate` | String | Datum začetka plana (`"yyyy-MM-dd"`) |
+| `focusAreas` | Array\<String\> | Fokusne mišične skupine |
+| `equipment` | Array\<String\> | Oprema |
+| `weeks` | Array\<Map\> | 4 tedni (WeekPlan) |
+| `weeks[].weekNumber` | Int | Številka tedna (1–4) |
+| `weeks[].days` | Array\<Map\> | Dnevi v tednu |
+| `weeks[].days[].dayNumber` | Int | Številka dne (1–28+) |
+| `weeks[].days[].exercises` | Array\<String\> | Imena vaj |
+| `weeks[].days[].isRestDay` | Boolean | Ali je to počitniški dan |
+| `weeks[].days[].focusLabel` | String | Label fokusa (npr. `"Upper Body"`) |
+| `weeks[].days[].isSwapped` | Boolean | Ali je dan bil auto-swapan (opcijsko) |
+| `algorithmData` | Map? | Debug BMI/BMR/TDEE podatki (opcijsko) |
+| `algorithmData.bmi` | Double | BMI vrednost |
+| `algorithmData.bmr` | Double | Bazalni metabolizem |
+| `algorithmData.tdee` | Double | Skupna dnevna poraba energije |
+
+---
+
+### 7.11 Kolekcija: `follows/{followerId}_{followingId}`
+
+Doc ID je **deterministični** format `"{followerId}_{followingId}"` — prepreči dvojno sledenje.
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `followerId` | String | — | Doc ID sledilca (resolvedId) | `FollowStore.followUser()` |
+| `followingId` | String | — | Doc ID sledene osebe | `FollowStore.followUser()` |
+| `followedAt` | Timestamp | server | Čas sledenja | `FollowStore.followUser()` |
+
+> ℹ️ Stari dokumenti (pred implementacijo determinističnega ID) imajo naključni auto-generated ID, toda iste `followerId`/`followingId` vrednosti v poljih. `unfollowUser()` podpira oba formata z fallback query.
+
+---
+
+### 7.12 Kolekcija: `notifications/{userId}/items/{autoId}`
+
+Obvestila (zaenkrat samo "new_follower").
+
+| Polje | Tip | Default | Opis | Piše |
+|-------|-----|---------|------|------|
+| `type` | String | — | Tip obvestila (npr. `"new_follower"`) | `FollowStore.followUser()` |
+| `fromUserId` | String | — | Kdo je sprožil obvestilo | `FollowStore.followUser()` |
+| `message` | String | — | Besedilo obvestila | `FollowStore.followUser()` |
+| `timestamp` | Timestamp | server | Čas obvestila | `FollowStore.followUser()` |
+| `read` | Boolean | `false` | Ali je obvestilo prebrano | `FollowStore.followUser()` |
+
+---
+
+### 7.13 DATA REDUNDANCY — Pregled podvojenih podatkov
+
+| # | Podatek | Polje 1 | Polje 2 | Resnost | Opis |
+|---|---------|---------|---------|---------|------|
+| 1 | Streak | `streak_days` (read by UserProfileManager) | `login_streak` (read+write by FirestoreGamificationRepository) | 🔴 Visoka | Dva pisca, en bralec — vrednosti se lahko razlikujeta. `UserProfileManager` je SSOT za streak v večini kode. |
+| 2 | Rating dnevnih aktivnosti | `dailyLogs/{date}` (food/water/burned) | `daily_logs/{date}` (streak status) | 🟡 Srednja | Dve različni sub-kolekciji z podobno semantiko. Ne pride do direktnega konflikta, a povzroča zmedo. |
+| 3 | Profil slika URL | ključ `"profilePictureUrl"` (zapis) | `"profile_picture_url"` (branje) | 🔴 Kritična | Write-read mismatch — `profilePictureUrl` nikoli ni prebrana nazaj, ker documentToUserProfile() bere `profile_picture_url`. |
+| 4 | GPS točke | `polylinePoints` (inline, `latitude`/`longitude`) | `gps_points/{chunk}` ali `points/{chunk}` (sub-col, `lat`/`lng`) | 🟡 Srednja | Dva formata za iste podatke. FirestoreWorkoutRepository podpira oba. |
+| 5 | Workout timestamp | `"timestamp"` (Long, novi format) | `"date"` (Firestore Timestamp, stari format) | 🔴 Visoka | `getWeeklyDoneCount()` querya po `"date"`, toda novi dokumenti nimajo tega polja → poizvedba vrne 0. |
+| 6 | Teža v profilu vs weightLogs | `goalWeightKg` v `users/{docId}` | `weightKg` v `users/{docId}/weightLogs` | 🟢 Nizka | `goalWeightKg` je CILJNA teža. `weightLogs` je zgodovina DEJANSKE teže. Ni konflikt. |
+
+---
+
+### 7.14 FIRESTORE INDEXES
+
+Potrebni (kompozitni) indeksi za delujoče poizvedbe:
+
+| Kolekcija | Polja | Tip | Kdo potrebuje |
+|-----------|-------|-----|---------------|
+| `users` | `is_public_profile ASC`, `followers DESC` | Kompozitni | `ProfileStore.getTopUsers()` |
+| `users/{uid}/runSessions` | `createdAt DESC` | Single-field descending | `FirestoreWorkoutRepository.getRunSessions()` + paginacija |
+| `users/{uid}/workoutSessions` | `date ASC` (Timestamp) | Single-field | `FirestoreWorkoutRepository.getWeeklyDoneCount()` ⚠️ problema s timestamp vs date |
+| `users/{uid}/gps_points` | `chunkIndex ASC` | Single-field | `FirestoreWorkoutRepository.loadGpsPoints()` |
+| `users/{uid}/points` | `chunkIndex ASC` | Single-field | `FirestoreWorkoutRepository.loadGpsPoints()` |
+| `users/{uid}/publicActivities` | `startTime DESC` | Single-field descending | `ProfileStore.mapToPublicProfile()` |
+| `follows` | `followingId ==` | Single-field equality | `FollowStore.getFollowers()` |
+| `follows` | `followerId ==` | Single-field equality | `FollowStore.getFollowing()` |
+| `follows` | `followerId ==`, `followingId ==` | Kompozitni | `FollowStore.isFollowing()` fallback query |
+
