@@ -532,7 +532,7 @@ Glavni profil — eden dokument na uporabnika.
 | `mealType` | String | `"Breakfast"`, `"Lunch"`, `"Dinner"`, `"Snacks"` |
 | `quantity` | Double | Količina (v g ali ml) |
 | `unit` | String | Enota (`"g"`, `"ml"`) |
-| `timestamp` | EpochMs | Čas vnosa |
+| `timestamp` | EpochMs | Čas točke |
 
 ---
 
@@ -1143,525 +1143,273 @@ V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
 
 ---
 
-## 9. NUTRITION & DIET LOGIC
+## Poglavje 12 — UI/UX & COMPOSE ARCHITECTURE
 
-> **Faza 5 od 10** — Dokumentacija prehranskega modula. Brez popravkov.
-
----
-
-### 9.1 Food Search Flow
-
-Iskanje hrane deluje izključno prek **zunanjega REST API-ja** — FatSecret Platform.  
-Ni lokalne SQLite baze, ni lokalnega JSON fajla za hrano.
-
-**Arhitektura klicne verige:**
-
-```
-UI (AddFoodSheet.kt / NutritionDialogs.kt)
-  │
-  ├─ FoodRepositoryImpl.searchFoodByName(query, maxResults=20)
-  │     → FatSecretApi.searchFoods(q, page=1, pageSize=20)
-  │           → HTTP GET  {FATSECRET_BASE_URL}/foods/search?q=...&page=1&pageSize=20
-  │                 ← JSON: { foods: { food: [ {food_id, food_name, brand_name, food_description} ] } }
-  │           → List<FoodSummary>
-  │
-  ├─ FoodRepositoryImpl.getFoodAutocomplete(query, maxResults=5)
-  │     → FatSecretApi.getFoodAutocomplete(q, maxResults=5)
-  │           → HTTP GET  {base}/foods/autocomplete?q=...&maxResults=5
-  │                 ← JSON: { suggestions: { suggestion: [ "...", "..." ] } }
-  │           → List<AutocompleteSuggestion>
-  │
-  ├─ FoodRepositoryImpl.getFoodDetail(id)
-  │     → FatSecretApi.getFoodDetail(foodId)
-  │           → HTTP GET  {base}/foods/{id}
-  │                 ← JSON: { food: { servings: { serving: [ ... ] } } }
-  │           → FoodDetail  (kalorije, makri, vlakna, natrij, holesterol ...)
-  │
-  └─ FoodRepositoryImpl.searchRecipes(query) / getRecipeDetail(id)
-        → FatSecretApi.searchRecipes() / getRecipeDetail()
-              → HTTP GET  {base}/recipes/search  /  {base}/recipes/{id}
-              → List<RecipeSummary>  /  RecipeDetail
-```
-
-**Backend proxy:** Aplikacija ne kliče FatSecret API neposredno — gre prek **lastnega Cloud Run proxy-ja** (`fatsecret-551351477998.europe-west1.run.app`), ki doda OAuth2 kredenciale. URL se prebere iz `BuildConfig.FATSECRET_BASE_URL`; če je prazen, se uporabi hardcoded fallback.
-
-**Autentikacija proxy-ja:** OkHttp interceptor doda `Authorization: Bearer {BACKEND_API_KEY}` na vsak zahtevek.
-
-**Priporočila (Recommended foods):**  
-`FatSecretApi.recommendedFoods(limit=8)` izvede 12 seed iskanj (`"chicken"`, `"rice"`, `"oats"`, …) in vrne prvih 8 unikatnih zadetkov (LinkedHashMap deduplikacija po `food_id`).
-
-**Barcode iskanje:**  
-`FatSecretApi.getFoodByBarcode(barcode)` → HTTP GET `{base}/foods/barcode?barcode=...`  
-Vrne `BarcodeResult(foodId, foodName)`.  Fallback za sliko: **OpenFoodFacts** REST API (`world.openfoodfacts.org/cgi/search.pl`).
-
-**Porcija:** Ob klicu `getFoodDetail()` se prioritizira porcija s `metric_serving_amount=100` in `metric_serving_unit="g"`. Če 100g porcija ne obstaja, se vzame prva porcija v nizu.
-
-**Lokalni cache:** Ni — vsaka poizvedba je svež HTTP klic. Firestore offline persistenca (`:setPersistenceEnabled(true)`) velja samo za `dailyLogs`, ne za food search rezultate.
+> Faza 8 od 10 — Avtor: AI Audit | Datum: 2026-04-28
 
 ---
 
-### 9.2 Macro Math (Seštevanje dnevnih makronutrientov)
+### 12.1 Navigation Flow — NavigationViewModel & Back Stack
 
-#### Seštevanje — NutritionScreen.kt (vrstice 158–167)
+**Datoteka:** `NavigationViewModel.kt` (121 vrstic)
 
-Makroji se seštevajo **lokalno v Compose state** iz `trackedFoods: List<TrackedFood>`:
+**Arhitektura:** Lasten navigacijski stack implementiran kot `MutableStateFlow<List<Screen>>` v `ViewModel` (preživi rotacijo zaslona). **Ne uporablja Jetpack Navigation Compose** — navigacija je ročno upravljana.
+
+#### Stack operacije:
+
+| Metoda | Opis | Kdaj se kliče |
+|--------|------|---------------|
+| `navigateTo(screen)` | Push `currentScreen` na stack, nastavi nov current | Velik večina navigacij |
+| `replaceTo(screen)` | Zamenja current brez pusha na stack | `LoadingWorkout → WorkoutSession` (prepreči "nazaj skozi loading") |
+| `popTo(screen)` | Pop do ciljnega zaslona ali `navigateTo()` | Redka specifična navigacija |
+| `clearStack()` | Prazni celoten stack | Ni klicana iz produkcijskega toka |
+| `navigateBack()` | Pop last ali fallback na Dashboard/Index | `BackHandler` v `MainActivity` |
+
+#### Odjava in Back Stack — Varnostna analiza:
 
 ```
-consumedKcal      = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
-consumedProtein   = trackedFoods.sumOf { it.proteinG     ?: 0.0 }
-consumedCarbs     = trackedFoods.sumOf { it.carbsG       ?: 0.0 }
-consumedFat       = trackedFoods.sumOf { it.fatG         ?: 0.0 }
-consumedFiber     = trackedFoods.sumOf { it.fiberG       ?: 0.0 }
-consumedSugar     = trackedFoods.sumOf { it.sugarG       ?: 0.0 }
-consumedSodium    = trackedFoods.sumOf { it.sodiumMg     ?: 0.0 }
-consumedPotassium = trackedFoods.sumOf { it.potassiumMg  ?: 0.0 }
-consumedCholest.  = trackedFoods.sumOf { it.cholesterolMg ?: 0.0 }
-consumedSatFat    = trackedFoods.sumOf { it.saturatedFatG ?: 0.0 }
+onLogout klic (AppDrawer.kt → AlertDialog confirmButton):
+  └── onLogout()  [callback v MainActivity]
+      ├── Firebase.auth.signOut()
+      ├── isLoggedIn = false
+      ├── userEmail = ""
+      ├── appViewModel.resetSyncState()
+      └── navViewModel.navigateTo(Screen.Index)
+          └── Push currentScreen (Dashboard) na stack!
 ```
 
-**⚠️ Rounding Error brez zaščite:**  
-`caloriesKcal.roundToInt()` se zaokroži na celo število **pred** seštevanjem. Pri 20+ živilih z decimalnimi vrednostmi se nabere napaka do ±10 kcal. Ostali makroji (`proteinG`, `carbsG`, `fatG`) se seštevajo kot `Double` brez zaokroževanja.
+> ⚠️ **Anomalija**: Ob odjavi se kliče `navigateTo(Screen.Index)` — to **pusha Dashboard na stack**. Stack ni počiščen. Če uporabnik klikne Back na `Screen.Index`, bo `navigateBack()` poklican s `stack.isNotEmpty()` → vrne se na `Screen.Dashboard` (zadnji element stacka), ki je zaščitena stran brez autentikacije. Šele naslednji Back klik bo preveril `isLoggedIn` in nagnal na `Screen.Index`.
 
-**Dvojna vrednost kalorij:**  
-Hkrati obstajata dve vrednosti zaužitih kalorij:
-1. `consumedKcal` — lokalni seštevek iz `trackedFoods` (za progresne bare v UI)
-2. `uiState.consumed` — vrednost iz Firestore `dailyLogs/{danes}.consumedCalories` (za dinamični TDEE)
+**Korektivna varovalna plast:** `navigateBack()` vsebuje:
+```kotlin
+current is Screen.Dashboard -> {
+    if (!isLoggedIn) _currentScreen.value = Screen.Index
+    else onFinish()
+}
+```
+To pomeni, da ko prideš nazaj na Dashboard brez prijave, bo naslednji Back klik odkril `!isLoggedIn` in šel na Index. Glasni dashboard vsebaj pa ni prikazan ker `isLoggedIn=false` → Compose ne prikaže vsebine (screeni preverjajo `isLoggedIn` iz MainActivity state). Stack ni počiščen, a vsebina je pravilno skrita.
 
-Obe sta prikazani, a se ne ujemata vedno, ker `consumedCalories` v Firestore posodablja samo `logFood()` (transakcija: `currentConsumed + caloriesKcal`), medtem ko lokalni seštevek upošteva vse `trackedFoods` iz `items` array-a.
+**Deep Links:** `Screen` je `sealed class` brez deep link URI podpore. **Ni podpore za Android deep links** (ni `Intent` filteriranja, ni Jetpack Navigation `deepLink {}` blokov). Zunanje aplikacije ne morejo odpreti specifičnih zaslonov.
 
-#### Cilji — NutritionScreen.kt (vrstice 197–202)
-
-Prednostni vrstni red pri določanju ciljnih vrednosti:
-
-| Makro | 1. prednost | 2. prednost | 3. prednost | Fallback |
-|-------|-------------|-------------|-------------|----------|
-| Kalorije | `nutritionPlan.calories` | `parseMacroBreakdown(plan.algorithmData.macroBreakdown)` | `plan.calories` | 2000 |
-| Beljakovine | `nutritionPlan.protein` | `parsed.proteinG` | `plan.protein` | 100 |
-| OH | `nutritionPlan.carbs` | `parsed.carbsG` | `plan.carbs` | 200 |
-| Maščobe | `nutritionPlan.fat` | `parsed.fatG` | `plan.fat` | 60 |
-
-**Zaokroževanje kalorij navzdol:** `targetCalories = (rawTargetCalories / 100) * 100`  
-→ npr. 2183 → 2100 (Integer division, brez Math.floor).
+**Screen sealed class:** 37 zaslonov definiranih. `Screen.PublicProfile` ima parameter `userId: String` — edini parametriziran zaslon v navigacijskem sistemu.
 
 ---
 
-### 9.3 Daily Goals Logic (BMR/TDEE Formula)
+### 12.2 State Management — StateFlow in Re-Composition
 
-Celoten izračunski pipeline je v `utils/NutritionCalculations.kt`, sprožen prek `NutritionPlanStore.recalculateNutritionPlan()`.
+#### AppViewModel — Globalni profil StateFlow
 
-#### Korak 1: BMR — `calculateAdvancedBMR(weight, height, age, isMale, bodyFat?)`
-
-**Če bodyFat% je znan (> 0):** Katch-McArdle formula:
-```
-leanBodyMass = weight × (1 − bodyFat / 100)
-BMR = 370 + (21.6 × leanBodyMass)
-```
-
-**Če bodyFat% ni znan:** Mifflin-St Jeor z age korekcijami:
-```
-Moški:  baseBMR = 10×weight + 6.25×height − 5×age + 5
-Ženska: baseBMR = 10×weight + 6.25×height − 5×age − 161
-
-Age multiplier:
-  < 18  → × 1.12
-  18–25 → × 1.05
-  26–35 → × 1.00
-  36–45 → × 0.97
-  46–55 → × 0.94
-  56–65 → × 0.91
-  65+   → × 0.87
+```kotlin
+val userProfile: StateFlow<UserProfile>
+val isProfileReady: StateFlow<Boolean>
+val isSyncing: StateFlow<Boolean>
+val syncStatusMessage: StateFlow<String>
 ```
 
-#### Korak 2: TDEE — `calculateEnhancedTDEE(bmr, frequency?, experience?, age, limitations, sleep?)`
+**Trigger za re-composition:** `val userProfile by appViewModel.userProfile.collectAsState()` v `MainActivity`. Ob vsaki spremembi `UserProfile` data classa se **celotna MainActivity Compose hierarhija** rekomponira, ker je `userProfile` parameter višje v drevesu, ki se propagira navzdol.
 
-```
-TDEE = BMR
-     × baseMultiplier     (treningFrequency: 2x=1.375, 3x=1.55, 4x=1.725, 5x=1.9, 6x=2.0, else=1.2)
-     × experienceMultiplier  (Beginner=1.08, Intermediate=1.0, Advanced=0.96)
-     × ageMultiplier         (<25=1.02, 25–35=1.00, 36–50=0.98, >50=0.95)
-     × sleepMultiplier       (<6h=0.90, 6–7h=0.97, 7–8h=1.00, 8–9h=1.02, 9+h=1.01)
-     × limitationMultiplier  (Asthma=0.92, HBP/Diabetes=0.94, Knee/Shoulder/Back=0.96, else=1.00)
-```
+**UserProfile ima 40+ polj** — vsaka sprememba kateregakoli polja (npr. samo `xp`) sproži `collectAsState` trigger in potencialno rekomponira vse screene, ki sprejemajo `userProfile` kot parameter.
 
-#### Korak 3: Kalorijski cilj — `calculateSmartCalories(tdee, goal?, experience?, bmi, age, isMale, bodyFat?, limitations)`
+**Firestore snapshot listener** (`ObserveUserProfileUseCase`) ne filtrira "kaj se je spremenilo" — vsak Firestore onSnapshot (tudi ko se polje ni spremenilo) nastavi `_userProfile.value = nova vrednost`, ki sproži rekomposicijo.
 
-| Cilj | Formula |
-|------|---------|
-| `"Build muscle"` | `tdee + baseSurplus × ageFactor × bodyFatFactor`  (baseSurplus: Beg=450, Int=350, Adv=250) |
-| `"Lose fat"` | `max(tdee − baseDeficit × genderFactor × ageFactor, minKcal)`  (min: M=1500, F=1200) |
-| `"Recomposition"` | tdee ± 150–200 glede na BMI/bodyFat |
-| `"Improve endurance"` | `tdee + 200–300` |
-| `"General health"` | `tdee ± 0–250` glede na BMI |
+> ⚠️ **Anomalija (Flicker)**: Ker Firestore listener in `startInitialSync` oba pišeta v `_userProfile` vzporedno in asinhronično, je možno kratkotrajen "prazen profil" → "pravi profil" prehod, ki povzroči vizualni flicker v screenih ki takoj prikazujejo `username` ali `level`. Screeni nimajo skeleton/loading stanja med posodobitvama.
 
-#### Korak 4: Makroji — `calculateOptimalMacros(calories, weight, goal?, experience?, age, isMale, bodyFat?, nutrition?, limitations)`
+#### NutritionViewModel — StateFlow za vodo (re-composition analiza)
 
-```
-protein = baseProteinPerKg × weight × ageProteinFactor × genderProteinFactor × nutritionProteinFactor
-           → toInt()  [g]
-
-fat = fatPerKg × weight
-       → toInt()  [g]
-
-carbs = max(80, (calories − protein×4 − fat×9) / 4)
-         → Keto/LCHF: max vrednost = 50g
-         → IF: minimum = 100g
-         → else: minimum = 80g
+```kotlin
+private val _localWaterMl = MutableStateFlow<Int?>(null)  // override pri optimistič. posod.
+private val _uiState = MutableStateFlow(NutritionUiState())
 ```
 
-`return Triple(protein, carbs, fat)`
+**Water update flow ob "+250ml" kliku:**
+1. `_localWaterMl.value = newValue` → takojšnja re-composition NutritionScreen (samo water bar animacija)
+2. Po 800ms debounce → Firestore write → onSnapshot → `_uiState.value` update → **DRUGA re-composition**
 
-#### Korak 5: Adaptivni TDEE — `calculateAdaptiveTDEE()` (Faza 7)
+**Skupaj: 2 re-composiciji za en klik na "+250ml".**
 
-```
-adaptiveTDEE = avgConsumedKcal − (ΔmasaKg × 7700 / aktivniDni)
+Ker je `_uiState` in `_localWaterMl` ločena StateFlow-a, obe premi sprožilki za re-composition. Compose smart recomposition pri `collectAsState()` bo rekomponiral samo composable-e ki dejansko berejo te vrednosti — ne celoten screen.
 
-hybridTDEE = C × adaptiveTDEE + (1−C) × theoreticalTDEE
-  kjer C:
-    0.0 → < 3 dni podatkov
-    0.5 → 3–5 dni podatkov
-    1.0 → 6+ dni podatkov
-```
+**S24 Ultra specifika:** Na zmogljivem 120Hz zaslonu sta 2 zaporedni re-composiciji brez opaznih artefaktov. Edini kritičen scenarij je, če je `_uiState` posodobitev (Firestore onSnapshot) zamujene in pride hkrati z novo user akcijo — tedaj sta 2 onsnapshot v kratkem intervalu → 2 re-composiciji z `_uiState`.
 
-Rezultat se shrani v `WeightPredictorStore.lastHybridTDEE` (in-memory singleton) in ga `NutritionViewModel.setUserMetrics()` prebere pri naslednjem klicu.
-
-#### Dinamični kalorični cilj — `NutritionViewModel`
-
-```
-dynamicTargetCalories = max(1200, baseTdee + burnedCalories + goalAdjustment)
-
-  baseTdee = hybridTDEE          (če > 800)
-           ELSE bmr × 1.2        (sedentarni TDEE)
-
-  goalAdjustment:
-    "Lose"/"Cut"  → −500
-    "Build"/"Gain" → +300
-    else          → 0
-```
-
-Ko uporabnik zaključi vajo/tek → `DailyLogRepository.updateDailyLog()` prišteje kalorije → Firestore snapshot posodobi `uiState.burned` → `dynamicTargetCalories` se samodejno poviša.
+> ⚠️ **Anomalija (nepotrebna re-composition)**: NutritionViewModel `combine()` operator za `dynamicTargetCalories` združuje 3 StateFlow-e: `baseTdee`, `uiState`, `goalAdjustment`. Vsak click ki posodobi `uiState` (ne samo kalorije) sproži ponoven izračun `dynamicTargetCalories` — vključno z vnosom vode. **Vnos vode ne vpliva na ciljne kalorije, a kljub temu sproži izračun TDEE.**
 
 ---
 
-### 9.4 Water Tracker
+### 12.3 Onboarding Logic — OnboardingHint
 
-#### Implementacija — Optimistični zapis z debounce-om (Faza 13.1)
+**Datoteka:** `ui/components/OnboardingHint.kt` (65 vrstic)
 
-```
-UI klik "+250ml"
-  │
-  ├─ nutritionViewModel.updateWaterOptimistic(newValue, todayId)
-  │
-  ├─ _localWaterMl.value = newValue    ← TAKOJŠEN UI odziv (brez čakanja Firestore)
-  │
-  ├─ waterSyncJob?.cancel()           ← prekliče prejšnji job če je v 800ms
-  │
-  └─ delay(800ms)
-       │
-       ├─ FoodRepositoryImpl.logWater(newValue, todayId)
-       │     → Firestore transaction:
-       │           SET dailyLogs/{danes} MERGE {
-       │             "date": todayId,
-       │             "waterMl": newValue,         ← ABSOLUTNA vrednost (ne increment)
-       │             "updatedAt": serverTimestamp()
-       │           }
-       │
-       ├─ SUCCESS → _localWaterMl.value = null   ← počisti lokalni override
-       └─ FAIL    → _localWaterMl.value = null   ← rollback na server vrednost
+**Implementacija:** Čista Compose kartica s 3 elementi: `Icon(Info)`, naslov, besedilo, in "Don't show again" gumb.
+
+**Shranjevanje stanja:** Edina raba `OnboardingHint` je v `BodyModuleHomeScreen.kt`:
+```kotlin
+val prefs = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+var showOnboarding by remember { mutableStateOf(!prefs.getBoolean("hide_body_hint", false)) }
+
+OnboardingHint(
+    title = "Welcome to Body Module",
+    message = "...",
+    onDismiss = {
+        showOnboarding = false
+        prefs.edit().putBoolean("hide_body_hint", true).apply()
+    }
+)
 ```
 
-**⚠️ Absolutni zapis (ne increment):**  
-`logWater()` zapiše `"waterMl": newValue` kot absolutno vrednost, ne kot `FieldValue.increment()`.  
-Če dva klici prideta znotraj 800ms in prvi ne bo preklican (ker ViewModel nima singleton scope), obstaja Race Condition — zadnji zapis zmaga.
+**Storage backend:** `SharedPreferences("app_flags")` — **lokalno na napravi**, ne v Firestore ali DataStore.
 
-**UI double-tap varovalka:** `lastWaterClickState` (remember mutableStateOf(0L)) v NutritionScreen prepreči dvojni klik z min. intervalom.
+**Posledica:** Hint je skrit samo na napravi, kjer je bil skrit. Na novi napravi ali po čiščenju podatkov aplikacije se hint prikaže znova.
 
-**Dnevni cilj vode — `calculateDailyWaterMl()`:**
+**Obseg:** Samo **ena instanca** `OnboardingHint` obstaja v celotni aplikaciji — v `BodyModuleHomeScreen`. Ni splošnega onboarding sistema za celotno aplikacijo.
 
-```
-base = weight × 35ml
-× 1.1   (moški)
-+ activityBonus  (Sedentary=0, Lightly=250, Moderately=500, Very=750 ml)
-+ 500ml  (treningov dan)
-→ zaokroži na 100ml
-→ coerceIn(1500..5000 ml)
-```
-
-Cilj se **ne shrani v Firestore** — izračuna se sproti iz profila ob zagonu screena.
+**DataStore:** Kljub temu, da ima aplikacija `DataStore Preferences` knjižnico, onboarding hint jo **ne uporablja** — ostaja pri `SharedPreferences`.
 
 ---
 
-### 9.5 Custom Meals & Recipes
+### 12.4 Haptic & Visual Feedback
 
-#### Struktura Custom Meal v Firestore
+#### HapticFeedback.kt
 
-```
-users/{uid}/customMeals/{mealId}
-  name:      String          // npr. "Zajtrk z jajci"
-  items:     List<Map>       // sestavine — glejte spodaj
-  createdAt: Timestamp       // serverTimestamp()
-```
+**Arhitektura:** `object` singleton z `enum FeedbackType` (9 tipov):
 
-Vsak element v `items`:
-```
-{
-  id:   String  // FatSecret food_id
-  name: String  // ime živila
-  amt:  String  // količina (shranjena kot String, ne Number)
-  unit: String  // enota (npr. "g", "cup")
+| Tip | Vzorec (API 29+) | Primer rabe |
+|-----|-----------------|-------------|
+| `LIGHT_CLICK` | `EFFECT_TICK` | Bottom bar navigacija, manjši gumbi |
+| `CLICK` | `EFFECT_CLICK` | Back gumb, splošni gumbi |
+| `HEAVY_CLICK` | `EFFECT_HEAVY_CLICK` | Swipe plan, WorkoutSession start |
+| `SUCCESS` | Waveform: 50-50-100-50-50ms | Rest day complete, workout done |
+| `ERROR` | Waveform: 100-100-100ms (255 amp) | Napaka |
+| `SELECTION` | `EFFECT_TICK` | |
+| `LONG_PRESS` | `EFFECT_HEAVY_CLICK` | |
+| `DOUBLE_TAP` | `EFFECT_DOUBLE_CLICK` | |
+| `DRAWER_OPEN` | Waveform crescendo: 80-40-60ms | |
+
+**OS verzijska granulacija:**
+- API 29+: `VibrationEffect.createPredefined()`
+- API 26–28: `VibrationEffect.createOneShot()` / `createWaveform()`
+- API <26: `vibrator.vibrate(durationMs)` (deprecated path)
+
+**Throttle mehanizem:** `lastVibrationTime` s 50ms minimalnim intervalom — prepreči preveliko vibriranje ob hitrem klikanju.
+
+> ⚠️ **Anomalija**: `lastVibrationTime` je **instanca spremenljivka** na `object` singletonu — pomeni, da se throttle deli med vsemi klici `performHapticFeedback` iz kateregakoli mesta v aplikaciji. Hitri klik, ki bi moral dobiti HEAVY_CLICK feedback, lahko dobi tiho (throttled), ker je nek drug LIGHT_CLICK pred 50ms sprožil vibracijo.
+
+**Trigiranje:** Haptic feedback se sproži **neposredno iz Composable onClick lambde** — ni posrednika prek ViewModel. Je sinhrono in se dogaja v UI threadu znotraj onClick callbacka.
+
+```kotlin
+// Primer iz BodyModuleHomeScreen:
+modifier = Modifier.clickable {
+    HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.CLICK)
+    onBack()
 }
 ```
 
-**⚠️ `amt` je String, ne Number** — shranjeno pred konverzijo; ob branju `parseRawItemsToTrackedFoods()` poskuša `(m["amount"] as? Number)?.toDouble() ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0`.
+#### XPPopup.kt
 
-#### Shranjevanje
+**Arhitektura:** Stateless Composable ki sprejme `xpAmount: Int`, `isVisible: Boolean`, `onDismiss: () -> Unit`.
 
-`FoodRepositoryImpl.logCustomMeal(name, itemsList)` → Firestore transakcija:
+**Animation flow:**
 ```
-// auto-ID dokument
-val newRef = docRef.collection("customMeals").document()
-transaction.set(newRef, mapOf("name" to name, "items" to items, "createdAt" to serverTimestamp()))
-// vrne newRef.id
-```
+isVisible=true → LaunchedEffect(isVisible):
+  delay(2500ms) → shouldFadeOut=true
+  delay(300ms)  → onDismiss()
 
-#### Branje (Live)
-
-`FoodRepositoryImpl.observeCustomMeals(uid)` → `addSnapshotListener` na `customMeals/`  
-→ `callbackFlow<QuerySnapshot>` → `NutritionViewModel.customMealsState: StateFlow<QuerySnapshot?>`  
-→ `NutritionScreen` pretvori v `List<SavedCustomMeal>` ob vsakem onSnapshot.
-
-#### Logiranje Custom Meal kot obrok
-
-Ko uporabnik izbere custom meal, NutritionScreen kliče `NutritionViewModel.getCustomMealItems(uid, mealId)`:
-```
-db.collection("users").document(currentUid)
-    .collection("customMeals").document(mealId)
-    .get().await()
-// vrne: doc.get("items") as? List<Map<String, Any>>
+animateFloatAsState(if (shouldFadeOut) 0f else 1f)  // fade out animacija
 ```
 
-Nato za vsako sestavino zbere `FoodDetail` iz FatSecret API in jo doda v `trackedFoods`.
+**Raba:** `XPPopup` je klicana samo v `Progress.kt` (AchievementsProgress screen). **Ni klicana** v `WorkoutSessionScreen`, `NutritionScreen`, ali drugje kjer se XP dejansko podeli.
 
-#### Recepti (FatSecret Recipes)
+> ⚠️ **Anomalija**: `XPPopup` je definirana kot lasten popup, ampak nima "kritičen hit" razlikovanje (ne prikaže drugačnega sporočila za 2× XP critical hit iz `ManageGamificationUseCase`). Vedno prikaže samo `✨ +$xpAmount XP`.
 
-Recepti so ločeni od Custom Meals. Iščejo se prek `FoodRepositoryImpl.searchRecipes()` / `getRecipeDetail()`.  
-**Ne shranjujejo** se v Firestore — so samo read-only prikaz iz FatSecret baze.
+> ⚠️ **Anomalija**: Barva besedila v `XPPopup` je hardcoded `Color.White`:
+```kotlin
+color = Color.White
+```
+V svetlih temah je ozadje popupa `MaterialTheme.colorScheme.primary` = `Color(0xFF38305A)` (temno vijolična) — bela tekst na temnem ozadju je OK. V temnih temah je `primary` = `Color(0xFFDCE4FF)` (svetlo pastelno modra) — **bela tekst na svetlem ozadju je slabo berljiv**.
 
-#### Vgrajevanje makrojev ob vnosu (Embed vs Reference)
+#### BadgeUnlockAnimation
 
-Ko se custom meal loggira kot obrok:
+**Lokacija:** `BadgeUnlockAnimation.kt` (korenski java direktorij, NE v `com.example.myapplication` paketu)
 
-- **Makroji se ob vnosu uvozijo iz FatSecret API-ja** in shranijo kot `TrackedFood` v `dailyLogs/{danes}.items[]`
-- **Referenca na `customMeals/{mealId}` se NE shrani** v dnevni log
-- **Posledica:** Kasnejša sprememba custom meal recepta NE vpliva na pretekle dnevne loge — stari vnosi ohranijo originalne makroje
+**Hardcoded barve (ne sledijo temi):**
+```kotlin
+Color(0xFFFFD700)  // zlata — badge prikaz
+Color(0xFF2563EB)  // modra — konfeti
+Color(0xFF13EF92)  // zelena — konfeti
+Color(0xFFF04C4C)  // rdeča — konfeti
+Color(0xFFFEE440)  // rumena — konfeti
+```
+Te barve so fiksirane neodvisno od aktivne teme.
+
+**Trigiranje:** Kliče `HapticFeedback.performHapticFeedback(context, SUCCESS)` sinhrono ob prikazanu animacije — direktno iz Composable.
 
 ---
 
-### 9.6 Ugotovljene Anomalije
+### 12.5 Dark Mode Integrity
 
-| # | Opis | Lokacija |
-|---|------|----------|
-| 1 | `consumedCalories` v Firestore in lokalni `consumedKcal` (sumOf trackedFoods) sta neodvisni vrednosti — prikazani hkrati v UI | `NutritionViewModel.logFood()` vs `NutritionScreen.consumedKcal` |
-| 2 | `logWater()` zapiše absolutno vrednost `waterMl`, ne incremental — Race Condition ob hitrem klikanju | `FoodRepositoryImpl.logWater()` |
-| 3 | `getCustomMealItems()` kliče `db.collection("users").document(currentUid)` **direktno** (bypassa `FirestoreHelper.getCurrentUserDocRef()`) | `NutritionViewModel.getCustomMealItems()` vrstica 293 |
-| 4 | `WeightPredictorStore.lastHybridTDEE` je in-memory singleton — po restartu aplikacije se izgubi in NutritionViewModel pade nazaj na `bmr × 1.2` | `NutritionViewModel.setUserMetrics()` vrstica 165 |
-| 5 | Makro cilji imajo 3-stopenjski fallback (nutritionPlan → parsed → plan), toda `nutritionPlan.calories` se zaokroži navzdol na 100, `dynamicTargetCalories` pa ne — UI prikazuje dve različni ciljni vrednosti | `NutritionScreen` vrstice 197–202 vs `dynamicTargetCalories` StateFlow |
+**Implementacija:** `ui/theme/theme.kt` — dva `ColorScheme` objekta (`DarkColors`, `LightColors`).
+
+**Pogoj za aktivacijo:**
+```kotlin
+@Composable
+fun MyApplicationTheme(darkTheme: Boolean = false, ...) {
+    val colors = if (darkTheme) DarkColors else LightColors
+    ...
+    MaterialTheme(colorScheme = colors, ...)
+}
+```
+
+`darkTheme` parameter prihaja iz `isDarkMode` State v `MainActivity`, ki ga bere iz `UserProfileManager.isDarkMode(email)` (Firestore polje `darkMode`).
+
+#### Barvna shema — primerjava
+
+| Token | Light | Dark | Opomba |
+|-------|-------|------|--------|
+| `primary` | `#38305A` (temno vijolična) | `#DCE4FF` (svetlo pastelna) | Inverzija |
+| `onPrimary` | `#FCFBF8` (smetanasto bela) | `#38305A` | Inverzija |
+| `secondary` | `#DCE4FF` (pastelno vijolična) | `#FCF5C7` (rumena) | Različen hue! |
+| `background` | `#FCFBF8` | `#14121F` (temno modra) | Inverzija |
+| `surface` | `#FFFFFF` | `#26223B` | Ok |
+| `surfaceVariant` | `#DCE4FF` | `#363251` | Ok |
+
+**Konzistentna raba:** Večina kode v `AppDrawer.kt` pravilno bere iz `MaterialTheme.colorScheme.*`:
+```kotlin
+val TextPrimary = MaterialTheme.colorScheme.onSurface
+val TextSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+val SheetBg = MaterialTheme.colorScheme.surface
+```
+
+#### Hardcoded barve izven teme
+
+Kljub dobremu dizajnu tema sistem imajo naslednji elementi hardcoded barve:
+
+| Datoteka | Hardcoded barva | Vrednost | Problem v dark mode? |
+|----------|----------------|----------|---------------------|
+| `XPPopup.kt` vrstica 66 | `Color.White` (besedilo) | `#FFFFFF` | 🔴 Slabo berljivo na `primary=#DCE4FF` v dark modu |
+| `BodyModuleHomeScreen.kt` vrstica 235, 243, 248, 293, 579 | `Color(0xFF4CAF50)` | zelena | 🟡 Barva je dovolj kontrastna na obeh temah |
+| `BadgeUnlockAnimation.kt` vrstice 89–159 | `Color(0xFFFFD700)`, `#2563EB`, `#13EF92`, `#F04C4C`, `#FEE440` | konfeti | 🟡 Animacijska barva — ne vpliva na berljivost |
+| `ActivityLogScreen.kt` vrstica 64 | `Color(0xFF4CAF50)` za `WALK` ActivityType | zelena | 🟡 Dovolj kontrastna |
+| `ExerciseHistoryScreen.kt` vrstica 259, 378 | `Color(0xFF4CAF50)` | zelena | 🟡 |
+| `ManualExerciseLogScreen.kt` vrstica 665, 697 | `Color(0xFF4CAF50)` | zelena | 🟡 |
+| `PlanPathDialog.kt` vrstica 297 | `Color(0xFF4CAF50)` | zelena | 🟡 |
+| `HealthConnectScreen.kt` vrstice 375, 436, 660 | `Color(0xFF4CAF50)` | zelena | 🟡 |
+| `PublicProfileScreen.kt` vrstica 451 | `Color(0xFF4CAF50)` | zelena | 🟡 |
+| `theme.kt` vrstica 22 | `val DrawerBlue = Color(0xFF2563EB)` | modra | **Ni klicana nikjer** — dead constant |
+
+> ⚠️ **Anomalija**: `DrawerBlue = Color(0xFF2563EB)` je definirana v `theme.kt`, ampak ni referenčna z nobenim mestom v projektu (ni rezultatov grep). Je dead constant.
+
+> ⚠️ **Anomalija**: `XPPopup` prikazuje belo besedilo (`Color.White`) na `MaterialTheme.colorScheme.primary` ozadju. V dark modu je `primary = Color(0xFFDCE4FF)` (svetlo pastelno modra) — **kontrast razmerje bele na `#DCE4FF` je ~1.5:1, kar ne zadosti WCAG AA minimuma 4.5:1**.
+
+#### Dark mode aktivacija — Timing Problem
+
+```
+Zagon aplikacije (up):
+T+0ms: MyApplicationTheme(darkTheme = isDarkMode)  ← isDarkMode=false (default)
+T+10ms: LaunchedEffect #1 → Firebase.auth check → LocalScope { isDarkMode = isDarkMode(email) }
+         [Firestore klic]
+T+500ms: isDarkMode=true vrne iz Firestorea → MyApplicationTheme(darkTheme=true) → RECOMPOSITION
+```
+
+**Posledica:** Pri vsakem zagonu z aktiviranim dark modom bo kratkotrajen **light mode flash** (`~500ms`) preden Firestore vrne vrednost. To je vizualni flicker ob zagonu.
 
 ---
 
-## Poglavje 11 — GAMIFICATION & PROGRESSION ENGINE
-
-> Faza 7 od 10 — Avtor: AI Audit | Datum: 2026-04-28
-
----
-
-### 11.1 XP Logic — Kako se dodeljuje XP
-
-**Vstopna točka:** `UpdateBodyMetricsUseCase.invoke()` → `ManageGamificationUseCase.recordWorkoutCompletion()` → `FirestoreGamificationRepository.awardXP()`
-
-**Formuli za XP ob zaključku treninga:**
-
-```
-// ManageGamificationUseCase.recordWorkoutCompletion()
-baseXP = 50
-calorieXP = (caloriesBurned / 8).toInt()
-isCritical = Random.nextFloat() < 0.1f      // 10% šansa
-finalBaseXP = if (isCritical) baseXP * 2 else baseXP   // 100 ali 50
-skupaj = finalBaseXP + calorieXP
-```
-
-**Alternativna formula** (v `completeWorkoutSession()` — klicana, ko UI pokliče neposredno):
-```
-workoutXp = 100 + (calKcal / 10)
-```
-
-> ⚠️ **Anomalija**: Dve različni formuli za XP za dokončan trening obstajata vzporedno (`recordWorkoutCompletion` vs `completeWorkoutSession`). `UpdateBodyMetricsUseCase` kliče samo `recordWorkoutCompletion`, `completeWorkoutSession` ni klicana iz nobenega zaključka treninga v produkcijskem toku, hkrati pa ni označena kot deprecated.
-
-**XP za ostale akcije** (iz `ManageGamificationUseCase`):
-| Akcija | XP |
-|--------|-----|
-| `DAILY_LOGIN` | 10 |
-| `REST_DAY` | 10 |
-| `PLAN_CREATED` | 100 |
-| `WORKOUT_COMPLETE` (base) | 50 (ali 100 ob critical hit) |
-| `CALORIES_BURNED` | `caloriesBurned / 8` |
-
-**Pisanje v Firestore:** `FirestoreGamificationRepository.awardXP()` uporablja `db.runTransaction` — atomarno prebere trenutni XP, izračuna `newXp = currentXp + amount`, hkrati izračuna `newLevel = UserProfile.calculateLevel(newXp)` in zapiše oba atributa skupaj. Vsak XP event se hkrati zapiše v `users/{uid}/xp_history/{autoId}` z razlogom, datumom in stanjem po transakciji.
-
-**Daily cap:** **Ne obstaja.** Ni omejitve, kolikokrat na dan se XP podeli. Vsak klic `awardXP()` bo atomarno prištel XP, neovirano.
-
-> ⚠️ **Anomalija**: Brez daily capa brez preverjanja, ali je trening danes že bil narejen, ni ovire za "farming" XP z zaganjanjem in takojšnjim zaključevanjem treningov večkrat na dan.
-
----
-
-### 11.2 Level System — Formula za levele
-
-**Datoteka:** `data/UserProfile.kt` vrstice 77–98
-
-```
-// Inicializacija
-level = 1
-requiredXp = 100
-totalXp = 0
-
-// Iteracija
-while (totalXp + requiredXp <= xp):
-    totalXp += requiredXp
-    level++
-    requiredXp = floor(requiredXp * 1.2)  // 20% rast na level
-```
-
-**Primeri XP pragov:**
-| Level | XP za dosego |
-|-------|-------------|
-| 1 | 0 |
-| 2 | 100 |
-| 3 | 220 (100+120) |
-| 4 | 364 (100+120+144) |
-| 5 | 537 (100+120+144+173) |
-| 10 | ~2 591 |
-| 25 | ~44 900 |
-| 50 | ~2 100 000 (ocena) |
-
-**Tip:** Eksponentna / geometrijska progresija (+20% XP potrebnih na level). Vsak naslednji level zahteva 20% več kot prejšnji.
-
-**Level se izračuna atomarno v transakciji** `awardXP()` — ni možno imeti "stale" levela.
-
----
-
-### 11.3 Streak Engine — Kako deluje streak
-
-**Dve vzporedni implementaciji:**
-
-#### A) `UserProfileManager.updateUserProgressAfterWorkout()` (PRIMARNA)
-- Kliče se iz `UpdateBodyMetricsUseCase` ob vsakem zaključku treninga.
-- Temelji na **epochDays** (celo število dni od Unix epohe) — `last_workout_epoch` v Firestoreu.
-- Logika:
-```
-dayDiff = todayEpochDays - lastWorkoutEpochDays
-newStreak = when:
-    oldLastEpoch == 0 → 1            // prvi trening kdajkoli
-    dayDiff == 0     → oldStreak     // danes že treniral → ohrani
-    dayDiff == 1     → oldStreak + 1  // včeraj treniral → podaljšaj
-    dayDiff > 1 AND freezes > 0 → oldStreak (freeze porabljen, streak ohranjen, NE poveča se!)
-    dayDiff > 1 AND freezes == 0 → 1 (reset)
-```
-
-#### B) `FirestoreGamificationRepository.updateStreak()` (SEKUNDARNA)
-- Temelji na **datum string** (`login_streak` polje), ne epochDays.
-- Piše v `users/{uid}/daily_logs/{todayStr}` s statusom `WORKOUT_DONE` ali `REST_DONE`.
-- Ima **idempotency guard**: če `daily_logs/{todayStr}` že obstaja, transakcija vrne takoj brez pisanja.
-- Streak se poveča samo ob `isWorkoutSuccess=true`. Rest Day (kliče se z `isWorkoutSuccess=true`!) poveča streak enako kot workout.
-
-> ⚠️ **Anomalija**: Dve vzporedni streak implementaciji (`login_streak` in `streak_days`) pišeta v različni Firestore polji (`login_streak` vs `streak_days`). Ni jasno, kateri je prikazan v UI. `updateUserProgressAfterWorkout` piše `streak_days` in `last_workout_epoch`; `updateStreak` piše `login_streak` in `last_streak_update_date`.
-
-> ⚠️ **Anomalija**: `WeeklyStreakWorker` (midnight check) kliče `FirestoreGamificationRepository.updateStreak()` oziroma `runMidnightStreakCheck()`, ki prebere `daily_logs/{yesterdayStr}`. Če pa je primarni streak v `streak_days` + `last_workout_epoch` (epochDays baza), Worker ne popravlja pravilnega polja.
-
-**Rest Day in streak:** V `ManageGamificationUseCase.restDayInitiated()` kliče `repository.updateStreak(isWorkoutSuccess = true)` — Rest Day šteje enako kot workout za `login_streak`. Za `streak_days` (primarystreak) Rest Day ne ustvari zapisa prek `updateUserProgressAfterWorkout` (ta se ne kliče).
-
-**WeeklyStreakWorker — urnik:** `OneTimeWorkRequest` z zamikom do naslednjega dne 00:01 lokalnega časa. Ob koncu vsakega uspeha se razporedi naslednji (`scheduleNext(context)`). Zahteva `NetworkType.CONNECTED`.
-
-> ⚠️ **Anomalija**: Worker ne bo zagnal in preveril streaka, če telefon ob polnoči nima internetne povezave. Streak ne bo padel, dokler Worker naslednjič ne uspe zagnati. To pomeni, da je možno streak ohraniti dalj časa z izogibanjem interneta.
-
-**Manipulacija s sistemskim časom:** `getTodayStr()` in `getYesterdayStr()` v `FirestoreGamificationRepository` kličeta `Clock.System.now()` z `TimeZone.currentSystemDefault()` — **sistemski čas naprave**. Ker so vrednosti vnesene v Firestore kot string/epochMs in niso preverjene prek `serverTimestamp()`, je manipulacija z uro naprave možna za podaljšanje streaka.
-
-> ⚠️ **Anomalija**: `updateUserProgressAfterWorkout()` prav tako kliče `Clock.System.now()` za `todayEpochDays`. Celotna streak logika temelji na lokalnem telefonskem času, ne na Firestore `serverTimestamp()`. Nastavitev datuma naprave naprej za 1 dan ohrani streak, nastavljanje nazaj pa ga ne prekine.
-
----
-
-### 11.4 Badge Unlock System
-
-**Definicije:** `BadgeDefinitions.ALL_BADGES` — 22 badge-ev v 6 kategorijah:
-| Kategorija | Badge-i |
-|-----------|---------|
-| `WORKOUT` | first_workout, committed_10/50/100/250/500 |
-| `ACHIEVEMENT` | calorie_crusher_1k/5k/10k, level_5/10/25/50, first_plan, plan_master |
-| `SOCIAL` | first_follower, social_butterfly (10), influencer (50), celebrity (100) |
-| `SPECIAL` | early_bird (5× pred 7:00), night_owl (5× po 21:00) |
-| `STREAK` | week_warrior (7), month_master (30), year_champion (365) |
-
-**Progress izračun:** `ManageGamificationUseCase.getBadgeProgress(badgeId, profile)` vrne vrednost iz `UserProfile` (npr. `profile.totalWorkoutsCompleted`, `profile.followers`, `profile.level`).
-
-**Unlock preverjanje (kje):**  
-`AchievementsScreen.kt` in `LevelPathScreen.kt` — oba računata badge status v composableu ob vsakem renderu:
-```
-isUnlocked = userProfile.badges.contains(badge.id) || userProgress >= badge.requirement
-```
-
-**Shranjevanje odklepov:** `userProfile.badges: List<String>` — Firestore polje `badges` je seznam ID-jev odklenjenih badge-ev. Ni evidence o tem, da se badge ID atomarno doda v Firestore ob odklepu; `WorkoutSessionScreen` ob zaključku treninga pokliče `result.unlockedBadges.firstOrNull()` za animacijo, ampak `WorkoutCompletionResult.unlockedBadges` vrne vedno **prazen seznam** (`emptyList()` — vrstica 86 v `ManageGamificationUseCase`).
-
-> ⚠️ **Anomalija**: `WorkoutCompletionResult.unlockedBadges` je hardcoded `emptyList()`. Badge animacija v `WorkoutSessionScreen.kt` (vrstica 554) bo vedno prazna — badge popup se nikoli ne sproži ob zaključku treninga.
-
-**Trigger model:** Badge odklepanje ni trigger-based (ni callbacka ob `awardXP` ali `updateStreak`). Badge status je izračunan on-demand v UI ob vsakem renderu na podlagi `UserProfile` vrijednosti. Ni periodičnega backend scana.
-
-> ⚠️ **Anomalija**: Ker badge odklepanje temelji na client-side izračunu brez pisanja, badge `id` ne bo dodan v Firestore `badges` seznam avtomatično ob doseženi meji. Brez dodatne logike za pisanje badge ID-ja, bo isUnlocked vedno `true` v UI (ker `userProgress >= req`), ampak `userProfile.badges.contains(badge.id)` bo vračal `false` do ročnega vpisa.
-
----
-
-### 11.5 Streak Freeze — Nakup in Poraba
-
-**Nakup:** `ShopViewModel.buyStreakFreeze()`
-- Cena: **300 XP**
-- Maks zalogo: **3 Freezes** hkrati
-- Mehanizem: Firestore transakcija atomarno preveri `streak_freezes < 3` in `xp >= 300`, nato atomarno zmanjša XP in poveča `streak_freezes`. Pisanje v `xp_history` z `"source": "SHOP_SPEND"`.
-- Level se preračuna znotraj iste transakcije.
-
-**Poraba:** Dve poti:
-1. `UserProfileManager.updateUserProgressAfterWorkout()` — porabi freeze ko `dayDiff > 1` in `streak_freezes > 0`. Streak ostane na stari vrednosti (ne poveča se). Piše `streak_freezes -= 1` le ako je bil `freezeUsed = true`.
-2. `FirestoreGamificationRepository.consumeStreakFreeze()` — kliče se iz `runMidnightStreakCheck()` Worker-ja. Enaka logika: atomarno zmanjša `streak_freezes` za 1.
-
-> ⚠️ **Anomalija**: Dve ločeni poti za porabo zamrznitev pišeta v isto polje (`streak_freezes`). Ko `updateUserProgressAfterWorkout` porabi freeze (workoutpath) IN Worker hkrati pokliče `consumeStreakFreeze` (midnight path), je za isto zamujeno noč možna dvojna poraba.
-
-**Pridobivanje Freeze (brez nakupa):** Ni evidence o tem, da se Freeze kdajkoli podeli brez nakupa v shopu. Ni nagradnega sistema (dnevna prijava, streak milestone) ki bi podarjal Freeze.
-
----
-
-### 11.6 Rest Day Swap Mehanizem
-
-**Lokacija:** `FirestoreGamificationRepository.checkIfFutureRestDaysExistAndSwap()`
-
-**Potek:** Ko Worker zazna, da je bil včerajšnji dan zamuden (ni zapisa v `daily_logs`):
-1. Poišče first upcoming rest day v aktivnem planu (`user_plans/{uid}.plans[0].weeks[].days[]`).
-2. Zamenjana dan — zamujeni dan postane `isRestDay=true, isSwapped=true`.
-3. Prihodnji rest dan postane workout z originalnim `focusLabel` — `isSwapped=true`.
-4. Posodobljeni plan se zapiše nazaj v Firestore.
-
-**Omejitev:** Zamenjava se naredi samo enkrat na zamujeni dan (FIFO — prvi razpoložljiv rest dan naprej).
-
-> ⚠️ **Anomalija**: `currentPlanDayNum` se izračuna kot `logsSnap.documents.size + 1` — skupno število vseh dokumentov v `users/{uid}/daily_logs`, ne samo aktivnih treningov. Če je kolekcija `daily_logs` zakrpana z `REST_DONE` ali `FROZEN` dokumenti za pretekle dni, bo `currentPlanDayNum` napačen (precenjen).
-
----
-
-### 11.7 Ugotovljene Anomalije
-
-| # | Opis | Lokacija | Resnost |
-|---|------|----------|---------|
-| 1 | Brez daily XP capa — XP farming možen z večkratnim zagonom/zaključkom treninga | `FirestoreGamificationRepository.awardXP()` | 🔴 Visoka |
-| 2 | Dve vzporedni streak implementaciji — `streak_days` (epochDays) in `login_streak` (dateStr) pišeta različni Firestore polji | `UserProfileManager` + `FirestoreGamificationRepository` | 🔴 Visoka |
-| 3 | Streak temelji na lokalnem telefonskem času, ne `serverTimestamp()` — manipulacija z uro naprave ohrani streak | `getTodayStr()`, `updateUserProgressAfterWorkout()` | 🔴 Visoka |
-| 4 | `WorkoutCompletionResult.unlockedBadges` je vedno `emptyList()` — badge unlock animacija nikoli ne sproži | `ManageGamificationUseCase.recordWorkoutCompletion()` vrstica 86 | 🔴 Visoka |
-| 5 | Worker ne zagona brez interneta — streak ne pade ob izključeni povezavi ob polnoči | `WeeklyStreakWorker` (`NetworkType.CONNECTED` constraint) | 🟡 Srednje |
-| 6 | Dvojna poraba Freeze možna: `updateUserProgressAfterWorkout` + `consumeStreakFreeze()` oba tečeta za isti zamujeni dan | `UserProfileManager` + `FirestoreGamificationRepository.runMidnightStreakCheck()` | 🟡 Srednje |
-| 7 | `completeWorkoutSession()` (druga XP formula) ni klicana iz WorkoutSession toka — brez opozorila o deprecated | `ManageGamificationUseCase` vrstica 44 | 🟡 Srednje |
-| 8 | Badge ID se nikoli atomarno ne doda v Firestore `badges` seznam ob dosegu meje — samo UI bere progress on-demand | `AchievementsScreen`, `LevelPathScreen` | 🟡 Srednje |
-| 9 | `currentPlanDayNum` v Swap algoritmu temelji na skupnem številu `daily_logs` dokumentov — vključno z REST/FROZEN zapisi | `checkIfFutureRestDaysExistAndSwap()` vrstice 202–203 | 🟡 Srednje |
-| 10 | `restDayInitiated()` kliče `updateStreak(isWorkoutSuccess=true)` — rest day poveča `login_streak` enako kot workout | `ManageGamificationUseCase.restDayInitiated()` vrstica 128 | 🟢 Nizko |
