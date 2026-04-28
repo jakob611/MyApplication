@@ -542,7 +542,7 @@ Celotna tek/aktivnost sesija. `{sessionId}` = Firestore auto-generated ID.
 
 | Polje | Tip | Default | Opis | Piše |
 |-------|-----|---------|------|------|
-| `id` | String | `""` | Interni ID (= doc ID) | `RunSession.toFirestoreMap()` prek `RunTrackerScreen` |
+| `id` | String | `""` | Interni ID (= doc ID) | `RunSession.toFirestoreMap()` |
 | `userId` | String | `""` | User doc ID | `RunSession.toFirestoreMap()` |
 | `startTime` | EpochMs | `0` | Čas začetka aktivnosti (ms) | `RunSession.toFirestoreMap()` |
 | `endTime` | EpochMs | `0` | Čas konca aktivnosti (ms) | `RunSession.toFirestoreMap()` |
@@ -758,37 +758,6 @@ Obvestila (zaenkrat samo "new_follower").
 | `message` | String | — | Besedilo obvestila | `FollowStore.followUser()` |
 | `timestamp` | Timestamp | server | Čas obvestila | `FollowStore.followUser()` |
 | `read` | Boolean | `false` | Ali je obvestilo prebrano | `FollowStore.followUser()` |
-
----
-
-### 7.13 DATA REDUNDANCY — Pregled podvojenih podatkov
-
-| # | Podatek | Polje 1 | Polje 2 | Resnost | Opis |
-|---|---------|---------|---------|---------|------|
-| 1 | Streak | `streak_days` (read by UserProfileManager) | `login_streak` (read+write by FirestoreGamificationRepository) | 🔴 Visoka | Dva pisca, en bralec — vrednosti se lahko razlikujeta. `UserProfileManager` je SSOT za streak v večini kode. |
-| 2 | Rating dnevnih aktivnosti | `dailyLogs/{date}` (food/water/burned) | `daily_logs/{date}` (streak status) | 🟡 Srednja | Dve različni sub-kolekciji z podobno semantiko. Ne pride do direktnega konflikta, a povzroča zmedo. |
-| 3 | Profil slika URL | ključ `"profilePictureUrl"` (zapis) | `"profile_picture_url"` (branje) | 🔴 Kritična | Write-read mismatch — `profilePictureUrl` nikoli ni prebrana nazaj, ker documentToUserProfile() bere `profile_picture_url`. |
-| 4 | GPS točke | `polylinePoints` (inline, `latitude`/`longitude`) | `gps_points/{chunk}` ali `points/{chunk}` (sub-col, `lat`/`lng`) | 🟡 Srednja | Dva formata za iste podatke. FirestoreWorkoutRepository podpira oba. |
-| 5 | Workout timestamp | `"timestamp"` (Long, novi format) | `"date"` (Firestore Timestamp, stari format) | 🔴 Visoka | `getWeeklyDoneCount()` querya po `"date"`, toda novi dokumenti nimajo tega polja → poizvedba vrne 0. |
-| 6 | Teža v profilu vs weightLogs | `goalWeightKg` v `users/{docId}` | `weightKg` v `users/{docId}/weightLogs` | 🟢 Nizka | `goalWeightKg` je CILJNA teža. `weightLogs` je zgodovina DEJANSKE teže. Ni konflikt. |
-
----
-
-### 7.14 FIRESTORE INDEXES
-
-Potrebni (kompozitni) indeksi za delujoče poizvedbe:
-
-| Kolekcija | Polja | Tip | Kdo potrebuje |
-|-----------|-------|-----|---------------|
-| `users` | `is_public_profile ASC`, `followers DESC` | Kompozitni | `ProfileStore.getTopUsers()` |
-| `users/{uid}/runSessions` | `createdAt DESC` | Single-field descending | `FirestoreWorkoutRepository.getRunSessions()` + paginacija |
-| `users/{uid}/workoutSessions` | `date ASC` (Timestamp) | Single-field | `FirestoreWorkoutRepository.getWeeklyDoneCount()` ⚠️ problema s timestamp vs date |
-| `users/{uid}/gps_points` | `chunkIndex ASC` | Single-field | `FirestoreWorkoutRepository.loadGpsPoints()` |
-| `users/{uid}/points` | `chunkIndex ASC` | Single-field | `FirestoreWorkoutRepository.loadGpsPoints()` |
-| `users/{uid}/publicActivities` | `startTime DESC` | Single-field descending | `ProfileStore.mapToPublicProfile()` |
-| `follows` | `followingId ==` | Single-field equality | `FollowStore.getFollowers()` |
-| `follows` | `followerId ==` | Single-field equality | `FollowStore.getFollowing()` |
-| `follows` | `followerId ==`, `followingId ==` | Kompozitni | `FollowStore.isFollowing()` fallback query |
 
 ---
 
@@ -1020,7 +989,7 @@ startInitialSync() → loadProfileFromFirestore() vrne iz Firestore OFFLINE CACH
                   Rezultat: profil naložen iz cache, overlay izgine hitro
 ```
 
-#### Test 4: Brez interneta, NOVA naprava (nič ni v Firestore cache)
+#### Test 4: Brez interneta, NOVA naprava (nič v Firestore cache)
 ```
 startInitialSync() → loadProfileFromFirestore() → Firestore SDK throws
                      FirebaseFirestoreException(UNAVAILABLE) po timeoutu
@@ -1108,7 +1077,7 @@ LaunchedEffect(Unit) {
 }
 ```
 
-**Dejstvo:** Oba se izvajata neodvisno. Compose jih obravnava kot dva ločena effect bloka na isti composable poziciji (oba imata isti key `Unit` a **različno vrstno pozicijo** v composition tree). Oba korutinata **tečeta vzporedno**.
+**Dejstvo:** Oba se izvajta neodvisno. Compose jih obravnava kot dva ločena effect bloka na isti composable poziciji (oba imata isti key `Unit` a **različno vrstno pozicijo** v composition tree). Oba korutinata **tečeta vzporedno**.
 
 **Posledice:**
 | Operacija | Blok 1 (vrstica 177) | Blok 2 (vrstica 277) |
@@ -1164,7 +1133,7 @@ V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
 |---------|---|
 | Internet OK, znana naprava | ✅ Normalno |
 | Internet OK, nova naprava | ✅ Normalno |
-| Offline, znana naprava (cache topel) | ✅ Brez interneta |
+| Offline, znana naprava (Firestore 100MB cache topel) | ✅ Brez interneta |
 | Offline, nova naprava (nič v cache) | ⚠️ Dolgo čakanje, nato prazen prif |
 | Firestore napaka (auth OK, Firestore down) | ⚠️ Isto kot zgoraj |
 
@@ -1432,7 +1401,7 @@ users/{uid}/customMeals/{mealId}
   createdAt: Timestamp       // serverTimestamp()
 ```
 
-Vsak element v `items[]`:
+Vsak element v `items`:
 ```
 {
   id:   String  // FatSecret food_id
@@ -1496,3 +1465,360 @@ Ko se custom meal loggira kot obrok:
 | 3 | `getCustomMealItems()` kliče `db.collection("users").document(currentUid)` **direktno** (bypassa `FirestoreHelper.getCurrentUserDocRef()`) | `NutritionViewModel.getCustomMealItems()` vrstica 293 |
 | 4 | `WeightPredictorStore.lastHybridTDEE` je in-memory singleton — po restartu aplikacije se izgubi in NutritionViewModel pade nazaj na `bmr × 1.2` | `NutritionViewModel.setUserMetrics()` vrstica 165 |
 | 5 | Makro cilji imajo 3-stopenjski fallback (nutritionPlan → parsed → plan), toda `nutritionPlan.calories` se zaokroži navzdol na 100, `dynamicTargetCalories` pa ne — UI prikazuje dve različni ciljni vrednosti | `NutritionScreen` vrstice 197–202 vs `dynamicTargetCalories` StateFlow |
+
+---
+
+## 10. SOCIAL & PRIVACY ARCHITECTURE
+
+> **Faza 6 od 10** — Socialni sloj, follow sistem, leaderboard, zasebnost, varnost. Brez popravkov.
+
+---
+
+### 10.1 Follow Flow (FollowStore.kt)
+
+#### 10.1.1 Follow mehanizem
+
+```
+followUser(followerId, followingId):
+
+GUARD: resolvedFollowerId == followingId → return false  (self-follow preprečen)
+
+Firestore ONE TRANSACTION {
+  READ: follows/{resolvedFollowerId}_{followingId}     ← deterministični doc ID check
+  READ: users/{resolvedFollowerId}                     ← follower's profile (za following count)
+  READ: users/{followingId}                            ← target's profile (za followers count)
+
+  IF followDoc.exists() → alreadyFollowing=true, return (no-op)
+
+  WRITE: follows/{resolvedFollowerId}_{followingId} = {
+    followerId: resolvedFollowerId,
+    followingId: followingId,
+    followedAt: serverTimestamp()
+  }
+
+  WRITE: users/{followingId}.followers = currentFollowers + 1   (SET MERGE)
+  WRITE: users/{resolvedFollowerId}.following = currentFollowing + 1 (SET MERGE)
+}
+
+AFTER TRANSACTION (nekritično, zunaj):
+  ADD: notifications/{followingId}/items/{autoId} = {
+    type: "new_follower",
+    fromUserId: resolvedFollowerId,
+    message: "started following you",
+    timestamp: serverTimestamp(),
+    read: false
+  }
+```
+
+**Deterministični Doc ID:** `"{followerId}_{followingId}"` — prepreči dvojno sledenje celo pri sočasnih klikih (transakcija preveri obstoj DOC-a, ne query-ja).
+
+**Atomarnost:** Oba števca (`followers` in `following`) se posodobita znotraj iste transakcije — ni možna situacija, kjer bi eden bil posodobljen brez drugega.
+
+**Notifikacija:** Zunaj transakcije — če notifikacija spodleti, gre `exception` v `Log.w` in se prezre. Sledenje je vseeno uspešno.
+
+#### 10.1.2 Unfollow mehanizem
+
+```
+unfollowUser(followerId, followingId):
+
+ATTEMPT 1 — Deterministični format (nov):
+  Firestore TRANSACTION {
+    READ: follows/{resolvedId}_{followingId}
+    IF !exists → return (skip transaction)
+    DELETE: followDoc
+    WRITE: users/{followingId}.followers = max(1, current) - 1
+    WRITE: users/{resolvedId}.following  = max(1, current) - 1
+  }
+
+ATTEMPT 2 — Stari naključni ID format (fallback):
+  IF !deletedViaTransaction:
+    QUERY: follows WHERE followerId==resolvedId AND followingId==followingId
+    DELETE: vsak najden doc
+    UPDATE: users/{followingId}.followers  FieldValue.increment(-1)   ← BREZ transakcije!
+    UPDATE: users/{resolvedId}.following   FieldValue.increment(-1)   ← BREZ transakcije!
+```
+
+**⚠️ Fallback brez transakcije:** Stari dokumenti se odstranejajo z `FieldValue.increment(-1)` zunaj transakcije — race condition je možen, a je ta pot samo za pred-migracijske podatke.
+
+#### 10.1.3 Count auto-repair (self-healing)
+
+`getFollowers(userId)` in `getFollowing(userId)` med nalaganjem seznama **samodejno popravita** count v Firestore, če se ne ujema z dejanskim številom dokumentov:
+
+```
+IF storedCount != actualDocs.size:
+  userRef.update("followers", actualDocs.size)  ← brez transakcije, samo korekcija
+```
+
+**⚠️ Self-follow cleanup:** Ob nalaganju followers/following se `followerId == userId` dokumenti samodejno brišejo z `doc.reference.delete()` — tiha čiščenja brez notifikacije.
+
+#### 10.1.4 Brisanje profila — kaj se zgodi?
+
+Funkcija `deleteUserData` ali `deleteUserAccount` **ne obstaja** v kodi. V kodi ni nobene logike, ki bi ob brisanju profila:
+- Pobrisala `follows/{userId}_*` ali `follows/*_{userId}` dokumente
+- Zmanjšala `followers` counter pri sledenih uporabnikih
+- Pobrisala `publicActivities/{userId}`
+- Pobrisala `notifications/{userId}/items`
+
+**Posledica:** Če uporabnik izbriše Firebase Auth račun ročno (npr. prek Firebase Console ali onkraj aplikacije), ostanejo vse follow relacije, counti, aktivnosti in notifikacije v Firestore **za vedno**. Ni implementirane cascade delete logike.
+
+---
+
+### 10.2 Leaderboard Logic
+
+#### Primarna leaderboard — Top po sledilcih
+
+```
+ProfileStore.getTopUsers(limit=10):
+  QUERY: users
+    WHERE is_public_profile == true
+    ORDER BY followers DESC
+    LIMIT 10
+  → List<PublicProfile>  (mapToPublicProfile z fetchActivities=false)
+```
+
+**Tip poizvedbe:** **Live query ob vsakem zagonu CommunityScreen** — ni predpripravljene (aggregated) lestvice. Vsak odprt CommunityScreen sproži svežo Firestore poizvedbo.
+
+**CommunityScreen kliče `getTopUsers(50)`** (ne 10):
+```
+LaunchedEffect(Unit) {
+  allUsers = ProfileStore.getTopUsers(50).filter { it.userId != currentUserId }
+}
+```
+
+**Cena:** Vsak odprt tab = 1 Firestore branje do 50 dokumentov. Ni caching-a, ni paginacije, ni snapshot listenerja (samo enkraten `.get()`).
+
+#### XP leaderboard — NE obstaja
+
+V kodi **ni ločene XP leaderboard logike**. Ni query-ja `ORDER BY xp DESC`. Edina razvrstitvena poizvedba je po `followers`.
+
+#### Client-side filtriranje
+
+Po prejetem `getTopUsers(50)` CommunityScreen naredi:
+```
+// Level filter (client-side)
+"New"      → filter { (it.level ?: 1) < 5 }
+"Veterans" → filter { (it.level ?: 1) > 20 }
+"All"      → brez filtra
+
+// Suggested users (random)
+suggestedUsers = allUsers.shuffled().take(5)
+```
+
+**⚠️ `allUsers.shuffled()` ob vsakem recompose:** `remember(allUsers)` prepreči ponovni shuffle ob vsakem recompose, a `allUsers` se ne posodobi po prvem zagonu (ni reload trigger). Vrstni red "Suggested" ostane enak za celoten lifecycle screena.
+
+#### Iskanje profilov
+
+```
+ProfileStore.searchPublicProfiles(query):
+  QUERY: users
+    WHERE is_public_profile == true
+    LIMIT 20
+  → client-side filter: username/first_name/docId contains query (ignoreCase)
+```
+
+**⚠️ Full-collection-first scan:** Firestore vrne prvih 20 javnih profilov brez filtra po imenu, nato se filter izvede na odjemalcu. Iskanje `"Aleksander"` bo vrnilo prazno, če noben izmed prvih 20 javnih profilov ne vsebuje tega niza — čeprav `"Aleksander"` obstaja na mestu 21.
+
+---
+
+### 10.3 Privacy Shields — Kje se uveljavljajo zasebnostne nastavitve
+
+#### 10.3.1 Zasebnostni flags (PrivacySettings data class)
+
+| Flag | Ključ v Firestore | Privzeto | Učinek |
+|------|-------------------|----------|--------|
+| `isPublic` | `is_public_profile` | `false` | Profil nevidljiv v iskanju in leaderboard-u |
+| `showLevel` | `show_level` | `false` | Level viden/skrit v PublicProfile |
+| `showBadges` | `show_badges` | `false` | Badges vidne/skrite |
+| `showStreak` | `show_streak` | `false` | Streak viden/skrit |
+| `showPlanPath` | `show_plan_path` | `false` | Plan path viden/skrit (zaenkrat vedno null — `activePlanSummary` = null) |
+| `showChallenges` | `show_challenges` | `false` | Pokaži izzive na javnem profilu | ProfileStore + UserProfileManager |
+| `showFollowers` | `show_followers` | `false` | Pokaži followers/following na javnem profilu | ProfileStore + UserProfileManager |
+| `shareActivities` | `share_activities` | `false` | Deli GPS aktivnosti s skupnostjo | ProfileStore + UserProfileManager |
+
+#### 10.3.2 Kje se filtriranje izvaja — UI vs Server
+
+**Vse filtriranje zasebnostnih nastavitev se izvaja IZKLJUČNO na odjemalcu (Android UI).**
+
+```
+mapToPublicProfile(doc, fetchActivities):
+
+1. if (!doc.exists()) return null
+2. val isPublic = doc.getBoolean("is_public_profile") ?: false
+3. if (!isPublic) return null   ← ← ← EDINO "strežniško" filtriranje je WHERE-clause v query-ju
+
+4. // Vse ostalo je client-side IF logic:
+   level    = if (showLevel)    calculateLevel(xp)  else null
+   badges   = if (showBadges)   doc.get("badges")   else null
+   streak   = if (showStreak)   doc.get("streak_days") else null
+   followers/following = if (showFollowers) ... else null
+   activities = if (shareActivities && fetchActivities) loadPublicActivities() else null
+```
+
+**Firestore Security Rules:** Datoteka `firestore.rules` **ne obstaja** v projektu (preverjen z `file_search`). To pomeni, da velja privzeto Firestore pravilnik — v development projektu je to pogosto `allow read, write: if true` (popolnoma odprt dostop), v produkcijskem projektu pa Firebase konzola morda nastavi drugačna pravila, a ne prek Android projekta.
+
+> ⚠️ **KRITIČNO:** Brez Firestore Security Rules zaščite je vsak, ki ima dostop do Firebase projekta (ali pozna project ID), zmožen brati **celoten** `users` dokument — vključno z emailom, XP, badges, streak, telesnimi metrikami — ne glede na `is_public_profile = false`.
+
+#### 10.3.3 Kaj `getPublicProfile()` dejansko prebere iz Firestore
+
+`FirestoreHelper.getUserRef(userId).get()` prebere **CELOTEN** `users/{userId}` dokument — tudi polja:
+- `height`, `age`, `gender`, `bodyFat`, `limitations`
+- `activityLevel`, `sleepHours`, `nutritionStyle`
+- `workoutGoal`, `focusAreas`, `equipment`
+- `total_calories`, `early_bird_workouts`, `night_owl_workouts`
+- `goalWeightKg`
+
+Vsa ta polja so prebrana in nato **preslikan sam na filter** v `mapToPublicProfile()`. Nobeno od teh polj ni v `PublicProfile` data class, torej **ne bodo prikazana** v UI.
+
+**Vendar:** Logika `doc.get("xp")` za izračun levela prebere XP vrednost tudi ko je `showLevel=false` — razlika je le v tem, ali se rezultat vrne ali ne. Firestore ga vseeno prebere — ni field projection.
+
+---
+
+### 10.4 Public Profile Rendering — Kaj ProfileStore dejansko izpostavi
+
+#### 10.4.1 PublicProfile data class — izpostavljena polja
+
+| Polje | Pogoj za izpostavljenost | Potencialno tveganje |
+|-------|--------------------------|---------------------|
+| `userId` | Vedno — je ključ dokumenta | ⚠️ Razkriva doc ID (email ali UID). Če je email, razkriva email naslov! |
+| `username` | Vedno (ni privacy flag) | Nizko tveganje |
+| `displayName` | Vedno (ni privacy flag) | `first_name` polje — nizko tveganje |
+| `level` | `showLevel == true` | Varno |
+| `badges` | `showBadges == true` | Varno |
+| `streak` | `showStreak == true` | Varno |
+| `followers` / `following` | `showFollowers == true` | Varno |
+| `shareActivities` | Vedno (upravljano prek flag) | Varno — samo boolean |
+| `recentActivities` | `shareActivities == true` | GPS rute — varno komprimirane |
+| **Email** | Ni v PublicProfile data class | ✅ Ni neposredno izpostavljen prek UI |
+| `profilePictureUrl` | Ni v PublicProfile data class | ✅ Na javnem profilu ni slike |
+| `telesne metrike` | Niso v PublicProfile data class | ✅ Ne prikažejo se v UI |
+
+#### 10.4.2 Doc ID = Email razkritje
+
+`val userId = doc.id` → `PublicProfile.userId`
+
+Ko je doc ID email (primarna pot prek `FirestoreHelper`), se email:
+1. **Shrani** v `PublicProfile.userId`
+2. **Posreduje** v CommunityScreen → `onViewProfile(profile.userId)` → NavController
+3. **Prikaže** v URL / nav poti (ne prikazano v UI, a obstaja v navigacijskem argumentu)
+4. **Pošlje** v `FollowStore.followUser(currentUserId, profile.userId)` → zapiše v `follows` dokument kot `followingId`
+
+**Posledica:** Email ciljnega uporabnika je vsem sledilcem dostopen prek `follows/{id}.followingId` polje v Firestore — brez Firestore Security Rules varovanja.
+
+#### 10.4.3 searchPublicProfiles — doc ID leak
+
+Iskanje:
+```
+val docId = doc.id  // email ali uid
+val matches = docId.contains(query, ignoreCase = true)
+```
+
+**Iskanje po `docId.contains(query)` efektivno dovoljuje iskanje po emailu** — ko kdo vpiše `"@gmail.com"`, bo iskanje vrnilo vse javne profile, katerih email vsebuje to nizo.
+
+---
+
+### 10.5 Activity Feed — publicActivities in GPS Kompresija
+
+#### 10.5.1 Kdaj se GPS ruta objavi
+
+```
+RunTrackerScreen (po teku):
+
+1. Preveri: resolvedDocRef.get() → shareActivities == true?
+2. IF true && finalLocationPoints.isNotEmpty():
+
+   val rawPts = finalLocationPoints.map { Pair(lat, lng) }
+   val compressed = CompressRouteUseCase()(rawPts)
+   val routeList = compressed.map { mapOf("lat" to it.first, "lng" to it.second) }
+
+   SET users/{uid}/publicActivities/{sessionId} = {
+     activityType, distanceMeters, elevationGainM/LossM,
+     avgSpeedMps, maxSpeedMps, startTime,
+     routePoints: [ {lat, lng}, ... ]   ← BREZ altitude, speed, accuracy!
+   }
+```
+
+**Objavljeni podatki:** Samo `lat` + `lng` — altitude, speed in accuracy **niso** v `routeList`. Relativno minimalen geolociranje.
+
+**Neubjavljeni podatki:** `caloriesKcal`, `durationSeconds` v `pubMap` **NISO vključeni** (poglejte vrstico 680–688 RunTrackerScreen) — `durationSeconds` in `caloriesKcal` sta v pubMap dejansko izpuščena (v Fazi 7.4 smo dokumentirali, da sta v shemi, toda spodnji kod ju ne zapiše):
+
+```
+// pubMap NE vsebuje:
+// "durationSeconds" ← izpuščeno iz writeMap
+// "caloriesKcal"    ← izpuščeno iz writeMap
+```
+
+#### 10.5.2 CompressRouteUseCase — dejanski algoritem
+
+```
+CompressRouteUseCase.invoke(points: List<Pair<Double, Double>>):
+
+  val limit = 100               ← maksimum točk
+  IF points.size <= 100: return points  (brez kompresije!)
+
+  val step = points.size / 100.0
+  FOR i in 0 until 100:
+    compressed.add(points[(i * step).toInt()])   ← uniform sampling
+  IF !compressed.contains(points.last()):
+    compressed.add(points.last())                ← zagotovi zadnjo točko
+
+  return compressed  (max 101 točk)
+```
+
+**⚠️ TO NI RDP ALGORITEM** — nasprotno temu, kar je navedeno v komentarjih kode (`// CompressRouteUseCase.compress() → RDP kompresija ~450→~35 točk`).  
+Dejanska implementacija je **enakomerni vzorčevalnik (uniform sampling)** z `limit=100`, ne Ramer-Douglas-Peucker algoritem.
+
+**Maksimum shranjenih točk:** 101 (100 + zadnja točka). Za kratek tek (<100 točk) se točke shranijo brez kompresije.
+
+**Geografska natančnost:** Ker vzorčevalnik enakomerno razporedi točke (brez upoštevanja geometrije), se ostrimi zavoji v trasi izgubijo proporcionalno pogosteje kot ravni deli.
+
+#### 10.5.3 Brisanje aktivnosti
+
+`ActivityLogScreen.kt` omogoča brisanje lastnih aktivnosti:
+```
+userRef.collection("publicActivities").document(runToDel.id).delete().await()
+```
+
+Brisanje `publicActivities` je na voljo v UI — brisanje `runSessions` (interni log) je **ločeno**, prav tako v ActivityLogScreen.
+
+---
+
+### 10.6 Firestore Security Rules — Audit
+
+Datoteka `firestore.rules` **ne obstaja** v projektu. Ni bilo najdene nobene `.rules` datoteke.
+
+**Implicirani status:** Varnostna pravila za Firestore so konfigurirana **zunaj Android projekta** (npr. v Firebase Console ali prek Firebase CLI). Projekt sam ne vsebuje in ne vzdržuje security rules datoteke.
+
+**Znana tveganja brez eksplicitnih pravil:**
+
+| Tveganje | Opis |
+|---------|------|
+| 🔴 Čitanje celotnih profilov | Brez row-level security kdorkoli z API ključem (iz Firebase Config) lahko prebere vsak dokument `users/{id}` |
+| 🔴 Pisanje v tuj profil | Brez write rules kdorkoli lahko piše v `users/{tujiId}` (npr. poviša `followers` sam sebi) |
+| 🔴 Branje `dailyLogs` | Prehranjevalni in kalorični podatki (`dailyLogs`) so potencialno dostopni brez avtentikacije |
+| 🔴 Branje `customMeals` | Custom recepti so potencialno dostopni brez avtentikacije |
+| 🟡 Branje `follows` | Follow relacije so readable — razkrivajo socialno mrežo |
+| 🟡 Branje `runSessions` | GPS trase s `latitude/longitude/altitude/speed` za vse teke so readable |
+| 🟡 Pisanje v `notifications` | Pisanje v notification kolekcijo je odprto — SPAM možen |
+
+**Zaščite, ki obstajajo samo na odjemalcu (Android):**
+- `is_public_profile` filter v `searchPublicProfiles` — samo Firestore WHERE clause, ne Security Rule
+- Privacy flags filtriranje v `mapToPublicProfile()` — samo client-side
+- `shareActivities` check pred pisanjem `publicActivities` — samo client-side check
+
+---
+
+### 10.7 Ugotovljene Anomalije
+
+| # | Opis | Lokacija | Resnost |
+|---|------|----------|---------|
+| 1 | `PublicProfile.userId` razkriva email naslov (ko je doc ID email) — posredovan v nav args, FollowStore zapise, `follows/{id}.followingId` polje | `ProfileStore.mapToPublicProfile()`, `FollowStore.followUser()` | 🔴 Visoka |
+| 2 | `searchPublicProfiles()` dovoljuje iskanje po emailu prek `docId.contains(query)` | `ProfileStore.searchPublicProfiles()` vrstica 173 | 🔴 Visoka |
+| 3 | Brez cascade delete: brisanje Firebase Auth računa ne počisti follow relacij, aktivnosti in notifikacij | ni nobene `deleteUserData()` funkcije | 🔴 Visoka |
+| 4 | Firestore Security Rules datoteka ne obstaja v projektu | projekt root | 🔴 Kritično |
+| 5 | `CompressRouteUseCase` ni RDP, ampak uniform sampling (limit=100) — komentar v kodi je napačen | `CompressRouteUseCase.kt` | 🟡 Srednje |
+| 6 | Leaderboard je live query (getTopUsers(50)) ob vsakem odprtju CommunityScreen — ni cache, paginacije, ali aggregated collection | `CommunityScreen.kt` + `ProfileStore.getTopUsers()` | 🟡 Srednje |
+| 7 | `mapToPublicProfile()` prebere celoten `users` doc (vključno z višino, starostjo, telesno maščobo) — Firestore nima field projection, odjemalec filtrira sam | `ProfileStore.mapToPublicProfile()` | 🟡 Srednje |
+| 8 | `unfollowUser()` fallback (stari format) posodobi counters z `FieldValue.increment(-1)` BREZ transakcije — race condition možen za stare dokumente | `FollowStore.unfollowUser()` vrstice 138–139 | 🟡 Srednje |
+| 9 | `pubMap` v RunTrackerScreen ne vključi `durationSeconds` in `caloriesKcal` — PublicActivity data class ju ima, a Firestore jih ne zapiše | `RunTrackerScreen.kt` vrstica 680–688 | 🟢 Nizko |
+| 10 | `activePlanSummary` je vedno null v PublicProfile — `showPlanPath` flag ne deluje | `ProfileStore.mapToPublicProfile()` vrstica 142 | 🟢 Nizko |
+
