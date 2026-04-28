@@ -36,3 +36,8 @@ debug_*.ps1
 # Ekstrahiran APK vsebina
 /apk_contents/
 
+/shared/build/.transforms/f78a32f75757e01d82f2817dc36d16c4/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/example/myapplication/domain/gamification/ManageGamificationUseCase$completeWorkoutSession$1.dex
+/shared/build/.transforms/f78a32f75757e01d82f2817dc36d16c4/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/example/myapplication/domain/gamification/ManageGamificationUseCase$recordWorkoutCompletion$1.dex
+/shared/build/.transforms/f78a32f75757e01d82f2817dc36d16c4/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/example/myapplication/domain/gamification/ManageGamificationUseCase$restDayInitiated$1.dex
+/mcp_build_log.txt
+/shared/build/.transforms/f78a32f75757e01d82f2817dc36d16c4/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/example/myapplication/domain/WorkoutGenerator$generateWorkout$$inlined$sortedByDescending$1.dex
