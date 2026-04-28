@@ -847,7 +847,7 @@ Firebase.auth.signInWithEmailAndPassword(email, password)
         if (success && email verified):
           isLoggedIn = true
           userEmail = email
-          AppIntent.SetProfile(loadProfile(email))  ← LOCAL profile
+          AppIntent.SetProfile(loadProfile(email))  ← LOCAL profil
           scope.launch { isDarkMode = isDarkMode(email) }  ← Firestore klic!
           navViewModel.navigateTo(Screen.Dashboard)
       }
@@ -939,7 +939,7 @@ viewModelScope.launch {
 
 ---
 
-#### 8.1.5 Vzporedni procesi ob zalogiranosti — LaunchedEffect(Unit) #2 [vrstica 277]
+#### 8.1.5 Vzporedni procesi ob zaloginosti — LaunchedEffect(Unit) #2 [vrstica 277]
 
 Ko `Firebase.auth.currentUser != null`, se **HKRATI** (neodvisno od startInitialSync) izvajajo:
 
@@ -1037,7 +1037,7 @@ startInitialSync() → loadProfileFromFirestore() → Firestore SDK throws
 #### Test 5: Dvojni klic startInitialSync (authListener + drugi trigger)
 ```
 1. authListener sproži scope.launch { startInitialSync() } → isSyncStarted=true, začne
-2. authListener se morda sproži znova (auth refresh) → startInitialSync() → GUARD: return  ✅ OK
+2. authListener se morda sproži znova (auth refresh) → startInitialSync() → GUARD: return takoj  ✅ OK
    Kljub temu scope.launch { } ustvari novo corutino ki se takoj vrne — minimalen overhead.
 ```
 
@@ -1160,13 +1160,13 @@ V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
 
 ### 8.6 Offline Behavior — Povzetek
 
-| Scenarij | Overlay traja | Profil naložen | App deluje |
-|---------|--------------|----------------|------------|
-| Internet OK, znana naprava | ~300–800ms | Da (Firestore) | ✅ Normalno |
-| Internet OK, nova naprava | ~2–3s (fetch + 1500ms delay) | Da (Firestore) | ✅ Normalno |
-| Offline, znana naprava (cache topel) | ~300ms | Da (Firestore cache) | ✅ Brez interneta |
-| Offline, nova naprava (nič v cache) | **do ~60 sekund** | Ne (prazen profil) | ⚠️ Dolgo čakanje, nato prazen prif |
-| Firestore napaka (auth OK, Firestore down) | ~60s timeout | Ne (prazen) | ⚠️ Isto kot zgoraj |
+| Scenarij | Rezultat |
+|---------|---|
+| Internet OK, znana naprava | ✅ Normalno |
+| Internet OK, nova naprava | ✅ Normalno |
+| Offline, znana naprava (cache topel) | ✅ Brez interneta |
+| Offline, nova naprava (nič v cache) | ⚠️ Dolgo čakanje, nato prazen prif |
+| Firestore napaka (auth OK, Firestore down) | ⚠️ Isto kot zgoraj |
 
 **Ključna zaščita:** `finally { _isProfileReady.value = true }` garantira, da overlay **vedno** izgine — aplikacija **nikoli ne obvisi** za vedno.
 
@@ -1174,383 +1174,325 @@ V praksi to ni vidno (~15ms), a je arhitekturno nepravilno.
 
 ---
 
-## 9. WORKOUT & GPS ENGINE
+## 9. NUTRITION & DIET LOGIC
 
-> **Avditorski status:** Faza 4/10 — GPS & Workout Engine  
-> **Preiskovane datoteke:** `RunTrackingService.kt`, `RunTrackerScreen.kt`, `RunTrackerViewModel.kt`, `RunSession.kt`
+> **Faza 5 od 10** — Dokumentacija prehranskega modula. Brez popravkov.
 
 ---
 
-### 9.1 Tracking Lifecycle
+### 9.1 Food Search Flow
 
-#### 9.1.1 Tip storitve
+Iskanje hrane deluje izključno prek **zunanjega REST API-ja** — FatSecret Platform.  
+Ni lokalne SQLite baze, ni lokalnega JSON fajla za hrano.
 
-`RunTrackingService` je Android **Foreground Service** (deduje od `android.app.Service`).  
-Ko je sledenje aktivno, se kliče `startForeground(NOTIFICATION_ID, createNotification())`, kar zagotavlja, da Android storitve ne ubije prioritetno. Storitev ima **persistentno notifikacijo** z gumbi "Pause/Resume" in "Stop".
-
-#### 9.1.2 Zagon
+**Arhitektura klicne verige:**
 
 ```
-UI (RunTrackerScreen)
-  └─ startForegroundService(Intent(context, RunTrackingService::class.java)
-         .also { it.action = ACTION_START; it.putExtra(EXTRA_ACTIVITY_TYPE, selectedActivity.name) })
+UI (AddFoodSheet.kt / NutritionDialogs.kt)
+  │
+  ├─ FoodRepositoryImpl.searchFoodByName(query, maxResults=20)
+  │     → FatSecretApi.searchFoods(q, page=1, pageSize=20)
+  │           → HTTP GET  {FATSECRET_BASE_URL}/foods/search?q=...&page=1&pageSize=20
+  │                 ← JSON: { foods: { food: [ {food_id, food_name, brand_name, food_description} ] } }
+  │           → List<FoodSummary>
+  │
+  ├─ FoodRepositoryImpl.getFoodAutocomplete(query, maxResults=5)
+  │     → FatSecretApi.getFoodAutocomplete(q, maxResults=5)
+  │           → HTTP GET  {base}/foods/autocomplete?q=...&maxResults=5
+  │                 ← JSON: { suggestions: { suggestion: [ "...", "..." ] } }
+  │           → List<AutocompleteSuggestion>
+  │
+  ├─ FoodRepositoryImpl.getFoodDetail(id)
+  │     → FatSecretApi.getFoodDetail(foodId)
+  │           → HTTP GET  {base}/foods/{id}
+  │                 ← JSON: { food: { servings: { serving: [ ... ] } } }
+  │           → FoodDetail  (kalorije, makri, vlakna, natrij, holesterol ...)
+  │
+  └─ FoodRepositoryImpl.searchRecipes(query) / getRecipeDetail(id)
+        → FatSecretApi.searchRecipes() / getRecipeDetail()
+              → HTTP GET  {base}/recipes/search  /  {base}/recipes/{id}
+              → List<RecipeSummary>  /  RecipeDetail
 ```
 
-1. `onStartCommand` sprejme `ACTION_START`.
-2. Prebere `currentActivityType` iz extra.
-3. Pridobi `PARTIAL_WAKE_LOCK` (CPU ne zaspi — brez timeout-a: `acquire()` brez parametra).
-4. Registrira barometer (senzor `TYPE_PRESSURE`) za merjenje nadmorske višine.
-5. Pokliče `startForeground(1001, notification)`.
-6. Izbere `GpsProfile` glede na tip aktivnosti (`resolveGpsProfile()`).
-7. Ustvari `LocationRequest` in `LocationCallback`.
-8. Pokliče `fusedLocationClient.requestLocationUpdates(...)`.
-9. Zažene timer (korutina na `Dispatchers.Main`).
+**Backend proxy:** Aplikacija ne kliče FatSecret API neposredno — gre prek **lastnega Cloud Run proxy-ja** (`fatsecret-551351477998.europe-west1.run.app`), ki doda OAuth2 kredenciale. URL se prebere iz `BuildConfig.FATSECRET_BASE_URL`; če je prazen, se uporabi hardcoded fallback.
 
-#### 9.1.3 Ustavitev
+**Autentikacija proxy-ja:** OkHttp interceptor doda `Authorization: Bearer {BACKEND_API_KEY}` na vsak zahtevek.
 
-Ustavitev se sproži iz UI ali iz gumba "Stop" v notifikaciji (PendingIntent → `ACTION_STOP`):
+**Priporočila (Recommended foods):**  
+`FatSecretApi.recommendedFoods(limit=8)` izvede 12 seed iskanj (`"chicken"`, `"rice"`, `"oats"`, …) in vrne prvih 8 unikatnih zadetkov (LinkedHashMap deduplikacija po `food_id`).
 
-1. `_isTracking.value = false`
-2. Prekine timerJob (`.cancel()`).
-3. Odjavi barometer.
-4. Pokliče `fusedLocationClient.removeLocationUpdates(locationCallback)`.
-5. Sprosti wake lock (`it.release()`).
-6. `stopForeground(STOP_FOREGROUND_REMOVE)` — notifikacija se odstrani.
-7. `stopSelf()` — storitev se uniči.
+**Barcode iskanje:**  
+`FatSecretApi.getFoodByBarcode(barcode)` → HTTP GET `{base}/foods/barcode?barcode=...`  
+Vrne `BarcodeResult(foodId, foodName)`.  Fallback za sliko: **OpenFoodFacts** REST API (`world.openfoodfacts.org/cgi/search.pl`).
 
-#### 9.1.4 Pavza / Nadaljevanje
+**Porcija:** Ob klicu `getFoodDetail()` se prioritizira porcija s `metric_serving_amount=100` in `metric_serving_unit="g"`. Če 100g porcija ne obstaja, se vzame prva porcija v nizu.
+
+**Lokalni cache:** Ni — vsaka poizvedba je svež HTTP klic. Firestore offline persistenca (`:setPersistenceEnabled(true)`) velja samo za `dailyLogs`, ne za food search rezultate.
+
+---
+
+### 9.2 Macro Math (Seštevanje dnevnih makronutrientov)
+
+#### Seštevanje — NutritionScreen.kt (vrstice 158–167)
+
+Makroji se seštevajo **lokalno v Compose state** iz `trackedFoods: List<TrackedFood>`:
 
 ```
-ACTION_PAUSE:
-  → _isPaused.value = true
-  → lastAltitudeM = null   // reset barometer baseline (preprečuje lažni vzpon)
-  → timerJob?.cancel()
-  → updateNotification()    // pokaže "Paused"
-
-ACTION_RESUME:
-  → _isPaused.value = false
-  → startTimer()
-  → updateNotification()
+consumedKcal      = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
+consumedProtein   = trackedFoods.sumOf { it.proteinG     ?: 0.0 }
+consumedCarbs     = trackedFoods.sumOf { it.carbsG       ?: 0.0 }
+consumedFat       = trackedFoods.sumOf { it.fatG         ?: 0.0 }
+consumedFiber     = trackedFoods.sumOf { it.fiberG       ?: 0.0 }
+consumedSugar     = trackedFoods.sumOf { it.sugarG       ?: 0.0 }
+consumedSodium    = trackedFoods.sumOf { it.sodiumMg     ?: 0.0 }
+consumedPotassium = trackedFoods.sumOf { it.potassiumMg  ?: 0.0 }
+consumedCholest.  = trackedFoods.sumOf { it.cholesterolMg ?: 0.0 }
+consumedSatFat    = trackedFoods.sumOf { it.saturatedFatG ?: 0.0 }
 ```
 
-GPS posodobitve med pavzo **NE** ustavijo — LocationCallback se prejema, a je ignoriran: `if (_isPaused.value) return`.
+**⚠️ Rounding Error brez zaščite:**  
+`caloriesKcal.roundToInt()` se zaokroži na celo število **pred** seštevanjem. Pri 20+ živilih z decimalnimi vrednostmi se nabere napaka do ±10 kcal. Ostali makroji (`proteinG`, `carbsG`, `fatG`) se seštevajo kot `Double` brez zaokroževanja.
 
-#### 9.1.5 Timer
+**Dvojna vrednost kalorij:**  
+Hkrati obstajata dve vrednosti zaužitih kalorij:
+1. `consumedKcal` — lokalni seštevek iz `trackedFoods` (za progresne bare v UI)
+2. `uiState.consumed` — vrednost iz Firestore `dailyLogs/{danes}.consumedCalories` (za dinamični TDEE)
 
-Timer je simpel 1-sekundni loop na `Dispatchers.Main`:
+Obe sta prikazani, a se ne ujemata vedno, ker `consumedCalories` v Firestore posodablja samo `logFood()` (transakcija: `currentConsumed + caloriesKcal`), medtem ko lokalni seštevek upošteva vse `trackedFoods` iz `items` array-a.
 
-```kotlin
-while (isActive && _isTracking.value && !_isPaused.value) {
-    delay(1000)
-    _elapsedSeconds.value++
-    if (_elapsedSeconds.value % 5 == 0L) updateNotification()
+#### Cilji — NutritionScreen.kt (vrstice 197–202)
+
+Prednostni vrstni red pri določanju ciljnih vrednosti:
+
+| Makro | 1. prednost | 2. prednost | 3. prednost | Fallback |
+|-------|-------------|-------------|-------------|----------|
+| Kalorije | `nutritionPlan.calories` | `parseMacroBreakdown(plan.algorithmData.macroBreakdown)` | `plan.calories` | 2000 |
+| Beljakovine | `nutritionPlan.protein` | `parsed.proteinG` | `plan.protein` | 100 |
+| OH | `nutritionPlan.carbs` | `parsed.carbsG` | `plan.carbs` | 200 |
+| Maščobe | `nutritionPlan.fat` | `parsed.fatG` | `plan.fat` | 60 |
+
+**Zaokroževanje kalorij navzdol:** `targetCalories = (rawTargetCalories / 100) * 100`  
+→ npr. 2183 → 2100 (Integer division, brez Math.floor).
+
+---
+
+### 9.3 Daily Goals Logic (BMR/TDEE Formula)
+
+Celoten izračunski pipeline je v `utils/NutritionCalculations.kt`, sprožen prek `NutritionPlanStore.recalculateNutritionPlan()`.
+
+#### Korak 1: BMR — `calculateAdvancedBMR(weight, height, age, isMale, bodyFat?)`
+
+**Če bodyFat% je znan (> 0):** Katch-McArdle formula:
+```
+leanBodyMass = weight × (1 − bodyFat / 100)
+BMR = 370 + (21.6 × leanBodyMass)
+```
+
+**Če bodyFat% ni znan:** Mifflin-St Jeor z age korekcijami:
+```
+Moški:  baseBMR = 10×weight + 6.25×height − 5×age + 5
+Ženska: baseBMR = 10×weight + 6.25×height − 5×age − 161
+
+Age multiplier:
+  < 18  → × 1.12
+  18–25 → × 1.05
+  26–35 → × 1.00
+  36–45 → × 0.97
+  46–55 → × 0.94
+  56–65 → × 0.91
+  65+   → × 0.87
+```
+
+#### Korak 2: TDEE — `calculateEnhancedTDEE(bmr, frequency?, experience?, age, limitations, sleep?)`
+
+```
+TDEE = BMR
+     × baseMultiplier     (treningFrequency: 2x=1.375, 3x=1.55, 4x=1.725, 5x=1.9, 6x=2.0, else=1.2)
+     × experienceMultiplier  (Beginner=1.08, Intermediate=1.0, Advanced=0.96)
+     × ageMultiplier         (<25=1.02, 25–35=1.00, 36–50=0.98, >50=0.95)
+     × sleepMultiplier       (<6h=0.90, 6–7h=0.97, 7–8h=1.00, 8–9h=1.02, 9+h=1.01)
+     × limitationMultiplier  (Asthma=0.92, HBP/Diabetes=0.94, Knee/Shoulder/Back=0.96, else=1.00)
+```
+
+#### Korak 3: Kalorijski cilj — `calculateSmartCalories(tdee, goal?, experience?, bmi, age, isMale, bodyFat?, limitations)`
+
+| Cilj | Formula |
+|------|---------|
+| `"Build muscle"` | `tdee + baseSurplus × ageFactor × bodyFatFactor`  (baseSurplus: Beg=450, Int=350, Adv=250) |
+| `"Lose fat"` | `max(tdee − baseDeficit × genderFactor × ageFactor, minKcal)`  (min: M=1500, F=1200) |
+| `"Recomposition"` | tdee ± 150–200 glede na BMI/bodyFat |
+| `"Improve endurance"` | `tdee + 200–300` |
+| `"General health"` | `tdee ± 0–250` glede na BMI |
+
+#### Korak 4: Makroji — `calculateOptimalMacros(calories, weight, goal?, experience?, age, isMale, bodyFat?, nutrition?, limitations)`
+
+```
+protein = baseProteinPerKg × weight × ageProteinFactor × genderProteinFactor × nutritionProteinFactor
+           → toInt()  [g]
+
+fat = fatPerKg × weight
+       → toInt()  [g]
+
+carbs = max(80, (calories − protein×4 − fat×9) / 4)
+         → Keto/LCHF: max vrednost = 50g
+         → IF: minimum = 100g
+         → else: minimum = 80g
+```
+
+`return Triple(protein, carbs, fat)`
+
+#### Korak 5: Adaptivni TDEE — `calculateAdaptiveTDEE()` (Faza 7)
+
+```
+adaptiveTDEE = avgConsumedKcal − (ΔmasaKg × 7700 / aktivniDni)
+
+hybridTDEE = C × adaptiveTDEE + (1−C) × theoreticalTDEE
+  kjer C:
+    0.0 → < 3 dni podatkov
+    0.5 → 3–5 dni podatkov
+    1.0 → 6+ dni podatkov
+```
+
+Rezultat se shrani v `WeightPredictorStore.lastHybridTDEE` (in-memory singleton) in ga `NutritionViewModel.setUserMetrics()` prebere pri naslednjem klicu.
+
+#### Dinamični kalorični cilj — `NutritionViewModel`
+
+```
+dynamicTargetCalories = max(1200, baseTdee + burnedCalories + goalAdjustment)
+
+  baseTdee = hybridTDEE          (če > 800)
+           ELSE bmr × 1.2        (sedentarni TDEE)
+
+  goalAdjustment:
+    "Lose"/"Cut"  → −500
+    "Build"/"Gain" → +300
+    else          → 0
+```
+
+Ko uporabnik zaključi vajo/tek → `DailyLogRepository.updateDailyLog()` prišteje kalorije → Firestore snapshot posodobi `uiState.burned` → `dynamicTargetCalories` se samodejno poviša.
+
+---
+
+### 9.4 Water Tracker
+
+#### Implementacija — Optimistični zapis z debounce-om (Faza 13.1)
+
+```
+UI klik "+250ml"
+  │
+  ├─ nutritionViewModel.updateWaterOptimistic(newValue, todayId)
+  │
+  ├─ _localWaterMl.value = newValue    ← TAKOJŠEN UI odziv (brez čakanja Firestore)
+  │
+  ├─ waterSyncJob?.cancel()           ← prekliče prejšnji job če je v 800ms
+  │
+  └─ delay(800ms)
+       │
+       ├─ FoodRepositoryImpl.logWater(newValue, todayId)
+       │     → Firestore transaction:
+       │           SET dailyLogs/{danes} MERGE {
+       │             "date": todayId,
+       │             "waterMl": newValue,         ← ABSOLUTNA vrednost (ne increment)
+       │             "updatedAt": serverTimestamp()
+       │           }
+       │
+       ├─ SUCCESS → _localWaterMl.value = null   ← počisti lokalni override
+       └─ FAIL    → _localWaterMl.value = null   ← rollback na server vrednost
+```
+
+**⚠️ Absolutni zapis (ne increment):**  
+`logWater()` zapiše `"waterMl": newValue` kot absolutno vrednost, ne kot `FieldValue.increment()`.  
+Če dva klici prideta znotraj 800ms in prvi ne bo preklican (ker ViewModel nima singleton scope), obstaja Race Condition — zadnji zapis zmaga.
+
+**UI double-tap varovalka:** `lastWaterClickState` (remember mutableStateOf(0L)) v NutritionScreen prepreči dvojni klik z min. intervalom.
+
+**Dnevni cilj vode — `calculateDailyWaterMl()`:**
+
+```
+base = weight × 35ml
+× 1.1   (moški)
++ activityBonus  (Sedentary=0, Lightly=250, Moderately=500, Very=750 ml)
++ 500ml  (treningov dan)
+→ zaokroži na 100ml
+→ coerceIn(1500..5000 ml)
+```
+
+Cilj se **ne shrani v Firestore** — izračuna se sproti iz profila ob zagonu screena.
+
+---
+
+### 9.5 Custom Meals & Recipes
+
+#### Struktura Custom Meal v Firestore
+
+```
+users/{uid}/customMeals/{mealId}
+  name:      String          // npr. "Zajtrk z jajci"
+  items:     List<Map>       // sestavine — glejte spodaj
+  createdAt: Timestamp       // serverTimestamp()
+```
+
+Vsak element v `items[]`:
+```
+{
+  id:   String  // FatSecret food_id
+  name: String  // ime živila
+  amt:  String  // količina (shranjena kot String, ne Number)
+  unit: String  // enota (npr. "g", "cup")
 }
 ```
 
-Notifikacija se posodablja **vsakih 5 sekund** (varčevanje z baterijo).
+**⚠️ `amt` je String, ne Number** — shranjeno pred konverzijo; ob branju `parseRawItemsToTrackedFoods()` poskuša `(m["amount"] as? Number)?.toDouble() ?: (m["amount"] as? String)?.toDoubleOrNull() ?: 1.0`.
+
+#### Shranjevanje
+
+`FoodRepositoryImpl.logCustomMeal(name, itemsList)` → Firestore transakcija:
+```
+// auto-ID dokument
+val newRef = docRef.collection("customMeals").document()
+transaction.set(newRef, mapOf("name" to name, "items" to items, "createdAt" to serverTimestamp()))
+// vrne newRef.id
+```
+
+#### Branje (Live)
+
+`FoodRepositoryImpl.observeCustomMeals(uid)` → `addSnapshotListener` na `customMeals/`  
+→ `callbackFlow<QuerySnapshot>` → `NutritionViewModel.customMealsState: StateFlow<QuerySnapshot?>`  
+→ `NutritionScreen` pretvori v `List<SavedCustomMeal>` ob vsakem onSnapshot.
+
+#### Logiranje Custom Meal kot obrok
+
+Ko uporabnik izbere custom meal, NutritionScreen kliče `NutritionViewModel.getCustomMealItems(uid, mealId)`:
+```
+db.collection("users").document(currentUid)
+    .collection("customMeals").document(mealId)
+    .get().await()
+// vrne: doc.get("items") as? List<Map<String, Any>>
+```
+
+Nato za vsako sestavino zbere `FoodDetail` iz FatSecret API in jo doda v `trackedFoods`.
+
+#### Recepti (FatSecret Recipes)
+
+Recepti so ločeni od Custom Meals. Iščejo se prek `FoodRepositoryImpl.searchRecipes()` / `getRecipeDetail()`.  
+**Ne shranjujejo** se v Firestore — so samo read-only prikaz iz FatSecret baze.
+
+#### Vgrajevanje makrojev ob vnosu (Embed vs Reference)
+
+Ko se custom meal loggira kot obrok:
+
+- **Makroji se ob vnosu uvozijo iz FatSecret API-ja** in shranijo kot `TrackedFood` v `dailyLogs/{danes}.items[]`
+- **Referenca na `customMeals/{mealId}` se NE shrani** v dnevni log
+- **Posledica:** Kasnejša sprememba custom meal recepta NE vpliva na pretekle dnevne loge — stari vnosi ohranijo originalne makroje
 
 ---
 
-### 9.2 Location Logic (GPS)
-
-#### 9.2.1 GPS Provider
-
-`FusedLocationProviderClient` iz Google Play Services.  
-Fiksna vrednost: `Priority.PRIORITY_HIGH_ACCURACY` za **vse** tipe aktivnosti.
-
-#### 9.2.2 Activity-Aware GPS Profili
-
-Interval GPS posodobitev je odvisen od tipa aktivnosti (`resolveGpsProfile()`):
-
-| ActivityType | interval (ms) | minInterval (ms) | maxDelay (ms) | minDistance (m) |
-|---|---|---|---|---|
-| `SPRINT` | 1 000 | 500 | 1 500 | 0 |
-| `RUN` | 2 000 | 1 000 | 3 000 | 1.5 |
-| `CYCLING`, `SKATING` | 3 000 | 1 500 | 5 000 | 3 |
-| `WALK`, `HIKE`, `NORDIC` | 6 000 | 3 000 | 9 000 | 6 |
-| `SKIING`, `SNOWBOARD` | 4 000 | 2 000 | 6 000 | 4 |
-
-#### 9.2.3 Filtriranje točk
-
-V `processLocationUpdate(location)` sta dva filtri:
-
-1. **Natančnost:** točke z `location.accuracy > 20` metrih se **zavrženejo**.
-2. **Nerealni skoki:** razdalja med zaporednima točkama > 100 m se **zavrže** (preprečuje GPS "teleport").
-
-```kotlin
-if (location.accuracy > 20) return          // točnost slaba
-if (distance < 100) totalDistance += distance  // ok
-else Log.d(TAG, "Skipping unrealistic distance jump")
-```
-
-#### 9.2.4 Hramba GPS točk
-
-Točke se shranjujejo **izključno v RAM** (v `MutableStateFlow<List<Location>>`):
-
-```kotlin
-private val _locationPoints = MutableStateFlow<List<Location>>(emptyList())
-```
-
-**Ni začasne datoteke, ni direktnega pisanja v Firestore med tekom.**  
-Ob koncu teka UI prebere `locationPoints` in jih pretvori v `List<LocationPoint>` (serializabilen data class), ki ga shrani v Firestore kot `polylinePoints` array v dokumentu RunSession.
-
-#### 9.2.5 Hitrost
-
-- **Trenutna hitrost:** bere se direktno iz `location.speed` (m/s) — vrednost, ki jo zagotovi GPS.
-- **Povprečna hitrost:** aritmetična sredina vseh `speedReadings` (dodan vsak odčitek, kjer `speed > 0.5 m/s`).
-- **Maksimalna hitrost:** `max(dosedanji max, novo)`.
-
----
-
-### 9.3 Math Formula Audit
-
-#### 9.3.1 Razdalja med GPS točkami
-
-Funkcija: **`Location.distanceTo(other: Location)`** — Androidova vgrajena metoda.
-
-To je **wrapper nad Haversine formulo** implementiranem v Android SDK (WGS84 sferoid). Ni lastne implementacije Haversine formule. Formula računa geodetično razdaljo ("great-circle") v metrih.
-
-```kotlin
-val distance = last.distanceTo(location)   // v metrih, float
-```
-
-#### 9.3.2 Kalkulacija kalorij — MET formula
-
-Funkcija `calculateCaloriesMet()` v `RunTrackerScreen.kt` (vrstice 68–121):
-
-**Osnovna formula:**
-```
-kcal = MET × teža_kg × čas_v_urah + pribitek_za_vzpon
-```
-
-**Vzpon pribitek:**
-```
-elevBonus = elevationGainM × 0.8 × (teža_kg / 70.0)
-```
-- Vzpon omejen: `elevationGainM.coerceIn(0f, 2000f)` (preprečuje GPS lažni vzpon)
-- Skala glede na težo (referenca: 70 kg = 0.8 kcal/m)
-
-**MET vrednosti (dinamične, linearno interpolirane po hitrosti):**
-
-`RUN (safeSpeed v km/h)`:
-| Hitrost | MET izračun |
-|---|---|
-| < 4 km/h | `safeSpeed` (linearno 0–4) |
-| 4–8 km/h | `4.0 + (speed-4) × 0.5` → [4.0–6.0] |
-| 8–10 km/h | `6.0 + (speed-8) × 1.0` → [6.0–8.0] |
-| 10–12 km/h | `8.0 + (speed-10) × 1.0` → [8.0–10.0] |
-| 12–14 km/h | `10.0 + (speed-12) × 0.75` → [10.0–11.5] |
-| > 14 km/h | `11.5 + (speed-14) × 0.4` |
-
-`WALK (safeSpeed v km/h)`:
-| Hitrost | MET izračun |
-|---|---|
-| < 3 km/h | `2.0 + (speed/3) × 0.5` |
-| 3–5 km/h | `2.5 + (speed-3) × 0.5` |
-| 5–7 km/h | `3.5 + (speed-5) × 0.5` |
-| > 7 km/h | `4.5 + (speed-7) × 0.3` |
-
-`SPRINT (safeSpeed v km/h)`:
-| Hitrost | MET izračun |
-|---|---|
-| < 10 km/h | `8.0` |
-| 10–16 km/h | `8.0 + (speed-10) × 0.83` → [8.0–13.0] |
-| 16–20 km/h | `13.0 + (speed-16) × 0.75` → [13.0–16.0] |
-| > 20 km/h | `16.0 + (speed-20) × 0.5` |
-
-`HIKE`:
-```
-MET = 6.0 + (elevationGainM / 100.0) × 0.5
-```
-(Vzpon direktno vpliva na MET za hribolazce.)
-
-`CYCLING (safeSpeed v km/h)`:
-| Hitrost | MET |
-|---|---|
-| < 15 km/h | 4.0 |
-| 15–20 km/h | 6.0 |
-| 20–25 km/h | 8.0 |
-| > 25 km/h | 10.0 |
-
-**Varnostne omejitve:**
-```kotlin
-val safeSpeed  = avgSpeedKmh.coerceIn(0f, 35f)       // max 35 km/h
-val safeWeight = weightKg.coerceIn(30.0, 200.0)       // 30–200 kg
-val safeElev   = elevationGainM.coerceIn(0f, 2000f)   // max 2000m
-return (base + elevBonus).toInt().coerceAtLeast(0)    // ne more biti negativno
-```
-
-**Opomba:** `ActivityType.metValue` (enum polje: RUN=8.0, SPRINT=14.0 ...) se v `calculateCaloriesMet()` **ne uporablja direktno** — MET se računa dinamično glede na hitrost. Enum vrednost `metValue` je definirana na tipu (npr. kot referenčna osnova pri zmerni intenzivnosti), a `calculateCaloriesMet` reimplementira logiko z interpolacijo.
-
----
-
-### 9.4 Auto-Pause & Battery
-
-#### 9.4.1 Auto-Pause
-
-**Ne obstaja.** Aplikacija nima samodejne pavze, ki bi se sprožila ob zaznanem mirovanju (npr. speed ≈ 0). Pavza je **izključno manualna** (gumb v UI ali notifikaciji).
-
-GPS točke z `speed > 0.5 m/s` se ne upoštevajo pri povprečni hitrosti, a čas teče naprej — to NI auto-pause.
-
-#### 9.4.2 Battery Saver način
-
-Ni eksplicitne logike za detekcijo `PowerManager.isPowerSaveMode`. Ko Android vstopi v Battery Saver:
-
-- `PARTIAL_WAKE_LOCK` ostane aktiven (CPU ne zaspi).
-- `FusedLocationProvider` z `PRIORITY_HIGH_ACCURACY` **se prilagodi** — operacijski sistem lahko poveča interval GPS-a. To pomeni, da v Battery Saver načinu GPS posodobitve prihajajo **redkeje** kot nastavljen interval, kar vpliva na natančnost razdalje.
-- Notifikacija se posodablja vsakih 5 sekund (ne vsakih 1s) — ta optimizacija je vgrajena.
-
-**Ni implementirane strategije za Battery Saver** (npr. preklopiti na `PRIORITY_BALANCED_POWER_ACCURACY`).
-
----
-
-### 9.5 State Recovery (System Kill)
-
-#### 9.5.1 onStartCommand return value
-
-```kotlin
-return START_STICKY
-```
-
-`START_STICKY` pomeni: **sistem ZNOVA zažene storitev** po uboju (OOM killer), toda `intent` bo `null`. V `onStartCommand`:
-
-```kotlin
-when (intent?.action) {
-    ACTION_START -> { ... }
-    ACTION_STOP  -> stopTracking()
-    ...
-}
-```
-
-Če je `intent == null` (restart po uboju), nobena `when` veja se ne izvede. Storitev se zažene brez inicializacije — `_isTracking.value` ostane `false`, `startForeground()` se **ne pokliče**. Rezultat: **prikazovanja slepe storitve brez sledenja** ali Android jo takoj uniči (ker ni `startForeground` v roku 5s za task-killed storitev).
-
-#### 9.5.2 Izguba podatkov
-
-Vsi GPS podatki živijo v RAM (`MutableStateFlow`). Ko sistem ubije proces:
-- **Vsi GPS točke se izgubijo** — ni trajnega vmesnega shranjevanja.
-- **Tek ni mogoče nadaljevati** — ob ponovnem odprtju UI-ja `isBound = false`, `service = null`, prikaže se začetni zaslon.
-
-#### 9.5.3 Singleton pattern
-
-```kotlin
-companion object {
-    private var instance: RunTrackingService? = null
-    fun getInstance(): RunTrackingService? = instance
-}
-```
-
-`instance` se postavi v `onCreate` in počisti v `onDestroy`. UI ga ne uporablja direktno — raje `bindService`. Ta singleton je dostopen le iz iste JVM instance.
-
-#### 9.5.4 Povzetek odpornosti
-
-| Scenarij | Rezultat |
-|---|---|
-| App gre v ozadje | ✅ Tek se nadaljuje (Foreground Service + WakeLock) |
-| Zaslon se izklopi | ✅ Tek se nadaljuje (WakeLock aktiven) |
-| Sistem ubije app (OOM, nizek RAM) | ⚠️ `START_STICKY` znova zažene storitev, a brez podatkov. Tek je izgubljen |
-| Battery Saver aktiviran | ⚠️ GPS interval avtomatsko redkejši (OS odločitev), razdalja manj natančna |
-| Crash v UI (ne v serviceu) | ✅ Storitev živi dalje, podatki v RAM so varni |
-
----
-
-### 9.6 Barometer & Elevation
-
-Poleg GPS se za merjenje vzpona/spusta uporablja **fizični barometski senzor** (`Sensor.TYPE_PRESSURE`):
-
-```kotlin
-val altitudeM = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressureHpa)
-```
-
-**Prag:** minimalna sprememba 3 m (`ELEVATION_THRESHOLD_M = 3f`) — spremembe pod 3 m se ignorirajo (filtrira šum senzorja).
-
-**Logika:**
-```
-if (diff >= +3m) → totalElevationGainM += diff; lastAltitudeM = altitudeM
-if (diff <= -3m) → totalElevationLossM += (-diff); lastAltitudeM = altitudeM
-```
-
-Med pavzo se `lastAltitudeM = null` (reset baze), da se izogne lažnemu vzponu pri nadaljevanju.
-
-Registracija:
-```kotlin
-sensorManager?.registerListener(barometerListener, sensor, SensorManager.SENSOR_DELAY_UI)
-```
-(`SENSOR_DELAY_UI` ≈ 60 ms interval — optimalno za prikaz, ne za analizo.)
-
-Barometer se odjavi pri `stopTracking()`:
-```kotlin
-sensorManager?.unregisterListener(barometerListener)
-```
-
----
-
-### 9.7 XP Formula (po koncu teka)
-
-```kotlin
-fun calculateXP(activityType: ActivityType, distanceMeters: Double, timeSeconds: Long): Int {
-    val baseFromDistance = distanceMeters / 100.0
-    val baseFromTime     = timeSeconds / 60.0
-    val multiplier = when (activityType) {
-        ActivityType.RUN, ActivityType.SPRINT   -> 1.5
-        ActivityType.HIKE, ActivityType.NORDIC  -> 1.3
-        ActivityType.WALK, ActivityType.SKATING -> 1.0
-        ActivityType.CYCLING                    -> 0.6
-        ActivityType.SKIING, ActivityType.SNOWBOARD -> 0.5
-    }
-    return ((baseFromDistance + baseFromTime) * multiplier).toInt().coerceAtLeast(10)
-}
-```
-
-**Minimum:** 10 XP za vsak zaključen trening.
-
-**Primeri:**
-| Aktivnost | Razdalja | Čas | Izračun | XP |
-|---|---|---|---|---|
-| RUN | 5 km | 30 min | `(50 + 30) × 1.5` | 120 XP |
-| WALK | 3 km | 45 min | `(30 + 45) × 1.0` | 75 XP |
-| CYCLING | 20 km | 60 min | `(200 + 60) × 0.6` | 156 XP |
-| SPRINT | 1 km | 5 min | `(10 + 5) × 1.5` | 22 XP |
-
----
-
-### 9.8 Data Flow Diagram (konec teka)
-
-```
-RunTrackingService (RAM)
-  ├─ _locationPoints (List<Location>)
-  ├─ _elapsedSeconds (Long)
-  ├─ _distanceMeters (Double)
-  ├─ _maxSpeed / _avgSpeed (Float)
-  └─ _elevationGain / _elevationLoss (Float)
-        │
-        ▼ (UI bere ob STOP, vse naenkrat)
-RunTrackerScreen.kt
-  ├─ calculateCaloriesMet(activityType, durationSeconds, weightKg, elevationGainM, avgKmh)
-  │     → caloriesKcal: Int
-  ├─ calculateXP(activityType, distanceMeters, elapsedSeconds)
-  │     → xp: Int
-  ├─ CompressRouteUseCase.compress(locationPoints)
-  │     → polylinePoints: List<LocationPoint>  (RDP kompresija ~450→~35 točk za publicActivities)
-  └─ RunSession(id, userId, startTime, endTime, durationSeconds, distanceMeters,
-                avgSpeedMps, maxSpeedMps, caloriesKcal, elevationGainM, elevationLossM,
-                activityType, polylinePoints, isSmoothed=false)
-        │
-        ├─ Firestore: users/{uid}/runSessions/{docId}   ← polni zapis včasnih tekov
-        │     (polylinePoints INLINE — ⚠️ potencialni >1MB crash pri dolgih tekih)
-        │
-        ├─ Firestore: users/{uid}/publicActivities/{docId}   ← SAMO če share_activities=true
-        │     (komprimirane točke routePoints[].lat/.lng, ~35 točk)
-        │
-        ├─ DailyLogRepository.updateDailyLog(date, burnedCalories=caloriesKcal)
-        │     → users/{uid}/dailyLogs/{yyyy-MM-dd}.burnedCalories
-        │
-        └─ viewModel.awardRunXP(xp)
-              → ManageGamificationUseCase.awardXP(xp, "RUN_COMPLETED")
-                    → FirestoreGamificationRepository (Firestore transakcija: xp, level, badge check)
-```
-
-**Neposrednega pisanja med tekom (live Firestore streaming) ni** — samo enkratni zapis ob koncu.
-
-**Teža uporabnika** se ob zagonu screena prebere iz `users/{uid}/weightLogs` (zadnji dokument, descending po `date`). Fallback vrednost: 70 kg.
-
----
+### 9.6 Ugotovljene Anomalije
+
+| # | Opis | Lokacija |
+|---|------|----------|
+| 1 | `consumedCalories` v Firestore in lokalni `consumedKcal` (sumOf trackedFoods) sta neodvisni vrednosti — prikazani hkrati v UI | `NutritionViewModel.logFood()` vs `NutritionScreen.consumedKcal` |
+| 2 | `logWater()` zapiše absolutno vrednost `waterMl`, ne incremental — Race Condition ob hitrem klikanju | `FoodRepositoryImpl.logWater()` |
+| 3 | `getCustomMealItems()` kliče `db.collection("users").document(currentUid)` **direktno** (bypassa `FirestoreHelper.getCurrentUserDocRef()`) | `NutritionViewModel.getCustomMealItems()` vrstica 293 |
+| 4 | `WeightPredictorStore.lastHybridTDEE` je in-memory singleton — po restartu aplikacije se izgubi in NutritionViewModel pade nazaj na `bmr × 1.2` | `NutritionViewModel.setUserMetrics()` vrstica 165 |
+| 5 | Makro cilji imajo 3-stopenjski fallback (nutritionPlan → parsed → plan), toda `nutritionPlan.calories` se zaokroži navzdol na 100, `dynamicTargetCalories` pa ne — UI prikazuje dve različni ciljni vrednosti | `NutritionScreen` vrstice 197–202 vs `dynamicTargetCalories` StateFlow |
