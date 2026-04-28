@@ -1167,7 +1167,10 @@ private fun computeWeightPrediction(
     }
 
     val avgDailyBalance = activeDaysWithData.map { log ->
-        log.calories - effectiveTDEE
+        // Formula: consumed - (TDEE + exerciseBurned)
+        // burnedMap vsebuje Health Connect podatke za ta dan (iz dailyLogs.burnedCalories)
+        val dayBurned = burnedMap[log.date] ?: 0.0
+        log.calories - effectiveTDEE - dayBurned
     }.average()
 
     // ── Napoved za 30 dni: 7700 kcal ≈ 1 kg ─────────────────────────────

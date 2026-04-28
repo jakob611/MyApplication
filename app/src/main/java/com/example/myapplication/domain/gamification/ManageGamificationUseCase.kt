@@ -7,6 +7,7 @@ import com.example.myapplication.data.BadgeDefinitions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.datetime.toLocalDateTime
 
 data class WorkoutCompletionResult(
     val unlockedBadges: List<Badge>,
@@ -60,7 +61,29 @@ class ManageGamificationUseCase(
         if (calorieXP > 0) {
             repository.awardXP(calorieXP, "CALORIES_BURNED")
         }
-        return WorkoutCompletionResult(emptyList(), finalBaseXP + calorieXP, isCritical) // emptyList is fine to bypass legacy logic safely
+
+        // ── Workout-Nutrition Bridge ─────────────────────────────────────────────
+        // Piše burned calories v dailyLogs → NutritionScreen prikaže pravilni net balance.
+        // To je edino mesto pisanja (UpdateBodyMetricsUseCase step 6 odstranjen).
+        if (caloriesBurned > 0.0) {
+            try {
+                val todayStr = kotlinx.datetime.Clock.System.now()
+                    .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                    .date.toString()
+                com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayStr) { data ->
+                    val existingBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
+                    data["burnedCalories"] = existingBurned + caloriesBurned
+                }
+                android.util.Log.d("ManageGamification",
+                    "✅ Nutrition bridge: +${caloriesBurned.toInt()} kcal → dailyLogs[$todayStr].burnedCalories")
+            } catch (e: Exception) {
+                android.util.Log.e("ManageGamification",
+                    "❌ burnedCalories bridge failed: ${e.message}", e)
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
+        return WorkoutCompletionResult(emptyList(), finalBaseXP + calorieXP, isCritical)
     }
 
     suspend fun awardXP(amount: Int, reason: String) {

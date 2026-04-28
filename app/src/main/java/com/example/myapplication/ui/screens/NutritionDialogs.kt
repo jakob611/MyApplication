@@ -412,7 +412,7 @@ internal fun TrackedFoodDetailDialog(
 @Composable
 internal fun MakeCustomMealsDialog(
     onDismiss: () -> Unit,
-    onSaved: (SavedCustomMeal, MealType) -> Unit
+    onSaved: (SavedCustomMeal, MealType, isSaveOnly: Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf(1) } // 1: Ingredients, 2: Name, 3: Destination
@@ -528,8 +528,8 @@ internal fun MakeCustomMealsDialog(
                                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                         try {
                                             val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
-                                            // Save only — pass MealType.Breakfast as placeholder; NutritionScreen checks askWhereToAdd
-                                            onSaved(SavedCustomMeal(newId, name, itemsList), MealType.Breakfast)
+                                            // isSaveOnly = true → NutritionScreen will NOT open ChooseMealDialog
+                                            onSaved(SavedCustomMeal(newId, name, itemsList), MealType.Breakfast, true)
                                             isSaving = false
                                         } catch (e: Exception) { isSaving = false }
                                     }
@@ -559,7 +559,7 @@ internal fun MakeCustomMealsDialog(
                                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                         try {
                                             val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
-                                            onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal)
+                                            onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal, false)
                                             isSaving = false
                                         } catch (e: Exception) { isSaving = false }
                                     }

@@ -720,12 +720,18 @@ fun NutritionScreen(
     if (showMakeCustom) {
         MakeCustomMealsDialog(
             onDismiss = { showMakeCustom = false },
-            onSaved = { saved, mealType ->
-                // Po shranjevanju takoj vpraĹˇamo kam dodaĹˇ; ÄŤipi se sami posodobijo prek snapshot listenerja
-                pendingCustomMeal = saved
-                chooseMealForCustom = mealType
-                showMakeCustom = false
-                askWhereToAdd = true
+            onSaved = { saved, mealType, isSaveOnly ->
+                if (isSaveOnly) {
+                    // "Save Only" — zapri dialog, prikaži Toast, NE odpri ChooseMealDialog
+                    showMakeCustom = false
+                    android.widget.Toast.makeText(context, "Meal Saved", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    // "Save & Add" — vprašaj za destinacijo
+                    pendingCustomMeal = saved
+                    chooseMealForCustom = mealType
+                    showMakeCustom = false
+                    askWhereToAdd = true
+                }
             }
         )
     }

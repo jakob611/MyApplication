@@ -44,6 +44,8 @@ class FirestoreWorkoutRepository : WorkoutRepository {
      *  1. Sub-kolekcija `gps_points` (nova naprava / nova pot)
      *  2. Sub-kolekcija `points` (po migracijskem načrtu GPS_POINTS_MIGRATION_PLAN.md)
      *  3. Inline `polylinePoints` array v dokumentu (stari format, backwards compat)
+     *
+     * Pot: users/{uid}/runSessions/{docId}/gps_points  ali  .../points
      */
     private suspend fun loadGpsPoints(
         sessionRef: DocumentReference,
@@ -68,15 +70,24 @@ class FirestoreWorkoutRepository : WorkoutRepository {
                                 accuracy  = 0f,
                                 timestamp = (pt["ts"]  as? Number)?.toLong()   ?: 0L
                             )
-                        } catch (_: Exception) { null }
+                        } catch (e: Exception) {
+                            Log.e("WorkoutRepo", "❌ gps_points točka parse napaka @ ${sessionRef.path}: ${e.message}", e)
+                            null
+                        }
                     }
                 }
                 if (pts.isNotEmpty()) {
-                    Log.d("WorkoutRepo", "GPS: ${pts.size} točk iz gps_points sub-kolekcije")
+                    Log.d("WorkoutRepo", "GPS: ${pts.size} točk iz gps_points @ ${sessionRef.path}")
                     return pts
+                } else {
+                    Log.w("WorkoutRepo", "⚠️ gps_points subcollection obstaja ampak je prazna @ ${sessionRef.path}")
                 }
+            } else {
+                Log.d("WorkoutRepo", "GPS: gps_points subcollection prazna @ ${sessionRef.path}")
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e("WorkoutRepo", "❌ gps_points fetch napaka @ ${sessionRef.path}: ${e.message}", e)
+        }
 
         // 2. Poskusi `points` subcollection (GPS_POINTS_MIGRATION_PLAN format)
         try {
@@ -96,17 +107,27 @@ class FirestoreWorkoutRepository : WorkoutRepository {
                                 speed     = 0f, accuracy = 0f,
                                 timestamp = (pt["ts"] as? Number)?.toLong() ?: 0L
                             )
-                        } catch (_: Exception) { null }
+                        } catch (e: Exception) {
+                            Log.e("WorkoutRepo", "❌ points točka parse napaka @ ${sessionRef.path}: ${e.message}", e)
+                            null
+                        }
                     }
                 }
                 if (pts.isNotEmpty()) {
-                    Log.d("WorkoutRepo", "GPS: ${pts.size} točk iz points sub-kolekcije")
+                    Log.d("WorkoutRepo", "GPS: ${pts.size} točk iz points sub-kolekcije @ ${sessionRef.path}")
                     return pts
+                } else {
+                    Log.w("WorkoutRepo", "⚠️ points subcollection obstaja ampak je prazna @ ${sessionRef.path}")
                 }
+            } else {
+                Log.d("WorkoutRepo", "GPS: points subcollection prazna @ ${sessionRef.path}")
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e("WorkoutRepo", "❌ points subcollection fetch napaka @ ${sessionRef.path}: ${e.message}", e)
+        }
 
         // 3. Fallback: inline polylinePoints (stari format)
+        Log.d("WorkoutRepo", "GPS fallback: inline polylinePoints (${inlinePoints.size} točk) @ ${sessionRef.path}")
         return inlinePoints
     }
 

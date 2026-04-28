@@ -254,6 +254,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // ── Real-time Auth Listener: sproži startInitialSync ob vsakem auth state change ──
+            // Deluje ob hladnem zagonu, po Google sign-in in po email verifikaciji brez restarта.
+            DisposableEffect(Unit) {
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+                    val fbUser = firebaseAuth.currentUser
+                    if (fbUser != null && (fbUser.isEmailVerified ||
+                            fbUser.providerData.any { it.providerId == "google.com" })) {
+                        scope.launch {
+                            appViewModel.startInitialSync(context, fbUser.email ?: "")
+                        }
+                    } else {
+                        appViewModel.resetSyncState()
+                    }
+                }
+                auth.addAuthStateListener(authListener)
+                onDispose { auth.removeAuthStateListener(authListener) }
+            }
+            // ────────────────────────────────────────────────────────────────────────────────
+
             LaunchedEffect(Unit) {
                 val user = Firebase.auth.currentUser
                 if (user != null && (user.isEmailVerified || user.providerData.any { it.providerId == "google.com" })) {
@@ -264,9 +284,8 @@ class MainActivity : ComponentActivity() {
                     isDarkMode = UserProfileManager.isDarkMode(userEmail)
                     navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
-                    // ── InitialSyncManager: sprožen takoj ob LoginState → AppViewModel ────
-                    // Preveri novo napravo, izvede vzporedni fetch, nastavi isProfileReady = true
-                    appViewModel.startInitialSync(context, userEmail)
+                    // ── InitialSyncManager: zdaj sproži DisposableEffect authListener zgoraj ──
+                    // appViewModel.startInitialSync(context, userEmail) — premaknjeno iz tega bloka
                     // ────────────────────────────────────────────────────────────────────
 
                     scope.launch(Dispatchers.IO) {
