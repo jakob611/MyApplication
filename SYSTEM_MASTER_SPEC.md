@@ -1098,7 +1098,7 @@ Ko je user že prijavljen (hot start), se profil naloži **TRIKRAT**:
 
 **Skupaj: 2 lokalna + 2 Firestore fetch-a** pri vsakem hladnem zagonu z obstoječo prijavo.
 
-#### 8.5.3 `GlobalScope.launch` v vrstici 225
+#### 8.5.3 Google Sign-In
 
 ```kotlin
 kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
@@ -1468,357 +1468,200 @@ Ko se custom meal loggira kot obrok:
 
 ---
 
-## 10. SOCIAL & PRIVACY ARCHITECTURE
+## Poglavje 11 — GAMIFICATION & PROGRESSION ENGINE
 
-> **Faza 6 od 10** — Socialni sloj, follow sistem, leaderboard, zasebnost, varnost. Brez popravkov.
-
----
-
-### 10.1 Follow Flow (FollowStore.kt)
-
-#### 10.1.1 Follow mehanizem
-
-```
-followUser(followerId, followingId):
-
-GUARD: resolvedFollowerId == followingId → return false  (self-follow preprečen)
-
-Firestore ONE TRANSACTION {
-  READ: follows/{resolvedFollowerId}_{followingId}     ← deterministični doc ID check
-  READ: users/{resolvedFollowerId}                     ← follower's profile (za following count)
-  READ: users/{followingId}                            ← target's profile (za followers count)
-
-  IF followDoc.exists() → alreadyFollowing=true, return (no-op)
-
-  WRITE: follows/{resolvedFollowerId}_{followingId} = {
-    followerId: resolvedFollowerId,
-    followingId: followingId,
-    followedAt: serverTimestamp()
-  }
-
-  WRITE: users/{followingId}.followers = currentFollowers + 1   (SET MERGE)
-  WRITE: users/{resolvedFollowerId}.following = currentFollowing + 1 (SET MERGE)
-}
-
-AFTER TRANSACTION (nekritično, zunaj):
-  ADD: notifications/{followingId}/items/{autoId} = {
-    type: "new_follower",
-    fromUserId: resolvedFollowerId,
-    message: "started following you",
-    timestamp: serverTimestamp(),
-    read: false
-  }
-```
-
-**Deterministični Doc ID:** `"{followerId}_{followingId}"` — prepreči dvojno sledenje celo pri sočasnih klikih (transakcija preveri obstoj DOC-a, ne query-ja).
-
-**Atomarnost:** Oba števca (`followers` in `following`) se posodobita znotraj iste transakcije — ni možna situacija, kjer bi eden bil posodobljen brez drugega.
-
-**Notifikacija:** Zunaj transakcije — če notifikacija spodleti, gre `exception` v `Log.w` in se prezre. Sledenje je vseeno uspešno.
-
-#### 10.1.2 Unfollow mehanizem
-
-```
-unfollowUser(followerId, followingId):
-
-ATTEMPT 1 — Deterministični format (nov):
-  Firestore TRANSACTION {
-    READ: follows/{resolvedId}_{followingId}
-    IF !exists → return (skip transaction)
-    DELETE: followDoc
-    WRITE: users/{followingId}.followers = max(1, current) - 1
-    WRITE: users/{resolvedId}.following  = max(1, current) - 1
-  }
-
-ATTEMPT 2 — Stari naključni ID format (fallback):
-  IF !deletedViaTransaction:
-    QUERY: follows WHERE followerId==resolvedId AND followingId==followingId
-    DELETE: vsak najden doc
-    UPDATE: users/{followingId}.followers  FieldValue.increment(-1)   ← BREZ transakcije!
-    UPDATE: users/{resolvedId}.following   FieldValue.increment(-1)   ← BREZ transakcije!
-```
-
-**⚠️ Fallback brez transakcije:** Stari dokumenti se odstranejajo z `FieldValue.increment(-1)` zunaj transakcije — race condition je možen, a je ta pot samo za pred-migracijske podatke.
-
-#### 10.1.3 Count auto-repair (self-healing)
-
-`getFollowers(userId)` in `getFollowing(userId)` med nalaganjem seznama **samodejno popravita** count v Firestore, če se ne ujema z dejanskim številom dokumentov:
-
-```
-IF storedCount != actualDocs.size:
-  userRef.update("followers", actualDocs.size)  ← brez transakcije, samo korekcija
-```
-
-**⚠️ Self-follow cleanup:** Ob nalaganju followers/following se `followerId == userId` dokumenti samodejno brišejo z `doc.reference.delete()` — tiha čiščenja brez notifikacije.
-
-#### 10.1.4 Brisanje profila — kaj se zgodi?
-
-Funkcija `deleteUserData` ali `deleteUserAccount` **ne obstaja** v kodi. V kodi ni nobene logike, ki bi ob brisanju profila:
-- Pobrisala `follows/{userId}_*` ali `follows/*_{userId}` dokumente
-- Zmanjšala `followers` counter pri sledenih uporabnikih
-- Pobrisala `publicActivities/{userId}`
-- Pobrisala `notifications/{userId}/items`
-
-**Posledica:** Če uporabnik izbriše Firebase Auth račun ročno (npr. prek Firebase Console ali onkraj aplikacije), ostanejo vse follow relacije, counti, aktivnosti in notifikacije v Firestore **za vedno**. Ni implementirane cascade delete logike.
+> Faza 7 od 10 — Avtor: AI Audit | Datum: 2026-04-28
 
 ---
 
-### 10.2 Leaderboard Logic
+### 11.1 XP Logic — Kako se dodeljuje XP
 
-#### Primarna leaderboard — Top po sledilcih
+**Vstopna točka:** `UpdateBodyMetricsUseCase.invoke()` → `ManageGamificationUseCase.recordWorkoutCompletion()` → `FirestoreGamificationRepository.awardXP()`
 
-```
-ProfileStore.getTopUsers(limit=10):
-  QUERY: users
-    WHERE is_public_profile == true
-    ORDER BY followers DESC
-    LIMIT 10
-  → List<PublicProfile>  (mapToPublicProfile z fetchActivities=false)
-```
-
-**Tip poizvedbe:** **Live query ob vsakem zagonu CommunityScreen** — ni predpripravljene (aggregated) lestvice. Vsak odprt CommunityScreen sproži svežo Firestore poizvedbo.
-
-**CommunityScreen kliče `getTopUsers(50)`** (ne 10):
-```
-LaunchedEffect(Unit) {
-  allUsers = ProfileStore.getTopUsers(50).filter { it.userId != currentUserId }
-}
-```
-
-**Cena:** Vsak odprt tab = 1 Firestore branje do 50 dokumentov. Ni caching-a, ni paginacije, ni snapshot listenerja (samo enkraten `.get()`).
-
-#### XP leaderboard — NE obstaja
-
-V kodi **ni ločene XP leaderboard logike**. Ni query-ja `ORDER BY xp DESC`. Edina razvrstitvena poizvedba je po `followers`.
-
-#### Client-side filtriranje
-
-Po prejetem `getTopUsers(50)` CommunityScreen naredi:
-```
-// Level filter (client-side)
-"New"      → filter { (it.level ?: 1) < 5 }
-"Veterans" → filter { (it.level ?: 1) > 20 }
-"All"      → brez filtra
-
-// Suggested users (random)
-suggestedUsers = allUsers.shuffled().take(5)
-```
-
-**⚠️ `allUsers.shuffled()` ob vsakem recompose:** `remember(allUsers)` prepreči ponovni shuffle ob vsakem recompose, a `allUsers` se ne posodobi po prvem zagonu (ni reload trigger). Vrstni red "Suggested" ostane enak za celoten lifecycle screena.
-
-#### Iskanje profilov
+**Formuli za XP ob zaključku treninga:**
 
 ```
-ProfileStore.searchPublicProfiles(query):
-  QUERY: users
-    WHERE is_public_profile == true
-    LIMIT 20
-  → client-side filter: username/first_name/docId contains query (ignoreCase)
+// ManageGamificationUseCase.recordWorkoutCompletion()
+baseXP = 50
+calorieXP = (caloriesBurned / 8).toInt()
+isCritical = Random.nextFloat() < 0.1f      // 10% šansa
+finalBaseXP = if (isCritical) baseXP * 2 else baseXP   // 100 ali 50
+skupaj = finalBaseXP + calorieXP
 ```
 
-**⚠️ Full-collection-first scan:** Firestore vrne prvih 20 javnih profilov brez filtra po imenu, nato se filter izvede na odjemalcu. Iskanje `"Aleksander"` bo vrnilo prazno, če noben izmed prvih 20 javnih profilov ne vsebuje tega niza — čeprav `"Aleksander"` obstaja na mestu 21.
+**Alternativna formula** (v `completeWorkoutSession()` — klicana, ko UI pokliče neposredno):
+```
+workoutXp = 100 + (calKcal / 10)
+```
+
+> ⚠️ **Anomalija**: Dve različni formuli za XP za dokončan trening obstajata vzporedno (`recordWorkoutCompletion` vs `completeWorkoutSession`). `UpdateBodyMetricsUseCase` kliče samo `recordWorkoutCompletion`, `completeWorkoutSession` ni klicana iz nobenega zaključka treninga v produkcijskem toku, hkrati pa ni označena kot deprecated.
+
+**XP za ostale akcije** (iz `ManageGamificationUseCase`):
+| Akcija | XP |
+|--------|-----|
+| `DAILY_LOGIN` | 10 |
+| `REST_DAY` | 10 |
+| `PLAN_CREATED` | 100 |
+| `WORKOUT_COMPLETE` (base) | 50 (ali 100 ob critical hit) |
+| `CALORIES_BURNED` | `caloriesBurned / 8` |
+
+**Pisanje v Firestore:** `FirestoreGamificationRepository.awardXP()` uporablja `db.runTransaction` — atomarno prebere trenutni XP, izračuna `newXp = currentXp + amount`, hkrati izračuna `newLevel = UserProfile.calculateLevel(newXp)` in zapiše oba atributa skupaj. Vsak XP event se hkrati zapiše v `users/{uid}/xp_history/{autoId}` z razlogom, datumom in stanjem po transakciji.
+
+**Daily cap:** **Ne obstaja.** Ni omejitve, kolikokrat na dan se XP podeli. Vsak klic `awardXP()` bo atomarno prištel XP, neovirano.
+
+> ⚠️ **Anomalija**: Brez daily capa brez preverjanja, ali je trening danes že bil narejen, ni ovire za "farming" XP z zaganjanjem in takojšnjim zaključevanjem treningov večkrat na dan.
 
 ---
 
-### 10.3 Privacy Shields — Kje se uveljavljajo zasebnostne nastavitve
+### 11.2 Level System — Formula za levele
 
-#### 10.3.1 Zasebnostni flags (PrivacySettings data class)
-
-| Flag | Ključ v Firestore | Privzeto | Učinek |
-|------|-------------------|----------|--------|
-| `isPublic` | `is_public_profile` | `false` | Profil nevidljiv v iskanju in leaderboard-u |
-| `showLevel` | `show_level` | `false` | Level viden/skrit v PublicProfile |
-| `showBadges` | `show_badges` | `false` | Badges vidne/skrite |
-| `showStreak` | `show_streak` | `false` | Streak viden/skrit |
-| `showPlanPath` | `show_plan_path` | `false` | Plan path viden/skrit (zaenkrat vedno null — `activePlanSummary` = null) |
-| `showChallenges` | `show_challenges` | `false` | Pokaži izzive na javnem profilu | ProfileStore + UserProfileManager |
-| `showFollowers` | `show_followers` | `false` | Pokaži followers/following na javnem profilu | ProfileStore + UserProfileManager |
-| `shareActivities` | `share_activities` | `false` | Deli GPS aktivnosti s skupnostjo | ProfileStore + UserProfileManager |
-
-#### 10.3.2 Kje se filtriranje izvaja — UI vs Server
-
-**Vse filtriranje zasebnostnih nastavitev se izvaja IZKLJUČNO na odjemalcu (Android UI).**
+**Datoteka:** `data/UserProfile.kt` vrstice 77–98
 
 ```
-mapToPublicProfile(doc, fetchActivities):
+// Inicializacija
+level = 1
+requiredXp = 100
+totalXp = 0
 
-1. if (!doc.exists()) return null
-2. val isPublic = doc.getBoolean("is_public_profile") ?: false
-3. if (!isPublic) return null   ← ← ← EDINO "strežniško" filtriranje je WHERE-clause v query-ju
-
-4. // Vse ostalo je client-side IF logic:
-   level    = if (showLevel)    calculateLevel(xp)  else null
-   badges   = if (showBadges)   doc.get("badges")   else null
-   streak   = if (showStreak)   doc.get("streak_days") else null
-   followers/following = if (showFollowers) ... else null
-   activities = if (shareActivities && fetchActivities) loadPublicActivities() else null
+// Iteracija
+while (totalXp + requiredXp <= xp):
+    totalXp += requiredXp
+    level++
+    requiredXp = floor(requiredXp * 1.2)  // 20% rast na level
 ```
 
-**Firestore Security Rules:** Datoteka `firestore.rules` **ne obstaja** v projektu (preverjen z `file_search`). To pomeni, da velja privzeto Firestore pravilnik — v development projektu je to pogosto `allow read, write: if true` (popolnoma odprt dostop), v produkcijskem projektu pa Firebase konzola morda nastavi drugačna pravila, a ne prek Android projekta.
+**Primeri XP pragov:**
+| Level | XP za dosego |
+|-------|-------------|
+| 1 | 0 |
+| 2 | 100 |
+| 3 | 220 (100+120) |
+| 4 | 364 (100+120+144) |
+| 5 | 537 (100+120+144+173) |
+| 10 | ~2 591 |
+| 25 | ~44 900 |
+| 50 | ~2 100 000 (ocena) |
 
-> ⚠️ **KRITIČNO:** Brez Firestore Security Rules zaščite je vsak, ki ima dostop do Firebase projekta (ali pozna project ID), zmožen brati **celoten** `users` dokument — vključno z emailom, XP, badges, streak, telesnimi metrikami — ne glede na `is_public_profile = false`.
+**Tip:** Eksponentna / geometrijska progresija (+20% XP potrebnih na level). Vsak naslednji level zahteva 20% več kot prejšnji.
 
-#### 10.3.3 Kaj `getPublicProfile()` dejansko prebere iz Firestore
-
-`FirestoreHelper.getUserRef(userId).get()` prebere **CELOTEN** `users/{userId}` dokument — tudi polja:
-- `height`, `age`, `gender`, `bodyFat`, `limitations`
-- `activityLevel`, `sleepHours`, `nutritionStyle`
-- `workoutGoal`, `focusAreas`, `equipment`
-- `total_calories`, `early_bird_workouts`, `night_owl_workouts`
-- `goalWeightKg`
-
-Vsa ta polja so prebrana in nato **preslikan sam na filter** v `mapToPublicProfile()`. Nobeno od teh polj ni v `PublicProfile` data class, torej **ne bodo prikazana** v UI.
-
-**Vendar:** Logika `doc.get("xp")` za izračun levela prebere XP vrednost tudi ko je `showLevel=false` — razlika je le v tem, ali se rezultat vrne ali ne. Firestore ga vseeno prebere — ni field projection.
+**Level se izračuna atomarno v transakciji** `awardXP()` — ni možno imeti "stale" levela.
 
 ---
 
-### 10.4 Public Profile Rendering — Kaj ProfileStore dejansko izpostavi
+### 11.3 Streak Engine — Kako deluje streak
 
-#### 10.4.1 PublicProfile data class — izpostavljena polja
+**Dve vzporedni implementaciji:**
 
-| Polje | Pogoj za izpostavljenost | Potencialno tveganje |
-|-------|--------------------------|---------------------|
-| `userId` | Vedno — je ključ dokumenta | ⚠️ Razkriva doc ID (email ali UID). Če je email, razkriva email naslov! |
-| `username` | Vedno (ni privacy flag) | Nizko tveganje |
-| `displayName` | Vedno (ni privacy flag) | `first_name` polje — nizko tveganje |
-| `level` | `showLevel == true` | Varno |
-| `badges` | `showBadges == true` | Varno |
-| `streak` | `showStreak == true` | Varno |
-| `followers` / `following` | `showFollowers == true` | Varno |
-| `shareActivities` | Vedno (upravljano prek flag) | Varno — samo boolean |
-| `recentActivities` | `shareActivities == true` | GPS rute — varno komprimirane |
-| **Email** | Ni v PublicProfile data class | ✅ Ni neposredno izpostavljen prek UI |
-| `profilePictureUrl` | Ni v PublicProfile data class | ✅ Na javnem profilu ni slike |
-| `telesne metrike` | Niso v PublicProfile data class | ✅ Ne prikažejo se v UI |
-
-#### 10.4.2 Doc ID = Email razkritje
-
-`val userId = doc.id` → `PublicProfile.userId`
-
-Ko je doc ID email (primarna pot prek `FirestoreHelper`), se email:
-1. **Shrani** v `PublicProfile.userId`
-2. **Posreduje** v CommunityScreen → `onViewProfile(profile.userId)` → NavController
-3. **Prikaže** v URL / nav poti (ne prikazano v UI, a obstaja v navigacijskem argumentu)
-4. **Pošlje** v `FollowStore.followUser(currentUserId, profile.userId)` → zapiše v `follows` dokument kot `followingId`
-
-**Posledica:** Email ciljnega uporabnika je vsem sledilcem dostopen prek `follows/{id}.followingId` polje v Firestore — brez Firestore Security Rules varovanja.
-
-#### 10.4.3 searchPublicProfiles — doc ID leak
-
-Iskanje:
+#### A) `UserProfileManager.updateUserProgressAfterWorkout()` (PRIMARNA)
+- Kliče se iz `UpdateBodyMetricsUseCase` ob vsakem zaključku treninga.
+- Temelji na **epochDays** (celo število dni od Unix epohe) — `last_workout_epoch` v Firestoreu.
+- Logika:
 ```
-val docId = doc.id  // email ali uid
-val matches = docId.contains(query, ignoreCase = true)
+dayDiff = todayEpochDays - lastWorkoutEpochDays
+newStreak = when:
+    oldLastEpoch == 0 → 1            // prvi trening kdajkoli
+    dayDiff == 0     → oldStreak     // danes že treniral → ohrani
+    dayDiff == 1     → oldStreak + 1  // včeraj treniral → podaljšaj
+    dayDiff > 1 AND freezes > 0 → oldStreak (freeze porabljen, streak ohranjen, NE poveča se!)
+    dayDiff > 1 AND freezes == 0 → 1 (reset)
 ```
 
-**Iskanje po `docId.contains(query)` efektivno dovoljuje iskanje po emailu** — ko kdo vpiše `"@gmail.com"`, bo iskanje vrnilo vse javne profile, katerih email vsebuje to nizo.
+#### B) `FirestoreGamificationRepository.updateStreak()` (SEKUNDARNA)
+- Temelji na **datum string** (`login_streak` polje), ne epochDays.
+- Piše v `users/{uid}/daily_logs/{todayStr}` s statusom `WORKOUT_DONE` ali `REST_DONE`.
+- Ima **idempotency guard**: če `daily_logs/{todayStr}` že obstaja, transakcija vrne takoj brez pisanja.
+- Streak se poveča samo ob `isWorkoutSuccess=true`. Rest Day (kliče se z `isWorkoutSuccess=true`!) poveča streak enako kot workout.
+
+> ⚠️ **Anomalija**: Dve vzporedni streak implementaciji (`login_streak` in `streak_days`) pišeta v različni Firestore polji (`login_streak` vs `streak_days`). Ni jasno, kateri je prikazan v UI. `updateUserProgressAfterWorkout` piše `streak_days` in `last_workout_epoch`; `updateStreak` piše `login_streak` in `last_streak_update_date`.
+
+> ⚠️ **Anomalija**: `WeeklyStreakWorker` (midnight check) kliče `FirestoreGamificationRepository.updateStreak()` oziroma `runMidnightStreakCheck()`, ki prebere `daily_logs/{yesterdayStr}`. Če pa je primarni streak v `streak_days` + `last_workout_epoch` (epochDays baza), Worker ne popravlja pravilnega polja.
+
+**Rest Day in streak:** V `ManageGamificationUseCase.restDayInitiated()` kliče `repository.updateStreak(isWorkoutSuccess = true)` — Rest Day šteje enako kot workout za `login_streak`. Za `streak_days` (primarystreak) Rest Day ne ustvari zapisa prek `updateUserProgressAfterWorkout` (ta se ne kliče).
+
+**WeeklyStreakWorker — urnik:** `OneTimeWorkRequest` z zamikom do naslednjega dne 00:01 lokalnega časa. Ob koncu vsakega uspeha se razporedi naslednji (`scheduleNext(context)`). Zahteva `NetworkType.CONNECTED`.
+
+> ⚠️ **Anomalija**: Worker ne bo zagnal in preveril streaka, če telefon ob polnoči nima internetne povezave. Streak ne bo padel, dokler Worker naslednjič ne uspe zagnati. To pomeni, da je možno streak ohraniti dalj časa z izogibanjem interneta.
+
+**Manipulacija s sistemskim časom:** `getTodayStr()` in `getYesterdayStr()` v `FirestoreGamificationRepository` kličeta `Clock.System.now()` z `TimeZone.currentSystemDefault()` — **sistemski čas naprave**. Ker so vrednosti vnesene v Firestore kot string/epochMs in niso preverjene prek `serverTimestamp()`, je manipulacija z uro naprave možna za podaljšanje streaka.
+
+> ⚠️ **Anomalija**: `updateUserProgressAfterWorkout()` prav tako kliče `Clock.System.now()` za `todayEpochDays`. Celotna streak logika temelji na lokalnem telefonskem času, ne na Firestore `serverTimestamp()`. Nastavitev datuma naprave naprej za 1 dan ohrani streak, nastavljanje nazaj pa ga ne prekine.
 
 ---
 
-### 10.5 Activity Feed — publicActivities in GPS Kompresija
+### 11.4 Badge Unlock System
 
-#### 10.5.1 Kdaj se GPS ruta objavi
+**Definicije:** `BadgeDefinitions.ALL_BADGES` — 22 badge-ev v 6 kategorijah:
+| Kategorija | Badge-i |
+|-----------|---------|
+| `WORKOUT` | first_workout, committed_10/50/100/250/500 |
+| `ACHIEVEMENT` | calorie_crusher_1k/5k/10k, level_5/10/25/50, first_plan, plan_master |
+| `SOCIAL` | first_follower, social_butterfly (10), influencer (50), celebrity (100) |
+| `SPECIAL` | early_bird (5× pred 7:00), night_owl (5× po 21:00) |
+| `STREAK` | week_warrior (7), month_master (30), year_champion (365) |
 
+**Progress izračun:** `ManageGamificationUseCase.getBadgeProgress(badgeId, profile)` vrne vrednost iz `UserProfile` (npr. `profile.totalWorkoutsCompleted`, `profile.followers`, `profile.level`).
+
+**Unlock preverjanje (kje):**  
+`AchievementsScreen.kt` in `LevelPathScreen.kt` — oba računata badge status v composableu ob vsakem renderu:
 ```
-RunTrackerScreen (po teku):
-
-1. Preveri: resolvedDocRef.get() → shareActivities == true?
-2. IF true && finalLocationPoints.isNotEmpty():
-
-   val rawPts = finalLocationPoints.map { Pair(lat, lng) }
-   val compressed = CompressRouteUseCase()(rawPts)
-   val routeList = compressed.map { mapOf("lat" to it.first, "lng" to it.second) }
-
-   SET users/{uid}/publicActivities/{sessionId} = {
-     activityType, distanceMeters, elevationGainM/LossM,
-     avgSpeedMps, maxSpeedMps, startTime,
-     routePoints: [ {lat, lng}, ... ]   ← BREZ altitude, speed, accuracy!
-   }
+isUnlocked = userProfile.badges.contains(badge.id) || userProgress >= badge.requirement
 ```
 
-**Objavljeni podatki:** Samo `lat` + `lng` — altitude, speed in accuracy **niso** v `routeList`. Relativno minimalen geolociranje.
+**Shranjevanje odklepov:** `userProfile.badges: List<String>` — Firestore polje `badges` je seznam ID-jev odklenjenih badge-ev. Ni evidence o tem, da se badge ID atomarno doda v Firestore ob odklepu; `WorkoutSessionScreen` ob zaključku treninga pokliče `result.unlockedBadges.firstOrNull()` za animacijo, ampak `WorkoutCompletionResult.unlockedBadges` vrne vedno **prazen seznam** (`emptyList()` — vrstica 86 v `ManageGamificationUseCase`).
 
-**Neubjavljeni podatki:** `caloriesKcal`, `durationSeconds` v `pubMap` **NISO vključeni** (poglejte vrstico 680–688 RunTrackerScreen) — `durationSeconds` in `caloriesKcal` sta v pubMap dejansko izpuščena (v Fazi 7.4 smo dokumentirali, da sta v shemi, toda spodnji kod ju ne zapiše):
+> ⚠️ **Anomalija**: `WorkoutCompletionResult.unlockedBadges` je hardcoded `emptyList()`. Badge animacija v `WorkoutSessionScreen.kt` (vrstica 554) bo vedno prazna — badge popup se nikoli ne sproži ob zaključku treninga.
 
-```
-// pubMap NE vsebuje:
-// "durationSeconds" ← izpuščeno iz writeMap
-// "caloriesKcal"    ← izpuščeno iz writeMap
-```
+**Trigger model:** Badge odklepanje ni trigger-based (ni callbacka ob `awardXP` ali `updateStreak`). Badge status je izračunan on-demand v UI ob vsakem renderu na podlagi `UserProfile` vrijednosti. Ni periodičnega backend scana.
 
-#### 10.5.2 CompressRouteUseCase — dejanski algoritem
-
-```
-CompressRouteUseCase.invoke(points: List<Pair<Double, Double>>):
-
-  val limit = 100               ← maksimum točk
-  IF points.size <= 100: return points  (brez kompresije!)
-
-  val step = points.size / 100.0
-  FOR i in 0 until 100:
-    compressed.add(points[(i * step).toInt()])   ← uniform sampling
-  IF !compressed.contains(points.last()):
-    compressed.add(points.last())                ← zagotovi zadnjo točko
-
-  return compressed  (max 101 točk)
-```
-
-**⚠️ TO NI RDP ALGORITEM** — nasprotno temu, kar je navedeno v komentarjih kode (`// CompressRouteUseCase.compress() → RDP kompresija ~450→~35 točk`).  
-Dejanska implementacija je **enakomerni vzorčevalnik (uniform sampling)** z `limit=100`, ne Ramer-Douglas-Peucker algoritem.
-
-**Maksimum shranjenih točk:** 101 (100 + zadnja točka). Za kratek tek (<100 točk) se točke shranijo brez kompresije.
-
-**Geografska natančnost:** Ker vzorčevalnik enakomerno razporedi točke (brez upoštevanja geometrije), se ostrimi zavoji v trasi izgubijo proporcionalno pogosteje kot ravni deli.
-
-#### 10.5.3 Brisanje aktivnosti
-
-`ActivityLogScreen.kt` omogoča brisanje lastnih aktivnosti:
-```
-userRef.collection("publicActivities").document(runToDel.id).delete().await()
-```
-
-Brisanje `publicActivities` je na voljo v UI — brisanje `runSessions` (interni log) je **ločeno**, prav tako v ActivityLogScreen.
+> ⚠️ **Anomalija**: Ker badge odklepanje temelji na client-side izračunu brez pisanja, badge `id` ne bo dodan v Firestore `badges` seznam avtomatično ob doseženi meji. Brez dodatne logike za pisanje badge ID-ja, bo isUnlocked vedno `true` v UI (ker `userProgress >= req`), ampak `userProfile.badges.contains(badge.id)` bo vračal `false` do ročnega vpisa.
 
 ---
 
-### 10.6 Firestore Security Rules — Audit
+### 11.5 Streak Freeze — Nakup in Poraba
 
-Datoteka `firestore.rules` **ne obstaja** v projektu. Ni bilo najdene nobene `.rules` datoteke.
+**Nakup:** `ShopViewModel.buyStreakFreeze()`
+- Cena: **300 XP**
+- Maks zalogo: **3 Freezes** hkrati
+- Mehanizem: Firestore transakcija atomarno preveri `streak_freezes < 3` in `xp >= 300`, nato atomarno zmanjša XP in poveča `streak_freezes`. Pisanje v `xp_history` z `"source": "SHOP_SPEND"`.
+- Level se preračuna znotraj iste transakcije.
 
-**Implicirani status:** Varnostna pravila za Firestore so konfigurirana **zunaj Android projekta** (npr. v Firebase Console ali prek Firebase CLI). Projekt sam ne vsebuje in ne vzdržuje security rules datoteke.
+**Poraba:** Dve poti:
+1. `UserProfileManager.updateUserProgressAfterWorkout()` — porabi freeze ko `dayDiff > 1` in `streak_freezes > 0`. Streak ostane na stari vrednosti (ne poveča se). Piše `streak_freezes -= 1` le ako je bil `freezeUsed = true`.
+2. `FirestoreGamificationRepository.consumeStreakFreeze()` — kliče se iz `runMidnightStreakCheck()` Worker-ja. Enaka logika: atomarno zmanjša `streak_freezes` za 1.
 
-**Znana tveganja brez eksplicitnih pravil:**
+> ⚠️ **Anomalija**: Dve ločeni poti za porabo zamrznitev pišeta v isto polje (`streak_freezes`). Ko `updateUserProgressAfterWorkout` porabi freeze (workoutpath) IN Worker hkrati pokliče `consumeStreakFreeze` (midnight path), je za isto zamujeno noč možna dvojna poraba.
 
-| Tveganje | Opis |
-|---------|------|
-| 🔴 Čitanje celotnih profilov | Brez row-level security kdorkoli z API ključem (iz Firebase Config) lahko prebere vsak dokument `users/{id}` |
-| 🔴 Pisanje v tuj profil | Brez write rules kdorkoli lahko piše v `users/{tujiId}` (npr. poviša `followers` sam sebi) |
-| 🔴 Branje `dailyLogs` | Prehranjevalni in kalorični podatki (`dailyLogs`) so potencialno dostopni brez avtentikacije |
-| 🔴 Branje `customMeals` | Custom recepti so potencialno dostopni brez avtentikacije |
-| 🟡 Branje `follows` | Follow relacije so readable — razkrivajo socialno mrežo |
-| 🟡 Branje `runSessions` | GPS trase s `latitude/longitude/altitude/speed` za vse teke so readable |
-| 🟡 Pisanje v `notifications` | Pisanje v notification kolekcijo je odprto — SPAM možen |
-
-**Zaščite, ki obstajajo samo na odjemalcu (Android):**
-- `is_public_profile` filter v `searchPublicProfiles` — samo Firestore WHERE clause, ne Security Rule
-- Privacy flags filtriranje v `mapToPublicProfile()` — samo client-side
-- `shareActivities` check pred pisanjem `publicActivities` — samo client-side check
+**Pridobivanje Freeze (brez nakupa):** Ni evidence o tem, da se Freeze kdajkoli podeli brez nakupa v shopu. Ni nagradnega sistema (dnevna prijava, streak milestone) ki bi podarjal Freeze.
 
 ---
 
-### 10.7 Ugotovljene Anomalije
+### 11.6 Rest Day Swap Mehanizem
+
+**Lokacija:** `FirestoreGamificationRepository.checkIfFutureRestDaysExistAndSwap()`
+
+**Potek:** Ko Worker zazna, da je bil včerajšnji dan zamuden (ni zapisa v `daily_logs`):
+1. Poišče first upcoming rest day v aktivnem planu (`user_plans/{uid}.plans[0].weeks[].days[]`).
+2. Zamenjana dan — zamujeni dan postane `isRestDay=true, isSwapped=true`.
+3. Prihodnji rest dan postane workout z originalnim `focusLabel` — `isSwapped=true`.
+4. Posodobljeni plan se zapiše nazaj v Firestore.
+
+**Omejitev:** Zamenjava se naredi samo enkrat na zamujeni dan (FIFO — prvi razpoložljiv rest dan naprej).
+
+> ⚠️ **Anomalija**: `currentPlanDayNum` se izračuna kot `logsSnap.documents.size + 1` — skupno število vseh dokumentov v `users/{uid}/daily_logs`, ne samo aktivnih treningov. Če je kolekcija `daily_logs` zakrpana z `REST_DONE` ali `FROZEN` dokumenti za pretekle dni, bo `currentPlanDayNum` napačen (precenjen).
+
+---
+
+### 11.7 Ugotovljene Anomalije
 
 | # | Opis | Lokacija | Resnost |
 |---|------|----------|---------|
-| 1 | `PublicProfile.userId` razkriva email naslov (ko je doc ID email) — posredovan v nav args, FollowStore zapise, `follows/{id}.followingId` polje | `ProfileStore.mapToPublicProfile()`, `FollowStore.followUser()` | 🔴 Visoka |
-| 2 | `searchPublicProfiles()` dovoljuje iskanje po emailu prek `docId.contains(query)` | `ProfileStore.searchPublicProfiles()` vrstica 173 | 🔴 Visoka |
-| 3 | Brez cascade delete: brisanje Firebase Auth računa ne počisti follow relacij, aktivnosti in notifikacij | ni nobene `deleteUserData()` funkcije | 🔴 Visoka |
-| 4 | Firestore Security Rules datoteka ne obstaja v projektu | projekt root | 🔴 Kritično |
-| 5 | `CompressRouteUseCase` ni RDP, ampak uniform sampling (limit=100) — komentar v kodi je napačen | `CompressRouteUseCase.kt` | 🟡 Srednje |
-| 6 | Leaderboard je live query (getTopUsers(50)) ob vsakem odprtju CommunityScreen — ni cache, paginacije, ali aggregated collection | `CommunityScreen.kt` + `ProfileStore.getTopUsers()` | 🟡 Srednje |
-| 7 | `mapToPublicProfile()` prebere celoten `users` doc (vključno z višino, starostjo, telesno maščobo) — Firestore nima field projection, odjemalec filtrira sam | `ProfileStore.mapToPublicProfile()` | 🟡 Srednje |
-| 8 | `unfollowUser()` fallback (stari format) posodobi counters z `FieldValue.increment(-1)` BREZ transakcije — race condition možen za stare dokumente | `FollowStore.unfollowUser()` vrstice 138–139 | 🟡 Srednje |
-| 9 | `pubMap` v RunTrackerScreen ne vključi `durationSeconds` in `caloriesKcal` — PublicActivity data class ju ima, a Firestore jih ne zapiše | `RunTrackerScreen.kt` vrstica 680–688 | 🟢 Nizko |
-| 10 | `activePlanSummary` je vedno null v PublicProfile — `showPlanPath` flag ne deluje | `ProfileStore.mapToPublicProfile()` vrstica 142 | 🟢 Nizko |
-
+| 1 | Brez daily XP capa — XP farming možen z večkratnim zagonom/zaključkom treninga | `FirestoreGamificationRepository.awardXP()` | 🔴 Visoka |
+| 2 | Dve vzporedni streak implementaciji — `streak_days` (epochDays) in `login_streak` (dateStr) pišeta različni Firestore polji | `UserProfileManager` + `FirestoreGamificationRepository` | 🔴 Visoka |
+| 3 | Streak temelji na lokalnem telefonskem času, ne `serverTimestamp()` — manipulacija z uro naprave ohrani streak | `getTodayStr()`, `updateUserProgressAfterWorkout()` | 🔴 Visoka |
+| 4 | `WorkoutCompletionResult.unlockedBadges` je vedno `emptyList()` — badge unlock animacija nikoli ne sproži | `ManageGamificationUseCase.recordWorkoutCompletion()` vrstica 86 | 🔴 Visoka |
+| 5 | Worker ne zagona brez interneta — streak ne pade ob izključeni povezavi ob polnoči | `WeeklyStreakWorker` (`NetworkType.CONNECTED` constraint) | 🟡 Srednje |
+| 6 | Dvojna poraba Freeze možna: `updateUserProgressAfterWorkout` + `consumeStreakFreeze()` oba tečeta za isti zamujeni dan | `UserProfileManager` + `FirestoreGamificationRepository.runMidnightStreakCheck()` | 🟡 Srednje |
+| 7 | `completeWorkoutSession()` (druga XP formula) ni klicana iz WorkoutSession toka — brez opozorila o deprecated | `ManageGamificationUseCase` vrstica 44 | 🟡 Srednje |
+| 8 | Badge ID se nikoli atomarno ne doda v Firestore `badges` seznam ob dosegu meje — samo UI bere progress on-demand | `AchievementsScreen`, `LevelPathScreen` | 🟡 Srednje |
+| 9 | `currentPlanDayNum` v Swap algoritmu temelji na skupnem številu `daily_logs` dokumentov — vključno z REST/FROZEN zapisi | `checkIfFutureRestDaysExistAndSwap()` vrstice 202–203 | 🟡 Srednje |
+| 10 | `restDayInitiated()` kliče `updateStreak(isWorkoutSuccess=true)` — rest day poveča `login_streak` enako kot workout | `ManageGamificationUseCase.restDayInitiated()` vrstica 128 | 🟢 Nizko |
