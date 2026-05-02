@@ -73,7 +73,7 @@ class FirestoreGamificationRepository : GamificationRepository {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return 0
         try {
             val snapshot = userRef.get().await()
-            return snapshot.getLong("login_streak")?.toInt() ?: 0
+            return snapshot.getLong("streak_days")?.toInt() ?: 0
         } catch (e: Exception) {
             return 0
         }
@@ -95,7 +95,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                 }
 
                 val snapshot = transaction.get(userRef)
-                val currentStreak = snapshot.getLong("login_streak")?.toInt() ?: 0
+                val currentStreak = snapshot.getLong("streak_days")?.toInt() ?: 0
 
                 // Streak SE POVEČA samo kadar je zares Workout success.
                 // Za Rest Day uporabnik ne dobi +1 streaka (kot si rekel: "na Rest stagnira").
@@ -103,7 +103,7 @@ class FirestoreGamificationRepository : GamificationRepository {
 
                 // Update Streak in Last Streak Update Date
                 transaction.update(userRef, mapOf(
-                    "login_streak" to newStreak,
+                    "streak_days" to newStreak,
                     "last_streak_update_date" to todayStr
                 ))
 
@@ -175,7 +175,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                     Log.d("GamificationRepo", "Streak Freeze uspešno porabljen. Streak ohranjen.")
                 } else {
                     // NO FREEZE. STREAK PADE NA 0.
-                    userRef.update("login_streak", 0).await()
+                    userRef.update("streak_days", 0).await()
                     Log.d("GamificationRepo", "Ni rest dnevov in ni freeze-a. Streak je padel na 0.")
                 }
             }

@@ -53,7 +53,7 @@ object UserProfileManager {
     private const val KEY_NIGHT_OWL = "night_owl_workouts"
     private const val KEY_LAST_LOGIN = "last_login_date"
     private const val KEY_TOTAL_PLANS = "total_plans_created"
-    private const val KEY_PROFILE_PICTURE = "profile_picture_url"
+    private const val KEY_PROFILE_PICTURE = "profilePictureUrl"
 
     private fun getSettings() = SettingsManager.provider.getSettings(PREFS_NAME)
 
@@ -221,7 +221,7 @@ object UserProfileManager {
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
             KEY_SHARE_ACTIVITIES to profile.shareActivities,
-            "profilePictureUrl" to profile.profilePictureUrl
+            KEY_PROFILE_PICTURE to profile.profilePictureUrl
         )
 
         if (profile.height != null && profile.height > 0) data["height"] = profile.height

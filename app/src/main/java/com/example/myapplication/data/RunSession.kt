@@ -114,12 +114,12 @@ data class RunSession(
         "avgSpeedMps" to avgSpeedMps,
         "polylinePoints" to polylinePoints.map { point ->
             mapOf(
-                "latitude" to point.latitude,
-                "longitude" to point.longitude,
-                "altitude" to point.altitude,
-                "speed" to point.speed,
-                "accuracy" to point.accuracy,
-                "timestamp" to point.timestamp
+                "lat" to point.latitude,
+                "lng" to point.longitude,
+                "alt" to point.altitude,
+                "spd" to point.speed,
+                "acc" to point.accuracy,
+                "ts" to point.timestamp
             )
         },
         "createdAt" to createdAt,

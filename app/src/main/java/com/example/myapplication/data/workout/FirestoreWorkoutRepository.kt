@@ -5,7 +5,6 @@ import com.example.myapplication.data.LocationPoint
 import com.example.myapplication.data.RunSession
 import com.example.myapplication.domain.workout.WorkoutRepository
 import com.example.myapplication.persistence.FirestoreHelper
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Query
@@ -14,11 +13,11 @@ import kotlinx.coroutines.tasks.await
 class FirestoreWorkoutRepository : WorkoutRepository {
 
     override suspend fun getWeeklyDoneCount(email: String, startEpochSeconds: Long): Int {
-        val startTimestamp = Timestamp(startEpochSeconds, 0)
+        val startEpochMs = startEpochSeconds * 1000L
         return try {
             val ref = FirestoreHelper.getCurrentUserDocRef()
             val querySnapshot = ref.collection("workoutSessions")
-                .whereGreaterThanOrEqualTo("date", startTimestamp)
+                .whereGreaterThanOrEqualTo("timestamp", startEpochMs)
                 .get()
                 .await()
             querySnapshot.documents.count { doc ->
