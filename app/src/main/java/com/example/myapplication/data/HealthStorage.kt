@@ -146,8 +146,9 @@ object HealthStorage {
             val goals = getHealthGoals()
             val stepsGoal = goals.stepsGoal
             if (steps >= stepsGoal) {
-                // Award achievement - requires injection of use case eventually, ignore for now to fix build quickly as this is a singleton
-                // TODO: Update via UseCase
+                // Award achievement — zahteva injekcijo UseCase-a.
+                // Backlog (Faza 10): Zamenjaj z ManageGamificationUseCase.recordStepsAchievement()
+                // ko bo HealthStorage prenehal biti singleton in bo podpiral DI.
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error storing daily data", e)

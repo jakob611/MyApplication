@@ -659,11 +659,16 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                             "caloriesKcal" to calories,
                                             "elevationGainM" to finalElevationGain,
                                             "elevationLossM" to finalElevationLoss,
-                                            "activityType" to selectedActivity.name,
-                                            "createdAt" to System.currentTimeMillis(),
-                                            "polylinePoints" to finalLocationPoints.map { mapOf("lat" to it.latitude, "lng" to it.longitude, "alt" to it.altitude, "spd" to it.speed, "acc" to it.accuracy, "ts" to it.timestamp) },
-                                            "isSmoothed" to successfullySmoothed
-                                        )
+                                             "activityType" to selectedActivity.name,
+                                             "createdAt" to System.currentTimeMillis(),
+                                             // 🗜️ RDP kompresija: maraton (14.400 točk) → ≤500 točk (~25 KB).
+                                             // Prepreči FAILED_PRECONDITION crash ob 1 MB Firestore limitu.
+                                             "polylinePoints" to com.example.myapplication.utils.RouteCompressor
+                                                 .compress(finalLocationPoints)
+                                                 .map { mapOf("lat" to it.latitude, "lng" to it.longitude, "alt" to it.altitude, "spd" to it.speed, "acc" to it.accuracy, "ts" to it.timestamp) },
+                                             "pointsCount" to finalLocationPoints.size,
+                                             "isSmoothed" to successfullySmoothed
+                                         )
                                         Log.d("RunTrackerSave", "WRITE runSessions doc=${resolvedDocRef.id} session=$sessionId points=${finalLocationPoints.size}")
                                         com.example.myapplication.persistence.FirestoreHelper.withRetry {
                                             resolvedDocRef.collection("runSessions").document(sessionId).set(runMap).await()

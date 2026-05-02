@@ -62,7 +62,8 @@ class UpdateBodyMetricsUseCase(
             //    bm_prefs ni več relevanten za te podatke.
 
             // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
-            // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
+            //    Faza 10 backlog: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
+            //    (sledeno v CODE_ISSUES.md — "bm_prefs deprecation backlog")
             // settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
 
             // 6. [MOVED to ManageGamificationUseCase.recordWorkoutCompletion] burnedCalories → dailyLogs

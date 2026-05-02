@@ -159,6 +159,12 @@ class AppViewModel(
                 }
             } catch (e: Exception) {
                 Log.e("AppViewModel", "InitialSync napaka: ${e.message}")
+                // Kritična Firestore napaka (npr. PERMISSION_DENIED) — sporoči uporabniku
+                // Opomba: context se prenese prek startInitialSync parametra, kar je varno
+                // ker je lifecycle vezana na Activity in je AppViewModel Application-scoped.
+                com.example.myapplication.utils.FirestoreErrorHandler.handle(
+                    context, e, "AppViewModel.startInitialSync"
+                )
             } finally {
                 _isSyncing.value = false
                 _isProfileReady.value = true

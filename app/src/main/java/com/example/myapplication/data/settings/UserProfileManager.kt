@@ -184,6 +184,26 @@ object UserProfileManager {
         }
     }
 
+    /**
+     * Shrani profil v Firestore z zaščito pred konflikti med napravami.
+     *
+     * ## Multi-device Conflict Resolution strategija
+     * Firestore **ne podpira** optimistične zaklepanje (OCC) nativno za profile.
+     * Zaščita je implementirana na dveh ravneh:
+     *
+     * 1. **SetOptions.merge()** — ta klic NIKOLI ne prepiše celotnega dokumenta.
+     *    Posodablja samo polja, ki so eksplicitno nastavljena v `data` mapi.
+     *    Polja, ki niso v mapi (xp, followers, following …), ostanejo nespremenjena.
+     *    → Naprava A in Naprava B lahko hkrati shranjujeta različna polja brez rac condition.
+     *
+     * 2. **Izključena polja** — `xp`, `followers`, `following` so namerno IZVZETI
+     *    iz te mape in se posodabljajo IZKLJUČNO prek Firestore atomarnih transakcij
+     *    (runTransaction / FieldValue.increment) v AchievementStore / FollowStore.
+     *    → Prepreči "stale read" scenarij kjer Naprava B prepiše vrednost, ki je
+     *      Naprava A med tem že atomarno zvišala.
+     *
+     * @param batch Opcijalni WriteBatch za atomarno shranjevanje skupaj z XP/badges
+     */
     suspend fun saveProfileFirestore(profile: UserProfile, batch: com.google.firebase.firestore.WriteBatch? = null) {
         if (profile.email.isBlank()) return
         val uid = Firebase.auth.currentUser?.uid ?: return

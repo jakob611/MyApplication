@@ -103,30 +103,40 @@ data class RunSession(
     /**
      * Convert to Firestore-compatible map for storage.
      */
-    fun toFirestoreMap(): Map<String, Any> = mapOf(
-        "id" to id,
-        "userId" to userId,
-        "startTime" to startTime,
-        "endTime" to endTime,
-        "durationSeconds" to durationSeconds,
-        "distanceMeters" to distanceMeters,
-        "maxSpeedMps" to maxSpeedMps,
-        "avgSpeedMps" to avgSpeedMps,
-        "polylinePoints" to polylinePoints.map { point ->
-            mapOf(
-                "lat" to point.latitude,
-                "lng" to point.longitude,
-                "alt" to point.altitude,
-                "spd" to point.speed,
-                "acc" to point.accuracy,
-                "ts" to point.timestamp
-            )
-        },
-        "createdAt" to createdAt,
-        "caloriesKcal" to caloriesKcal,
-        "elevationGainM" to elevationGainM,
-        "elevationLossM" to elevationLossM,
-        "activityType" to activityType.name,
-        "isSmoothed" to isSmoothed
-    )
+    /**
+     * Pretvori RunSession v Firestore-kompatibilno mapo.
+     * 🗜️ GPS točke se pred shranjevanjem kompresirajo z RDP algoritmom (≤500 točk),
+     *    da se prepreči FAILED_PRECONDITION crash pri Firestore 1 MB limitu.
+     *    Originalno število točk se shrani v `pointsCount` za statistiko.
+     */
+    fun toFirestoreMap(): Map<String, Any> {
+        val compressed = com.example.myapplication.utils.RouteCompressor.compress(polylinePoints)
+        return mapOf(
+            "id" to id,
+            "userId" to userId,
+            "startTime" to startTime,
+            "endTime" to endTime,
+            "durationSeconds" to durationSeconds,
+            "distanceMeters" to distanceMeters,
+            "maxSpeedMps" to maxSpeedMps,
+            "avgSpeedMps" to avgSpeedMps,
+            "polylinePoints" to compressed.map { point ->
+                mapOf(
+                    "lat" to point.latitude,
+                    "lng" to point.longitude,
+                    "alt" to point.altitude,
+                    "spd" to point.speed,
+                    "acc" to point.accuracy,
+                    "ts" to point.timestamp
+                )
+            },
+            "pointsCount" to polylinePoints.size, // originalno število za statistiko
+            "createdAt" to createdAt,
+            "caloriesKcal" to caloriesKcal,
+            "elevationGainM" to elevationGainM,
+            "elevationLossM" to elevationLossM,
+            "activityType" to activityType.name,
+            "isSmoothed" to isSmoothed
+        )
+    }
 }

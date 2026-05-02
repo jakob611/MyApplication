@@ -223,7 +223,7 @@ private fun ProductCard(item: ShopItem, accent: Color) {
                         fontWeight = FontWeight.Bold,
                         color = accent
                     )
-                    // TODO: Add to cart functionality
+                    // Backlog: "Add to cart" funkcionalnost za fizične izdelke (Faza 6)
                     Text(
                         "ADD",
                         fontWeight = FontWeight.Bold,
