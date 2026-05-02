@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-04-28  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 19 zaključena)**
+**Zadnja posodobitev:** 2026-05-02  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 20 zaključena)**
 
 ---
 
@@ -261,6 +261,26 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 **Initial Sync Indicator:**
 7. ✅ **`MainActivity.kt`**: Dodan `var isSyncing by remember { mutableStateOf(false) }`. Ob zagonu (ko se nalaga profil iz Firestore) prikaže overlay `"Syncing your fitness data…"` z `CircularProgressIndicator`. Ob uspešnem nalaganju (`isSyncing = false`) se overlay skrije.
+
+### 2026-05-02 — Faza 20: MainActivity Startup Refactor & Threading Fixes
+
+**Spremembe:**
+1. ✅ **`MainActivity.kt` — Združitev 3× `LaunchedEffect(Unit)` v en strukturiran tok:**
+   - Blok na vrstici 112 (performance timer), blok na vrstici 177 (fresh_start, GlobalScope, partial auth) in blok na vrstici 277 (real auth check + workers) so tekli vzporedno → združeni v en `LaunchedEffect(Unit)` s fazami 1→3g.
+   - Odstranjeno: `AppIntent.SetProfile(UserProfileManager.loadProfile(""))` z **praznim emailom** (bil je brez učinka, a povzročal Firestore read z napačnim ključem).
+   - Odstranjeno: dvojni `AppIntent.StartListening(userEmail)` klic (enkrat iz prvega, enkrat iz drugega bloka).
+   - `isCheckingAuth = false` se zdaj nastavi **enkrat**, na koncu enega bloka.
+
+2. ✅ **`MainActivity.kt` — `GlobalScope.launch` → `scope.launch(Dispatchers.IO)`:**
+   - `GlobalScope.launch(Dispatchers.IO)` za Firestore profil fetch (vrstica 225) zamenjano z `scope.launch(Dispatchers.IO)` — coroutine je zdaj vezana na `rememberCoroutineScope()` in se zaključi z Composable lifecycle.
+
+3. ✅ **`NetworkObserver.kt` — 60-sekundna zakasnitev pri ponovni vzpostavitvi signala odpravljena:**
+   - `onCapabilitiesChanged` je prej emitiral `false` ko `NET_CAPABILITY_VALIDATED=false` (Android captive portal validacija traja do 60s po WiFi reconnect) → prepisal `onAvailable(true)`.
+   - Zdaj `onCapabilitiesChanged` emitira **samo `true`** (ko validated=true). `false` ob izgubi signala ureja `onLost`.
+
+4. ✅ **`NutritionViewModel.kt` — `syncHealthConnectNow` na Main thread → IO:**
+   - `viewModelScope.launch { ... }` zamenjano z `viewModelScope.launch(Dispatchers.IO) { ... }`.
+   - Health Connect branje + Firestore transakcija ne blokirata več UI niti.
 
 ### 2026-04-28 — Faza 19: Custom Meal Flow, Global Sync v AppViewModel, GPS Subcollection
 

@@ -30,9 +30,12 @@ class NetworkObserver(private val context: Context) {
                 networkCapabilities: NetworkCapabilities
             ) {
                 super.onCapabilitiesChanged(network, networkCapabilities)
-                val connected = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                // Emit only if actual internet is validated
-                trySend(connected)
+                // Emitiramo SAMO potrditev internet dostopa (true).
+                // False ob izgubi signala ureja onLost — izogibamo se 60s zakasnitve
+                // ki jo povzroča Android captive portal validacija (NET_CAPABILITY_VALIDATED
+                // ostane false do ~60s po vzpostavitvi WiFi/LTE signala).
+                val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (validated) trySend(true)
             }
         }
 

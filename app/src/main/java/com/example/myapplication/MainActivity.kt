@@ -108,11 +108,6 @@ class MainActivity : ComponentActivity() {
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         setContent {
-            // First paint measurement
-            LaunchedEffect(Unit) {
-                val timeToPaint = android.os.SystemClock.elapsedRealtime() - coldStartEpochMs
-                Log.i("AppPerf", " First paint arrived at: $timeToPaint ms")
-            }
 
             val context = LocalContext.current
             val bodyOverviewViewModel: BodyOverviewViewmodel =
@@ -173,75 +168,6 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) { errorMessage = "Google sign-in failed: ${e.localizedMessage}" }
             }
 
-            // === INITIAL AUTH & SYNC FLOW ===
-            LaunchedEffect(Unit) {
-                appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
-                val accountEmail = com.google.firebase.ktx.Firebase.auth.currentUser?.email
-
-                // Preveri fresh_start flag (nastavljen ob delete data/account)
-                val appFlags = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
-                if (appFlags.getBoolean("fresh_start_on_login", false)) {
-                    // Pobriši vse bm_prefs na čisto — novo začetno stanje
-                    context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                        .edit().clear().apply()
-                    context.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE)
-                        .edit().clear().apply()
-                    // Počisti flag
-                    appFlags.edit().remove("fresh_start_on_login").apply()
-                    Log.d("MainActivity", "✅ Fresh start: bm_prefs reset")
-                }
-
-                // ── Faza 5: One-time migracija — pobriši stare lokalne SharedPrefs caches ──
-                // water_cache, burned_cache, calories_cache, food_cache so bili legaccy
-                // vmesni buffer za sync. Firestore SDK (isPersistenceEnabled=true) zdaj
-                // skrbi za offline delovanje sam — te datoteke niso več potrebne.
-                val migPrefs = context.getSharedPreferences("migration_flags", Context.MODE_PRIVATE)
-                if (!migPrefs.getBoolean("faza5_legacy_purge_done", false)) {
-                    com.example.myapplication.persistence.DailySyncManager.clearLegacyCache(context)
-                    migPrefs.edit().putBoolean("faza5_legacy_purge_done", true).apply()
-                    Log.i("MainActivity", "✅ Faza 5: Legacy lokalni cache počiščen → Firestore je Single Source of Truth")
-                }
-                // ──────────────────────────────────────────────────────────────────────────
-
-                    if (accountEmail != null) {
-                        userEmail = accountEmail
-
-                        // Nastavi uporabniški profil
-                        appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
-                        isDarkMode = UserProfileManager.isDarkMode(userEmail)
-
-                    // Preveri in sinhroniziraj badge ob zagonu
-                    try {
-                        val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
-                        useCase.checkAndSyncBadgesOnStartup()
-                    }
-                    catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
-
-                    // Sinhronizacija načrtov
-                    try { PlanDataStore.migrateLocalPlansToFirestore(context) } catch (_: Exception) {}
-                    bodyOverviewViewModel.refreshPlans()
-
-                    // Osveži podatke o profilu iz Firestore
-                    kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                        try {
-                            val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
-                            if (remote != null) {
-                                UserProfileManager.saveProfile(remote)
-                                val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
-                                if (actParsed != null && actParsed > 0) {
-                                    context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
-                                        .edit().putInt("weekly_target", actParsed).apply()
-                                }
-                                withContext(Dispatchers.Main) { appViewModel.handleIntent(AppIntent.SetProfile(remote)) }
-                            }
-                        } catch (_: Exception) {}
-                    }
-
-                    // Nastavitev start poslušanja s pomočjo UseCase
-                    appViewModel.handleIntent(AppIntent.StartListening(userEmail))
-                }
-                isCheckingAuth = false
-            }
 
             // ----- Sync stanje iz AppViewModel (prestavljena InitialSyncManager logika) -----
             val isProfileReady by appViewModel.isProfileReady.collectAsState()
@@ -274,47 +200,86 @@ class MainActivity : ComponentActivity() {
             }
             // ────────────────────────────────────────────────────────────────────────────────
 
+            // === STARTUP INIT — en sam strukturiran tok zagona ===
             LaunchedEffect(Unit) {
+                // 1. Performance timer
+                val timeToPaint = android.os.SystemClock.elapsedRealtime() - coldStartEpochMs
+                Log.i("AppPerf", "First paint arrived at: $timeToPaint ms")
+
+                // 2. One-time startup tasks (ne zahtevajo avtentikacije)
+                val appFlags = context.getSharedPreferences("app_flags", Context.MODE_PRIVATE)
+                if (appFlags.getBoolean("fresh_start_on_login", false)) {
+                    context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+                    context.getSharedPreferences("algorithm_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+                    appFlags.edit().remove("fresh_start_on_login").apply()
+                    Log.d("MainActivity", "✅ Fresh start: bm_prefs reset")
+                }
+                val migPrefs = context.getSharedPreferences("migration_flags", Context.MODE_PRIVATE)
+                if (!migPrefs.getBoolean("faza5_legacy_purge_done", false)) {
+                    com.example.myapplication.persistence.DailySyncManager.clearLegacyCache(context)
+                    migPrefs.edit().putBoolean("faza5_legacy_purge_done", true).apply()
+                    Log.i("MainActivity", "✅ Faza 5: Legacy lokalni cache počiščen → Firestore je Single Source of Truth")
+                }
+
+                // 3. Auth check — enkraten vhod, brez podvajanja
                 val user = Firebase.auth.currentUser
                 if (user != null && (user.isEmailVerified || user.providerData.any { it.providerId == "google.com" })) {
-                    isLoggedIn = true
                     userEmail = user.email ?: ""
+                    isLoggedIn = true
 
+                    // 3a. Takojšnji lokalni profil (brez čakanja na mrežo) → hiter UI
                     appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                     isDarkMode = UserProfileManager.isDarkMode(userEmail)
                     navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
-                    // ── InitialSyncManager: zdaj sproži DisposableEffect authListener zgoraj ──
-                    // appViewModel.startInitialSync(context, userEmail) — premaknjeno iz tega bloka
-                    // ────────────────────────────────────────────────────────────────────
+                    // 3b. Enkraten real-time listener (AppViewModel.isListening guard prepreči dvojni subscribe)
+                    appViewModel.handleIntent(AppIntent.StartListening(userEmail))
 
+                    // 3c. Firestore profil — scope.launch na IO (ne GlobalScope, ne Main thread)
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
+                            if (remote != null) {
+                                UserProfileManager.saveProfile(remote)
+                                val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
+                                if (actParsed != null && actParsed > 0) {
+                                    context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
+                                        .edit().putInt("weekly_target", actParsed).apply()
+                                }
+                                withContext(Dispatchers.Main) { appViewModel.handleIntent(AppIntent.SetProfile(remote)) }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    // 3d. Login streak (IO)
                     scope.launch(Dispatchers.IO) {
                         try {
                             val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                             useCase.recordLoginOnly()
-                        }
-                        catch (e: Exception) { Log.e("MainActivity", "Login streak error: ${e.message}") }
+                        } catch (e: Exception) { Log.e("MainActivity", "Login streak error: ${e.message}") }
                     }
+
+                    // 3e. Worker scheduling (IO)
                     scope.launch(Dispatchers.IO) {
                         try {
                             val profile = UserProfileManager.loadProfile(userEmail)
                             com.example.myapplication.workers.WeeklyStreakWorker.ensureScheduled(context, profile.startOfWeek)
                         } catch (e: Exception) { Log.e("MainActivity", "WeeklyStreakWorker error: ${e.message}") }
                     }
-
-                    // Tedenski čistilec starih GPS run_routes .json datotek
                     try {
                         com.example.myapplication.worker.RunRouteCleanupWorker.ensureScheduled(context)
                     } catch (e: Exception) { Log.e("MainActivity", "RunRouteCleanupWorker error: ${e.message}") }
 
+                    // 3f. Badge sync z 1500ms zakasnitvijo (za topel Firestore cache)
                     scope.launch(Dispatchers.IO) {
                         delay(1500)
                         try {
                             val useCase = com.example.myapplication.domain.gamification.GamificationProvider.provide(context)
                             useCase.checkAndSyncBadgesOnStartup()
-                        }
-                        catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
+                        } catch (e: Exception) { Log.e("MainActivity", "Badge sync error: ${e.message}") }
                     }
+
+                    // 3g. Plan migracija + widgeti + DailySyncManager
                     scope.launch {
                         try { PlanDataStore.migrateLocalPlansToFirestore(context) } catch (_: Exception) {}
                         try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
@@ -324,9 +289,6 @@ class MainActivity : ComponentActivity() {
                             try { com.example.myapplication.persistence.DailySyncManager.syncOnAppOpen(context, syncUid) } catch (_: Exception) {}
                         }
                     }
-
-                    // Real-time Firestore listener — kliče loadProfileFromFirestore() (ni ročnega gradnje UserProfile)
-                    appViewModel.handleIntent(AppIntent.StartListening(userEmail))
                 } else {
                     navViewModel.navigateTo(Screen.Index)
                 }
