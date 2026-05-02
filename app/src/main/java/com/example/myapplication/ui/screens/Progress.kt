@@ -1040,20 +1040,21 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
 
                             progressViewModel.awardWeightLogXP()
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_xp_earned), android.widget.Toast.LENGTH_SHORT).show()
                             }
 
                             // Avtomatsko posodobi nutrition plan z novo težo
-                            Log.d("ProgressScreen", "🔥 Starting nutrition plan recalculation for uid=$uid, weight=$wKg")
+                            // PII varnost: uid in telesna teža se NE izpisujeta v log
+                            Log.d("ProgressScreen", "🔥 Starting nutrition plan recalculation")
                             val success = com.example.myapplication.persistence.NutritionPlanStore.recalculateNutritionPlan(
                                 uid, wKg
                             )
                             Log.d("ProgressScreen", "🔥 Recalculation result: $success")
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 if (success) {
-                                    android.widget.Toast.makeText(context, "✅ Nutrition plan updated!", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_nutrition_plan_updated), android.widget.Toast.LENGTH_LONG).show()
                                 } else {
-                                    android.widget.Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_missing_plan_data), android.widget.Toast.LENGTH_LONG).show()
                                 }
                                 onSaved()
                                 onDismiss()
@@ -1061,7 +1062,7 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                         } catch (e: Exception) {
                             Log.e("ProgressScreen", "🔥 ERROR updating nutrition plan", e)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "❌ Failed to update nutrition plan: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, "❌ ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                                 saving = false
                             }
                         }

@@ -135,7 +135,8 @@ class AppViewModel(
                         }
 
                         syncPrefs.edit().putBoolean("initial_sync_done_$initialSyncUid", true).apply()
-                        Log.i("AppViewModel", "✅ InitialSync končan za uid=$initialSyncUid")
+                        // PII varnost: UID se NE izpisuje v log
+                        Log.i("AppViewModel", "✅ InitialSync končan")
 
                         withContext(Dispatchers.Main) {
                             _syncStatusMessage.value = "Profile Ready! ✓"

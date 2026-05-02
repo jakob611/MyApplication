@@ -34,6 +34,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.R
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.persistence.PlanDataStore
 import com.example.myapplication.ui.home.CommunityScreen
@@ -895,16 +896,16 @@ class MainActivity : ComponentActivity() {
                                     startInSignUp = (currentScreen as Screen.Login).startInSignUp,
                                     onForgotPassword = { email ->
                                         errorMessage = null
-                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
+                                        if (email.isBlank()) { errorMessage = context.getString(R.string.error_email_required); return@LoginScreen }
                                         Firebase.auth.sendPasswordResetEmail(email).addOnCompleteListener { task ->
-                                            errorMessage = if (task.isSuccessful) "Password reset email sent to $email"
-                                            else task.exception?.localizedMessage ?: "Failed to send reset email"
+                                            errorMessage = if (task.isSuccessful) context.getString(R.string.success_password_reset_sent)
+                                            else task.exception?.localizedMessage ?: context.getString(R.string.error_password_reset_failed)
                                         }
                                     },
                                     onLogin = { email, password ->
                                         errorMessage = null
-                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
-                                        if (password.isBlank()) { errorMessage = "Please enter your password."; return@LoginScreen }
+                                        if (email.isBlank()) { errorMessage = context.getString(R.string.error_email_required); return@LoginScreen }
+                                        if (password.isBlank()) { errorMessage = context.getString(R.string.error_password_required); return@LoginScreen }
                                         Firebase.auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
                                                 val user = Firebase.auth.currentUser
@@ -913,22 +914,22 @@ class MainActivity : ComponentActivity() {
                                                     appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                                                     scope.launch { isDarkMode = UserProfileManager.isDarkMode(userEmail) }
                                                     navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
-                                                } else if (user != null) { errorMessage = "Please verify your email first!"; Firebase.auth.signOut() }
-                                                else errorMessage = "Error: no user."
-                                            } else errorMessage = task.exception?.localizedMessage ?: "Login failed."
+                                                } else if (user != null) { errorMessage = context.getString(R.string.error_verify_email_first); Firebase.auth.signOut() }
+                                                else errorMessage = context.getString(R.string.error_no_user)
+                                            } else errorMessage = task.exception?.localizedMessage ?: context.getString(R.string.error_login_failed)
                                         }
                                     },
                                     onSignup = { email, password, confirmPassword ->
                                         errorMessage = null
-                                        if (email.isBlank()) { errorMessage = "Please enter your email."; return@LoginScreen }
-                                        if (password.isBlank()) { errorMessage = "Please enter your password."; return@LoginScreen }
-                                        if (password != confirmPassword) { errorMessage = "Passwords do not match."; return@LoginScreen }
+                                        if (email.isBlank()) { errorMessage = context.getString(R.string.error_email_required); return@LoginScreen }
+                                        if (password.isBlank()) { errorMessage = context.getString(R.string.error_password_required); return@LoginScreen }
+                                        if (password != confirmPassword) { errorMessage = context.getString(R.string.error_passwords_no_match); return@LoginScreen }
                                         Firebase.auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
                                                 Firebase.auth.currentUser?.sendEmailVerification()
-                                                errorMessage = "Sign-up successful! Check your email to verify."
+                                                errorMessage = context.getString(R.string.success_signup)
                                                 Firebase.auth.signOut()
-                                            } else errorMessage = task.exception?.localizedMessage ?: "Sign-up failed."
+                                            } else errorMessage = task.exception?.localizedMessage ?: context.getString(R.string.error_signup_failed)
                                         }
                                     },
                                     onBackToHome = { errorMessage = null; navViewModel.navigateTo(Screen.Index) },

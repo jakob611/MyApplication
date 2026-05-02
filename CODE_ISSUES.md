@@ -2,7 +2,7 @@
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
 **Zadnja posodobitev:** 2026-05-02  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 3 zaključena)**
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4 zaključena)**
 
 ---
 
@@ -304,6 +304,33 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 **4. Algorithm Audit:**
 - ✅ Ustvarjena `GLOW_UPP_LOGIC_AUDIT.md` z Markdown tabelami za Streak Logic, XP Calculation, PlanPath in Workout/Rest Days.
+
+### 2026-05-02 — Faza 4: Sanitacija logike, varnost in i18n
+
+**1. PII Logging Fixes (KRITIČNO — GDPR/varnost):**
+- ✅ `WeeklyStreakWorker.kt`: `Log.d("... for $email")` → `Log.d("Daily streak check running")` — email izbrisan iz loga
+- ✅ `FirestoreHelper.kt:74`: `"...falling back to UID: $uid"` → `"...falling back to UID"` — UID izbrisan iz loga
+- ✅ `FirestoreHelper.kt:96`: `"...Migrating to Email: $email"` → `"...Migrating to Email document."` — email izbrisan
+- ✅ `AppViewModel.kt:138`: `"InitialSync končan za uid=$initialSyncUid"` → `"InitialSync končan"` — UID izbrisan
+- ✅ `Progress.kt:1047`: `"uid=$uid, weight=$wKg"` → `"Starting nutrition plan recalculation"` — uid + telesna teža izbrisana
+- ✅ `fatsecret_api_service.kt`: `Log "Base URL: $baseUrlValue"` in `"Request URL: $url"` odstranjeni — URL vsebuje iskalne poizvedbe = vedenjski PII
+
+**2. Dead Code — stenziliran v prazne stub-e (čaka ročno brisanje):**
+- ✅ `network/ai_utils.kt` → vsebina zamenjana z minimalnim package stub-om
+- ✅ `ui/adapters/ChallengeAdapter.kt` → vsebina zamenjana z minimalnim package stub-om
+- ℹ️ `domain/nutrition/NutritionCalculations.kt` → že bila prazna, ostane
+- **⚠️ AKCIJA POTREBNA**: Ročno zbriši te 3 datoteke
+
+**3. Hardcoded Strings → strings.xml (i18n Faza 4):**
+- ✅ `strings.xml`: Dodanih 12 novih string resourcov (auth napake + toast sporočila)
+- ✅ `MainActivity.kt auth flow`: Vse statične napake (`"Please enter your email."`, itd.) zamenjane z `context.getString(R.string.xxx)`
+- ✅ `NutritionScreen.kt`: Toast sporočila (`"Meal Saved"`, `"Not logged in"`, itd.) zamenjana z `context.getString()`
+- ✅ `Progress.kt`: Toast sporočila (`"+50 XP Earned!"`, `"✅ Nutrition plan updated!"`, itd.) zamenjana z `context.getString()`
+- ℹ️ Backlog: ~50+ preostalih Compose UI-label nizov v ostalih screenih (DeveloperSettingsScreen, RunTrackerScreen itd.) — niso kritični za produkcijo
+
+**4. simulateDayPass — DEBUG-only zaklep:**
+- ✅ `WeeklyStreakWorker.simulateDayPass()`: Dodan `if (!BuildConfig.DEBUG) return` guard
+- V Release buildu funkcija takoj vrne, brez akcije — ne more se sprožiti iz DeveloperSettingsScreen
 
 ### 2026-05-02 — Faza 3: Performance & UI/UX Poliranje
 

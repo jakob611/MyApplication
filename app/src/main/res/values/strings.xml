@@ -12,4 +12,27 @@
     <string name="widget_water_description">Track water intake - add or remove 50ml with one tap</string>
     <string name="widget_weight_description">Track weight - add or remove 0.1kg with one tap</string>
     <string name="quick_meal_widget_description">Quick meal logging - add custom meals based on time of day</string>
+
+    <!-- Auth error messages (Faza 4 — i18n) -->
+    <string name="error_email_required">Please enter your email.</string>
+    <string name="error_password_required">Please enter your password.</string>
+    <string name="error_passwords_no_match">Passwords do not match.</string>
+    <string name="error_verify_email_first">Please verify your email first!</string>
+    <string name="error_login_failed">Login failed.</string>
+    <string name="error_signup_failed">Sign-up failed.</string>
+    <string name="error_password_reset_failed">Failed to send reset email</string>
+    <string name="error_no_user">Error: no user.</string>
+    <string name="success_signup">Sign-up successful! Check your email to verify.</string>
+    <string name="success_password_reset_sent">Password reset email sent</string>
+    <string name="error_google_signin">Google sign-in error.</string>
+    <string name="error_google_signin_failed">Google sign-in failed</string>
+
+    <!-- Toast messages (Faza 4 — i18n) -->
+    <string name="toast_xp_earned">+50 XP Earned!</string>
+    <string name="toast_nutrition_plan_updated">✅ Nutrition plan updated!</string>
+    <string name="toast_missing_plan_data">⚠️ Missing plan data - please create a plan first</string>
+    <string name="toast_meal_saved">Meal Saved</string>
+    <string name="toast_not_logged_in">Not logged in</string>
+    <string name="toast_meal_not_found">Meal not found</string>
+    <string name="toast_no_items_in_meal">No items found in custom meal.</string>
 </resources>

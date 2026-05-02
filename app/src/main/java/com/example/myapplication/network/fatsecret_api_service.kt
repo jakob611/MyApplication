@@ -171,8 +171,8 @@ object FatSecretApi {
             if (q.isBlank()) return@withContext emptyList()
 
             val baseUrlValue = baseUrl()
-            android.util.Log.d(TAG, "Base URL: $baseUrlValue")
-            android.util.Log.d(TAG, "Searching foods: q=$q, page=$page, pageSize=$pageSize")
+            // PII/Infra varnost: base URL in search query se NE izpisujeta v log
+            android.util.Log.d(TAG, "Searching foods: pageSize=$pageSize")
 
             val url = "${baseUrlValue.trimEnd('/')}/foods/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", q)
@@ -180,8 +180,7 @@ object FatSecretApi {
                 .addQueryParameter("pageSize", pageSize.toString())
                 .build()
 
-            android.util.Log.d(TAG, "Request URL: $url")
-
+            // PII/Infra varnost: polni URL (ki vsebuje query parameter) se NE izpisuje v log
             val req = Request.Builder().url(url).get().build()
 
             try {

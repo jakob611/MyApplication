@@ -724,7 +724,7 @@ fun NutritionScreen(
                 if (isSaveOnly) {
                     // "Save Only" — zapri dialog, prikaži Toast, NE odpri ChooseMealDialog
                     showMakeCustom = false
-                    android.widget.Toast.makeText(context, "Meal Saved", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_meal_saved), android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     // "Save & Add" — vprašaj za destinacijo
                     pendingCustomMeal = saved
@@ -759,7 +759,7 @@ fun NutritionScreen(
 
                 if (currentUid == null) {
                     // Removed redundant qualifier
-                    android.widget.Toast.makeText(context, "Not logged in", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_not_logged_in), android.widget.Toast.LENGTH_SHORT).show()
                     pendingCustomMeal = null
                     askWhereToAdd = false
                     return@ChooseMealDialog true
@@ -771,7 +771,7 @@ fun NutritionScreen(
                         val items = nutritionViewModel.getCustomMealItems(currentUid, cm.id)
 
                         if (items == null) {
-                            android.widget.Toast.makeText(context, "Meal not found", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_meal_not_found), android.widget.Toast.LENGTH_SHORT).show()
                             pendingCustomMeal = null
                             askWhereToAdd = false
                             return@launch
@@ -818,7 +818,7 @@ fun NutritionScreen(
                             trackedFoods = trackedFoods + newItems
                             showAddedMessage = "Added custom meal: ${cm.name}"
                         } else {
-                            android.widget.Toast.makeText(context, "No items found in custom meal.", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_no_items_in_meal), android.widget.Toast.LENGTH_LONG).show()
                         }
                         pendingCustomMeal = null
                         askWhereToAdd = false
