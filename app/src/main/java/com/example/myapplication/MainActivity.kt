@@ -81,6 +81,9 @@ class MainActivity : ComponentActivity() {
     // Performance timer
     private var coldStartEpochMs: Long = 0L
 
+    // Dark mode — prebran SINHRONO pred setContent, da preprečimo bel blisk ob zagonu
+    private var initialDarkMode = false
+
     // Push notification permission launcher
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
@@ -92,6 +95,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         coldStartEpochMs = android.os.SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
+
+        // Sinhrono preberi dark mode iz lokalnega cache-a PRED setContent
+        // → prepreči 500ms bel blisk pri zagonu na uporabnikih z dark modom
+        initialDarkMode = getSharedPreferences("user_prefs", MODE_PRIVATE)
+            .getBoolean("dark_mode", false)
 
         // Eager load AdvancedExerciseRepository in background immediately upon app startup
         kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
@@ -117,6 +125,11 @@ class MainActivity : ComponentActivity() {
             val appViewModel: AppViewModel = viewModel()
             val userProfile by appViewModel.userProfile.collectAsState()
 
+            // NutritionViewModel — ista instanca kot v NutritionScreen (Activity scope)
+            // Potrebujemo ga za clearUser() ob logout → prekliče Firestore listener
+            val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel =
+                viewModel(factory = MyViewModelFactory(context))
+
             val networkObserver = remember { com.example.myapplication.utils.NetworkObserver(context) }
             val isOnline by networkObserver.observe().collectAsState(initial = true)
 
@@ -130,7 +143,8 @@ class MainActivity : ComponentActivity() {
             var isLoggedIn by remember { mutableStateOf(false) }
             var userEmail by remember { mutableStateOf("") }
             var errorMessage by remember { mutableStateOf<String?>(null) }
-            var isDarkMode by remember { mutableStateOf(false) }
+            // initialDarkMode prebran SINHRONO v onCreate → brez belega bliska
+            var isDarkMode by remember { mutableStateOf(initialDarkMode) }
 
             // ----- Vadba stanje -----
             var selectedPlan by remember { mutableStateOf<PlanResult?>(null) }
@@ -161,7 +175,12 @@ class MainActivity : ComponentActivity() {
                         if (user != null && user.email != null) {
                             isLoggedIn = true; userEmail = user.email!!
                             appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
-                            scope.launch { isDarkMode = UserProfileManager.isDarkMode(userEmail) }
+                            scope.launch {
+                                val dark = UserProfileManager.isDarkMode(userEmail)
+                                isDarkMode = dark
+                                context.getSharedPreferences("user_prefs", MODE_PRIVATE)
+                                    .edit().putBoolean("dark_mode", dark).apply()
+                            }
                             navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
                         } else errorMessage = "Google sign-in error."
                     }, onError = { err -> errorMessage = err })
@@ -229,7 +248,13 @@ class MainActivity : ComponentActivity() {
 
                     // 3a. Takojšnji lokalni profil (brez čakanja na mrežo) → hiter UI
                     appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
-                    isDarkMode = UserProfileManager.isDarkMode(userEmail)
+                    // isDarkMode je že nastavljen iz initialDarkMode (prebran v onCreate),
+                    // tukaj pa osvežimo iz Firestore (async) in hkrati posodobimo lokalni cache.
+                    val firestoreDark = UserProfileManager.isDarkMode(userEmail)
+                    isDarkMode = firestoreDark
+                    // Cache v SharedPreferences za naslednji hladen zagon (brez bliska)
+                    getSharedPreferences("user_prefs", MODE_PRIVATE)
+                        .edit().putBoolean("dark_mode", firestoreDark).apply()
                     navViewModel.navigateTo(if (pendingNavigateToNutrition) Screen.Nutrition else Screen.Dashboard)
 
                     // 3b. Enkraten real-time listener (AppViewModel.isListening guard prepreči dvojni subscribe)
@@ -402,6 +427,7 @@ class MainActivity : ComponentActivity() {
                                     com.example.myapplication.persistence.FirestoreHelper.clearCache()
                                     appViewModel.handleIntent(AppIntent.SetProfile(com.example.myapplication.data.UserProfile(email = "")))
                                     appViewModel.resetSyncState() // ponastavi sync za naslednji login
+                                    nutritionViewModel.clearUser() // prekliče Firestore listener
                                     val lp = context.getSharedPreferences("local_prefs", Context.MODE_PRIVATE)
                                     lp.edit().putString("fcm_token", "").apply()
                                     isLoggedIn = false
@@ -415,6 +441,9 @@ class MainActivity : ComponentActivity() {
                                                 isDarkMode = isDarkMode,
                                 onDarkModeToggle = {
                                     isDarkMode = !isDarkMode
+                                    // Shrani lokalno (SharedPrefs) za hladen zagon brez bliska
+                                    context.getSharedPreferences("user_prefs", MODE_PRIVATE)
+                                        .edit().putBoolean("dark_mode", isDarkMode).apply()
                                     scope.launch { UserProfileManager.setDarkMode(userEmail, isDarkMode) }
                                 },
                                 onNavigateToPrivacyPolicy = { navigateTo(Screen.PrivacyPolicy); scope.launch { drawerState.close() } },

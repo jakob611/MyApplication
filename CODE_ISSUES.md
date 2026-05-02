@@ -2,7 +2,7 @@
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
 **Zadnja posodobitev:** 2026-05-02  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 20 zaključena)**
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 3 zaključena)**
 
 ---
 
@@ -304,6 +304,32 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 **4. Algorithm Audit:**
 - ✅ Ustvarjena `GLOW_UPP_LOGIC_AUDIT.md` z Markdown tabelami za Streak Logic, XP Calculation, PlanPath in Workout/Rest Days.
+
+### 2026-05-02 — Faza 3: Performance & UI/UX Poliranje
+
+**1. Dark Mode Flash (`MainActivity.kt`):**
+- ✅ Dodan `private var initialDarkMode = false` field v `MainActivity`.
+- ✅ V `onCreate()` PRED `setContent`, sinhrono prebran iz `user_prefs` SharedPreferences: `getSharedPreferences("user_prefs", MODE_PRIVATE).getBoolean("dark_mode", false)`.
+- ✅ `var isDarkMode` začne z `initialDarkMode` namesto `false` → bel blisk odpravljen.
+- ✅ Ob Firestore fetch in ob toggleu, dark mode se hkrati shrani v `user_prefs` → naslednji zagon brez bliska.
+- **Root cause**: `isDarkMode = false` je povzročal, da se je app renderiral v svetlem načinu, šele po async Firestore klicu (100-500ms) pa je dobil pravo vrednost.
+
+**2. XPPopup Contrast (`XPPopup.kt`):**
+- ✅ `color = Color.White` zamenjano z `color = MaterialTheme.colorScheme.onPrimary`.
+- ✅ V svetlem načinu: kremasta bela (`#FCFBF8`) na temno vijolični (`#38305A`) → WCAG AA ✅.
+- ✅ V temnem načinu: temno vijolična (`#38305A`) na svetli pastelni modri (`#DCE4FF`) → WCAG AA ✅.
+- **Root cause**: Dark mode `primary = Color(0xFFDCE4FF)` (svetlo pastelna) + hardcoded `Color.White` = kontrast ratio pod 2:1.
+
+**3. HapticFeedback Throttle:**
+- ℹ️ Že implementiran v `HapticFeedback.kt` (50ms, liniji 26-44). Nobenih sprememb ni bilo potrebnih.
+
+**4. NutritionViewModel Memory Leak (`NutritionViewModel.kt`):**
+- ✅ `observeDailyTotals()`: nested collect (`uidFlow.collect { ... .collect { } }`) zamenjano z `flatMapLatest + launchIn`.
+- ✅ Dodan `@OptIn(ExperimentalCoroutinesApi::class)` na obe `flatMapLatest` uporabi.
+- ✅ Nova funkcija `clearUser()`: nastavi `uidFlow.value = null`, počisti `_firestoreFoods`, cancela `waterSyncJob`.
+- ✅ `syncHealthConnectNow` sedaj teče na `Dispatchers.IO` (prepreči blokiranje UI niti).
+- ✅ `nutritionViewModel.clearUser()` se kliče ob logout v `MainActivity`.
+- **Root cause**: `uidFlow.collect { ... }` je bil zamrznjen na prvem uid, ker se zunanji collect ne more nadaljevati dokler notranji `.collect { doc }` ne konča (Firestore listener nikoli ne konča).
 
 ### 2026-05-02 — Faza 2: Konsolidacija podatkov (Firestore polja)
 

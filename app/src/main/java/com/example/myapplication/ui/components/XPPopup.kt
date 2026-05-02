@@ -1,7 +1,6 @@
 package com.example.myapplication.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +60,10 @@ fun XPPopup(
                     text = "✨ +$xpAmount XP",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    // onPrimary zagotovi kontrast v obeh temah:
+                    // Light: kremasto bela (#FCFBF8) na temno vijolični → ✅
+                    // Dark:  temno vijolična (#38305A) na svetli pastelni → ✅
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
