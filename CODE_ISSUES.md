@@ -305,6 +305,21 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 **4. Algorithm Audit:**
 - ✅ Ustvarjena `GLOW_UPP_LOGIC_AUDIT.md` z Markdown tabelami za Streak Logic, XP Calculation, PlanPath in Workout/Rest Days.
 
+### 2026-05-02 — Faza 2: Konsolidacija podatkov (Firestore polja)
+
+**1. profilePictureUrl (`UserProfileManager.kt`):**
+- ✅ `KEY_PROFILE_PICTURE` spremenjen iz `"profile_picture_url"` (snake_case) → `"profilePictureUrl"` (camelCase). `saveProfileFirestore` zdaj uporablja konstanto namesto hardcode stringa.
+- **Root cause**: App je pisala pod `"profilePictureUrl"` in brala pod `"profile_picture_url"` → profilne slike se niso nikoli naložile iz Firestore.
+
+**2. login_streak → streak_days (`FirestoreGamificationRepository.kt`):**
+- ✅ Vse tri metode (`getCurrentStreak`, `updateStreak`, `runMidnightStreakCheck`) zdaj pišejo/berejo `"streak_days"` namesto `"login_streak"`. Oba polja sta bila prisotna v Firestore — zdaj en vir resnice.
+
+**3. workoutSessions timestamp (`FirestoreWorkoutRepository.kt`):**
+- ✅ `getWeeklyDoneCount` popravljeno: prej je poizvedovalo po polju `"date"` s `Firestore Timestamp`, čeprav dokumenti hranijo epoch ms v polju `"timestamp"`. Zdaj primerja `"timestamp"` (epoch ms). Odstranjen neuporabljen `import com.google.firebase.Timestamp`.
+
+**4. GPS koordinate poenotene (`RunSession.kt`):**
+- ✅ `toFirestoreMap()` zdaj shranjuje koordinate z `"lat"`/`"lng"`/`"alt"`/`"spd"`/`"acc"`/`"ts"` — skladno z `RunTrackerScreen`, `RunRouteStore` in `gps_points` subkolekcijo. `FirestoreWorkoutRepository.getRunSessions()` podpira oba formata (backwards compat).
+
 ### 2026-04-27 — Faza 18: Meal Builder UI Fix + InitialSyncManager
 
 **Meal Builder Dialog Fix (`NutritionDialogs.kt`):**

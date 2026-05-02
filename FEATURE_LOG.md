@@ -342,4 +342,14 @@ no replicira staro SimpleDateFormat obliko.
 1. `MakeCustomMealsDialog`: `AlertDialog` se pogojno skrije (`if (!showFoodSearch)`) ko je `AddFoodSheet` odprt. `ModalBottomSheet` je edini aktivni composable — ni več prekrivanja scrimov. Klik na sestavino ne sproži več `onDismiss` staršev dialog.
 2. `InitialSyncManager`: Ob prvi prijavi na novi napravi (ključ `initial_sync_done_<uid>` ni v SharedPrefs) se z `async/await` vzporedno fetchajo: profil (XP/level), plani (`user_plans/{uid}`), teže (`weightLogs` zadnjih 10). Overlay prikazuje `"Downloading your fitness profile (XP, Plans & Progress)…"`. Po uspešnem prenosu prikaže `"Profile Ready! ✓"` (1.5s), nato se skrije. Normalni zagoni ostanejo nespremenjenj.
 **Zakaj:** Prekrivanje dialogov je povzročalo nehoteno zapiranje Custom Meal procesa. Nov sync manager odpravi zamude pri XP/Plans/BodyModule ob zagonu na novi napravi.
+
+## 2026-05-02 — Faza 2: Konsolidacija podatkov — Firestore polja
+**Datoteke:** `data/settings/UserProfileManager.kt`, `data/gamification/FirestoreGamificationRepository.kt`, `data/workout/FirestoreWorkoutRepository.kt`, `data/RunSession.kt`
+**Kaj:**
+1. `UserProfileManager`: `KEY_PROFILE_PICTURE` poenoten na `"profilePictureUrl"` (camelCase). Prej je app pisala pod enim, brala pod drugim ključem — profilne slike se niso nalagale.
+2. `FirestoreGamificationRepository`: Zamenjava `"login_streak"` → `"streak_days"` (3 metode). Odpravlja dvostransko pisanje v Firestore pod dvema različnima ključema.
+3. `FirestoreWorkoutRepository.getWeeklyDoneCount`: Poizvedba preusmerjena iz `"date"` (Firestore Timestamp) → `"timestamp"` (epoch ms Long). Tedenska statistika je bila vedno -1 oz. 0 ker polje "date" v workoutSessions ne obstaja.
+4. `RunSession.toFirestoreMap()`: GPS polja preimenovana v `lat/lng/alt/spd/acc/ts` — enotni format s `RunTrackerScreen`, `RunRouteStore` in `gps_points` subkolekcijo.
+**Zakaj:** Neskladja v poimenovanju so povzročala molče napačne vrednosti (profilne slike, streak, tedenska statistika) brez vidnih napak v logih.
+**Tveganje:**  nizko (backwards compat branje v FirestoreWorkoutRepository.getRunSessions() ohranjeno za stare formate)
 **Tveganje:**  nizko (dialog fix je pogojno renderiranje brez spremembe logike; sync je additive, enkraten, z graceful fallback)
