@@ -3,12 +3,16 @@ package com.example.myapplication.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.PlanResult
+import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
 import com.example.myapplication.domain.workout.GetBodyMetricsUseCase
 import com.example.myapplication.domain.workout.SwapPlanDaysUseCase
 import com.example.myapplication.domain.workout.UpdateBodyMetricsUseCase
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -64,14 +68,23 @@ sealed class BodyHomeIntent {
     ) : BodyHomeIntent()
 }
 
+/** Faza 4b: Event za Toast + HapticFeedback ko se streak poveča */
+data class StreakUpdateEvent(val newStreak: Int, val isRestDay: Boolean = false)
+
 class BodyModuleHomeViewModel(
     private val getBodyMetrics: GetBodyMetricsUseCase,
     private val updateBodyMetrics: UpdateBodyMetricsUseCase,
-    private val swapPlanDays: SwapPlanDaysUseCase
+    private val swapPlanDays: SwapPlanDaysUseCase,
+    /** Faza 4b: Za CompleteRestDay (Stretching) streak logiko */
+    private val gamificationUseCase: ManageGamificationUseCase? = null
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(BodyHomeUiState())
     val ui: StateFlow<BodyHomeUiState> = _ui.asStateFlow()
+
+    /** Faza 4b: Event za prikaz Toast "Daily Goal Met! Streak: X days 🔥" + HapticFeedback */
+    private val _streakUpdatedEvent = MutableSharedFlow<StreakUpdateEvent>(extraBufferCapacity = 1)
+    val streakUpdatedEvent: SharedFlow<StreakUpdateEvent> = _streakUpdatedEvent.asSharedFlow()
 
     fun handleIntent(intent: BodyHomeIntent) {
         when (intent) {
@@ -88,7 +101,29 @@ class BodyModuleHomeViewModel(
                 }
             }
             is BodyHomeIntent.CompleteRestDay -> {
-                 // Future implementation
+                /** Faza 4b: Stretching = Rest Day Goal Met → streak +1, XP +10, Toast + Haptic */
+                if (gamificationUseCase == null) {
+                    android.util.Log.w("BodyModuleHomeVM", "gamificationUseCase ni nastavljen — preskočim CompleteRestDay")
+                    return
+                }
+                viewModelScope.launch {
+                    _ui.value = _ui.value.copy(isLoading = true)
+                    try {
+                        val newStreak = gamificationUseCase.restDayInitiated()
+                        // Optimistično posodobi UI state
+                        _ui.value = _ui.value.copy(
+                            isWorkoutDoneToday = true,
+                            streakDays = newStreak,
+                            isLoading = false
+                        )
+                        // Sproži event za Toast + HapticFeedback v UI sloju
+                        _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
+                        android.util.Log.d("BodyModuleHomeVM", "✅ Rest Day stretching done. Novi streak: $newStreak")
+                    } catch (e: Exception) {
+                        _ui.value = _ui.value.copy(isLoading = false, errorMessage = e.message)
+                        android.util.Log.e("BodyModuleHomeVM", "❌ CompleteRestDay napaka: ${e.message}", e)
+                    }
+                }
             }
             is BodyHomeIntent.HideCompletionAnimation -> {
                 _ui.value = _ui.value.copy(showCompletionAnimation = false)
@@ -119,28 +154,29 @@ class BodyModuleHomeViewModel(
                     )
 
                     result.onSuccess { completionResult ->
-                        // Faza 13.2: osveži stats iz Firestorea prek LoadMetrics takoj po shranjevanju.
-                        // updateUserProgressAfterWorkout() je že zapisal nove vrednosti v transakciji,
-                        // zdaj samo preberemo in posodobimo UI state.
                         if (intent.email.isNotBlank()) {
                             try {
                                 getBodyMetrics.invoke(intent.email).collect { freshState ->
+                                    val newStreak = freshState.streakDays
                                     _ui.value = freshState.copy(
                                         showCompletionAnimation = !intent.isExtraWorkout,
                                         isWorkoutDoneToday = true,
                                         isLoading = false
                                     )
+                                    // Faza 4b: Sproži Toast + Haptic tudi za dokončan workout
+                                    _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = false))
                                 }
                             } catch (_: Exception) {
-                                // Fallback: optimistično posodobi lokalno
+                                val optimisticStreak = _ui.value.streakDays + 1
                                 _ui.value = _ui.value.copy(
                                     isLoading = false,
                                     isWorkoutDoneToday = true,
                                     showCompletionAnimation = !intent.isExtraWorkout,
                                     planDay = _ui.value.planDay + if (!intent.isExtraWorkout) 1 else 0,
-                                    streakDays = _ui.value.streakDays + 1,
+                                    streakDays = optimisticStreak,
                                     dailyKcal = _ui.value.dailyKcal + intent.totalKcal
                                 )
+                                _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = optimisticStreak, isRestDay = false))
                             }
                         } else {
                             _ui.value = _ui.value.copy(

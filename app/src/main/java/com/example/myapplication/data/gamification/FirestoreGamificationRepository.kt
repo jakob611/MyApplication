@@ -4,7 +4,6 @@ import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.persistence.FirestoreHelper
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
@@ -12,12 +11,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * Zlata koda - KMP ready Firestore implementacija za Gamification,
- * ki zamenjuje AchievementStore in rešuje Heisenbug, ker BERE IZ ENOSTEGA VIRA RESNICE (Firestore).
+ * Zlata koda - KMP ready Firestore implementacija za Gamification.
  * NIMA NITI ENE SharedPreferences ODVISNOSTI.
- */
-/**
- * Android implementation of GamificationRepository with direct Firestore integration.
+ *
+ * Faza 4b: dailyHistory mapa v glavnem doc (ne subcollection daily_logs).
+ * Streak +1 za Workout, +1 za Stretching (Rest day), 0 za Freeze, =0 brez freeze-a.
+ * checkIfFutureRestDaysExistAndSwap je IZBRISAN — auto-swap ni več potreben.
  */
 class FirestoreGamificationRepository : GamificationRepository {
 
@@ -79,43 +78,51 @@ class FirestoreGamificationRepository : GamificationRepository {
         }
     }
 
-    override suspend fun updateStreak(isWorkoutSuccess: Boolean) {
-        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
+    /**
+     * Faza 4b — Nova Streak logika (Daily Habit):
+     * +1 za workout DAN in uspešen trening.
+     * +1 za rest DAN in opravljeno raztezanje (activityType = "STRETCHING_DONE").
+     * De-dup: dailyHistory mapa v glavnem dokumentu (hitrejše branje, brez subcollection).
+     * @return Novi streak po posodobitvi (0 ob napaki)
+     */
+    override suspend fun updateStreak(isWorkoutSuccess: Boolean, activityType: String): Int {
+        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return 0
         val todayStr = getTodayStr()
 
-        try {
+        return try {
+            var computedStreak = 0
             db.runTransaction { transaction ->
-                // Skripta sedaj rešuje HEISENBUG preverjanja Double Logs:
-                val todayLogRef = userRef.collection("daily_logs").document(todayStr)
-                val existingLog = transaction.get(todayLogRef)
+                val snapshot = transaction.get(userRef)
 
-                if (existingLog.exists()) {
-                    // Że zabeleženo danes, preprečimo "Dvojno dodajanje preko UI vs Workerja"
-                    return@runTransaction
+                // De-dup: preveri dailyHistory mapo v glavnem dokumentu
+                @Suppress("UNCHECKED_CAST")
+                val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
+                if (dailyHistory.containsKey(todayStr)) {
+                    val existingStatus = dailyHistory[todayStr]?.toString() ?: "?"
+                    Log.d("GamificationRepo", "Danes že zabeleženo kot $existingStatus — preskočim.")
+                    computedStreak = snapshot.getLong("streak_days")?.toInt() ?: 0
+                    return@runTransaction null
                 }
 
-                val snapshot = transaction.get(userRef)
                 val currentStreak = snapshot.getLong("streak_days")?.toInt() ?: 0
-
-                // Streak SE POVEČA samo kadar je zares Workout success.
-                // Za Rest Day uporabnik ne dobi +1 streaka (kot si rekel: "na Rest stagnira").
+                // Streak +1 samo ob uspešnem dnevu (workout ali stretching)
                 val newStreak = if (isWorkoutSuccess) currentStreak + 1 else currentStreak
+                computedStreak = newStreak
 
-                // Update Streak in Last Streak Update Date
+                // Zapiši streak + dailyHistory.$todayStr — vse v enem update()
+                // Dot notation v update() = nested field path (Firestore standard)
                 transaction.update(userRef, mapOf(
                     "streak_days" to newStreak,
-                    "last_streak_update_date" to todayStr
+                    "last_streak_update_date" to todayStr,
+                    "dailyHistory.$todayStr" to activityType
                 ))
-
-                // Log success for the day
-                transaction.set(todayLogRef, mapOf(
-                    "date" to todayStr,
-                    "status" to if (isWorkoutSuccess) "WORKOUT_DONE" else "REST_DONE",
-                    "timestamp" to Clock.System.now().toEpochMilliseconds()
-                ))
+                null
             }.await()
+            Log.d("GamificationRepo", "✅ Streak posodobljen: $computedStreak ($activityType)")
+            computedStreak
         } catch (e: Exception) {
-            Log.e("GamificationRepo", "Failed to update streak.", e)
+            Log.e("GamificationRepo", "Napaka pri posodabljanju streaka.", e)
+            0
         }
     }
 
@@ -138,140 +145,60 @@ class FirestoreGamificationRepository : GamificationRepository {
         }
     }
 
+    /**
+     * Faza 4b — Polnočni streak check (brez auto-swap logike).
+     *
+     * Pravila:
+     * - Dan je zabeležen v dailyHistory mapi → ni akcije.
+     * - Dan ni zabeležen + ima freeze → auto-porabi freeze, zapiši "FROZEN".
+     * - Dan ni zabeležen + ni freeze → streak = 0, zapiši "MISSED".
+     *
+     * checkIfFutureRestDaysExistAndSwap() je IZBRISAN (Faza 4b).
+     */
     override suspend fun runMidnightStreakCheck() {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
         val yesterdayStr = getYesterdayStr()
 
         try {
-            val yesterdayLogRef = userRef.collection("daily_logs").document(yesterdayStr)
-            val logSnap = yesterdayLogRef.get().await()
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(userRef)
 
-            if (!logSnap.exists()) {
-                // Yesterday was MISSED (Ni ne workout logs, ne rest logs za včeraj)
-
-                // ZDAJ PRIDE POSEBNA LOGIKA - 1. POGLEDAMO ALI LAHKO SWAPAMO REST DAY
-                val canSwap = checkIfFutureRestDaysExistAndSwap(yesterdayStr)
-
-                if (canSwap) {
-                    // Swap uspešen, včeraj smo spremenili v REST day automatsko, streak ne pade.
-                    userRef.collection("daily_logs").document(yesterdayStr).set(mapOf(
-                        "date" to yesterdayStr,
-                        "status" to "REST_SWAPPED",
-                        "timestamp" to Clock.System.now().toEpochMilliseconds()
-                    )).await()
-                    Log.d("GamificationRepo", "Workout zgrešen, a je bil nadomeščen s Swap-om Rest dneva.")
-                    return
-                }
-
-                // NI VEČ REST DAYEV V TEDNU. 2. POGLEDAMO ČE IMAMO STREAK FREEZE.
-                val freezeUsed = consumeStreakFreeze()
-                if (freezeUsed) {
-                    // Uspešno uporabljen STREAK FREEZE.
-                    userRef.collection("daily_logs").document(yesterdayStr).set(mapOf(
-                        "date" to yesterdayStr,
-                        "status" to "FROZEN",
-                        "timestamp" to Clock.System.now().toEpochMilliseconds()
-                    )).await()
-                    Log.d("GamificationRepo", "Streak Freeze uspešno porabljen. Streak ohranjen.")
-                } else {
-                    // NO FREEZE. STREAK PADE NA 0.
-                    userRef.update("streak_days", 0).await()
-                    Log.d("GamificationRepo", "Ni rest dnevov in ni freeze-a. Streak je padel na 0.")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("GamificationRepo", "Midnight streak check failed.", e)
-        }
-    }
-
-    private suspend fun checkIfFutureRestDaysExistAndSwap(missedDateStr: String): Boolean {
-        Log.d("GamificationRepo", "Checking if we can auto-swap missed workout ($missedDateStr) for a future REST day in current week")
-        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return false
-        try {
-            // 1. Dobimo plan dokument
-            val docRef = db.collection("user_plans").document(userRef.id)
-            val snapshot = docRef.get().await()
-            if (!snapshot.exists()) return false
-
-            @Suppress("UNCHECKED_CAST")
-            val plansList = snapshot.get("plans") as? MutableList<Map<String, Any>> ?: return false
-            if (plansList.isEmpty()) return false
-            val currentPlan = plansList.first().toMutableMap()
-
-            // 2. Najdemo kateri dan v planu smo (preštejemo dni zabeležene v daily_logs)
-            val logsSnap = userRef.collection("daily_logs").get().await()
-            val currentPlanDayNum = logsSnap.documents.size + 1
-
-            @Suppress("UNCHECKED_CAST")
-            val weeksList = currentPlan["weeks"] as? MutableList<Map<String, Any>> ?: return false
-
-            var foundRestDay = false
-            var targetRestWeekIndex = -1
-            var targetRestDayIndex = -1
-            var missedWeekIndex = -1
-            var missedDayIndex = -1
-
-            // Iskanje včerajšnjega dneva
-            for ((wIndex, week) in weeksList.withIndex()) {
+                // Preveri dailyHistory mapo v glavnem dokumentu
                 @Suppress("UNCHECKED_CAST")
-                val days = week["days"] as? MutableList<Map<String, Any>> ?: continue
-                for ((dIndex, day) in days.withIndex()) {
-                    val dayNum = (day["dayNumber"] as? Number)?.toInt() ?: 0
-                    if (dayNum == currentPlanDayNum) {
-                         missedWeekIndex = wIndex
-                         missedDayIndex = dIndex
-                    }
-                    if (missedWeekIndex != -1 && dayNum > currentPlanDayNum) {
-                        val isRest = day["isRestDay"] as? Boolean ?: false
-                        if (isRest && !foundRestDay) {
-                           targetRestWeekIndex = wIndex
-                           targetRestDayIndex = dIndex
-                           foundRestDay = true
-                        }
-                    }
+                val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
+
+                if (dailyHistory.containsKey(yesterdayStr)) {
+                    // Včeraj je bil uspešno zabeležen — ni akcije
+                    Log.d("GamificationRepo", "Včeraj ($yesterdayStr) zabeležen: ${dailyHistory[yesterdayStr]}")
+                    return@runTransaction null
                 }
-            }
 
-            if (!foundRestDay || missedWeekIndex == -1) return false
+                // Včerajšnji dan ni bil opravljen
+                val currentFreezes = (snapshot.getLong("streak_freezes") ?: 0L).toInt()
 
-            // Perform SWAP
-            @Suppress("UNCHECKED_CAST")
-            val missedWeek = (weeksList[missedWeekIndex] as Map<String, Any>).toMutableMap()
-            @Suppress("UNCHECKED_CAST")
-            val missedDays = (missedWeek["days"] as List<Map<String, Any>>).map { it.toMutableMap() }.toMutableList()
-
-            @Suppress("UNCHECKED_CAST")
-            val targetWeek = if (missedWeekIndex == targetRestWeekIndex) missedWeek else (weeksList[targetRestWeekIndex] as Map<String, Any>).toMutableMap()
-            @Suppress("UNCHECKED_CAST")
-            val targetDays = if (missedWeekIndex == targetRestWeekIndex) missedDays else (targetWeek["days"] as List<Map<String, Any>>).map { it.toMutableMap() }.toMutableList()
-
-            // missedDay postane Rest
-            missedDays[missedDayIndex]["isRestDay"] = true
-            missedDays[missedDayIndex]["isSwapped"] = true
-
-            // future day postane Workout (podeduje focus)
-            val originalFocus = missedDays[missedDayIndex]["focusLabel"] ?: ""
-            targetDays[targetRestDayIndex]["isRestDay"] = false
-            targetDays[targetRestDayIndex]["focusLabel"] = originalFocus
-            targetDays[targetRestDayIndex]["isSwapped"] = true
-
-            missedWeek["days"] = missedDays
-            weeksList[missedWeekIndex] = missedWeek
-
-            if (missedWeekIndex != targetRestWeekIndex) {
-                 targetWeek["days"] = targetDays
-                 weeksList[targetRestWeekIndex] = targetWeek
-            }
-
-            currentPlan["weeks"] = weeksList
-            plansList[0] = currentPlan
-
-            docRef.update("plans", plansList).await()
-            return true
-
+                if (currentFreezes > 0) {
+                    // Auto-porabi Streak Freeze
+                    transaction.update(userRef, mapOf(
+                        "streak_freezes" to (currentFreezes - 1),
+                        "dailyHistory.$yesterdayStr" to "FROZEN"
+                    ))
+                    Log.d("GamificationRepo", "❄️ Streak Freeze auto-porabljen. Ostalo: ${currentFreezes - 1}")
+                } else {
+                    // Ni freeze-a → streak pade na 0
+                    transaction.update(userRef, mapOf(
+                        "streak_days" to 0,
+                        "dailyHistory.$yesterdayStr" to "MISSED"
+                    ))
+                    Log.d("GamificationRepo", "💔 Ni freeze-a. Streak je padel na 0.")
+                }
+                null
+            }.await()
         } catch (e: Exception) {
-            Log.e("GamificationRepo", "Swap algorithem padel", e)
-            return false
+            Log.e("GamificationRepo", "Polnočni streak check je spodletel.", e)
         }
     }
+
 }
+
+
+

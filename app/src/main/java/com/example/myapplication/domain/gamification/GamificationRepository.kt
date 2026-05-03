@@ -25,8 +25,10 @@ interface GamificationRepository {
      * Povečaj ali ohrani streak. Zažene se, ko je uspešno zabeleženo,
      * in pod kapuco reši tisti "Heisenbug".
      * @param isWorkoutSuccess Je bil trening ali rest day uspešno obkljukan danes?
+     * @param activityType Tip aktivnosti za dailyHistory mapo: "WORKOUT_DONE" ali "STRETCHING_DONE"
+     * @return Novi streak po posodobitvi (0 ob napaki)
      */
-    suspend fun updateStreak(isWorkoutSuccess: Boolean)
+    suspend fun updateStreak(isWorkoutSuccess: Boolean, activityType: String = "WORKOUT_DONE"): Int
 
     /**
      * Ozadičen worker (polnoč) reče repositoryju: "Preveri in resetiraj, če manjkajo workouti".

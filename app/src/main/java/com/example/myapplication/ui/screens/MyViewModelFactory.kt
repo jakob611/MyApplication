@@ -60,7 +60,8 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(workoutRepo, settingsRepo),
                 UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
-                SwapPlanDaysUseCase()
+                SwapPlanDaysUseCase(),
+                gamificationUseCase  // Faza 4b: za CompleteRestDay stretching logiko
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

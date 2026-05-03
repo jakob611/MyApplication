@@ -67,11 +67,22 @@ fun BodyModuleHomeScreen(
 
     // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
     // Faza 13.2: LaunchedEffect(Unit) se požene ob vsaki re-kompoziciji zaslona (po navigaciji nazaj).
-    // updateUserProgressAfterWorkout() je v tem trenutku že zaključil Firestore transakcijo,
-    // zato bomo tu prebrali sveže vrednosti plan_day in streak_days.
     LaunchedEffect(Unit) {
         val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
         vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail))
+    }
+
+    // Faza 4b: Toast + HapticFeedback ko se streak poveča (workout ali stretching)
+    LaunchedEffect(vm) {
+        vm.streakUpdatedEvent.collect { event ->
+            // S24 Ultra natančna vibracija — SUCCESS tip
+            com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                context,
+                com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
+            )
+            val msg = "Daily Goal Met! Streak: ${event.newStreak} days 🔥"
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     val showKnowledge = remember { mutableStateOf(false) }

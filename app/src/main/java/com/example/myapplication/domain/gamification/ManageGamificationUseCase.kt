@@ -40,7 +40,7 @@ class ManageGamificationUseCase(
         }
     }
 
-    /** Uporabnik je uspeĹˇno zakljuŤil workout */
+    /** Uporabnik je uspešno zaključil workout */
     suspend fun completeWorkoutSession(calKcal: Int) {
         // UI sedaj klice samo TO!
         repository.updateStreak(isWorkoutSuccess = true)
@@ -123,10 +123,18 @@ class ManageGamificationUseCase(
         return emptyList() // delegated to future KMP sync logic
     }
 
-    /** Uporabnik si vzame prosto, zato dobimo nekaj XP, ampak streak ohranimo. */
-    suspend fun restDayInitiated() {
-        repository.updateStreak(isWorkoutSuccess = true) // Rest Day je veljaven uspeh dneva
+    /**
+     * Faza 4b: Uporabnik je opravil raztezanje na rest dnevu.
+     * Streak +1, XP +10. Shrani status "STRETCHING_DONE" v dailyHistory mapo.
+     * @return Novi streak (za Toast "Daily Goal Met! Streak: X days 🔥")
+     */
+    suspend fun restDayInitiated(): Int {
+        val newStreak = repository.updateStreak(
+            isWorkoutSuccess = true,
+            activityType = "STRETCHING_DONE"
+        )
         repository.awardXP(10, "REST_DAY")
+        return newStreak
     }
 
     /** Worker (ob polnoči) pozove, da naj bi bil tisti dan odtreniran ali zamujen. */
