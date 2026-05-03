@@ -12,9 +12,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * KMP Migration backlog (Faza 10): Ta razred je tesno vezan na Android Context.
- * Migracija na čisto KMP bo mögoča ko bo SettingsManager v celoti zamenjal SharedPreferences.
- * Sledeno v CODE_ISSUES.md — "UserPreferencesRepository KMP migration".
+ * TODO: Migration to pure KMP. This is currently tightly coupled with Context.
  */
 class UserPreferencesRepository(private val context: Context) {
 
@@ -90,8 +88,7 @@ class UserPreferencesRepository(private val context: Context) {
      * ⚠️ DELNO DEPRECATED (Faza 9.2): Ta funkcija piše v bm_prefs kot lokalni fallback cache.
      * Resnični SSOT je Firestore prek UserProfileManager.saveWorkoutStats().
      * Ostane funkcionalna samo za offline fallback v GetBodyMetricsUseCase.getPlanDay().
-     * Faza 10 backlog: Odstrani bm_prefs zapis ko GetBodyMetricsUseCase ne bo več potreboval localnega fallbacka.
-     * (sledeno v CODE_ISSUES.md — "bm_prefs deprecation backlog")
+     * TODO (Faza 10): Odstrani bm_prefs zapis ko GetBodyMetricsUseCase ne bo več potreboval localnega fallbacka.
      */
     suspend fun updateWorkoutStats(completedDay: Int, timestamp: Long) {
         bmSettings.putInt("plan_day", completedDay)

@@ -15,15 +15,15 @@ enum class ActivityType(
     val showSpeed: Boolean,     // prikaži hitrost (km/h)
     val unitLabel: String       // "km", "km" ali "m" za smučanje
 ) {
-    RUN(       "Run",        "🏃", 8.0,   true,  true,  true,  "km"),
-    WALK(      "Walk",       "🚶", 3.5,   false, true,  true,  "km"),
-    HIKE(      "Hike",       "🥾", 5.3,   true,  false, true, "km"),
+    RUN(       "Run",        "", 8.0,   true,  true,  true,  "km"),
+    WALK(      "Walk",       "", 3.5,   false, true,  true,  "km"),
+    HIKE(      "Hike",       "", 5.3,   true,  false, true, "km"),
     SPRINT(    "Sprint",     "⚡", 14.0,  false, true,  true,  "km"),
-    CYCLING(   "Cycling",    "🚴", 6.8,   true,  false, true,  "km"),
+    CYCLING(   "Cycling",    "", 6.8,   true,  false, true,  "km"),
     SKIING(    "Skiing",     "⛷️", 7.0,   true,  false, true,  "km"),
-    SNOWBOARD( "Snowboard",  "🏂", 5.5,   true,  false, true,  "km"),
+    SNOWBOARD( "Snowboard",  "", 5.5,   true,  false, true,  "km"),
     SKATING(   "Skating",    "⛸️", 7.5,   false, false, true,  "km"),
-    NORDIC(    "Nordic Walk","🎿", 4.8,   true,  true,  true, "km");
+    NORDIC(    "Nordic Walk","", 4.8,   true,  true,  true, "km");
 
     companion object {
         fun fromString(s: String?): ActivityType =
@@ -103,40 +103,30 @@ data class RunSession(
     /**
      * Convert to Firestore-compatible map for storage.
      */
-    /**
-     * Pretvori RunSession v Firestore-kompatibilno mapo.
-     * 🗜️ GPS točke se pred shranjevanjem kompresirajo z RDP algoritmom (≤500 točk),
-     *    da se prepreči FAILED_PRECONDITION crash pri Firestore 1 MB limitu.
-     *    Originalno število točk se shrani v `pointsCount` za statistiko.
-     */
-    fun toFirestoreMap(): Map<String, Any> {
-        val compressed = com.example.myapplication.utils.RouteCompressor.compress(polylinePoints)
-        return mapOf(
-            "id" to id,
-            "userId" to userId,
-            "startTime" to startTime,
-            "endTime" to endTime,
-            "durationSeconds" to durationSeconds,
-            "distanceMeters" to distanceMeters,
-            "maxSpeedMps" to maxSpeedMps,
-            "avgSpeedMps" to avgSpeedMps,
-            "polylinePoints" to compressed.map { point ->
-                mapOf(
-                    "lat" to point.latitude,
-                    "lng" to point.longitude,
-                    "alt" to point.altitude,
-                    "spd" to point.speed,
-                    "acc" to point.accuracy,
-                    "ts" to point.timestamp
-                )
-            },
-            "pointsCount" to polylinePoints.size, // originalno število za statistiko
-            "createdAt" to createdAt,
-            "caloriesKcal" to caloriesKcal,
-            "elevationGainM" to elevationGainM,
-            "elevationLossM" to elevationLossM,
-            "activityType" to activityType.name,
-            "isSmoothed" to isSmoothed
-        )
-    }
+    fun toFirestoreMap(): Map<String, Any> = mapOf(
+        "id" to id,
+        "userId" to userId,
+        "startTime" to startTime,
+        "endTime" to endTime,
+        "durationSeconds" to durationSeconds,
+        "distanceMeters" to distanceMeters,
+        "maxSpeedMps" to maxSpeedMps,
+        "avgSpeedMps" to avgSpeedMps,
+        "polylinePoints" to polylinePoints.map { point ->
+            mapOf(
+                "latitude" to point.latitude,
+                "longitude" to point.longitude,
+                "altitude" to point.altitude,
+                "speed" to point.speed,
+                "accuracy" to point.accuracy,
+                "timestamp" to point.timestamp
+            )
+        },
+        "createdAt" to createdAt,
+        "caloriesKcal" to caloriesKcal,
+        "elevationGainM" to elevationGainM,
+        "elevationLossM" to elevationLossM,
+        "activityType" to activityType.name,
+        "isSmoothed" to isSmoothed
+    )
 }

@@ -135,8 +135,7 @@ class AppViewModel(
                         }
 
                         syncPrefs.edit().putBoolean("initial_sync_done_$initialSyncUid", true).apply()
-                        // PII varnost: UID se NE izpisuje v log
-                        Log.i("AppViewModel", "✅ InitialSync končan")
+                        Log.i("AppViewModel", "✅ InitialSync končan za uid=$initialSyncUid")
 
                         withContext(Dispatchers.Main) {
                             _syncStatusMessage.value = "Profile Ready! ✓"
@@ -159,12 +158,6 @@ class AppViewModel(
                 }
             } catch (e: Exception) {
                 Log.e("AppViewModel", "InitialSync napaka: ${e.message}")
-                // Kritična Firestore napaka (npr. PERMISSION_DENIED) — sporoči uporabniku
-                // Opomba: context se prenese prek startInitialSync parametra, kar je varno
-                // ker je lifecycle vezana na Activity in je AppViewModel Application-scoped.
-                com.example.myapplication.utils.FirestoreErrorHandler.handle(
-                    context, e, "AppViewModel.startInitialSync"
-                )
             } finally {
                 _isSyncing.value = false
                 _isProfileReady.value = true

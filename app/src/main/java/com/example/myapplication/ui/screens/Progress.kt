@@ -1040,29 +1040,28 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
 
                             progressViewModel.awardWeightLogXP()
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_xp_earned), android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, "+50 XP Earned!", android.widget.Toast.LENGTH_SHORT).show()
                             }
 
                             // Avtomatsko posodobi nutrition plan z novo težo
-                            // PII varnost: uid in telesna teža se NE izpisujeta v log
-                            Log.d("ProgressScreen", "🔥 Starting nutrition plan recalculation")
+                            Log.d("ProgressScreen", " Starting nutrition plan recalculation for uid=$uid, weight=$wKg")
                             val success = com.example.myapplication.persistence.NutritionPlanStore.recalculateNutritionPlan(
                                 uid, wKg
                             )
-                            Log.d("ProgressScreen", "🔥 Recalculation result: $success")
+                            Log.d("ProgressScreen", " Recalculation result: $success")
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 if (success) {
-                                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_nutrition_plan_updated), android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, "✅ Nutrition plan updated!", android.widget.Toast.LENGTH_LONG).show()
                                 } else {
-                                    android.widget.Toast.makeText(context, context.getString(com.example.myapplication.R.string.toast_missing_plan_data), android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", android.widget.Toast.LENGTH_LONG).show()
                                 }
                                 onSaved()
                                 onDismiss()
                             }
                         } catch (e: Exception) {
-                            Log.e("ProgressScreen", "🔥 ERROR updating nutrition plan", e)
+                            Log.e("ProgressScreen", " ERROR updating nutrition plan", e)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "❌ ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, "❌ Failed to update nutrition plan: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                                 saving = false
                             }
                         }
@@ -1247,7 +1246,7 @@ private fun monthName(month: Int): String = when (month) {
 }
 
 /**
- * 🔮 Weight Destiny — motivacijska kartica z vizualnim trendom in What-if simulatorjem.
+ *  Weight Destiny — motivacijska kartica z vizualnim trendom in What-if simulatorjem.
  * Nadomešča staro WeightPredictionCard (Faza 7.1).
  */
 @Composable
@@ -1269,15 +1268,15 @@ private fun WeightDestinyCard(
     // Dynamic message based on C (confidence) and trend
     val (msgEmoji, msgText) = when {
         confidence < 0.5 ->
-            "🧪" to "Learning your metabolism… (${prediction.activeDaysInLastWeek}/7 days of data)"
+            "" to "Learning your metabolism… (${prediction.activeDaysInLastWeek}/7 days of data)"
         balance < -50 && prediction.goalDateStr != null ->
-            "🎯" to "Great progress! Predicted goal date: ${prediction.goalDateStr}"
+            "" to "Great progress! Predicted goal date: ${prediction.goalDateStr}"
         balance < -50 ->
             "✅" to "You're on track! Keep up this pace."
         balance > 50 && prediction.goalDateStr != null ->
-            "📈" to "Gaining mass. Predicted goal date: ${prediction.goalDateStr}"
+            "" to "Gaining mass. Predicted goal date: ${prediction.goalDateStr}"
         balance > 50 ->
-            "📈" to "You are gaining body mass. Adjust nutrition to match your goal."
+            "" to "You are gaining body mass. Adjust nutrition to match your goal."
         else ->
             "⚖️" to "You are in energy balance. Keep it up!"
     }
@@ -1304,7 +1303,7 @@ private fun WeightDestinyCard(
 
             // ── Header ──────────────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🔮", fontSize = 20.sp)
+                Text("", fontSize = 20.sp)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     "Weight Destiny",
@@ -1353,7 +1352,7 @@ private fun WeightDestinyCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🎲", fontSize = 14.sp)
+                        Text("", fontSize = 14.sp)
                         Spacer(Modifier.width(4.dp))
                         Text(
                             "What-if Simulator",
@@ -1404,10 +1403,10 @@ private fun WeightDestinyCard(
                     daysDelta != null && daysDelta < 0 ->
                         "⚠️ Cilj bi dosegel ${-daysDelta} dni pozneje."
                     whatIfDaysToGoal != null ->
-                        "🎯 Nov čas do cilja: ~$whatIfDaysToGoal dni"
+                        " Nov čas do cilja: ~$whatIfDaysToGoal dni"
                     else -> {
                         val adj30 = prediction.emaWeightKg + (adjustedBalance * 30.0) / 7700.0
-                        "📊 Čez 30 dni: ${String.format(Locale.US, "%.1f %s", convert(adj30), unit)}"
+                        " Čez 30 dni: ${String.format(Locale.US, "%.1f %s", convert(adj30), unit)}"
                     }
                 }
                 Text(
@@ -1543,7 +1542,7 @@ private fun WeightTrendLine(
             }
             if (goalWeightKg != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🎯 Cilj", fontSize = 10.sp, color = goalColor)
+                    Text(" Cilj", fontSize = 10.sp, color = goalColor)
                     Text(
                         String.format(Locale.US, "%.1f %s", goalWeightKg, unit),
                         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = goalColor

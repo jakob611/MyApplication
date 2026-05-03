@@ -53,7 +53,7 @@ object UserProfileManager {
     private const val KEY_NIGHT_OWL = "night_owl_workouts"
     private const val KEY_LAST_LOGIN = "last_login_date"
     private const val KEY_TOTAL_PLANS = "total_plans_created"
-    private const val KEY_PROFILE_PICTURE = "profilePictureUrl"
+    private const val KEY_PROFILE_PICTURE = "profile_picture_url"
 
     private fun getSettings() = SettingsManager.provider.getSettings(PREFS_NAME)
 
@@ -184,26 +184,6 @@ object UserProfileManager {
         }
     }
 
-    /**
-     * Shrani profil v Firestore z zaščito pred konflikti med napravami.
-     *
-     * ## Multi-device Conflict Resolution strategija
-     * Firestore **ne podpira** optimistične zaklepanje (OCC) nativno za profile.
-     * Zaščita je implementirana na dveh ravneh:
-     *
-     * 1. **SetOptions.merge()** — ta klic NIKOLI ne prepiše celotnega dokumenta.
-     *    Posodablja samo polja, ki so eksplicitno nastavljena v `data` mapi.
-     *    Polja, ki niso v mapi (xp, followers, following …), ostanejo nespremenjena.
-     *    → Naprava A in Naprava B lahko hkrati shranjujeta različna polja brez rac condition.
-     *
-     * 2. **Izključena polja** — `xp`, `followers`, `following` so namerno IZVZETI
-     *    iz te mape in se posodabljajo IZKLJUČNO prek Firestore atomarnih transakcij
-     *    (runTransaction / FieldValue.increment) v AchievementStore / FollowStore.
-     *    → Prepreči "stale read" scenarij kjer Naprava B prepiše vrednost, ki je
-     *      Naprava A med tem že atomarno zvišala.
-     *
-     * @param batch Opcijalni WriteBatch za atomarno shranjevanje skupaj z XP/badges
-     */
     suspend fun saveProfileFirestore(profile: UserProfile, batch: com.google.firebase.firestore.WriteBatch? = null) {
         if (profile.email.isBlank()) return
         val uid = Firebase.auth.currentUser?.uid ?: return
@@ -241,7 +221,7 @@ object UserProfileManager {
             KEY_SHOW_CHALLENGES to profile.showChallenges,
             KEY_SHOW_FOLLOWERS to profile.showFollowers,
             KEY_SHARE_ACTIVITIES to profile.shareActivities,
-            KEY_PROFILE_PICTURE to profile.profilePictureUrl
+            "profilePictureUrl" to profile.profilePictureUrl
         )
 
         if (profile.height != null && profile.height > 0) data["height"] = profile.height

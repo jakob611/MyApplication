@@ -5,9 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
-    // Faza 3: Room — kapt se je izkazal za nekompatibilnega s Kotlin 2.2.x + AGP 9.2
-    // Kadar bo znan točen KSP version za kotlin 2.2.10, zamenjaj z:
-    // id("com.google.devtools.ksp") version "2.2.10-1.0.XX"
+    // KSP ni na voljo za Kotlin 2.2.10; kapt ne dela (K1 removed).
+    // AppDatabase_Impl implementiran ročno v AppDatabase_Impl.kt
 }
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -150,17 +149,10 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // Room — Offline-First baza podatkov (Faza 3)
+    // AppDatabase_Impl je ročno napisan (KSP ni na voljo za Kotlin 2.2.10, kapt ne dela).
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")       // Flow + coroutines razširitve
-    annotationProcessor("androidx.room:room-compiler:$roomVersion") // Za KSP: zamenjaj z ksp(...)
+    implementation("androidx.room:room-ktx:$roomVersion")
+    // room-compiler ni potreben — AppDatabase_Impl.kt je v src/main/java
 }
 
-// Faza 3: Room kapt konfiguracija (samo aktiven kadar kapt plugin je aktiven)
-// kapt {
-//     correctErrorTypes = true
-//     arguments {
-//         arg("room.schemaLocation", "$projectDir/schemas")
-//         arg("room.incremental", "true")
-//     }
-// }

@@ -71,8 +71,7 @@ object FirestoreHelper {
 
         // validation of email as document id
         if (email.isNullOrBlank()) {
-            // PII varnost: UID se NE izpisuje v log
-            Log.w(TAG, "User has no email, falling back to UID")
+            Log.w(TAG, "User has no email, falling back to UID: $uid")
             cachedResolvedId = uid
             cachedForUid = uid
             return db.collection("users").document(uid)
@@ -94,8 +93,7 @@ object FirestoreHelper {
             // Check if UID doc exists (Legacy data)
             val uidDoc = uidRef.get().await()
             if (uidDoc.exists()) {
-                // PII varnost: email se NE izpisuje v log
-                Log.i(TAG, "Legacy UID document found. Migrating to Email document.")
+                Log.i(TAG, "Legacy UID document found. Migrating to Email: $email")
 
                 // MIGRATE DATA - copy top-level document
                 val data = uidDoc.data

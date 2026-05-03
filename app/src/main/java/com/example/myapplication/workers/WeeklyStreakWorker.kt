@@ -1,7 +1,6 @@
 package com.example.myapplication.workers
 import android.content.Context
 import android.util.Log
-import com.example.myapplication.BuildConfig
 import androidx.work.CoroutineWorker
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
@@ -25,10 +24,8 @@ class WeeklyStreakWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
     override suspend fun doWork(): Result {
-        // Preveri prisotnost prijavljenega uporabnika (brez shranjevanja emaila)
-        Firebase.auth.currentUser?.email ?: return Result.success()
-        // PII varnost: email se NE izpisuje v log (GDPR)
-        Log.d(TAG, "Daily streak check running")
+        val email = Firebase.auth.currentUser?.email ?: return Result.success()
+        Log.d(TAG, "Daily streak check running for $email")
         try {
             val repository = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
             val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repository)
@@ -73,11 +70,6 @@ class WeeklyStreakWorker(
             scheduleNext(context)
         }
         fun simulateDayPass(context: Context) {
-            // 🔐 Samo DEBUG build — v produkciji je onemogočeno
-            if (!BuildConfig.DEBUG) {
-                Log.w(TAG, "simulateDayPass: dostopno samo v DEBUG načinu")
-                return
-            }
             val request = OneTimeWorkRequestBuilder<WeeklyStreakWorker>()
                 .setInitialDelay(0, TimeUnit.SECONDS)
                 .build()

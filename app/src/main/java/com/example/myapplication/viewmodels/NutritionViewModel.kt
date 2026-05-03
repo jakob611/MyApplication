@@ -17,10 +17,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -37,6 +33,7 @@ data class DailyTotals(
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase
 ) : ViewModel() {
+
     private val _healthConnectSyncTrigger = MutableStateFlow(0)
     val healthConnectSyncTrigger: StateFlow<Int> = _healthConnectSyncTrigger.asStateFlow()
 
@@ -58,7 +55,7 @@ class NutritionViewModel(
             delay(800L)
             try {
                 com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(newValue.coerceAtLeast(0), todayId)
-                Log.d("NutritionVM", "💧 Water synced to Firestore: ${newValue}ml")
+                Log.d("NutritionVM", " Water synced to Firestore: ${newValue}ml")
             } catch (e: Exception) {
                 Log.e("NutritionVM", "Failed to sync water to Firestore", e)
                 _localWaterMl.value = null // rollback na server vrednost
@@ -101,7 +98,20 @@ class NutritionViewModel(
 
     private val uidFlow = MutableStateFlow<String?>(com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId())
 
-    @OptIn(ExperimentalCoroutinesApi::class)
+    /**
+     * clearUser() — pokliči ob odjavi, da se prekine Firestore listener in počistijo lokalni podatki.
+     * Nastavi uidFlow = null → flatMapLatest emitira flowOf(null) → listener se samodejno prekliče.
+     */
+    fun clearUser() {
+        waterSyncJob?.cancel()
+        waterSyncJob = null
+        uidFlow.value = null
+        _firestoreFoods.value = emptyList()
+        _localWaterMl.value = null
+        _uiState.value = DailyTotals()
+        Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje počiščeno")
+    }
+
     val customMealsState: StateFlow<com.google.firebase.firestore.QuerySnapshot?> = uidFlow.flatMapLatest { uid ->
         if (uid == null) flowOf(null)
         else com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeCustomMeals(uid)
@@ -191,7 +201,7 @@ class NutritionViewModel(
     fun applyHybridTDEE(hybridTDEE: Int) {
         if (hybridTDEE > 800 && _baseTdee.value > 0.0) {
             _baseTdee.value = hybridTDEE.toDouble()
-            Log.d("NutritionVM", "🔄 applyHybridTDEE: $hybridTDEE kcal → baseTdee updated")
+            Log.d("NutritionVM", " applyHybridTDEE: $hybridTDEE kcal → baseTdee updated")
         }
     }
 
@@ -201,59 +211,39 @@ class NutritionViewModel(
         observeDailyTotals()
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeDailyTotals() {
-        // flatMapLatest: ko se uid spremeni (logout → null, login → uid),
-        // samodejno prekliče stari Firestore listener in odpre novega.
-        // Odpravlja nested-collect bug (stari listener ostal aktiven po logouter).
-        uidFlow
-            .flatMapLatest { uid ->
-                if (uid == null) flowOf(null)
-                else {
-                    val todayId = Clock.System.now()
-                        .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-                    com.example.myapplication.data.nutrition.FoodRepositoryImpl
-                        .observeDailyLog(uid, todayId)
+        viewModelScope.launch {
+            uidFlow.collect { uid ->
+                if (uid != null) {
+                    val todayId = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+                    com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
+                        Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
+
+                        val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+                        val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
+                        val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+
+                        updateDailyTotals(
+                            consumed = serverConsumed,
+                            burned   = serverBurned,
+                            water    = serverWater
+                        )
+                        // Debug store — posodobi surove vrednosti za DebugDashboard
+                        com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
+                        com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
+                        com.example.myapplication.debug.NutritionDebugStore.lastWaterMl = serverWater
+
+                        // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
+                        val rawItems = doc.get("items") as? List<*>
+                        if (rawItems != null) {
+                            val foods = parseRawItemsToTrackedFoods(rawItems)
+                            if (foods.isNotEmpty()) _firestoreFoods.value = foods
+                        }
+                        // ────────────────────────────────────────────────────────────────────
+                    }
                 }
             }
-            .onEach { doc ->
-                if (doc == null) return@onEach
-                Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
-
-                val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
-                val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
-                val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
-
-                updateDailyTotals(
-                    consumed = serverConsumed,
-                    burned   = serverBurned,
-                    water    = serverWater
-                )
-                // Debug store — posodobi surove vrednosti za DebugDashboard
-                com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
-                com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
-                com.example.myapplication.debug.NutritionDebugStore.lastWaterMl = serverWater
-
-                // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
-                val rawItems = doc.get("items") as? List<*>
-                if (rawItems != null) {
-                    val foods = parseRawItemsToTrackedFoods(rawItems)
-                    if (foods.isNotEmpty()) _firestoreFoods.value = foods
-                }
-            }
-            .launchIn(viewModelScope)
-    }
-
-    /**
-     * Ob odjavi (logout) nastavi uid na null → flatMapLatest samodejno
-     * prekliče obstoječi Firestore listener. Kliči iz logout handlera.
-     */
-    fun clearUser() {
-        uidFlow.value = null
-        _firestoreFoods.value = emptyList()
-        _localWaterMl.value = null
-        waterSyncJob?.cancel()
-        Log.d("NutritionVM", "🔒 clearUser: Firestore listener ustavljen")
+        }
     }
 
     /**
@@ -295,8 +285,7 @@ class NutritionViewModel(
         }
 
     fun syncHealthConnectNow(context: Context) {
-        // Dispatchers.IO: Health Connect branje + Firestore transakcija ne blokirata UI niti
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val syncUseCase = com.example.myapplication.domain.workout.SyncHealthConnectUseCase()
             syncUseCase(context)
         }
