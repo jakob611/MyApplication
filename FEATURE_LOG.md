@@ -353,3 +353,14 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** Neskladja v poimenovanju so povzročala molče napačne vrednosti (profilne slike, streak, tedenska statistika) brez vidnih napak v logih.
 **Tveganje:**  nizko (backwards compat branje v FirestoreWorkoutRepository.getRunSessions() ohranjeno za stare formate)
 **Tveganje:**  nizko (dialog fix je pogojno renderiranje brez spremembe logike; sync je additive, enkraten, z graceful fallback)
+
+## 2026-05-03 — Faza 4b: Daily Habit Streak sistem + čiščenje kode
+**Datoteke:** `data/gamification/FirestoreGamificationRepository.kt`, `domain/gamification/GamificationRepository.kt`, `domain/gamification/ManageGamificationUseCase.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `ui/screens/BodyModuleHomeScreen.kt`, `ui/screens/MyViewModelFactory.kt`
+**Kaj:**
+1. Nova Streak logika: +1 za Workout, +1 za Stretching (Rest Dan), auto Freeze, =0 brez freeze-a
+2. `checkIfFutureRestDaysExistAndSwap()` popolnoma izbrisan — app ne prestavi več dni v PlanPath-u
+3. dailyHistory mapa v glavnem Firestore dokumentu (ne subcollection) za status vsak dan (WORKOUT_DONE/STRETCHING_DONE/FROZEN/MISSED)
+4. `BodyModuleHomeViewModel.CompleteRestDay` implementiran — pokliče `restDayInitiated()`, vrne streak za Toast
+5. Toast "Daily Goal Met! Streak: X days 🔥" + S24 Ultra HapticFeedback.SUCCESS ob vsakem streak povečanju
+**Zakaj:** Stari streak je nagrajeval samo workoutje; rest dnevi niso šteli. Swap logika je povzročala nenadzorovane spremembe plana. dailyHistory mapa je cenejša od daily_logs subcollection (1 doc read vs. subcollection query).
+**Tveganje:**  srednje (nova dailyHistory mapa je nov Firestore field; stari daily_logs subcollection podatki se ne migrirajo — novi zapisi gredo v mapo, stari ostanejo v subcollection ampak niso več berljivi za streak check)

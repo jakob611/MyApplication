@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-02  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4 zaključena)**
+**Zadnja posodobitev:** 2026-05-03  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4b zaključena)**
 
 ---
 
@@ -68,6 +68,49 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-03 — Faza 4b: Daily Habit Streak sistem + čiščenje kode
+
+**Nova Streak logika (Daily Habit):**
+- ✅ `Streak +1` → Workout dan + opravljen trening (`WORKOUT_DONE` v `dailyHistory`)
+- ✅ `Streak +1` → Rest dan + opravljeno raztezanje (Stretching kartica → `STRETCHING_DONE`)
+- ✅ `Streak +0 (Freeze)` → zamujeni dan + Streak Freeze razpoložljiv (auto-poraba)
+- ✅ `Streak = 0` → zamujeni dan + ni freeze-a
+
+**Odstranjeno:**
+- ✅ `checkIfFutureRestDaysExistAndSwap()` — **IZBRISAN** iz `FirestoreGamificationRepository.kt`
+  Aplikacija ne prestavi več dni v PlanPath-u samodejno. Streak pade ali porabi freeze.
+- ✅ `daily_logs` subcollection za streak tracking → zamenjano z `dailyHistory` mapa v glavnem doc
+  Razlog: hitrejše branje (1 document read namesto subcollection query), nižji Firestore stroški
+- ✅ `currentPlanDayNum = logsSnap.documents.size + 1` — odstranjeno skupaj s swap funkcijo
+
+**Novo — Firestore Schema:**
+```
+users/{uid}: {
+  dailyHistory: {
+    "2026-05-03": "WORKOUT_DONE",   // +1 streak
+    "2026-05-02": "STRETCHING_DONE", // +1 streak (rest day)
+    "2026-05-01": "FROZEN",          // freeze porabljen
+    "2026-04-30": "MISSED"           // streak = 0
+  }
+}
+```
+
+**Stretching Aktivacija:**
+- ✅ `BodyModuleHomeViewModel.CompleteRestDay` — implementiran (bil `// Future implementation`)
+- ✅ Pokliče `ManageGamificationUseCase.restDayInitiated()` → `updateStreak("STRETCHING_DONE")` + XP +10
+- ✅ Optimistično posodobi `isWorkoutDoneToday = true`, `streakDays = newStreak`
+- ✅ `StreakUpdateEvent` SharedFlow emitiran za Toast + HapticFeedback v Screen-u
+
+**UX Add-on (Toast + Haptic):**
+- ✅ `BodyModuleHomeScreen`: `LaunchedEffect(vm)` zbira `streakUpdatedEvent`
+- ✅ `HapticFeedback.SUCCESS` — S24 Ultra precizna vibracija ob vsaki streak posodobitvi
+- ✅ Toast: `"Daily Goal Met! Streak: X days 🔥"` (Workout IN Stretching pot)
+
+**Technical Fixes:**
+- ✅ `plan_day` se bere iz Firestore profila (`plan_day` field) — `GetBodyMetricsUseCase` to dela že od Faze 13.2
+- ✅ `updateStreak()` vrne `Int` (novi streak) — omogoča Toast z realnim številom
+- ✅ `MyViewModelFactory` posreduje `gamificationUseCase` v `BodyModuleHomeViewModel`
 
 ### 2026-05-03 — Faza 3: Room Offline-First strategija za Activity Log
 
