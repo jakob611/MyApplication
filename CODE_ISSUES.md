@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-03  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4b zaključena)**
+**Zadnja posodobitev:** 2026-05-03 (build fix)  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4b + build fix zaključena)**
 
 ---
 
@@ -68,6 +68,20 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-03 — Build Fix: KSP Configuration Cache napaka
+
+**Problem:** Build je iskal KSP `2.2.10-1.0.32` (in prej `1.0.28`) čeprav je bil plugin že odstranjen iz `build.gradle.kts`.
+**Root cause:** `org.gradle.configuration-cache=true` v `gradle.properties` → Gradle je bral stari keš, ki je vseboval zastarelo KSP referenco. Ker KSP ni na voljo za Kotlin 2.2.10 (noben `2.2.10-1.0.X` patch ni v Maven repos), je vsak build propadel.
+**Rešitev:**
+- ✅ `gradle.properties`: `org.gradle.configuration-cache=true` → zakomentirano (onemogoči stali keš)
+- ✅ `build.gradle.kts` + `app/build.gradle.kts`: brez KSP/kapt referenc
+- ✅ Room: `AppDatabase_Impl.kt` ročno napisan (nadomešča KSP code generation)
+- ✅ BUILD SUCCESSFUL ✅
+
+**Dodano v tej seji:**
+- ✅ `strings.xml`: 10 novih auth napake/success stringov za MainActivity login flow
+- ✅ `NutritionViewModel.clearUser()`: počisti Firestore listener, waterSyncJob, in session state ob odjavi
 
 ### 2026-05-03 — Faza 4b: Daily Habit Streak sistem + čiščenje kode
 
