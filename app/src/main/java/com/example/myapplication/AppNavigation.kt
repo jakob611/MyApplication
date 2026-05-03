@@ -52,6 +52,7 @@ sealed class Screen {
 
     // Telo / obraz / lasje
     object FaceModule : Screen()
+    object GoldenRatio : Screen()   // Analiza zlatega razmerja (ML Kit kamera)
     object HairModule : Screen()
 
     // Pro / Shop
@@ -93,7 +94,8 @@ private val bottomItems = listOf(
 fun screenToIndex(screen: Screen): Int {
     val index = when (screen) {
         is Screen.Dashboard, is Screen.BodyModule, is Screen.BodyModuleHome,
-        is Screen.BodyOverview, is Screen.FaceModule, is Screen.HairModule,
+        is Screen.BodyOverview, is Screen.FaceModule, is Screen.GoldenRatio,
+        is Screen.HairModule,
         is Screen.Shop, is Screen.ExerciseHistory, is Screen.RunTracker,
         is Screen.ActivityLog -> 0
         is Screen.Progress, is Screen.MyPlans -> 1

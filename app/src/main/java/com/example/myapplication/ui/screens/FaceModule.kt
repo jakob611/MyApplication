@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +32,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun FaceModuleScreen(
     onBack: () -> Unit = {},
-
+    onGoldenRatio: () -> Unit = {},
 ) {
     var showSkincare by remember { mutableStateOf(false) }
     var showExercises by remember { mutableStateOf(false) }
@@ -116,6 +117,24 @@ fun FaceModuleScreen(
                 onClick = { showExercises = true },
                 cardColor = MaterialTheme.colorScheme.surfaceVariant,
                 borderColor = Color(0xFF33aaff),
+                comingSoon = false
+            )
+
+            // Golden Ratio Analyzer Card
+            FaceFeatureCard(
+                title = "Golden Ratio Analyzer ✨",
+                description = "Analyze your facial proportions with ML Kit face detection and the golden ratio (1.618).",
+                icon = {
+                    Icon(
+                        Icons.Filled.Analytics,
+                        contentDescription = "Golden Ratio",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(50.dp)
+                    )
+                },
+                onClick = onGoldenRatio,
+                cardColor = Color(0xFF2A1810),
+                borderColor = Color(0xFFFFD700),
                 comingSoon = false
             )
         }

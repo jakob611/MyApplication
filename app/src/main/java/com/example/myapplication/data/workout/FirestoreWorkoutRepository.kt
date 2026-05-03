@@ -165,13 +165,12 @@ class FirestoreWorkoutRepository : WorkoutRepository {
                     } catch (_: Exception) { emptyList() }
 
                     // ── GPS Firestore Data Link ───────────────────────────────────────────
-                    // Za cycling in walk: dodatni fetch sub-kolekcije gps_points / points
-                    // ker GPS točke morda niso vgrajene v glavni dokument (drugi telefon!)
+                    // Sub-kolekcijo beremo SAMO ko inline točk ni (npr. drugi telefon, stari zapis).
+                    // FIX N+1: prej je RUNNING/CYCLING/WALKING vedno sprožil 2 dodatna get() klica
+                    // (gps_points + points subcollection) — tudi ko so bile inline točke prisotne.
+                    // Rezultat: 15 tekov × 2 klica = 30 nepotrebnih roundtrip-ov (~2-3s zamude).
                     val activityTypeStr = data["activityType"] as? String ?: ""
-                    val needsSubFetch = activityTypeStr.equals("CYCLING", ignoreCase = true) ||
-                                       activityTypeStr.equals("WALKING", ignoreCase = true) ||
-                                       activityTypeStr.equals("RUNNING", ignoreCase = true) ||
-                                       inlinePoints.isEmpty() // vedno poskusi sub-kolekcijo če inline ni podatkov
+                    val needsSubFetch = inlinePoints.isEmpty()
                     val finalPoints = if (needsSubFetch) {
                         loadGpsPoints(doc.reference, inlinePoints)
                     } else inlinePoints
@@ -204,4 +203,3 @@ class FirestoreWorkoutRepository : WorkoutRepository {
         }
     }
 }
-

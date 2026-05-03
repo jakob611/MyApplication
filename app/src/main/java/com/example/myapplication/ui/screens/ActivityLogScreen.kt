@@ -99,8 +99,8 @@ fun ActivityLogScreen(onBack: () -> Unit) {
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 val currentPoints = allRawPoints[crun.id] ?: emptyList()
                 if (currentPoints.isNotEmpty()) {
-                    val isWalkingProfile = crun.activityType == ActivityType.RUN || crun.activityType == ActivityType.WALK || crun.activityType == ActivityType.HIKE
-                    val finalPoints = com.example.myapplication.map.MapboxMapMatcher.matchRoute(currentPoints, isWalkingProfile)
+                    // Lokalni RDP algoritem (Mapbox API odstranjen — Faza 2)
+                    val finalPoints = com.example.myapplication.utils.RouteCompressor.compress(currentPoints)
                     if (finalPoints !== currentPoints) {
                         // Uspesno zglajeno, shranimo v _smoothed file, original ostane cel!
                         com.example.myapplication.persistence.RunRouteStore.saveRoute(context, "${crun.id}_smoothed", finalPoints)
@@ -160,14 +160,14 @@ fun ActivityLogScreen(onBack: () -> Unit) {
             allRoutes = routesBuilder
             allRawPoints = rawBuilder
 
-            // Samodejno tiho zgladi VSE še nepo-glajene teke v ozadju, takoj ob nalaganju aktivnosti (če imamo internet)
+            // Samodejno tiho zgladi VSE še nepo-glajene teke v ozadju, takoj ob nalaganju
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 sessions.forEach { run ->
                     if (!run.isSmoothed && (run.activityType == ActivityType.RUN || run.activityType == ActivityType.WALK || run.activityType == ActivityType.HIKE || run.activityType == ActivityType.CYCLING)) {
                         val currentPoints = rawBuilder[run.id] ?: emptyList()
                         if (currentPoints.size > 2) {
-                            val isWalkingProfile = run.activityType == ActivityType.RUN || run.activityType == ActivityType.WALK || run.activityType == ActivityType.HIKE
-                            val finalPoints = com.example.myapplication.map.MapboxMapMatcher.matchRoute(currentPoints, isWalkingProfile)
+                            // Lokalni RDP algoritem (Mapbox API odstranjen — Faza 2)
+                            val finalPoints = com.example.myapplication.utils.RouteCompressor.compress(currentPoints)
                             if (finalPoints !== currentPoints) {
                                 com.example.myapplication.persistence.RunRouteStore.saveRoute(context, "${run.id}_smoothed", finalPoints)
                                 runCatching { markRunAsSmoothed(run.id) }

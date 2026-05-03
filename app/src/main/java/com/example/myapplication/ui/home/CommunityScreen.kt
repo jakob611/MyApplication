@@ -161,8 +161,13 @@ fun CommunityScreen(
                         val displayUsers = remember(allUsers, selectedFilter) {
                             allUsers.filter {
                                 when(selectedFilter) {
-                                    "New" -> (it.level ?: 1) < 5
-                                    "Veterans" -> (it.level ?: 1) > 20
+                                    // FIX: level je null kadar show_level=false → ne filtriramo ga,
+                                    // ker nimamo zanesljivega podatka. Privzeto pokažemo uporabnika.
+                                    "New" -> {
+                                        val lvl = it.level
+                                        lvl == null || lvl < 5   // neznano = prikaži (benefit of doubt)
+                                    }
+                                    "Veterans" -> (it.level ?: 0) > 20  // null = ni veteran
                                     else -> true
                                 }
                             }

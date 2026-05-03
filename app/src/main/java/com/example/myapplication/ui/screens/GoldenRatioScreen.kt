@@ -633,3 +633,34 @@ fun MLKitScanningOverlay(
         }
     }
 }
+
+// ── Navigacijski wrapper ─────────────────────────────────────────────────────
+// Ovije obstoječo AutoAnalysisSection() v Scaffold z nazaj gumbom.
+// Nova logika: NE. Samo navigacijski okvir.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GoldenRatioScreen(onBack: () -> Unit = {}) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Golden Ratio Analyzer", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            AutoAnalysisSection()
+        }
+    }
+}
+

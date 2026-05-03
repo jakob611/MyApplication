@@ -13,9 +13,8 @@ val localProps = Properties().apply {
 val fatsecretBaseUrl = (localProps.getProperty("FATSECRET_BASE_URL") ?: "").removeSuffix("/")
 val fitnessApiBaseUrl = (localProps.getProperty("FITNESS_API_BASE_URL") ?: "").removeSuffix("/")
 val backendKey = localProps.getProperty("BACKEND_API_KEY") ?: ""
-val mapboxPublicKey = localProps.getProperty("MAPBOX_PUBLIC_KEY") ?: ""
-val mapboxSecretKey = localProps.getProperty("MAPBOX_SECRET_KEY") ?: ""
 val openWeatherKey = localProps.getProperty("OPEN_WEATHER_API_KEY") ?: ""
+// MAPBOX_PUBLIC_KEY in MAPBOX_SECRET_KEY odstranjeni (Faza 2, 2026-05-03) — Mapbox API se ne uporablja več
 
 android {
     namespace = "com.example.myapplication"
@@ -29,8 +28,6 @@ android {
         buildConfigField("String", "FATSECRET_BASE_URL", "\"$fatsecretBaseUrl\"")
         buildConfigField("String", "FITNESS_API_BASE_URL", "\"$fitnessApiBaseUrl\"")
         buildConfigField("String", "BACKEND_API_KEY", "\"$backendKey\"")
-        buildConfigField("String", "MAPBOX_PUBLIC_KEY", "\"$mapboxPublicKey\"")
-        buildConfigField("String", "MAPBOX_SECRET_KEY", "\"$mapboxSecretKey\"")
         buildConfigField("String", "OPEN_WEATHER_API_KEY", "\"$openWeatherKey\"")
 
         // Ohrani samo slovenščino in angleščino - zmanjša velikost res/ map
