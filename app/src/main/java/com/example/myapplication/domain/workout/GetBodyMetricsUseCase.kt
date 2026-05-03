@@ -5,12 +5,14 @@ import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.viewmodels.BodyHomeUiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private val settingsRepo: UserPreferencesRepository) {
-    fun invoke(email: String): Flow<BodyHomeUiState> = flow {
+    /**
+     * @param email Email za Firestore lookup
+     * @param plan  Trenutni plan (za določitev todayIsRest) — Faza 8
+     */
+    fun invoke(email: String, plan: com.example.myapplication.data.PlanResult? = null): Flow<BodyHomeUiState> = flow {
         // Emit loading state initially
         emit(BodyHomeUiState(isLoading = true))
 
@@ -26,17 +28,30 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
                 val weeklyTarget = stats["weekly_target"] as? Int ?: 3
                 val planDay = stats["plan_day"] as? Int ?: 1
                 val lastEpoch = stats["last_workout_epoch"] as? Long ?: 0L
-                // Faza 13.3: preberi število zamrznitev
                 val streakFreezes = stats["streak_freezes"] as? Int ?: 0
+                // Faza 8: today_status iz dailyHistory (za stretching button vidnost)
+                val todayStatus = stats["today_status"] as? String ?: ""
 
-                val isDoneToday = if (lastEpoch == 0L) false else {
-                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-                    val lastDate = kotlinx.datetime.LocalDate.fromEpochDays(lastEpoch.toInt())
-                    lastDate == now
+                // Faza 8: isWorkoutDoneToday = WORKOUT_DONE ali STRETCHING_DONE v dailyHistory
+                // (prej: samo epoch check, ki ni deloval za stretching)
+                val isDoneToday = when {
+                    todayStatus == "WORKOUT_DONE" || todayStatus == "STRETCHING_DONE" -> true
+                    todayStatus.isNotEmpty() -> false  // PENDING_STRETCHING, FROZEN, MISSED → ni done
+                    // Fallback: epoch check za backward compatibility
+                    lastEpoch == 0L -> false
+                    else -> {
+                        val now = kotlinx.datetime.Clock.System.now()
+                            .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                        val lastDate = kotlinx.datetime.LocalDate.fromEpochDays(lastEpoch.toInt())
+                        lastDate == now
+                    }
                 }
 
-                // [Global Audit — Faza 13.3]: settingsRepo.updateWorkoutStats() klic odstranjen.
-                // bm_prefs lokalni cache ni več potreben — Firestore je SSOT za streak/planDay.
+                // Faza 8: todayIsRest — iz plana (ali je planDay rest day?)
+                val todayIsRest = plan?.weeks
+                    ?.flatMap { it.days }
+                    ?.firstOrNull { it.dayNumber == planDay }
+                    ?.isRestDay ?: false
 
                 state = state.copy(
                     streakDays = streak,
@@ -46,11 +61,12 @@ class GetBodyMetricsUseCase(private val workoutRepo: WorkoutRepository, private 
                     planDay = planDay,
                     totalWorkoutsCompleted = total,
                     isWorkoutDoneToday = isDoneToday,
+                    todayIsRest = todayIsRest,
+                    todayStatus = todayStatus,
                     dailyKcal = settingsRepo.getDailyCalories().toInt()
                 )
             } else {
-                // Če ni v Firestore (prvi zagon brez oblaka), preberi začasno to kar imamo preden prepiše vse na null
-                // Ker je ta koda tu fallback, uporabimo zasilne vrednosti dokler se ne uredi
+                // Fallback: začasne vrednosti dokler Firestore ne odgovori
                 val isDoneLocally = settingsRepo.isWorkoutDoneToday()
                 state = state.copy(
                     planDay = settingsRepo.getPlanDay(),

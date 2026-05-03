@@ -42,6 +42,8 @@ data class BodyHomeUiState(
     val outdoorSuggestion: String? = null,
     val errorMessage: String? = null,
     val isLoading: Boolean = false,
+    /** Faza 8: status današnjega dne iz dailyHistory ("WORKOUT_DONE", "STRETCHING_DONE", "PENDING_STRETCHING", "") */
+    val todayStatus: String = "",
     val challenges: List<Challenge> = listOf(
         Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Perform core exercises daily.", 500),
         Challenge("c2", "30 days pushups", "Improve your pushups in 30 days. Do 50 pushups/day.", 300),
@@ -50,7 +52,8 @@ data class BodyHomeUiState(
 )
 
 sealed class BodyHomeIntent {
-    data class LoadMetrics(val email: String) : BodyHomeIntent()
+    /** @param plan Trenutni plan — za določitev todayIsRest (ali je planDay rest day?) */
+    data class LoadMetrics(val email: String, val plan: com.example.myapplication.data.PlanResult? = null) : BodyHomeIntent()
     object CompleteRestDay : BodyHomeIntent()
     object HideCompletionAnimation : BodyHomeIntent()
     data class AcceptChallenge(val id: String) : BodyHomeIntent()
@@ -92,7 +95,7 @@ class BodyModuleHomeViewModel(
                 viewModelScope.launch {
                     _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
                     try {
-                        getBodyMetrics.invoke(intent.email).collect { newState ->
+                        getBodyMetrics.invoke(intent.email, intent.plan).collect { newState ->
                             _ui.value = newState
                         }
                     } catch (e: Exception) {
@@ -114,6 +117,7 @@ class BodyModuleHomeViewModel(
                         _ui.value = _ui.value.copy(
                             isWorkoutDoneToday = true,
                             streakDays = newStreak,
+                            todayStatus = "STRETCHING_DONE",
                             isLoading = false
                         )
                         // Sproži event za Toast + HapticFeedback v UI sloju

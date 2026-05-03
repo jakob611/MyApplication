@@ -373,15 +373,22 @@ object UserProfileManager {
         return try {
             val doc = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef().get().await()
             if (doc.exists()) {
+                // Faza 8: Beri today_status iz dailyHistory mape (za Stretching button vidnost)
+                val todayStr = kotlinx.datetime.Clock.System.now()
+                    .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString()
+                @Suppress("UNCHECKED_CAST")
+                val dailyHistory = (doc.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
                 mapOf(
-                    "streak_days" to (doc.getLong("streak_days")?.toInt() ?: 0),
-                    "total_workouts_completed" to (doc.getLong("total_workouts_completed")?.toInt() ?: 0),
-                    "weekly_done" to (doc.getLong("weekly_done")?.toInt() ?: 0),
-                    "last_workout_epoch" to (doc.getLong("last_workout_epoch") ?: 0L),
-                    "plan_day" to (doc.getLong("plan_day")?.toInt() ?: 1),
-                    "weekly_target" to (doc.getLong("weekly_target")?.toInt() ?: 0),
+                    "streak_days"               to (doc.getLong("streak_days")?.toInt() ?: 0),
+                    "total_workouts_completed"  to (doc.getLong("total_workouts_completed")?.toInt() ?: 0),
+                    "weekly_done"               to (doc.getLong("weekly_done")?.toInt() ?: 0),
+                    "last_workout_epoch"        to (doc.getLong("last_workout_epoch") ?: 0L),
+                    "plan_day"                  to (doc.getLong("plan_day")?.toInt() ?: 1),
+                    "weekly_target"             to (doc.getLong("weekly_target")?.toInt() ?: 0),
                     // Faza 13.3 — Streak Freeze
-                    "streak_freezes" to (doc.getLong("streak_freezes")?.toInt() ?: 0)
+                    "streak_freezes"            to (doc.getLong("streak_freezes")?.toInt() ?: 0),
+                    // Faza 8 — Unified status iz dailyHistory (za UI vidnost Stretching/Workout)
+                    "today_status"              to (dailyHistory[todayStr]?.toString() ?: "")
                 )
             } else null
         } catch (e: Exception) {
@@ -435,97 +442,24 @@ object UserProfileManager {
     }
 
     /**
-     * Faza 13.3 — Streak Engine & Plan Progression + Streak Freeze
+     * ⛔ DEPRECATED — Faza 8: Unified Streak Engine
      *
-     * Atomarna Firestore transakcija, ki posodobi streak_days, plan_day, last_workout_epoch
-     * in streak_freezes po zaključenem treningu.
+     * Vsa streak logika (epoch, freeze, dailyHistory) je PRESELJENA v
+     * FirestoreGamificationRepository.processWorkoutCompletion() in klicana
+     * prek ManageGamificationUseCase.recordWorkoutCompletion().
      *
-     * Streak Freeze logika:
-     *  - Če je dayDiff > 1 (prekinitev) IN ima uporabnik streak_freezes > 0:
-     *      → streak_freezes -= 1, streak_days ostane nespremenjen,
-     *        last_workout_epoch = todayEpoch (normalno)
-     *  - Če je dayDiff > 1 IN ni zamrznitev:
-     *      → streak_days = 1 (reset kot prej)
+     * Ta funkcija je NO-OP STUB in jo je varno poklicati — ne dela nič.
+     * Obdržana samo za backward compatibility med migracijo.
+     * TODO Faza 9: Po potrditvi stabilnosti to funkcijo zbriši in posodobi vse klicatelje.
      *
-     * @param incrementPlanDay false za "extra" treninge — streak se posodobi, plan_day pa ne
-     * @return [WorkoutProgressResult] z vsemi novimi vrednostmi
+     * @deprecated Zamenjana z FirestoreGamificationRepository.processWorkoutCompletion()
      */
+    @Deprecated("Faza 8: Unified Streak Engine. Pokliči processWorkoutCompletion() prek ManageGamificationUseCase.")
     suspend fun updateUserProgressAfterWorkout(incrementPlanDay: Boolean = true): WorkoutProgressResult {
-        return try {
-            val ref = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
-            val db  = com.example.myapplication.persistence.FirestoreHelper.getDb()
-
-            // epochDays (Int→Long) — skladno z obstoječo logiko, NE epochMs!
-            val todayEpoch: Long = Clock.System.now()
-                .toLocalDateTime(TimeZone.currentSystemDefault())
-                .date.toEpochDays().toLong()
-
-            val result = db.runTransaction { tx ->
-                val doc = tx.get(ref)
-
-                val oldPlanDay   = (doc.getLong("plan_day")           ?: 1L).toInt()
-                val oldStreak    = (doc.getLong("streak_days")        ?: 0L).toInt()
-                val oldLastEpoch =  doc.getLong("last_workout_epoch") ?: 0L
-                // Faza 13.3: preberi zamrznitve (default 0)
-                val oldFreezes   = (doc.getLong("streak_freezes")     ?: 0L).toInt()
-
-                // Plan Day: +1 samo za redne (ne extra) treninge
-                val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
-
-                // Streak: izračunaj na osnovi razlike epochDays
-                val dayDiff = todayEpoch - oldLastEpoch
-                var freezeUsed = false
-                var newFreezes = oldFreezes
-
-                val newStreak = when {
-                    oldLastEpoch == 0L -> 1              // prvi trening kdajkoli
-                    dayDiff == 0L      -> oldStreak      // danes že treniral — ohrani
-                    dayDiff == 1L      -> oldStreak + 1  // včeraj → podaljšaj
-                    else -> {
-                        // Prekinitev — preveri zamrznitve
-                        if (oldFreezes > 0) {
-                            freezeUsed = true
-                            newFreezes = oldFreezes - 1
-                            Log.d("UserProfileManager",
-                                "❄️ Streak Freeze porabljen! Ostalo: $newFreezes (streak ohranjen na $oldStreak)")
-                            oldStreak  // streak se ohrani, NE poveča
-                        } else {
-                            1          // ni zamrznitev → ponastavi
-                        }
-                    }
-                }
-
-                val updates = mutableMapOf<String, Any>(
-                    "plan_day"           to newPlanDay,
-                    "streak_days"        to newStreak,
-                    // last_workout_epoch vedno kot epochDays (Integer format v Long)
-                    "last_workout_epoch" to todayEpoch
-                )
-                // Posodobi streak_freezes samo, če je bila zamrznitev porabljena
-                if (freezeUsed) {
-                    updates["streak_freezes"] = newFreezes
-                }
-
-                tx.set(ref, updates, SetOptions.merge())
-
-                WorkoutProgressResult(
-                    newPlanDay      = newPlanDay,
-                    newStreakDays   = newStreak,
-                    newStreakFreezes = newFreezes,
-                    freezeUsed      = freezeUsed
-                )
-            }.await()
-
-            Log.d("UserProfileManager",
-                "✅ Streak Engine (13.3): planDay=${result.newPlanDay}, streak=${result.newStreakDays}, " +
-                "freezes=${result.newStreakFreezes}, freezeUsed=${result.freezeUsed} " +
-                "(incrementPlan=$incrementPlanDay, epochDay=$todayEpoch)")
-            result
-        } catch (e: Exception) {
-            Log.e("UserProfileManager",
-                "❌ updateUserProgressAfterWorkout failed: ${e.message}", e)
-            WorkoutProgressResult(newPlanDay = 1, newStreakDays = 0, newStreakFreezes = 0)
-        }
+        android.util.Log.w("UserProfileManager",
+            "⚠️ updateUserProgressAfterWorkout() je DEPRECATED no-op (Faza 8)." +
+            " Streak Engine je preseljen v FirestoreGamificationRepository.")
+        return WorkoutProgressResult(newPlanDay = 0, newStreakDays = 0, newStreakFreezes = 0)
     }
 
     fun clearAllLocalData() {

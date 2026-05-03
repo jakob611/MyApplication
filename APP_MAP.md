@@ -63,13 +63,16 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | `domain/workout/SwapPlanDaysUseCase.kt` | Zamenjaj dan A ↔ dan B v planu | pure Kotlin |
 | `domain/gamification/ManageGamificationUseCase.kt` | XP, badge, `restDayInitiated()`, Workout-Nutrition Bridge. **NE kliče `repository.updateStreak()` za redne workouty** (Faza 7 Audit). | `GamificationRepository`, `DailyLogRepository` |
 
-### ⚠️ ARHITEKTURNA OPOMBA — Dual Streak Engine (Backlog)
-> **Stanje (2026-05-03):** DELNO ODPRAVLJENO.
-> - **Redni workout**: `UserProfileManager.updateUserProgressAfterWorkout()` — epoch-based z Streak Freeze ✅
-> - **Rest day stretching**: `FirestoreGamificationRepository.updateStreak()` — dailyHistory-based ✅
-> - **Extra workout REST dan**: BLOKIRAN — samo XP, brez streak ✅ (Faza 7 Audit)
+### ⚠️ ARHITEKTURNA OPOMBA — Unified Streak Engine (Faza 8)
+> **Stanje (2026-05-03):** POENOTEN — Dual Streak Engine ELIMINIRAN ✅
+> - **Redni workout**: `FirestoreGamificationRepository.processWorkoutCompletion(incrementPlanDay=true)` — epoch+freeze+dailyHistory ✅
+> - **Extra workout (workout dan)**: `FirestoreGamificationRepository.processWorkoutCompletion(incrementPlanDay=false)` — streak računa, plan_day ne ✅
+> - **Extra workout REST dan**: BLOKIRAN v `ManageGamificationUseCase.recordWorkoutCompletion(isRestDay=true)` — samo XP ✅
+> - **Rest day stretching**: `ManageGamificationUseCase.restDayInitiated()` → `repository.updateStreak("STRETCHING_DONE")` ✅
+> - **UserProfileManager.updateUserProgressAfterWorkout()**: DEPRECATED no-op stub ✅
 >
-> TODO: Preseli Streak Freeze logiko iz `UserProfileManager` v `FirestoreGamificationRepository`, nato združi oba v eno pot.
+> SSOT: `FirestoreGamificationRepository` piše dailyHistory za VSE poti.
+> `UserProfileManager` bere samo za prikaz v profilu.
 
 ---
 
@@ -193,17 +196,18 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 
 ---
 
-## 🔑 STREAK LOGIC — ODGOVORNOST PO DATOTEKAH (SSOT)
+## 🔑 STREAK LOGIC — ODGOVORNOST PO DATOTEKAH (SSOT) — Faza 8 Unified
 
 | Scenarij | Odgovorna datoteka | Funkcija |
 |----------|-------------------|---------|
-| Redni workout zaključen | `data/settings/UserProfileManager.kt` | `updateUserProgressAfterWorkout(incrementPlanDay=true)` |
-| Extra workout (workout dan) | `data/settings/UserProfileManager.kt` | `updateUserProgressAfterWorkout(incrementPlanDay=false)` |
-| **Extra workout REST dan** | **BLOKIRAN** — samo XP | `UpdateBodyMetricsUseCase.invoke()` guard `isExtra && isRestDay` |
+| Redni workout zaključen | `data/gamification/FirestoreGamificationRepository.kt` | `processWorkoutCompletion(incrementPlanDay=true)` |
+| Extra workout (workout dan) | `data/gamification/FirestoreGamificationRepository.kt` | `processWorkoutCompletion(incrementPlanDay=false)` |
+| **Extra workout REST dan** | **BLOKIRAN** — samo XP | `ManageGamificationUseCase.recordWorkoutCompletion(isRestDay=true)` guard |
 | Rest day stretching (EDINI VELJAVNI NAČIN) | `ManageGamificationUseCase.kt` | `restDayInitiated()` → `repository.updateStreak("STRETCHING_DONE")` |
 | Polnočni check (Worker) | `workers/WeeklyStreakWorker.kt` | `executeMidnightStreakCheck()` |
-| Streak Freeze poraba | `data/settings/UserProfileManager.kt` | znotraj `updateUserProgressAfterWorkout()` |
+| Streak Freeze poraba | `data/gamification/FirestoreGamificationRepository.kt` | znotraj `processWorkoutCompletion()` (dayDiff guard) |
 | Označi rest day PENDING | `domain/usecase/UpdateStreakUseCase.kt` | `markRestDayPending()` |
+| ~~UserProfileManager.updateUserProgressAfterWorkout()~~ | ~~DEPRECATED~~ | ~~No-op stub — Faza 8~~ |
 
 ---
 

@@ -544,7 +544,6 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - ✅ Dodan `@OptIn(ExperimentalCoroutinesApi::class)` na obe `flatMapLatest` uporabi.
 - ✅ Nova funkcija `clearUser()`: nastavi `uidFlow.value = null`, počisti `_firestoreFoods`, cancela `waterSyncJob`.
 - ✅ `syncHealthConnectNow` sedaj teče na `Dispatchers.IO` (prepreči blokiranje UI niti).
-- ✅ `nutritionViewModel.clearUser()` se kliče ob logout v `MainActivity`.
 - **Root cause**: `uidFlow.collect { ... }` je bil zamrznjen na prvem uid, ker se zunanji collect ne more nadaljevati dokler notranji `.collect { doc }` ne konča (Firestore listener nikoli ne konča).
 
 ### 2026-05-02 — Faza 2: Konsolidacija podatkov (Firestore polja)
@@ -572,3 +571,23 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 10. ✅ Detekcija nove naprave: `initial_sync_done_<uid>` v `sync_prefs` SharedPreferences. Ob prvi prijavi (ključ odsoten) se nastavi `syncStatusMessage = "Downloading your fitness profile (XP, Plans & Progress)…"`.
 11. ✅ Vzporedni `async` fetch-i za: `users/{uid}` (XP/level), `user_plans/{uid}` (plani), `weightLogs` (zadnjih 10). Vsi tečejo hkrati — čakamo z `.await()`. Po uspešnem prenosu: `"Profile Ready! ✓"` (1.5s) → overlay izgine.
 12. ✅ Po intenzivnem prenosu se nastavi `initial_sync_done_<uid> = true` → nadaljnji zagoni gredo skozi normalni (varčni) tok.
+
+### 2026-05-03 — Faza 8: Unified Streak Engine + Stretching Button Fix
+
+**1. Unified Streak Engine (eliminacija Dual Engine):**
+- ✅ `GamificationRepository.kt`: Dodan `processWorkoutCompletion(incrementPlanDay)` + `getTodayStatus()` interfacea
+- ✅ `FirestoreGamificationRepository.kt`: Implementiran `processWorkoutCompletion()` — epoch-based streak z Freeze + dailyHistory + plan_day v ENI transakciji. Zamenjal `UserProfileManager.updateUserProgressAfterWorkout()`.
+- ✅ `ManageGamificationUseCase.kt`: `recordWorkoutCompletion()` zdaj kliče `repository.processWorkoutCompletion(incrementPlanDay)` namesto da delegira na UserProfileManager.
+- ✅ `UpdateBodyMetricsUseCase.kt`: Odstranjen `UserProfileManager.updateUserProgressAfterWorkout()` klic. `incrementPlanDay = !isExtra` posredovan v `recordWorkoutCompletion()`.
+- ✅ `UserProfileManager.updateUserProgressAfterWorkout()`: DEPRECATED no-op stub.
+
+**2. Stretching Button UI Fix:**
+- ✅ `UserProfileManager.getWorkoutStats()`: Dodan `"today_status"` iz `dailyHistory[today]`.
+- ✅ `GetBodyMetricsUseCase.kt`: `invoke()` sprejme `plan: PlanResult?`, izračuna `todayIsRest` iz `planDay.isRestDay` in `todayStatus` iz `dailyHistory`.
+- ✅ `BodyHomeUiState`: Dodan `todayStatus: String = ""`.
+- ✅ `BodyHomeIntent.LoadMetrics`: Dodan `plan: PlanResult?` parameter.
+- ✅ `BodyModuleHomeScreen.kt`: `LaunchedEffect(currentPlan)` zdaj pošlje `LoadMetrics(email, currentPlan)` → ViewModel dobi plan za `todayIsRest`. Stretching card pogoj: `ui.todayIsRest && ui.todayStatus != "STRETCHING_DONE"`.
+
+**3. APP_MAP.md posodobitev:**
+- ✅ Odstranjena opomba o "Dual Streak Engine", dodana "Unified Streak Engine (Faza 8)" sekcija.
+- ✅ Tabela "Streak Logic" posodobljena na eno pot.

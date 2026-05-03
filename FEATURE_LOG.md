@@ -374,3 +374,9 @@ no replicira staro SimpleDateFormat obliko.
 5. Toast "Daily Goal Met! Streak: X days 🔥" + S24 Ultra HapticFeedback.SUCCESS ob vsakem streak povečanju
 **Zakaj:** Stari streak je nagrajeval samo workoutje; rest dnevi niso šteli. Swap logika je povzročala nenadzorovane spremembe plana. dailyHistory mapa je cenejša od daily_logs subcollection (1 doc read vs. subcollection query).
 **Tveganje:**  srednje (nova dailyHistory mapa je nov Firestore field; stari daily_logs subcollection podatki se ne migrirajo — novi zapisi gredo v mapo, stari ostanejo v subcollection ampak niso več berljivi za streak check)
+
+## [2026-05-03] — Faza 8: Unified Streak Engine + Stretching Button UI Fix
+**Datoteke:** `GamificationRepository.kt`, `FirestoreGamificationRepository.kt`, `ManageGamificationUseCase.kt`, `UpdateBodyMetricsUseCase.kt`, `UserProfileManager.kt`, `GetBodyMetricsUseCase.kt`, `BodyModuleHomeViewModel.kt`, `BodyModuleHomeScreen.kt`, `APP_MAP.md`
+**Kaj:** Eliminiran Dual Streak Engine — vsa streak logika (epoch, Streak Freeze, dailyHistory, plan_day) preseljena v `FirestoreGamificationRepository.processWorkoutCompletion()`. `GetBodyMetricsUseCase` sedaj sprejme `plan`, izračuna `todayIsRest` in bere `todayStatus` iz `dailyHistory`. Stretching kartica zdaj pravilno prikaže, ko je dan rest dan in raztezanje še ni opravljeno.
+**Zakaj:** `UserProfileManager.updateUserProgressAfterWorkout()` je računal streak neodvisno od `FirestoreGamificationRepository.updateStreak()` → dvojne posodobitve, neskladnost. `todayIsRest` je bil vedno `false` → Stretching gumb se nikoli ni prikazal.
+**Tveganje:** 🟡 srednje (večja refaktoracija streak patha, obsežno testiranje priporočeno)

@@ -48,14 +48,21 @@ class ManageGamificationUseCase(
         repository.awardXP(workoutXp, "WORKOUT_COMPLETE")
     }
 
-    suspend fun recordWorkoutCompletion(caloriesBurned: Double, hour: Int, isRestDay: Boolean = false): WorkoutCompletionResult {
-        // FIX: Extra workout na rest dnevu NE sme vplivati na streak.
-        // Streak se ne posodobi, če je to rest day (stretching je edini veljavni način).
+    /**
+     * Faza 8 — Unified Streak Engine:
+     * @param incrementPlanDay true = redni workout (plan_day +1), false = extra workout
+     * @param isRestDay true = extra workout na rest dnevu → samo XP, brez streak
+     */
+    suspend fun recordWorkoutCompletion(
+        caloriesBurned: Double,
+        hour: Int,
+        isRestDay: Boolean = false,
+        incrementPlanDay: Boolean = true
+    ): WorkoutCompletionResult {
+        // Faza 8: Unified Streak Engine — kliči processWorkoutCompletion SAMO če ni extra-na-rest-dnevu
+        // isRestDay tukaj pomeni "extra workout na rest dnevu" (propagirano iz UpdateBodyMetricsUseCase)
         if (!isRestDay) {
-            // ⚠️ AUDIT FIX (Faza 7): Streak za redne workouty posodobi UserProfileManager.updateUserProgressAfterWorkout()
-            // v UpdateBodyMetricsUseCase (epoch-based z Streak Freeze). Tukaj NE kličemo repository.updateStreak()
-            // da preprečimo dvojno posodobitev streak_days.
-            // OPOMBA: Za rest day stretching streak posodobi restDayInitiated() → repository.updateStreak().
+            repository.processWorkoutCompletion(incrementPlanDay)
         }
         val calorieXP = (caloriesBurned / 8).toInt()
         val baseXP = 50

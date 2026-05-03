@@ -52,4 +52,26 @@ interface GamificationRepository {
      * Za uporabo Streak Freeze, če je na voljo.
      */
     suspend fun consumeStreakFreeze(): Boolean
+
+    /**
+     * Faza 8 — Unified Streak Engine.
+     * NADOMEŠČA UserProfileManager.updateUserProgressAfterWorkout().
+     *
+     * V ENI Firestore transakciji:
+     * - Epoch-based streak izračun (dayDiff z Streak Freeze podporo)
+     * - Zapiše dailyHistory.$today = "WORKOUT_DONE"
+     * - Posodobi streak_days, last_workout_epoch, plan_day
+     *
+     * iOS-ready: vsa logika v domain/data layer, brez Android odvisnosti.
+     *
+     * @param incrementPlanDay true za redne workouty, false za extra treninge
+     */
+    suspend fun processWorkoutCompletion(incrementPlanDay: Boolean)
+
+    /**
+     * Vrni status današnjega dne iz dailyHistory mape.
+     * Možne vrednosti: "WORKOUT_DONE", "STRETCHING_DONE", "PENDING_STRETCHING",
+     * "FROZEN", "MISSED", ali null (dan ni bil zabeležen).
+     */
+    suspend fun getTodayStatus(): String?
 }

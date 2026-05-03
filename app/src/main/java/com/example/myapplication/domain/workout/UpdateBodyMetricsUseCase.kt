@@ -30,9 +30,15 @@ class UpdateBodyMetricsUseCase(
             val hour = now.toLocalDateTime(tz).hour
             val timestamp = now.toEpochMilliseconds()
 
-            // 1. Pridobivanje nagrad (XP, Early Bird, Critical Hit)
-            // FIX: isRestDay=true → ne posodablja streaka (samo XP)
-            val res = gamificationUseCase.recordWorkoutCompletion(totalKcal.toDouble(), hour, isRestDay = isRestDay && isExtra)
+            // 1. Pridobivanje nagrad (XP, Early Bird, Critical Hit) + Faza 8: Unified Streak Engine
+            // isRestDay = isExtra && isRestDay → extra workout na rest dnevu = samo XP, brez streak
+            // incrementPlanDay = !isExtra → extra workout ne napreduje plan_day
+            val res = gamificationUseCase.recordWorkoutCompletion(
+                caloriesBurned = totalKcal.toDouble(),
+                hour = hour,
+                isRestDay = isRestDay && isExtra,
+                incrementPlanDay = !isExtra
+            )
 
             // 2. Priprava podatkov (BREZ FIREBASE IMPORTA)
             val workoutDoc = mutableMapOf(
@@ -50,29 +56,11 @@ class UpdateBodyMetricsUseCase(
             // 3. Shranjevanje v bazo
             workoutRepo.saveWorkoutSession(email, workoutDoc)
 
-            // 3b. Faza 13.3: Streak Engine + Plan Progression + Streak Freeze (atomarna transakcija)
-            // FIX: Extra workout na rest dnevu = samo bonus XP, brez streak in plan_day posodobitve.
-            if (!(isExtra && isRestDay)) {
-                val progressResult = com.example.myapplication.data.settings.UserProfileManager
-                    .updateUserProgressAfterWorkout(incrementPlanDay = !isExtra)
-                android.util.Log.d("UpdateBodyMetrics",
-                    " Streak Engine result: planDay=${progressResult.newPlanDay}, " +
-                    "streak=${progressResult.newStreakDays}, freezes=${progressResult.newStreakFreezes}, " +
-                    "freezeUsed=${progressResult.freezeUsed}, isExtra=$isExtra")
-            } else {
-                android.util.Log.d("UpdateBodyMetrics", "⚡ Extra workout on REST DAY → samo XP, brez streak posodobitve.")
-            }
+            // 3b. [Faza 8 — Unified Streak Engine] Streak je zdaj v celoti v ManageGamificationUseCase
+            //     → recordWorkoutCompletion() → repository.processWorkoutCompletion()
+            //     UserProfileManager.updateUserProgressAfterWorkout() je DEPRECATED no-op.
 
-            // 4. [REMOVED — Faza 13.3 Global Audit] settingsRepo.updateWorkoutStats() je bil DEPRECATED.
-            //    plan_day, streak_days, last_workout_epoch — vse piše updateUserProgressAfterWorkout() v Firestore.
-            //    bm_prefs ni več relevanten za te podatke.
-
-            // 5. [DEPRECATED — SSOT je dailyLogs] Stari SharedPrefs zapis kalorij
-            // TODO: Odstrani ko bo bm_prefs.daily_calories popolnoma nadomeščen z DailyLogRepository
-            // settingsRepo.updateDailyCalories(totalKcal.toDouble(), timestamp)
-
-            // 6. [MOVED to ManageGamificationUseCase.recordWorkoutCompletion] burnedCalories → dailyLogs
-            // Pisanje je centralizirano v Workout-Nutrition Bridgeu. Tu ni duplikata.
+            // 4–6. Ostalo nespremenjeno (XP, burnedCalories bridge so v ManageGamificationUseCase)
 
             Result.success(res)
         } catch (e: Exception) {

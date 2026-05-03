@@ -62,14 +62,19 @@ fun BodyModuleHomeScreen(
     LaunchedEffect(currentPlan) {
         if (currentPlan == null) {
             onStartPlan()
+        } else {
+            // Faza 8: LoadMetrics z planom → GetBodyMetricsUseCase izračuna todayIsRest pravilno
+            val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+            vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail, currentPlan))
         }
     }
 
     // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
     // Faza 13.2: LaunchedEffect(Unit) se požene ob vsaki re-kompoziciji zaslona (po navigaciji nazaj).
+    // Faza 8: Skupaj z LaunchedEffect(currentPlan) zagotavlja osvežitev z aktualnim planDayIsRest
     LaunchedEffect(Unit) {
         val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail))
+        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail, currentPlan))
     }
 
     // Faza 4b: Toast + HapticFeedback ko se streak poveča (workout ali stretching)
@@ -195,8 +200,9 @@ fun BodyModuleHomeScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            // Rest Activity Card (only shows on rest days)
-            if (ui.todayIsRest && !ui.isWorkoutDoneToday) {
+            // Rest Activity Card (prikaže se SAMO na rest dneh ko raztezanje še ni opravljeno)
+            // Faza 8: ui.todayIsRest = iz plana (planDay.isRestDay), todayStatus = iz dailyHistory
+            if (ui.todayIsRest && ui.todayStatus != "STRETCHING_DONE") {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
                     shape = MaterialTheme.shapes.large,
