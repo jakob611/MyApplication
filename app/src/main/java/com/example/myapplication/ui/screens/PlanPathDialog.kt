@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.AlgorithmPreferences
 import com.example.myapplication.data.DayPlan
 import com.example.myapplication.data.PlanResult
+import com.example.myapplication.persistence.PlanDataStore
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun PlanPathDialog(
@@ -162,6 +164,16 @@ fun PlanPathDialog(
                                     onResult = { updated ->
                                         localPlan = updated
                                         onPlanUpdated?.invoke(updated)
+                                        // ✅ Fix Faza 5: Persisti swap v Firestore/DataStore
+                                        val scope = kotlinx.coroutines.MainScope()
+                                        scope.launch {
+                                            try {
+                                                PlanDataStore.updatePlan(context, updated)
+                                                android.util.Log.d("PlanPathDialog", "✅ Swap persistan v Firestore: dan $fromDay ↔ dan $toDay")
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("PlanPathDialog", "❌ Swap persistenca spodletela: ${e.message}")
+                                            }
+                                        }
                                         com.example.myapplication.utils.AppToast.showSuccess(context, "Swapped!")
                                     }
                                 ))
