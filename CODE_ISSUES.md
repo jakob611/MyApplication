@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-03 (build fix)  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 4b + build fix zaključena)**
+**Zadnja posodobitev:** 2026-05-03 (Clean Architecture refactor)  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 5 Clean Architecture zaključena)**
 
 ---
 
@@ -68,6 +68,33 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-03 — Faza 5: Clean Architecture refactoring
+
+**Naloga 1 — Mapna struktura (domain/model + domain/usecase):**
+- ✅ `domain/model/Streak.kt` — čisti domenski model (days, freezes, todayStatus, computed properties)
+- ✅ `domain/model/UserPlan.kt` — domenski wrapper za plan (KMP-ready, brez Android odvisnosti)
+- ✅ `domain/usecase/UpdateStreakUseCase.kt` — dediciran use case za streak (workout(), restDayStretching(), runMidnightCheck(), getCurrentStreak())
+- ℹ️ `data/repository/` pattern: FirestoreGamificationRepository je v `data/gamification/`, FirestoreUserProfileRepository v `data/profile/`
+
+**Naloga 2 — Centralizacija logike:**
+- ✅ `data/auth/AuthRepository.kt` — centraliziran object za auth/session management
+  - `signOut(context)`: Firebase.auth.signOut() + FirestoreHelper.clearCache() + FCM token clear
+  - `isLoggedIn()`, `getCurrentEmail()`, `getCurrentUid()`
+  - Zamenjuje razpršene Firebase.auth.signOut() klice po kodi
+- ✅ **KRITIČNA NAPAKA POPRAVLJENA**: `PlanPathDialog.kt` — swap dni zdaj kliče `PlanDataStore.updatePlan()` po potrditvi
+  - Prej: swap je deloval samo lokalno (`localPlan = updated`), Firestore ni bil posodobljen
+  - Zdaj: `scope.launch { PlanDataStore.updatePlan(context, updated) }` → persistirano
+
+**Naloga 3 — MainActivity čiščenje:**
+- ✅ `ui/MainAppContent.kt` (NOVO): celoten Composable izluščen iz MainActivity
+  - Auth stanje, screen routing (30+ screenov), Drawer, BottomBar, Scaffold
+  - Sync overlay, badge animacija, widget intent handling
+  - `performLogout()` kliče `AuthRepository.signOut(context)` — én vhod
+- ✅ `MainActivity.kt`: 977 → 100 vrstic ✅
+  - Ostane samo: `onCreate()`, `setContent { MainAppContent(...) }`, `firebaseAuthWithGoogle()`
+
+**Root cause (PlanPathDialog swap):** `BodyHomeIntent.SwapDays.onResult` je vrnil posodobljeni plan klicatelju, `PlanPathDialog` pa je posodobil samo lokalni `localPlan` state brez `PlanDataStore.updatePlan()` klica. Ob vsakem ponovnem odprtju dialoga so se prikazali stari (neswappani) dnevi.
 
 ### 2026-05-03 — Build Fix: KSP Configuration Cache napaka
 
