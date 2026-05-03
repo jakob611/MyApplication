@@ -16,6 +16,16 @@
 
 ## DNEVNIK
 
+## 2026-05-03 — Faza 6: Golden Ratio routing, Rest Day, Room, iOS Code Polish
+**Datoteke:** `ui/MainAppContent.kt`, `domain/gamification/GamificationRepository.kt`, `data/gamification/FirestoreGamificationRepository.kt`, `domain/usecase/UpdateStreakUseCase.kt`, `domain/gamification/ManageGamificationUseCase.kt`, `data/local/AppDatabase_Impl.kt`, `build.gradle.kts`, `app/build.gradle.kts`
+**Kaj:**
+1. Golden Ratio: FaceModuleScreen v MainAppContent dobi `onGoldenRatio` + dodan routing za `Screen.GoldenRatio`
+2. Room: AppDatabase_Impl.kt popolnoma obnovljen z modularno implementacijo (stara verzija je bila pomotoma nadomeščena s stubom)
+3. Rest Day: nova metoda `markRestDayPending()` → `PENDING_STRETCHING` status v dailyHistory; `STRETCHING_DONE` se postavi samo ob eksplicitni uporabniški akciji
+4. iOS Code Polish: `android.util.Log` odstranjiv iz `ManageGamificationUseCase`
+**Zakaj:** Zaključitev Clean Architecture refaktoringa; Room je bil nenamerno poškodovan pri KSP preizkusu
+**Tveganje:** 🟡 srednje (AppDatabase_Impl je ročno pisan — pri spremembi entitet posodobi SQL CREATE TABLE)
+
 ## 2026-03-09 — Refactoring: premik data modelov in izluščitev logike
 **Datoteke:** `data/AlgorithmData.kt`, `data/PlanModels.kt`, `domain/WorkoutPlanGenerator.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `ui/screens/PlanPathVisualizer.kt`, `ui/screens/PlanPathDialog.kt`, `ui/screens/KnowledgeHubScreen.kt`
 **Kaj:** Data modeli premaknjeni iz `ui/screens/` v `data/`. Algoritem za generiranje plana v `domain/`. ViewModel izluščen iz BodyModuleHomeScreen.

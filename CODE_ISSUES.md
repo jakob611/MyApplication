@@ -69,6 +69,31 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-05-03 — Faza 6: Golden Ratio, Rest Day PENDING_STRETCHING, Room Impl, Code Polish
+
+**1. Golden Ratio Navigation (MainAppContent.kt):**
+- ✅ `FaceModuleScreen` klic v MainAppContent.kt: dodan `onGoldenRatio = { navigateTo(Screen.GoldenRatio) }`
+- ✅ Dodan routing `currentScreen is Screen.GoldenRatio -> GoldenRatioScreen(onBack = ::navigateBack)` v `when` blok
+- ℹ️ `Screen.GoldenRatio` object je bil že definiran v `AppNavigation.kt`; `GoldenRatioScreen.kt` je bil že v `ui/screens/`
+
+**2. Room / KSP Status:**
+- ✅ `AppDatabase_Impl.kt` obnovljen z novo čisto implementacijo (stara 360-vrstična verzija zamenjana z modularno)
+  - `WorkoutSessionDao_Impl`: `getSessionsFlow()` prek `MutableStateFlow` invalidation signal, `upsertAll()`, `upsert()`, `getLatestCreatedAt()`, `deleteById()`, `getSessionCount()`
+  - `GpsPointDao_Impl`: `getPointsForSession()`, `getPointsPreferRaw()`, `insertAll()` (IGNORE), `deleteBySessionId()`, `getPointCount()`
+- ⚠️ **KSP za Kotlin 2.2.x ni na voljo** (potrjeno: `2.2.10-1.0.28` ni v Maven repos)
+  - Ko bo KSP objavljen: dodaj `id("com.google.devtools.ksp") version "2.x.x-1.0.Y"` + `ksp("androidx.room:room-compiler:2.6.1")` → potem ročno izbriši `AppDatabase_Impl.kt`
+
+**3. Rest Day PENDING_STRETCHING:**
+- ✅ `GamificationRepository.kt`: nova metoda `markRestDayPending()` v interface (z jasno doc da runMidnightCheck ne sme klicati te funkcije)
+- ✅ `FirestoreGamificationRepository.kt`: implementirano `markRestDayPending()` → piše `"PENDING_STRETCHING"` v `dailyHistory.$todayStr` (idempotentno: ne prepiše `STRETCHING_DONE`/`WORKOUT_DONE`)
+- ✅ `UpdateStreakUseCase.kt`: dodan `markRestDayPending()` wrapper + opomba da `runMidnightCheck()` ne sme auto-complete rest dnevov
+- ℹ️ Firestore schema: `"PENDING_STRETCHING"` = rest day pričakuje akcijo; `"STRETCHING_DONE"` = opravil
+
+**4. iOS Code Polish (domain/):**
+- ✅ `ManageGamificationUseCase.kt`: odstranjeni `android.util.Log.d/e` klici iz `recordWorkoutCompletion()` → napaka je tiha, `DailyLogRepository.lastTransactions` zabeleži neuspeh
+- ✅ `UpdateStreakUseCase.kt`: brez Android odvisnosti ✓ (že bila čista)
+- ℹ️ Opomba backlog: `ManageGamificationUseCase.recordWorkoutCompletion()` direktno kliče `DailyLogRepository()` — za iOS bo potreben inject abstraktnega interface-a
+
 ### 2026-05-03 — Faza 5: Clean Architecture refactoring
 
 **Naloga 1 — Mapna struktura (domain/model + domain/usecase):**
