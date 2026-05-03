@@ -69,6 +69,48 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-05-03 — Faza 3: Room Offline-First strategija za Activity Log
+
+**Nova arhitektura (Offline-First + Data Splitting):**
+
+**Problem:** Activity Log je zahteval 2-3s ob vsakem odprtju (Firestore round-trip).
+**Rešitev:** Room baza lokalno hrani sesumarke tekov. Ob zagonu 0ms latenca, Firestore delta sync v ozadju.
+
+**Novo ustvarjene datoteke:**
+1. ✅ **`data/local/WorkoutEntities.kt`**
+   - `WorkoutSessionEntity(@PrimaryKey id = Firestore doc.id)` — preprečuje podvajanje z @Upsert
+   - `GpsPointEntity(isRaw: Boolean)` — isRaw=true surovi GPS (S24 Ultra), isRaw=false RDP iz Firestore
+   - Mapper funkcije: `toRunSession()`, `toEntity()`, `toLocationPoint()`, `toGpsPointEntity()`
+2. ✅ **`data/local/WorkoutDao.kt`**
+   - `WorkoutSessionDao`: getSessionsFlow() → Flow, upsertAll(), getLatestCreatedAt() (za delta sync), deleteById()
+   - `GpsPointDao`: getPointsPreferRaw() (isRaw DESC), insertAll(IGNORE), deleteBySessionId()
+3. ✅ **`data/local/AppDatabase.kt`** — Room singleton, `glow_upp_offline.db`
+4. ✅ **`data/local/OfflineFirstWorkoutRepository.kt`**
+   - `sessionsFlow`: Flow<List<RunSession>> iz Room (live)
+   - `syncFromFirestore()`: `whereGreaterThan("createdAt", lastTimestamp)` → delta, brez composite indeksa
+   - `insertLocalSession()`: surovi GPS (isRaw=true) ob shranjevanju teka
+   - `getGpsPoints()`: prioritizira surove točke pred kompresiranimi
+
+**Spremenjene datoteke:**
+5. ✅ **`viewmodels/RunTrackerViewModel.kt`** — dodan `sessions: StateFlow`, `isSyncing`, `syncFromFirestore()`, `getGpsPoints()`, `deleteFromRoom()`; init {} start Room flow
+6. ✅ **`ui/screens/ActivityLogScreen.kt`** — zamenjal Firestore callback z Room flow collect + inkrementalnim GPS nalaganjem; dodan `LaunchedEffect("firestoreSync")` za delta sync; brisanje zbriše iz Room (CASCADE)
+7. ✅ **`ui/home/CommunityScreen.kt`** — State Hoisting fix: skeleton samo ob prvem nalaganju (allUsers.isEmpty()); stari seznam viden med osveževanjem; Shimmer animacija (infiniteRepeatable, 0.15→0.45 alpha, 900ms)
+8. ✅ **`ui/screens/MyViewModelFactory.kt`** — posreduje `OfflineFirstWorkoutRepository` v `RunTrackerViewModel`
+9. ✅ **`app/build.gradle.kts`** — dodane Room odvisnosti (room-runtime, room-ktx, ksp compiler) + KSP plugin
+10. ✅ **`build.gradle.kts`** (top-level) — dodan KSP plugin `2.2.10-1.0.27`
+
+**Arhitekturna opomba — Firestore DocumentID ↔ Room PrimaryKey:**
+`WorkoutSessionEntity.id = Firestore doc.id` (String). @Upsert → INSERT OR REPLACE po id.
+Delta sync formula: `MAX(createdAt) FROM workout_sessions WHERE userId=X` → `whereGreaterThan("createdAt", ts)`.
+Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
+
+**Data Splitting Strategy:**
+- Firestore: samo RDP-kompresiran GPS (`polylinePoints`, ≤500 točk) → 90% manj stroškov ✅
+- Room (isRaw=true): polne surove GPS točke iz RunTrackerScreen → S24 Ultra kakovost prikaza
+- Room (isRaw=false): kompresiran GPS iz Firestore sync → fallback za seje iz drugih naprav
+
+### 2026-05-03 — Faza 2: Restavracija funkcij + Mapbox API odstranitev
+
 ### 2026-04-26 — Faza 15: Community Privacy & Calorie Sync
 
 **Spremembe:**

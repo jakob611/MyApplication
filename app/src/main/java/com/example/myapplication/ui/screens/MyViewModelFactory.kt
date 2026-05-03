@@ -14,6 +14,8 @@ import com.example.myapplication.domain.workout.SwapPlanDaysUseCase
 import com.example.myapplication.data.workout.FirestoreWorkoutRepository
 import com.example.myapplication.domain.gamification.GamificationProvider
 import com.example.myapplication.data.settings.UserPreferencesRepository
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.local.OfflineFirstWorkoutRepository
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -24,8 +26,11 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
         if (modelClass.isAssignableFrom(RunTrackerViewModel::class.java)) {
             requireNotNull(context) { "Context required for RunTrackerViewModel" }
             val gamificationUseCase = GamificationProvider.provide(context)
+            // Faza 3: Offline-First — posreduj Room repository
+            val db = AppDatabase.getInstance(context)
+            val offlineRepo = OfflineFirstWorkoutRepository(db)
             @Suppress("UNCHECKED_CAST")
-            return RunTrackerViewModel(FirestoreWorkoutRepository(), gamificationUseCase) as T
+            return RunTrackerViewModel(FirestoreWorkoutRepository(), gamificationUseCase, offlineRepo) as T
         }
         if (modelClass.isAssignableFrom(NutritionViewModel::class.java)) {
             requireNotNull(context) { "Context required for NutritionViewModel" }

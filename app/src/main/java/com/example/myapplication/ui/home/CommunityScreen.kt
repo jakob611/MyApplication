@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.example.myapplication.data.PublicProfile
 import androidx.compose.material.icons.automirrored.filled.List
-
+import androidx.compose.animation.core.*
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +38,21 @@ fun CommunityScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<PublicProfile>>(emptyList()) }
     var allUsers by remember { mutableStateOf<List<PublicProfile>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
+    // STATE HOISTING: isRefreshing = true samo med mrežnim klicem; allUsers nikoli ne počistimo
+    // → zmanjša 300ms glitch (stari seznam ostane viden med osveževanjem, ne prazno platno)
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    // Shimmer animacija za skeleton kartice
+    val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by shimmerTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue  = 0.45f,
+        animationSpec = infiniteRepeatable(
+            animation  = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
 
     // Filters
     var filterExpanded by remember { mutableStateOf(false) }
@@ -46,10 +60,10 @@ fun CommunityScreen(
 
     // Load users on start
     LaunchedEffect(Unit) {
-        isSearching = true
+        isRefreshing = true
         allUsers = com.example.myapplication.persistence.ProfileStore.getTopUsers(50)
             .filter { it.userId != currentUserId }
-        isSearching = false
+        isRefreshing = false
     }
 
     val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior(androidx.compose.material3.rememberTopAppBarState())
@@ -127,9 +141,9 @@ fun CommunityScreen(
                             searchQuery = it
                             if (it.isNotBlank()) {
                                 scope.launch {
-                                    isSearching = true
+                                    isRefreshing = true
                                     searchResults = com.example.myapplication.persistence.ProfileStore.searchPublicProfiles(it)
-                                    isSearching = false
+                                    isRefreshing = false
                                 }
                             } else {
                                 searchResults = emptyList()
@@ -150,14 +164,24 @@ fun CommunityScreen(
                             .height(56.dp)
                     )
 
-                    if (isSearching) {
+                    // STATE HOISTING: Prikaži skeleton SAMO ob prvem nalaganju (allUsers prazen).
+                    // Ko so podatki na voljo, obdrži stari seznam med osveževanjem (ne prazno platno).
+                    if (isRefreshing && allUsers.isEmpty()) {
+                        // Skeleton z shimmer animacijo (samo 1. nalaganje)
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(5) { SkeletonUserCard() }
+                            items(5) { SkeletonUserCard(shimmerAlpha = shimmerAlpha) }
                         }
                     } else {
+                        // State Hoisting: stari seznam ostane viden med osveževanjem
+                        if (isRefreshing) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         val displayUsers = remember(allUsers, selectedFilter) {
                             allUsers.filter {
                                 when(selectedFilter) {
@@ -398,7 +422,7 @@ private fun SuggestedUserCard(
 }
 
 @Composable
-private fun SkeletonUserCard() {
+private fun SkeletonUserCard(shimmerAlpha: Float = 0.3f) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -415,7 +439,7 @@ private fun SkeletonUserCard() {
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha))
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -424,7 +448,7 @@ private fun SkeletonUserCard() {
                         .height(18.dp)
                         .fillMaxWidth(0.5f)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha))
                 )
                 Spacer(Modifier.height(6.dp))
                 Box(
@@ -432,7 +456,7 @@ private fun SkeletonUserCard() {
                         .height(14.dp)
                         .fillMaxWidth(0.3f)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha))
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -441,7 +465,7 @@ private fun SkeletonUserCard() {
                         .height(18.dp)
                         .width(30.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha))
                 )
                 Spacer(Modifier.height(6.dp))
                 Box(
@@ -449,7 +473,7 @@ private fun SkeletonUserCard() {
                         .height(12.dp)
                         .width(50.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha))
                 )
             }
         }

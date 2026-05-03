@@ -5,6 +5,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
+    // Faza 3: Room — kapt se je izkazal za nekompatibilnega s Kotlin 2.2.x + AGP 9.2
+    // Kadar bo znan točen KSP version za kotlin 2.2.10, zamenjaj z:
+    // id("com.google.devtools.ksp") version "2.2.10-1.0.XX"
 }
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -49,7 +52,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        // Kotlin 2.x: zagotovi, da Room anotacije (@PrimaryKey itd.) delujejo v data class konstruktorjih
+        freeCompilerArgs += "-Xannotation-default-target=param-property"
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -141,4 +148,19 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+
+    // Room — Offline-First baza podatkov (Faza 3)
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")       // Flow + coroutines razširitve
+    annotationProcessor("androidx.room:room-compiler:$roomVersion") // Za KSP: zamenjaj z ksp(...)
 }
+
+// Faza 3: Room kapt konfiguracija (samo aktiven kadar kapt plugin je aktiven)
+// kapt {
+//     correctErrorTypes = true
+//     arguments {
+//         arg("room.schemaLocation", "$projectDir/schemas")
+//         arg("room.incremental", "true")
+//     }
+// }

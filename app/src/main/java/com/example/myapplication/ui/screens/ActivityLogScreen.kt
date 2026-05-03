@@ -34,6 +34,7 @@ import com.example.myapplication.viewmodels.RunTrackerViewModel
 
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -127,54 +128,68 @@ fun ActivityLogScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadRunSessions { sessions ->
+    // ── OFFLINE-FIRST NALAGANJE (Faza 3) ─────────────────────────────────
+    // Korak 1: Takoj pokaži Room podatke (0ms) — collect Room StateFlow
+    LaunchedEffect(viewModel) {
+        viewModel.sessions.collect { sessions ->
+            val prevIds = runs.map { it.id }.toSet()
+            val newIds  = sessions.map { it.id }.toSet() - prevIds
+
             runs = sessions
-            loading = false
+            if (sessions.isNotEmpty()) loading = false
 
-            val routesBuilder = mutableMapOf<String, List<Pair<Double, Double>>>()
-            val rawBuilder = mutableMapOf<String, List<com.example.myapplication.data.LocationPoint>>()
+            // Inkrementalno naloži GPS samo za NOVE seje (ne za vse ob vsaki spremembi)
+            if (newIds.isEmpty()) return@collect
 
-            sessions.forEach { run ->
-                if (run.id.isNotBlank()) {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val routesBuilder = allRoutes.toMutableMap()
+                val rawBuilder    = allRawPoints.toMutableMap()
+
+                sessions.filter { it.id in newIds }.forEach { run ->
+                    if (run.id.isBlank()) return@forEach
+                    // GPS vir prioriteta: 1) RunRouteStore (JSON) → 2) Room GPS → 3) Firestore inline
                     var rawLoaded = com.example.myapplication.persistence.RunRouteStore.loadRoute(context, run.id)
                     if (rawLoaded.isNullOrEmpty() && run.polylinePoints.isNotEmpty()) {
                         rawLoaded = run.polylinePoints
                     }
-
-                    // Tudi poskusimo naložiti dodaten `_smoothed` file!
+                    if (rawLoaded.isNullOrEmpty()) {
+                        // Fallback na Room GPS točke (isRaw=true surove ali isRaw=false iz Firestore sync)
+                        rawLoaded = viewModel.getGpsPoints(run.id)
+                    }
                     val smoothedLoaded = com.example.myapplication.persistence.RunRouteStore.loadRoute(context, "${run.id}_smoothed")
 
                     if (!rawLoaded.isNullOrEmpty()) {
                         rawBuilder[run.id] = rawLoaded
-                        // Če je tek `isSmoothed`, poženemo zglajene točke NA MAPI;
-                        // Če ne, pa surove "raw". Za grafe hitrosti ostanejo "raw".
-                        if (run.isSmoothed && !smoothedLoaded.isNullOrEmpty()) {
-                            routesBuilder[run.id] = smoothedLoaded.map { Pair(it.latitude, it.longitude) }
+                        routesBuilder[run.id] = if (run.isSmoothed && !smoothedLoaded.isNullOrEmpty()) {
+                            smoothedLoaded.map { Pair(it.latitude, it.longitude) }
                         } else {
-                            routesBuilder[run.id] = rawLoaded.map { Pair(it.latitude, it.longitude) }
+                            rawLoaded.map { Pair(it.latitude, it.longitude) }
                         }
                     }
                 }
-            }
-            allRoutes = routesBuilder
-            allRawPoints = rawBuilder
 
-            // Samodejno tiho zgladi VSE še nepo-glajene teke v ozadju, takoj ob nalaganju
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                sessions.forEach { run ->
-                    if (!run.isSmoothed && (run.activityType == ActivityType.RUN || run.activityType == ActivityType.WALK || run.activityType == ActivityType.HIKE || run.activityType == ActivityType.CYCLING)) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    allRoutes    = routesBuilder
+                    allRawPoints = rawBuilder
+                }
+
+                // Samodejno glajenje samo za nove, nepo-glajene teke
+                sessions.filter { it.id in newIds }.forEach { run ->
+                    if (!run.isSmoothed && (run.activityType == ActivityType.RUN ||
+                            run.activityType == ActivityType.WALK ||
+                            run.activityType == ActivityType.HIKE ||
+                            run.activityType == ActivityType.CYCLING)) {
                         val currentPoints = rawBuilder[run.id] ?: emptyList()
                         if (currentPoints.size > 2) {
-                            // Lokalni RDP algoritem (Mapbox API odstranjen — Faza 2)
                             val finalPoints = com.example.myapplication.utils.RouteCompressor.compress(currentPoints)
                             if (finalPoints !== currentPoints) {
                                 com.example.myapplication.persistence.RunRouteStore.saveRoute(context, "${run.id}_smoothed", finalPoints)
                                 runCatching { markRunAsSmoothed(run.id) }
-                                    .onFailure { Log.w("ActivityLog", "Failed to mark isSmoothed for ${run.id}", it) }
+                                    .onFailure { Log.w("ActivityLog", "isSmoothed flag ni shranjen za ${run.id}", it) }
                                 withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    allRoutes = allRoutes.toMutableMap().apply { put(run.id, finalPoints.map { Pair(it.latitude, it.longitude) }) }
-                                    // Posodobi seznam runs, da dobi kljukico wasSmoothed=true
+                                    allRoutes = allRoutes.toMutableMap().apply {
+                                        put(run.id, finalPoints.map { Pair(it.latitude, it.longitude) })
+                                    }
                                     val idx = runs.indexOfFirst { it.id == run.id }
                                     if (idx >= 0) {
                                         val mutRuns = runs.toMutableList()
@@ -188,6 +203,13 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    // Korak 2: Firestore delta sync v ozadju → Room posodobi flow samodejno
+    LaunchedEffect("firestoreSync") {
+        viewModel.syncFromFirestore()
+        // Varnostni izklop: če je Room prazen in Firestore ne vrne nič
+        if (loading) loading = false
     }
 
     Box(
@@ -448,6 +470,8 @@ fun ActivityLogScreen(onBack: () -> Unit) {
                                     Log.d("ActivityLog", "DELETE run session doc=${userRef.id} runId=${runToDel.id}")
                                     userRef.collection("runSessions").document(runToDel.id).delete().await()
                                     userRef.collection("publicActivities").document(runToDel.id).delete().await()
+                                    // Faza 3: zbriši tudi iz Room (CASCADE zbriše GPS točke)
+                                    viewModel.deleteFromRoom(runToDel.id)
                                 }.onFailure {
                                     Log.e("ActivityLog", "Delete failed for runId=${runToDel.id}", it)
                                 }
