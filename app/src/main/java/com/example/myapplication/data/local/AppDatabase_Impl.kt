@@ -3,23 +3,29 @@ package com.example.myapplication.data.local
 // =============================================================================
 // AppDatabase_Impl.kt — ročno pisana Room implementacija
 //
-// Zakaj ročno: KSP nima objavljene verzije za Kotlin 2.2.10, kapt pa ne dela
+// Zakaj ročno: KSP nima objavljene verzije za Kotlin 2.2.x, kapt pa ne dela
 // z Kotlin 2.2.x (K1 odstranjem). Room pri .build() poišče ta razred prek
 // Class.forName("...AppDatabase_Impl") — dokler ta datoteka obstaja, Room deluje.
 //
-// Velja za Room 2.6.1. Ob nadgradnji Room-a ali zamenjavi entitet: posodobi
-// CREATE TABLE SQL stavke in cursor mapperje spodaj.
+// Ko bo KSP objavljen za tvojo verzijo Kotlina:
+//   1. Daj v build.gradle.kts: id("com.google.devtools.ksp") version "2.x.x-1.0.Y"
+//   2. Dodaj ksp("androidx.room:room-compiler:2.6.1")
+//   3. Izbriši to datoteko ročno (Right-click → Delete v Android Studiu)
+//
+// Velja za Room 2.6.1.
 // =============================================================================
 
 import android.database.Cursor
 import androidx.room.DatabaseConfiguration
 import androidx.room.InvalidationTracker
+import androidx.room.migration.AutoMigrationSpec
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.SupportSQLiteStatement
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
@@ -30,330 +36,273 @@ import kotlinx.coroutines.withContext
 
 class AppDatabase_Impl : AppDatabase() {
 
-    @Volatile private var _workoutSessionDao: WorkoutSessionDao? = null
-    @Volatile private var _gpsPointDao: GpsPointDao?        = null
+    private val _invalidationSignal = MutableStateFlow(0L)
 
-    // ── Room lifecycle hooks ──────────────────────────────────────────────────
+    private val _workoutSessionDao: WorkoutSessionDao_Impl by lazy {
+        WorkoutSessionDao_Impl(this)
+    }
+
+    private val _gpsPointDao: GpsPointDao_Impl by lazy {
+        GpsPointDao_Impl(this)
+    }
+
+    override fun workoutSessionDao(): WorkoutSessionDao = _workoutSessionDao
+    override fun gpsPointDao(): GpsPointDao = _gpsPointDao
 
     override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper {
-        val callback = object : SupportSQLiteOpenHelper.Callback(1) {
+        val cb = object : SupportSQLiteOpenHelper.Callback(version = 1) {
             override fun onCreate(db: SupportSQLiteDatabase) {
-                db.execSQL(SQL_CREATE_WORKOUT_SESSIONS)
-                db.execSQL(SQL_CREATE_GPS_POINTS)
-                db.execSQL(SQL_CREATE_IDX_GPS_SESSION)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `workout_sessions` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `startTime` INTEGER NOT NULL,
+                        `endTime` INTEGER NOT NULL,
+                        `durationSeconds` INTEGER NOT NULL,
+                        `distanceMeters` REAL NOT NULL,
+                        `maxSpeedMps` REAL NOT NULL,
+                        `avgSpeedMps` REAL NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `caloriesKcal` INTEGER NOT NULL,
+                        `elevationGainM` REAL NOT NULL,
+                        `elevationLossM` REAL NOT NULL,
+                        `activityType` TEXT NOT NULL,
+                        `isSmoothed` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `gps_points` (
+                        `uid` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sessionId` TEXT NOT NULL,
+                        `latitude` REAL NOT NULL,
+                        `longitude` REAL NOT NULL,
+                        `altitude` REAL NOT NULL,
+                        `speed` REAL NOT NULL,
+                        `accuracy` REAL NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `isRaw` INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY(`sessionId`) REFERENCES `workout_sessions`(`id`) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_gps_points_sessionId` ON `gps_points` (`sessionId`)")
             }
+
             override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
-                // Version 1 — ni migracij
+                // V1 beta: destructive migration prek fallbackToDestructiveMigration() v AppDatabase.kt
             }
         }
-        val helperCfg = SupportSQLiteOpenHelper.Configuration
-            .builder(config.context)
-            .name(config.name)
-            .callback(callback)
-            .build()
-        return config.sqliteOpenHelperFactory.create(helperCfg)
+        return config.sqliteOpenHelperFactory.create(
+            SupportSQLiteOpenHelper.Configuration.builder(config.context)
+                .name(config.name)
+                .callback(cb)
+                .build()
+        )
     }
 
-    @Suppress("DEPRECATION")
     override fun createInvalidationTracker(): InvalidationTracker =
-        // @RestrictTo(LIBRARY_GROUP_PREFIX) — dostopno za kompilacijo, samo lint opozorilo.
-        // Naš Flow mehanizem (_dbWriteTrigger) ne uporablja tega trackerja, toda Room
-        // zahteva veljaven (ne-null) primerek ob inicializaciji.
-        InvalidationTracker(
-            this,
-            emptyMap<String, String>(),
-            emptyMap<String, Set<String>>(),
-            "workout_sessions",
-            "gps_points"
-        )
+        InvalidationTracker(this, "workout_sessions", "gps_points")
 
     override fun clearAllTables() {
-        val sqliteDb = openHelper.writableDatabase
+        val db = openHelper.writableDatabase
+        db.beginTransaction()
         try {
-            sqliteDb.beginTransaction()
-            sqliteDb.execSQL("DELETE FROM `gps_points`")
-            sqliteDb.execSQL("DELETE FROM `workout_sessions`")
-            sqliteDb.setTransactionSuccessful()
+            db.execSQL("DELETE FROM `gps_points`")
+            db.execSQL("DELETE FROM `workout_sessions`")
+            db.setTransactionSuccessful()
         } finally {
-            sqliteDb.endTransaction()
+            db.endTransaction()
         }
     }
 
-    // ── DAO factory ──────────────────────────────────────────────────────────
+    override fun getAutoMigrations(
+        autoMigrationSpecs: Map<Class<out AutoMigrationSpec>, AutoMigrationSpec>
+    ): List<Migration> = emptyList()
 
-    override fun workoutSessionDao(): WorkoutSessionDao =
-        _workoutSessionDao ?: synchronized(this) {
-            _workoutSessionDao ?: WorkoutSessionDaoImpl(this).also { _workoutSessionDao = it }
-        }
+    fun notifyInvalidation() { _invalidationSignal.value = System.currentTimeMillis() }
 
-    override fun gpsPointDao(): GpsPointDao =
-        _gpsPointDao ?: synchronized(this) {
-            _gpsPointDao ?: GpsPointDaoImpl(this).also { _gpsPointDao = it }
-        }
-
-    // ── Shared write-notification bus (reaktivni Flows) ───────────────────────
-
-    companion object {
-        /**
-         * Vsak писanjski DAO klic pošlje Unit v ta SharedFlow.
-         * [WorkoutSessionDaoImpl.getSessionsFlow] posluša in ob každem signalu
-         * znova poizveduje bazo → UI se posodobi brez Room InvalidationTracker-ja.
-         */
-        val _dbWriteTrigger = MutableSharedFlow<Unit>(
-            replay        = 0,
-            extraBufferCapacity = 4,
-            onBufferOverflow    = BufferOverflow.DROP_OLDEST
-        )
-
-        // ── DDL stavki ────────────────────────────────────────────────────────
-
-        private const val SQL_CREATE_WORKOUT_SESSIONS = """
-            CREATE TABLE IF NOT EXISTS `workout_sessions` (
-                `id`              TEXT    NOT NULL,
-                `userId`          TEXT    NOT NULL,
-                `startTime`       INTEGER NOT NULL,
-                `endTime`         INTEGER NOT NULL,
-                `durationSeconds` INTEGER NOT NULL,
-                `distanceMeters`  REAL    NOT NULL,
-                `maxSpeedMps`     REAL    NOT NULL,
-                `avgSpeedMps`     REAL    NOT NULL,
-                `createdAt`       INTEGER NOT NULL,
-                `caloriesKcal`    INTEGER NOT NULL,
-                `elevationGainM`  REAL    NOT NULL,
-                `elevationLossM`  REAL    NOT NULL,
-                `activityType`    TEXT    NOT NULL,
-                `isSmoothed`      INTEGER NOT NULL,
-                PRIMARY KEY(`id`)
-            )"""
-
-        private const val SQL_CREATE_GPS_POINTS = """
-            CREATE TABLE IF NOT EXISTS `gps_points` (
-                `uid`       INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                `sessionId` TEXT    NOT NULL,
-                `latitude`  REAL    NOT NULL,
-                `longitude` REAL    NOT NULL,
-                `altitude`  REAL    NOT NULL,
-                `speed`     REAL    NOT NULL,
-                `accuracy`  REAL    NOT NULL,
-                `timestamp` INTEGER NOT NULL,
-                `isRaw`     INTEGER NOT NULL DEFAULT 1,
-                FOREIGN KEY(`sessionId`) REFERENCES `workout_sessions`(`id`) ON DELETE CASCADE
-            )"""
-
-        private const val SQL_CREATE_IDX_GPS_SESSION =
-            "CREATE INDEX IF NOT EXISTS `index_gps_points_sessionId` ON `gps_points` (`sessionId`)"
-    }
+    internal fun getReadableDb(): SupportSQLiteDatabase = openHelper.readableDatabase
+    internal fun getWritableDb(): SupportSQLiteDatabase = openHelper.writableDatabase
+    internal fun invalidationFlow(): Flow<Long> = _invalidationSignal
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WorkoutSessionDaoImpl
+// WorkoutSessionDao_Impl
 // ─────────────────────────────────────────────────────────────────────────────
 
-private class WorkoutSessionDaoImpl(private val db: AppDatabase_Impl) : WorkoutSessionDao {
-
-    // ── Reaktivni Flow ───────────────────────────────────────────────────────
+class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionDao {
 
     override fun getSessionsFlow(): Flow<List<WorkoutSessionEntity>> =
-        AppDatabase_Impl._dbWriteTrigger
-            .onStart { emit(Unit) }          // prva emisija = takoj ob zbiranju
-            .map { fetchAllSessions() }
+        db.invalidationFlow()
+            .onStart { emit(0L) }
+            .map { querySessions() }
 
-    private fun fetchAllSessions(): List<WorkoutSessionEntity> {
-        val result = mutableListOf<WorkoutSessionEntity>()
-        val cursor: Cursor = db.openHelper.readableDatabase.query(
-            "SELECT * FROM workout_sessions ORDER BY createdAt DESC"
-        )
-        try {
-            while (cursor.moveToNext()) result.add(mapSession(cursor))
-        } finally {
-            cursor.close()
+    private fun querySessions(): List<WorkoutSessionEntity> {
+        val c = db.getReadableDb().query("SELECT * FROM workout_sessions ORDER BY createdAt DESC")
+        return c.use { cur ->
+            buildList {
+                while (cur.moveToNext()) add(cur.toWorkoutSessionEntity())
+            }
         }
-        return result
     }
 
-    // ── Pisalne operacije ────────────────────────────────────────────────────
+    private fun Cursor.toWorkoutSessionEntity() = WorkoutSessionEntity(
+        id              = getString(getColumnIndexOrThrow("id")),
+        userId          = getString(getColumnIndexOrThrow("userId")),
+        startTime       = getLong(getColumnIndexOrThrow("startTime")),
+        endTime         = getLong(getColumnIndexOrThrow("endTime")),
+        durationSeconds = getInt(getColumnIndexOrThrow("durationSeconds")),
+        distanceMeters  = getDouble(getColumnIndexOrThrow("distanceMeters")),
+        maxSpeedMps     = getFloat(getColumnIndexOrThrow("maxSpeedMps")),
+        avgSpeedMps     = getFloat(getColumnIndexOrThrow("avgSpeedMps")),
+        createdAt       = getLong(getColumnIndexOrThrow("createdAt")),
+        caloriesKcal    = getInt(getColumnIndexOrThrow("caloriesKcal")),
+        elevationGainM  = getFloat(getColumnIndexOrThrow("elevationGainM")),
+        elevationLossM  = getFloat(getColumnIndexOrThrow("elevationLossM")),
+        activityType    = getString(getColumnIndexOrThrow("activityType")),
+        isSmoothed      = getInt(getColumnIndexOrThrow("isSmoothed")) != 0
+    )
 
-    override suspend fun upsertAll(sessions: List<WorkoutSessionEntity>): Unit = withContext(Dispatchers.IO) {
-        val sqliteDb = db.openHelper.writableDatabase
+    override suspend fun upsertAll(sessions: List<WorkoutSessionEntity>) = withContext(Dispatchers.IO) {
+        if (sessions.isEmpty()) return@withContext
+        val wdb = db.getWritableDb()
+        wdb.beginTransaction()
         try {
-            sqliteDb.beginTransaction()
-            sessions.forEach { s -> sqliteDb.execSQL(UPSERT_SESSION_SQL, sessionBindArgs(s)) }
-            sqliteDb.setTransactionSuccessful()
+            sessions.forEach { upsertInTransaction(wdb, it) }
+            wdb.setTransactionSuccessful()
         } finally {
-            sqliteDb.endTransaction()
+            wdb.endTransaction()
         }
-        AppDatabase_Impl._dbWriteTrigger.tryEmit(Unit)
+        db.notifyInvalidation()
     }
 
-    override suspend fun upsert(session: WorkoutSessionEntity): Unit = withContext(Dispatchers.IO) {
-        db.openHelper.writableDatabase.execSQL(UPSERT_SESSION_SQL, sessionBindArgs(session))
-        AppDatabase_Impl._dbWriteTrigger.tryEmit(Unit)
+    override suspend fun upsert(session: WorkoutSessionEntity) = withContext(Dispatchers.IO) {
+        val wdb = db.getWritableDb()
+        wdb.beginTransaction()
+        try {
+            upsertInTransaction(wdb, session)
+            wdb.setTransactionSuccessful()
+        } finally {
+            wdb.endTransaction()
+        }
+        db.notifyInvalidation()
     }
 
-    override suspend fun deleteById(id: String): Unit = withContext(Dispatchers.IO) {
-        db.openHelper.writableDatabase.execSQL(
-            "DELETE FROM workout_sessions WHERE id = ?", arrayOf<Any>(id)
+    private fun upsertInTransaction(wdb: SupportSQLiteDatabase, s: WorkoutSessionEntity) {
+        val stmt: SupportSQLiteStatement = wdb.compileStatement(
+            "INSERT OR REPLACE INTO workout_sessions " +
+            "(id,userId,startTime,endTime,durationSeconds,distanceMeters,maxSpeedMps,avgSpeedMps," +
+            "createdAt,caloriesKcal,elevationGainM,elevationLossM,activityType,isSmoothed) " +
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
-        AppDatabase_Impl._dbWriteTrigger.tryEmit(Unit)
+        stmt.use {
+            it.bindString(1,  s.id)
+            it.bindString(2,  s.userId)
+            it.bindLong(3,    s.startTime)
+            it.bindLong(4,    s.endTime)
+            it.bindLong(5,    s.durationSeconds.toLong())
+            it.bindDouble(6,  s.distanceMeters)
+            it.bindDouble(7,  s.maxSpeedMps.toDouble())
+            it.bindDouble(8,  s.avgSpeedMps.toDouble())
+            it.bindLong(9,    s.createdAt)
+            it.bindLong(10,   s.caloriesKcal.toLong())
+            it.bindDouble(11, s.elevationGainM.toDouble())
+            it.bindDouble(12, s.elevationLossM.toDouble())
+            it.bindString(13, s.activityType)
+            it.bindLong(14,   if (s.isSmoothed) 1L else 0L)
+            it.executeInsert()
+        }
     }
-
-    // ── Bralne operacije ─────────────────────────────────────────────────────
 
     override suspend fun getLatestCreatedAt(userId: String): Long? = withContext(Dispatchers.IO) {
-        val cursor: Cursor = db.openHelper.readableDatabase.query(
-            "SELECT MAX(createdAt) FROM workout_sessions WHERE userId = ?",
-            arrayOf<Any>(userId)
-        )
-        try {
-            if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else null
-        } finally {
-            cursor.close()
-        }
+        db.getReadableDb().query(
+            "SELECT MAX(createdAt) FROM workout_sessions WHERE userId = ?", arrayOf(userId)
+        ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null }
+    }
+
+    override suspend fun deleteById(id: String) = withContext(Dispatchers.IO) {
+        db.getWritableDb().execSQL("DELETE FROM workout_sessions WHERE id = ?", arrayOf(id))
+        db.notifyInvalidation()
     }
 
     override suspend fun getSessionCount(userId: String): Int = withContext(Dispatchers.IO) {
-        val cursor: Cursor = db.openHelper.readableDatabase.query(
-            "SELECT COUNT(*) FROM workout_sessions WHERE userId = ?",
-            arrayOf<Any>(userId)
-        )
-        try {
-            if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        } finally {
-            cursor.close()
-        }
-    }
-
-    // ── Pomočniki ────────────────────────────────────────────────────────────
-
-    private fun sessionBindArgs(s: WorkoutSessionEntity): Array<Any> = arrayOf(
-        s.id,
-        s.userId,
-        s.startTime,
-        s.endTime,
-        s.durationSeconds.toLong(),
-        s.distanceMeters,
-        s.maxSpeedMps.toDouble(),
-        s.avgSpeedMps.toDouble(),
-        s.createdAt,
-        s.caloriesKcal.toLong(),
-        s.elevationGainM.toDouble(),
-        s.elevationLossM.toDouble(),
-        s.activityType,
-        if (s.isSmoothed) 1L else 0L
-    )
-
-    private fun mapSession(c: Cursor) = WorkoutSessionEntity(
-        id              = c.getString(c.getColumnIndexOrThrow("id")),
-        userId          = c.getString(c.getColumnIndexOrThrow("userId")),
-        startTime       = c.getLong  (c.getColumnIndexOrThrow("startTime")),
-        endTime         = c.getLong  (c.getColumnIndexOrThrow("endTime")),
-        durationSeconds = c.getInt   (c.getColumnIndexOrThrow("durationSeconds")),
-        distanceMeters  = c.getDouble(c.getColumnIndexOrThrow("distanceMeters")),
-        maxSpeedMps     = c.getFloat (c.getColumnIndexOrThrow("maxSpeedMps")),
-        avgSpeedMps     = c.getFloat (c.getColumnIndexOrThrow("avgSpeedMps")),
-        createdAt       = c.getLong  (c.getColumnIndexOrThrow("createdAt")),
-        caloriesKcal    = c.getInt   (c.getColumnIndexOrThrow("caloriesKcal")),
-        elevationGainM  = c.getFloat (c.getColumnIndexOrThrow("elevationGainM")),
-        elevationLossM  = c.getFloat (c.getColumnIndexOrThrow("elevationLossM")),
-        activityType    = c.getString(c.getColumnIndexOrThrow("activityType")),
-        isSmoothed      = c.getInt   (c.getColumnIndexOrThrow("isSmoothed")) != 0
-    )
-
-    companion object {
-        private const val UPSERT_SESSION_SQL =
-            "INSERT OR REPLACE INTO workout_sessions " +
-            "(id, userId, startTime, endTime, durationSeconds, distanceMeters, " +
-            " maxSpeedMps, avgSpeedMps, createdAt, caloriesKcal, " +
-            " elevationGainM, elevationLossM, activityType, isSmoothed) " +
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        db.getReadableDb().query(
+            "SELECT COUNT(*) FROM workout_sessions WHERE userId = ?", arrayOf(userId)
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GpsPointDaoImpl
+// GpsPointDao_Impl
 // ─────────────────────────────────────────────────────────────────────────────
 
-private class GpsPointDaoImpl(private val db: AppDatabase_Impl) : GpsPointDao {
+class GpsPointDao_Impl(private val db: AppDatabase_Impl) : GpsPointDao {
+
+    private fun Cursor.toGpsPoints(): List<GpsPointEntity> = buildList {
+        while (moveToNext()) add(GpsPointEntity(
+            uid       = getLong(getColumnIndexOrThrow("uid")),
+            sessionId = getString(getColumnIndexOrThrow("sessionId")),
+            latitude  = getDouble(getColumnIndexOrThrow("latitude")),
+            longitude = getDouble(getColumnIndexOrThrow("longitude")),
+            altitude  = getDouble(getColumnIndexOrThrow("altitude")),
+            speed     = getFloat(getColumnIndexOrThrow("speed")),
+            accuracy  = getFloat(getColumnIndexOrThrow("accuracy")),
+            timestamp = getLong(getColumnIndexOrThrow("timestamp")),
+            isRaw     = getInt(getColumnIndexOrThrow("isRaw")) != 0
+        ))
+    }
 
     override suspend fun getPointsForSession(sessionId: String): List<GpsPointEntity> = withContext(Dispatchers.IO) {
-        query("SELECT * FROM gps_points WHERE sessionId = ? ORDER BY timestamp ASC", arrayOf<Any>(sessionId))
+        db.getReadableDb().query(
+            "SELECT * FROM gps_points WHERE sessionId = ? ORDER BY timestamp ASC", arrayOf(sessionId)
+        ).use { it.toGpsPoints() }
     }
 
     override suspend fun getPointsPreferRaw(sessionId: String): List<GpsPointEntity> = withContext(Dispatchers.IO) {
-        query("SELECT * FROM gps_points WHERE sessionId = ? ORDER BY isRaw DESC, timestamp ASC", arrayOf<Any>(sessionId))
+        db.getReadableDb().query(
+            "SELECT * FROM gps_points WHERE sessionId = ? ORDER BY isRaw DESC, timestamp ASC", arrayOf(sessionId)
+        ).use { it.toGpsPoints() }
     }
 
-    override suspend fun insertAll(points: List<GpsPointEntity>): Unit = withContext(Dispatchers.IO) {
-        val sqliteDb = db.openHelper.writableDatabase
+    override suspend fun insertAll(points: List<GpsPointEntity>) = withContext(Dispatchers.IO) {
+        if (points.isEmpty()) return@withContext
+        val wdb = db.getWritableDb()
+        wdb.beginTransaction()
         try {
-            sqliteDb.beginTransaction()
-            points.forEach { p ->
-                sqliteDb.execSQL(INSERT_GPS_SQL, gpsBindArgs(p))
+            val stmt: SupportSQLiteStatement = wdb.compileStatement(
+                "INSERT OR IGNORE INTO gps_points " +
+                "(sessionId,latitude,longitude,altitude,speed,accuracy,timestamp,isRaw) " +
+                "VALUES (?,?,?,?,?,?,?,?)"
+            )
+            stmt.use { s ->
+                points.forEach { p ->
+                    s.clearBindings()
+                    s.bindString(1, p.sessionId)
+                    s.bindDouble(2, p.latitude)
+                    s.bindDouble(3, p.longitude)
+                    s.bindDouble(4, p.altitude)
+                    s.bindDouble(5, p.speed.toDouble())
+                    s.bindDouble(6, p.accuracy.toDouble())
+                    s.bindLong(7,   p.timestamp)
+                    s.bindLong(8,   if (p.isRaw) 1L else 0L)
+                    s.executeInsert()
+                }
             }
-            sqliteDb.setTransactionSuccessful()
+            wdb.setTransactionSuccessful()
         } finally {
-            sqliteDb.endTransaction()
+            wdb.endTransaction()
         }
     }
 
-    override suspend fun deleteBySessionId(sessionId: String): Unit = withContext(Dispatchers.IO) {
-        db.openHelper.writableDatabase.execSQL(
-            "DELETE FROM gps_points WHERE sessionId = ?", arrayOf<Any>(sessionId)
+    override suspend fun deleteBySessionId(sessionId: String) = withContext(Dispatchers.IO) {
+        db.getWritableDb().execSQL(
+            "DELETE FROM gps_points WHERE sessionId = ?", arrayOf(sessionId)
         )
     }
 
     override suspend fun getPointCount(sessionId: String): Int = withContext(Dispatchers.IO) {
-        val cursor: Cursor = db.openHelper.readableDatabase.query(
-            "SELECT COUNT(*) FROM gps_points WHERE sessionId = ?", arrayOf<Any>(sessionId)
-        )
-        try {
-            if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        } finally {
-            cursor.close()
-        }
-    }
-
-    // ── Pomočniki ────────────────────────────────────────────────────────────
-
-    private fun query(sql: String, args: Array<Any>): List<GpsPointEntity> {
-        val result = mutableListOf<GpsPointEntity>()
-        val cursor: Cursor = db.openHelper.readableDatabase.query(sql, args)
-        try {
-            while (cursor.moveToNext()) result.add(mapGps(cursor))
-        } finally {
-            cursor.close()
-        }
-        return result
-    }
-
-    private fun gpsBindArgs(p: GpsPointEntity): Array<Any> = arrayOf(
-        p.sessionId,
-        p.latitude,
-        p.longitude,
-        p.altitude,
-        p.speed.toDouble(),
-        p.accuracy.toDouble(),
-        p.timestamp,
-        if (p.isRaw) 1L else 0L
-    )
-
-    private fun mapGps(c: Cursor) = GpsPointEntity(
-        uid       = c.getLong  (c.getColumnIndexOrThrow("uid")),
-        sessionId = c.getString(c.getColumnIndexOrThrow("sessionId")),
-        latitude  = c.getDouble(c.getColumnIndexOrThrow("latitude")),
-        longitude = c.getDouble(c.getColumnIndexOrThrow("longitude")),
-        altitude  = c.getDouble(c.getColumnIndexOrThrow("altitude")),
-        speed     = c.getFloat (c.getColumnIndexOrThrow("speed")),
-        accuracy  = c.getFloat (c.getColumnIndexOrThrow("accuracy")),
-        timestamp = c.getLong  (c.getColumnIndexOrThrow("timestamp")),
-        isRaw     = c.getInt   (c.getColumnIndexOrThrow("isRaw")) != 0
-    )
-
-    companion object {
-        private const val INSERT_GPS_SQL =
-            "INSERT OR IGNORE INTO gps_points " +
-            "(sessionId, latitude, longitude, altitude, speed, accuracy, timestamp, isRaw) " +
-            "VALUES (?,?,?,?,?,?,?,?)"
+        db.getReadableDb().query(
+            "SELECT COUNT(*) FROM gps_points WHERE sessionId = ?", arrayOf(sessionId)
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
     }
 }
-

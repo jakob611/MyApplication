@@ -42,10 +42,26 @@ class UpdateStreakUseCase(
 
     /**
      * Preveri polnočni streak (zamrznjena / zamujeni dnevi).
+     * ⚠️ Preverja IZKLJUČNO včerajšnji dan — nikoli ne auto-complete rest dnevov za danes.
      * Kliče se iz WeeklyStreakWorker.
      */
     suspend fun runMidnightCheck() {
         repository.runMidnightStreakCheck()
+    }
+
+    /**
+     * Označi današnji dan kot REST DAY v čakanju (PENDING_STRETCHING).
+     *
+     * Status ostane PENDING_STRETCHING, DOKLER uporabnik ne klikne
+     * "Done" na Stretching kartici → takrat se kliče [restDayStretching()].
+     *
+     * Kliče se iz BodyModuleHomeScreen ob odprtju, ko je today rest day
+     * in ni bilo raztezanja. Idempotentno — že zaključenih dni ne prepiše.
+     *
+     * iOS-ready: brez Android odvisnosti.
+     */
+    suspend fun markRestDayPending() {
+        repository.markRestDayPending()
     }
 
     /**
@@ -56,4 +72,5 @@ class UpdateStreakUseCase(
         return Streak(days = days)
     }
 }
+
 

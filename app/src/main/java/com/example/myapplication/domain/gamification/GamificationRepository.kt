@@ -31,7 +31,20 @@ interface GamificationRepository {
     suspend fun updateStreak(isWorkoutSuccess: Boolean, activityType: String = "WORKOUT_DONE"): Int
 
     /**
+     * Označi TODAY kot "PENDING_STRETCHING" v dailyHistory mapi.
+     * Kliče se, ko app ugotovi da je danes rest day — a uporabnik
+     * še NI opravil raztezanja. Status ne pripiše streak +1.
+     * Prehod v "STRETCHING_DONE" se zgodi SAMO prek [updateStreak] ob
+     * eksplicitni uporabnikovi akciji.
+     *
+     * ⛔ runMidnightCheck() NE sme klicati te metode — polnočni check
+     * preverja VČERAJ (ne danes) in ne sme avtokonkludirati rest dnevov.
+     */
+    suspend fun markRestDayPending()
+
+    /**
      * Ozadičen worker (polnoč) reče repositoryju: "Preveri in resetiraj, če manjkajo workouti".
+     * ⚠️ Ta metoda analizira SAMO VČERAJŠNJI dan — nikoli ne auto-complete todayja.
      */
     suspend fun runMidnightStreakCheck()
 
@@ -40,4 +53,3 @@ interface GamificationRepository {
      */
     suspend fun consumeStreakFreeze(): Boolean
 }
-

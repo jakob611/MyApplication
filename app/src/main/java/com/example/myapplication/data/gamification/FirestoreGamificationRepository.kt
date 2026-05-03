@@ -126,6 +126,39 @@ class FirestoreGamificationRepository : GamificationRepository {
         }
     }
 
+    /**
+     * Označi TODAY kot "PENDING_STRETCHING" — brez streak +1.
+     * Proži se ko app ugotovi da je danes rest day, preden uporabnik sproži raztezanje.
+     * Deluje kot idempoten write: če je dan že zabeležen (STRETCHING_DONE), ga ne prepiše.
+     */
+    override suspend fun markRestDayPending() {
+        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
+        val todayStr = getTodayStr()
+        try {
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(userRef)
+                @Suppress("UNCHECKED_CAST")
+                val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
+
+                // Ne prepiši, če je dan STRETCHING_DONE ali WORKOUT_DONE (že zaključen)
+                val existing = dailyHistory[todayStr]?.toString()
+                if (existing == "STRETCHING_DONE" || existing == "WORKOUT_DONE") {
+                    Log.d("GamificationRepo", "Rest day $todayStr že zaključen ($existing) — preskočim pending.")
+                    return@runTransaction null
+                }
+
+                // Zapiši PENDING_STRETCHING samo z dot-notation (ne poveča streak_days)
+                transaction.update(userRef, mapOf(
+                    "dailyHistory.$todayStr" to "PENDING_STRETCHING"
+                ))
+                null
+            }.await()
+            Log.d("GamificationRepo", "✅ Rest day $todayStr → PENDING_STRETCHING")
+        } catch (e: Exception) {
+            Log.e("GamificationRepo", "Napaka pri markRestDayPending()", e)
+        }
+    }
+
     override suspend fun consumeStreakFreeze(): Boolean {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return false
         return try {

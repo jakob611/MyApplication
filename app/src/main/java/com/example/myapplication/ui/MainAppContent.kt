@@ -367,7 +367,11 @@ fun MainAppContent(
                                         onBadgeUnlocked = { badge -> unlockedBadge = badge; appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) }
                                     )
                                 }
-                                currentScreen is Screen.FaceModule -> FaceModuleScreen(onBack = ::navigateBack)
+                                currentScreen is Screen.FaceModule -> FaceModuleScreen(
+                                    onBack = ::navigateBack,
+                                    onGoldenRatio = { navigateTo(Screen.GoldenRatio) }
+                                )
+                                currentScreen is Screen.GoldenRatio -> GoldenRatioScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.HairModule -> HairModuleScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.Shop -> ShopScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.Progress -> ProgressScreen(
@@ -629,4 +633,5 @@ fun MainAppContent(
         }
     }
 }
+
 

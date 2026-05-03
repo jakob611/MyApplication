@@ -4,5 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.10" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.10" apply false
     id("com.google.gms.google-services") version "4.4.1" apply false
-    // KSP ni na voljo za Kotlin 2.2.10; AppDatabase_Impl.kt je ročno napisan
+    // KSP: Ko bo na voljo za Kotlin 2.2.x, dodaj:
+    //   id("com.google.devtools.ksp") version "2.2.x-1.0.Y" apply false
+    // In takrat izbriši src/main/java/.../AppDatabase_Impl.kt (ročno pisani stub).
 }

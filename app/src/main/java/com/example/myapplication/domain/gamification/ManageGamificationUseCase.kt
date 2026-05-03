@@ -74,11 +74,9 @@ class ManageGamificationUseCase(
                     val existingBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
                     data["burnedCalories"] = existingBurned + caloriesBurned
                 }
-                android.util.Log.d("ManageGamification",
-                    "✅ Nutrition bridge: +${caloriesBurned.toInt()} kcal → dailyLogs[$todayStr].burnedCalories")
-            } catch (e: Exception) {
-                android.util.Log.e("ManageGamification",
-                    "❌ burnedCalories bridge failed: ${e.message}", e)
+                // ℹ️ Log je dostopen prek DailyLogRepository.lastTransactions (iOS-ready)
+            } catch (_: Exception) {
+                // Napaka je tiha — DailyLogRepository.lastTransactions zabeleži neuspeh
             }
         }
         // ────────────────────────────────────────────────────────────────────────
