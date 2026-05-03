@@ -200,20 +200,32 @@ fun BodyModuleHomeScreen(
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
                     shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable {
-                        com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS)
-                        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteRestDay)
-                    }
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("🧘", fontSize = 28.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Rest Day: Mobility & Stretching", color = MaterialTheme.colorScheme.onSecondary, fontWeight = FontWeight.Bold)
-                            Text("Take 5 mins to stretch +10 XP", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f), fontSize = 12.sp)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🧘", fontSize = 28.sp)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("Rest Day: Mobility & Stretching", color = MaterialTheme.colorScheme.onSecondary, fontWeight = FontWeight.Bold)
+                                Text("Take 5 mins to stretch and mark day complete", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f), fontSize = 12.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        // FIX: Namenski gumb — EDINI način za streak +1 na rest dnevu (ne Extra Workout!)
+                        Button(
+                            onClick = {
+                                com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                                    context,
+                                    com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
+                                )
+                                vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.CompleteRestDay)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSecondary),
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("✅ Start Stretching (+10 XP)", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

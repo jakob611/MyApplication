@@ -1,8 +1,8 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-03 (Clean Architecture refactor)  
-**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅ (Faza 5 Clean Architecture zaključena)**
+**Zadnja posodobitev:** 2026-05-03 (Faza 7: Camera fix, Rest Day lock, Deep Audit, APP_MAP refresh)  
+**Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
 
@@ -68,6 +68,44 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-03 — Faza 7: Camera Fix, Rest Day Lock, Deep Logic Audit, APP_MAP Refresh
+
+**1. Camera Rendering Fix (GoldenRatioScreen.kt):**
+- ✅ **Root cause**: `photoUri.value = uri` je bil nastavljen PRED zagonom kamere → Coil je poskušal naložiti prazno datoteko, jo cachiral kot null. Ko kamera shrani sliko, `photoUri.value` se ni spremenil → brez recompose → prazna slika.
+- ✅ **Fix**: Ločitev `displayUri` (za AsyncImage) in `cameraFileUri` (za `cameraLauncher.launch()`):
+  - `cameraFileUri` = shranimo samo file pot pred launch-om (NE prikaže v UI)
+  - `displayUri` = nastavimo ŠELE v callback-u `success=true` → Coil vedno dobi veljavno sliko
+- ✅ `displayUri` je `rememberSaveable` (Uri je Parcelable) → preživi rotation/config change
+- ✅ AsyncImage: `diskCachePolicy=DISABLED`, `memoryCachePolicy=DISABLED` → brez zastarelega cach-a
+- ✅ Galerija: `displayUri = uri` takoj ob `galleryLauncher` callback-u (nespremenjena logika)
+
+**2. Rest Day Extra Workout Streak Lock:**
+- ✅ **Root cause**: `ManageGamificationUseCase.recordWorkoutCompletion()` je klical `repository.updateStreak()` za vse workouty, vključno z extra workout na rest dnevu → streak napačno povečan.
+- ✅ **Fix**: Dodan `isRestDay: Boolean = false` parameter skozi celo verigo:
+  - `BodyModuleHomeViewModel.CompleteWorkoutSession` → `val isRestDay = _ui.value.todayIsRest`
+  - `UpdateBodyMetricsUseCase.invoke(isRestDay = isRestDay && isExtra)`
+  - Ko `isExtra && isRestDay`: preskočena `UserProfileManager.updateUserProgressAfterWorkout()` (brez streak + plan_day)
+  - `ManageGamificationUseCase.recordWorkoutCompletion(isRestDay)`: preskočena `repository.updateStreak()` (samo XP)
+- ✅ "Start Stretching" gumb v `BodyModuleHomeScreen.kt` — namenski Button znotraj Rest Day Card (vidno samo `todayIsRest && !isWorkoutDoneToday`). EDINI veljavni način za streak +1 na rest dnevu.
+
+**3. Deep Logic Audit — Dual Streak Engine Sanacija:**
+- ✅ **Odkrita težava**: Obstajata dva neodvisna streak update path-a:
+  - `ManageGamificationUseCase.recordWorkoutCompletion()` → `repository.updateStreak()` (dailyHistory)
+  - `UserProfileManager.updateUserProgressAfterWorkout()` → Firestore transaction (epoch-based)
+  - Skupni rezultat: `streak_days` se je posodabljal DVAKRAT ob vsakem workout-u
+- ✅ **Fix**: Odstranjeno `repository.updateStreak()` iz `ManageGamificationUseCase.recordWorkoutCompletion()` za redne workouty
+- ✅ `ManageGamificationUseCase.completeWorkoutSession()` označen `@deprecated` — ne kliče več `updateStreak()` (obdržan za BC)
+- ℹ️ **Backlog**: Streak Freeze logika je še vedno samo v `UserProfileManager.updateUserProgressAfterWorkout()`. TODO: preseli v `FirestoreGamificationRepository.updateStreak()` za eno pot.
+- ℹ️ **Stanje po Fazi 7**: Redni workout → epoch pot (UserProfileManager). Rest day → dailyHistory pot (FirestoreGamificationRepository). Extra workout REST dan → BLOKIRAN.
+
+**4. APP_MAP.md Refresh:**
+- ✅ APP_MAP.md popolnoma prepisan z novo Clean Architecture strukturo
+- ✅ Dodane sekcije: Streak Logic SSOT, Plan Path SSOT, Face Analysis SSOT, Firestore Schema
+- ✅ Dodana arhitekturna opomba za Dual Streak Engine (backlog)
+- ✅ Hitri vodič razširjen s 30+ vnosi
+
+
 
 ### 2026-05-03 — Faza 6: Golden Ratio, Rest Day PENDING_STRETCHING, Room Impl, Code Polish
 

@@ -142,6 +142,8 @@ class BodyModuleHomeViewModel(
             is BodyHomeIntent.CompleteWorkoutSession -> {
                 viewModelScope.launch {
                     _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
+                    // FIX: Streak lock — extra workout na rest dnevu ne sme vplivati na streak.
+                    val isRestDay = _ui.value.todayIsRest
                     val result = updateBodyMetrics.invoke(
                         email = intent.email,
                         totalKcal = intent.totalKcal,
@@ -150,7 +152,8 @@ class BodyModuleHomeViewModel(
                         planDay = _ui.value.planDay,
                         isExtra = intent.isExtraWorkout,
                         exerciseResults = intent.exerciseResults,
-                        focusAreas = intent.focusAreas
+                        focusAreas = intent.focusAreas,
+                        isRestDay = isRestDay  // FIX: propagiraj rest day status do use case
                     )
 
                     result.onSuccess { completionResult ->

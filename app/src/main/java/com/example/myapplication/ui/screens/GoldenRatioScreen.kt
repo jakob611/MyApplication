@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -52,10 +53,17 @@ fun AutoAnalysisSection() {
     val faceData = remember { mutableStateOf<DetectedFaceData?>(null) }
     val isLoading = remember { mutableStateOf(false) }
 
-    val photoUri = remember { mutableStateOf<Uri?>(null) }
+    // FIX: Ločimo file URI (za kamero) od display URI (za AsyncImage).
+    // displayUri se nastavi ŠELE ko kamera uspešno shrani sliko → Coil ne cachira prazne datoteke.
+    // rememberSaveable: Uri je Parcelable → preživi config change (zasuk zaslona).
+    val displayUri = rememberSaveable { mutableStateOf<Uri?>(null) }
+    val cameraFileUri = remember { mutableStateOf<Uri?>(null) }  // samo za launch
+
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && photoUri.value != null) {
-            processImage(context, photoUri.value!!, calculatedScore, advancedAnalysis, isLoading, coroutineScope, faceData)
+        if (success && cameraFileUri.value != null) {
+            // Šele zdaj nastavimo displayUri → Coil dobi veljavno sliko
+            displayUri.value = cameraFileUri.value
+            processImage(context, cameraFileUri.value!!, calculatedScore, advancedAnalysis, isLoading, coroutineScope, faceData)
         }
     }
 
@@ -71,7 +79,7 @@ fun AutoAnalysisSection() {
                     "${context.packageName}.fileprovider",
                     file
                 )
-                photoUri.value = uri
+                cameraFileUri.value = uri  // shranimo file URI, NE display URI
                 cameraLauncher.launch(uri)
             } catch (e: Exception) {
                 android.util.Log.e("GoldenRatio", "Camera launch failed", e)
@@ -84,7 +92,7 @@ fun AutoAnalysisSection() {
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            photoUri.value = uri
+            displayUri.value = uri  // galerija: takoj prikaži
             processImage(context, uri, calculatedScore, advancedAnalysis, isLoading, coroutineScope, faceData)
         }
     }
@@ -93,7 +101,7 @@ fun AutoAnalysisSection() {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (photoUri.value != null) {
+        if (displayUri.value != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -102,8 +110,14 @@ fun AutoAnalysisSection() {
                     .background(Color.Black, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
+                // FIX: diskCachePolicy DISABLED → Coil vedno reloadira svežo sliko iz kamere
                 AsyncImage(
-                    model = photoUri.value,
+                    model = coil.request.ImageRequest.Builder(context)
+                        .data(displayUri.value)
+                        .diskCachePolicy(coil.request.CachePolicy.DISABLED)
+                        .memoryCachePolicy(coil.request.CachePolicy.DISABLED)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = "Selected Photo",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -219,15 +233,14 @@ fun AutoAnalysisSection() {
                     if (permissionCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                         try {
                             val file = File(context.cacheDir, "face_analysis_${System.currentTimeMillis()}.jpg")
-                            // Ensure directory exists
                             file.parentFile?.mkdirs()
 
                             val uri = FileProvider.getUriForFile(
-                                context.applicationContext, // Use application context to be safe
+                                context.applicationContext,
                                 "${context.packageName}.fileprovider",
                                 file
                             )
-                            photoUri.value = uri
+                            cameraFileUri.value = uri  // FIX: shranimo le file URI, NE display URI
                             cameraLauncher.launch(uri)
                         } catch (e: Exception) {
                             android.util.Log.e("GoldenRatio", "Camera launch failed", e)

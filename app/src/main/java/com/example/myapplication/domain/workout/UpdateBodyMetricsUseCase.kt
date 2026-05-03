@@ -20,7 +20,9 @@ class UpdateBodyMetricsUseCase(
         isExtra: Boolean,
         exerciseResults: List<Map<String, Any>>,
         /** Fokus mišic te seje — za fetchLastSessionForFocus() v Fazi 12. */
-        focusAreas: List<String> = emptyList()
+        focusAreas: List<String> = emptyList(),
+        /** FIX: Extra workout na rest dan = samo bonus XP, brez streak posodobitve. */
+        isRestDay: Boolean = false
     ): Result<WorkoutCompletionResult?> {
         return try {
             val tz = TimeZone.currentSystemDefault()
@@ -29,7 +31,8 @@ class UpdateBodyMetricsUseCase(
             val timestamp = now.toEpochMilliseconds()
 
             // 1. Pridobivanje nagrad (XP, Early Bird, Critical Hit)
-            val res = gamificationUseCase.recordWorkoutCompletion(totalKcal.toDouble(), hour)
+            // FIX: isRestDay=true → ne posodablja streaka (samo XP)
+            val res = gamificationUseCase.recordWorkoutCompletion(totalKcal.toDouble(), hour, isRestDay = isRestDay && isExtra)
 
             // 2. Priprava podatkov (BREZ FIREBASE IMPORTA)
             val workoutDoc = mutableMapOf(
@@ -48,14 +51,17 @@ class UpdateBodyMetricsUseCase(
             workoutRepo.saveWorkoutSession(email, workoutDoc)
 
             // 3b. Faza 13.3: Streak Engine + Plan Progression + Streak Freeze (atomarna transakcija)
-            // Posodobi streak_days, plan_day, last_workout_epoch in streak_freezes v users/{uid}
-            // isExtra workouts -> incrementPlanDay=false (streak se posodobi, plan_day pa ne)
-            val progressResult = com.example.myapplication.data.settings.UserProfileManager
-                .updateUserProgressAfterWorkout(incrementPlanDay = !isExtra)
-            android.util.Log.d("UpdateBodyMetrics",
-                " Streak Engine result: planDay=${progressResult.newPlanDay}, " +
-                "streak=${progressResult.newStreakDays}, freezes=${progressResult.newStreakFreezes}, " +
-                "freezeUsed=${progressResult.freezeUsed}, isExtra=$isExtra")
+            // FIX: Extra workout na rest dnevu = samo bonus XP, brez streak in plan_day posodobitve.
+            if (!(isExtra && isRestDay)) {
+                val progressResult = com.example.myapplication.data.settings.UserProfileManager
+                    .updateUserProgressAfterWorkout(incrementPlanDay = !isExtra)
+                android.util.Log.d("UpdateBodyMetrics",
+                    " Streak Engine result: planDay=${progressResult.newPlanDay}, " +
+                    "streak=${progressResult.newStreakDays}, freezes=${progressResult.newStreakFreezes}, " +
+                    "freezeUsed=${progressResult.freezeUsed}, isExtra=$isExtra")
+            } else {
+                android.util.Log.d("UpdateBodyMetrics", "⚡ Extra workout on REST DAY → samo XP, brez streak posodobitve.")
+            }
 
             // 4. [REMOVED — Faza 13.3 Global Audit] settingsRepo.updateWorkoutStats() je bil DEPRECATED.
             //    plan_day, streak_days, last_workout_epoch — vse piše updateUserProgressAfterWorkout() v Firestore.

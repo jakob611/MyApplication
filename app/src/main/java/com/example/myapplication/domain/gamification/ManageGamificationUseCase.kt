@@ -40,18 +40,23 @@ class ManageGamificationUseCase(
         }
     }
 
-    /** Uporabnik je uspešno zaključil workout */
+    /** @deprecated Používaj recordWorkoutCompletion() — ta funkcija je legacy stub */
     suspend fun completeWorkoutSession(calKcal: Int) {
-        // UI sedaj klice samo TO!
-        repository.updateStreak(isWorkoutSuccess = true)
-
-        // Dodeli XP na podlagi kalorij iz baze (v Repositoryju), tu samo pravilo "Kcal -> XP"
+        // ⚠️ AUDIT: Ne kliče več repository.updateStreak() — streak posodobi UpdateBodyMetricsUseCase.
+        // Obdržano za backwards compatibility, logika je v recordWorkoutCompletion().
         val workoutXp = 100 + (calKcal / 10)
         repository.awardXP(workoutXp, "WORKOUT_COMPLETE")
     }
 
-    suspend fun recordWorkoutCompletion(caloriesBurned: Double, hour: Int): WorkoutCompletionResult {
-        repository.updateStreak(isWorkoutSuccess = true)
+    suspend fun recordWorkoutCompletion(caloriesBurned: Double, hour: Int, isRestDay: Boolean = false): WorkoutCompletionResult {
+        // FIX: Extra workout na rest dnevu NE sme vplivati na streak.
+        // Streak se ne posodobi, če je to rest day (stretching je edini veljavni način).
+        if (!isRestDay) {
+            // ⚠️ AUDIT FIX (Faza 7): Streak za redne workouty posodobi UserProfileManager.updateUserProgressAfterWorkout()
+            // v UpdateBodyMetricsUseCase (epoch-based z Streak Freeze). Tukaj NE kličemo repository.updateStreak()
+            // da preprečimo dvojno posodobitev streak_days.
+            // OPOMBA: Za rest day stretching streak posodobi restDayInitiated() → repository.updateStreak().
+        }
         val calorieXP = (caloriesBurned / 8).toInt()
         val baseXP = 50
         val isCritical = kotlin.random.Random.nextFloat() < 0.1f
