@@ -3,9 +3,6 @@ package com.example.myapplication.domain.gamification
 import com.example.myapplication.domain.model.AchievementProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 /**
  * Rezultat zaključenega workout-a.
@@ -41,16 +38,18 @@ class ManageGamificationUseCase(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // recordWorkoutCompletion — Faza 12: XP izračun + en atomaren klic
+    // recordWorkoutCompletion — Faza 12b: XP izračun + VEDNO en atomaren klic
+    //
+    // KRITIČNA FIX: isRestDay NE zaobide klica repozitorija!
+    // Brez vpisa v dailyHistory in last_activity_epoch midnight worker vidi prazen dan
+    // → porabi Streak Freeze ali resetira streak na 0, čeprav je uporabnik treniral.
+    //
+    // processActivityCompletion pokrije VSE scenarije v ENI transakciji:
+    //   isRestDay=false → "WORKOUT_DONE" + streak+1
+    //   isRestDay=true  → "REST_WORKOUT_DONE" + streak ohranjen (ne pade!)
     // ─────────────────────────────────────────────────────────────────────────
     /**
-     * Zaključi vadbo: izračuna skupni XP, nato pokliče atomarni engine.
-     *
-     * Za normalni workout (isRestDay=false):
-     *   → pokliče repository.processWorkoutCompletion(streak + XP + kalorije v 1 tx)
-     *
-     * Za extra workout na rest dnevu (isRestDay=true):
-     *   → samo XP + kalorije, brez streak posodobitve
+     * Zaključi vadbo: izračuna skupni XP, nato pokliče atomarni engine za vse scenarije.
      *
      * XP formula:
      *   calorieXP  = caloriesBurned / 8   (1 XP na 8 kcal)
@@ -60,7 +59,7 @@ class ManageGamificationUseCase(
      *
      * @param caloriesBurned kcal porabljene med vadbo
      * @param hour           ura vadbe (rezervirano za Early Bird / Night Owl bonus)
-     * @param isRestDay      true = extra vadba na rest dnevu → samo XP, brez streak
+     * @param isRestDay      true = extra vadba na rest dnevu → streak se ohrani (ne poveča, ne pade)
      * @param incrementPlanDay true = redni workout → plan_day +1 v Firestore
      */
     suspend fun recordWorkoutCompletion(
@@ -71,33 +70,21 @@ class ManageGamificationUseCase(
     ): WorkoutCompletionResult {
 
         // ── XP izračun (pred klicem repozitorija) ────────────────────────────
-        val calorieXP   = (caloriesBurned / 8).toInt()                      // 1 XP = 8 kcal
+        val calorieXP   = (caloriesBurned / 8).toInt()         // 1 XP = 8 kcal
         val baseXP      = 50
-        val isCritical  = kotlin.random.Random.nextFloat() < 0.1f           // 10% verjetnost
-        val finalBaseXP = if (isCritical) baseXP * 2 else baseXP            // Critical = 2× base
+        val isCritical  = kotlin.random.Random.nextFloat() < 0.1f
+        val finalBaseXP = if (isCritical) baseXP * 2 else baseXP
         val totalXP     = finalBaseXP + calorieXP
         // ─────────────────────────────────────────────────────────────────────
 
-        if (!isRestDay) {
-            // Normalni workout: atomarna transakcija za streak + XP + kalorije
-            repository.processWorkoutCompletion(
-                incrementPlanDay = incrementPlanDay,
-                xpToBeAwarded    = totalXP,
-                xpReason         = "WORKOUT_COMPLETE",
-                caloriesBurned   = caloriesBurned
-            )
-        } else {
-            // Extra workout na rest dnevu: samo XP + kalorije, brez streak posodobitve
-            repository.awardXP(totalXP, "WORKOUT_COMPLETE")
-            if (caloriesBurned > 0.0) {
-                try {
-                    val todayStr = Clock.System.now()
-                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                        .date.toString()
-                    repository.logBurnedCalories(todayStr, caloriesBurned)
-                } catch (_: Exception) { /* tiha napaka — ne sesuj UI */ }
-            }
-        }
+        // VEDNO pokliči atomarni engine — isRestDay=true NE sme zaobiti tega klica!
+        repository.processActivityCompletion(
+            isRestDay        = isRestDay,
+            incrementPlanDay = incrementPlanDay,
+            xpToBeAwarded    = totalXP,
+            xpReason         = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE",
+            caloriesBurned   = caloriesBurned
+        )
 
         return WorkoutCompletionResult(emptyList(), totalXP, isCritical)
     }

@@ -54,20 +54,29 @@ interface GamificationRepository {
     suspend fun consumeStreakFreeze(): Boolean
 
     /**
-     * Faza 12 — Unified Streak + XP + Calories Engine.
-     * Vsa logika za zaključeno vadbo v Eni atomarni Firestore transakciji:
-     * - Epoch-based streak izračun (dayDiff z Streak Freeze podporo)
-     * - Zapiše dailyHistory.$today = "WORKOUT_DONE"
-     * - Posodobi streak_days, last_activity_epoch, plan_day
+     * Faza 12b — Unified Activity Completion Engine (nadomešča processWorkoutCompletion).
+     *
+     * ENA atomarna Firestore transakcija za VSAKO aktivnost — redni trening ALI extra rest-day workout:
+     * - Epoch-based streak izračun z isRestDay matriko (dayDiff z Streak Freeze podporo)
+     * - Vedno zapiše dailyHistory.$today ("WORKOUT_DONE" ali "REST_WORKOUT_DONE")
+     * - Vedno posodobi last_activity_epoch → midnight check nikoli ne vidi praznega dne
      * - Atomarno dodeli XP in beleži xp_history
      * - Zapiše porabljene kalorije v dailyLogs
      *
-     * @param incrementPlanDay  true za redne workouty, false za extra treninge
-     * @param xpToBeAwarded     skupni XP za to vadbo (base + kalorije, critical pomnoženo)
-     * @param xpReason          razlog za XP log (npr. "WORKOUT_COMPLETE")
-     * @param caloriesBurned    porabljene kalorije za Nutrition bridge (0.0 = preskoči)
+     * Streak matrika:
+     *   oldLastEpoch == 0L → 1 (prvi zapis)
+     *   dayDiff == 0L      → oldStreak (de-dup)
+     *   dayDiff == 1L      → if (isRestDay) oldStreak else oldStreak + 1
+     *   dayDiff > 1L       → freeze? ohrani : 1
+     *
+     * @param isRestDay        true = extra workout na rest dnevu (streak se NE poveča, a se zapiše)
+     * @param incrementPlanDay true za redne workouty (plan_day +1), false za extra
+     * @param xpToBeAwarded    skupni XP za to aktivnost
+     * @param xpReason         razlog za XP log
+     * @param caloriesBurned   porabljene kalorije za Nutrition bridge (0.0 = preskoči)
      */
-    suspend fun processWorkoutCompletion(
+    suspend fun processActivityCompletion(
+        isRestDay: Boolean,
         incrementPlanDay: Boolean,
         xpToBeAwarded: Int,
         xpReason: String,

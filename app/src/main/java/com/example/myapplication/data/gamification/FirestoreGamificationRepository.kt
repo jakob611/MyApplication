@@ -169,10 +169,23 @@ class FirestoreGamificationRepository : GamificationRepository {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // processWorkoutCompletion — Faza 12: ENA atomarna transakcija
-    // Streak + plan_day + XP + xp_history + burnedCalories hkrati ali nič.
+    // processActivityCompletion — Faza 12b: ENA atomarna transakcija za VSE aktivnosti
+    //
+    // KRITIČNA FIX (Faza 12b): isRestDay=true NE sme zaobiti transakcije!
+    // Brez vpisa v dailyHistory in last_activity_epoch midnight worker vidi prazen dan
+    // in kaznuje uporabnika z Freeze porabo ali streakResetom — čeprav je treniral.
+    //
+    // Streak matrika:
+    //   dayDiff == 1L + isRestDay=true  → ohrani streak (rest day ne prispeva +1)
+    //   dayDiff == 1L + isRestDay=false → streak + 1     (redni workout)
+    //   dayDiff > 1L                    → freeze? ohrani : 1
+    //
+    // dailyHistory status:
+    //   isRestDay=false → "WORKOUT_DONE"
+    //   isRestDay=true  → "REST_WORKOUT_DONE"
     // ─────────────────────────────────────────────────────────────────────────
-    override suspend fun processWorkoutCompletion(
+    override suspend fun processActivityCompletion(
+        isRestDay: Boolean,
         incrementPlanDay: Boolean,
         xpToBeAwarded: Int,
         xpReason: String,
@@ -182,62 +195,71 @@ class FirestoreGamificationRepository : GamificationRepository {
         val todayStr   = getTodayStr()
         val todayEpoch = getTodayEpoch()
         val nowMillis  = Clock.System.now().toEpochMilliseconds()
+        val todayStatus = if (isRestDay) "REST_WORKOUT_DONE" else "WORKOUT_DONE"
 
         try {
             db.runTransaction { transaction ->
                 // ── READ faza (vse read-e pred write-i) ────────────────────
                 val snapshot = transaction.get(userRef)
 
-                // De-dup: danes že WORKOUT_DONE → preskoči
+                // De-dup: prepreči ponavljajoče klice istega tipa za isti dan
+                // "WORKOUT_DONE" je višja prioriteta — ne prepiši ga z "REST_WORKOUT_DONE"
                 @Suppress("UNCHECKED_CAST")
                 val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-                if (dailyHistory[todayStr] == "WORKOUT_DONE") {
-                    Log.d("GamificationRepo", "processWorkoutCompletion: danes že WORKOUT_DONE — preskočim.")
+                val existingStatus = dailyHistory[todayStr]?.toString()
+                if (existingStatus == "WORKOUT_DONE" || existingStatus == todayStatus) {
+                    Log.d("GamificationRepo", "processActivityCompletion: danes že '$existingStatus' — preskočim.")
                     return@runTransaction null
                 }
 
-                val oldStreak    = (snapshot.getLong("streak_days")          ?: 0L).toInt()
-                val oldLastEpoch =  snapshot.getLong("last_activity_epoch")  ?: 0L
-                val oldPlanDay   = (snapshot.getLong("plan_day")             ?: 1L).toInt()
-                val oldFreezes   = (snapshot.getLong("streak_freezes")       ?: 0L).toInt()
-                val currentXp    = (snapshot.getLong("xp")                   ?: 0L).toInt()
+                val oldStreak    = (snapshot.getLong("streak_days")         ?: 0L).toInt()
+                val oldLastEpoch =  snapshot.getLong("last_activity_epoch") ?: 0L
+                val oldPlanDay   = (snapshot.getLong("plan_day")            ?: 1L).toInt()
+                val oldFreezes   = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
+                val currentXp    = (snapshot.getLong("xp")                  ?: 0L).toInt()
 
-                // Burned calories: atomarno branje dailyLogs dokumenta
+                // Atomarno branje dailyLogs dokumenta (za akumulacijo kalorij)
                 val dailyLogRef      = db.collection("dailyLogs").document(todayStr)
                 val dailyLogSnapshot = transaction.get(dailyLogRef)
                 val existingCals     = (dailyLogSnapshot.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
 
-                // ── Streak izračun (epoch-based) ───────────────────────────
+                // ── Streak izračun (epoch-based z isRestDay matriko) ────────
                 val dayDiff    = todayEpoch - oldLastEpoch
                 var newFreezes = oldFreezes
-                val newStreak  = when {
-                    oldLastEpoch == 0L -> 1
-                    dayDiff == 0L      -> oldStreak
-                    dayDiff == 1L      -> oldStreak + 1
+                val newStreak: Int = when {
+                    oldLastEpoch == 0L -> 1          // prvi zapis kdajkoli
+                    dayDiff == 0L      -> oldStreak  // isti dan (ne bi smelo sem — de-dup zgoraj)
+                    dayDiff == 1L      -> {
+                        // Včeraj aktiven: rest day ohrani streak, redni workout ga poveča
+                        if (isRestDay) oldStreak else oldStreak + 1
+                    }
                     else -> {
+                        // Vrzel > 1 dan: preveri Streak Freeze
                         if (oldFreezes > 0) {
                             newFreezes = oldFreezes - 1
-                            Log.d("GamificationRepo", "❄️ processWorkoutCompletion Freeze porabljen! Ostalo: $newFreezes")
-                            oldStreak
-                        } else { 1 }
+                            Log.d("GamificationRepo", "❄️ processActivityCompletion Freeze porabljen! Ostalo: $newFreezes")
+                            oldStreak  // ohrani streak, NE poveča
+                        } else {
+                            1          // ni freeze → ponastavi na 1
+                        }
                     }
                 }
 
-                // ── XP izračun ─────────────────────────────────────────────
+                // ── XP + Level ─────────────────────────────────────────────
                 val newXp    = currentXp + xpToBeAwarded
                 val newLevel = UserProfile.calculateLevel(newXp)
 
-                // ── Plan day ───────────────────────────────────────────────
+                // ── Plan day (samo za redne workouty) ─────────────────────
                 val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
 
                 // ── WRITE faza ─────────────────────────────────────────────
-                // 1. Glavni user dokument (streak + XP + plan_day + epoch + dailyHistory)
+                // 1. Glavni user dokument — streak + XP + plan_day + epoch + dailyHistory
                 val userUpdates = mutableMapOf<String, Any>(
                     "streak_days"             to newStreak,
                     "plan_day"                to newPlanDay,
-                    "last_activity_epoch"     to todayEpoch,
+                    "last_activity_epoch"     to todayEpoch,   // ← VEDNO posodobi (zavaruje pred midnight check)
                     "last_streak_update_date" to todayStr,
-                    "dailyHistory.$todayStr"  to "WORKOUT_DONE",
+                    "dailyHistory.$todayStr"  to todayStatus,  // "WORKOUT_DONE" ali "REST_WORKOUT_DONE"
                     "xp"                      to newXp,
                     "level"                   to newLevel
                 )
@@ -268,13 +290,15 @@ class FirestoreGamificationRepository : GamificationRepository {
                 }
 
                 Log.d("GamificationRepo",
-                    "✅ processWorkoutCompletion: streak=$newStreak, planDay=$newPlanDay, " +
+                    "✅ processActivityCompletion [isRestDay=$isRestDay]: " +
+                    "streak=$newStreak, planDay=$newPlanDay, " +
                     "xp=+$xpToBeAwarded (→$newXp), level=$newLevel, " +
-                    "calories=$caloriesBurned, freezeUsed=${newFreezes != oldFreezes}")
+                    "calories=$caloriesBurned, status=$todayStatus, " +
+                    "freezeUsed=${newFreezes != oldFreezes}")
                 null
             }.await()
         } catch (e: Exception) {
-            Log.e("GamificationRepo", "❌ processWorkoutCompletion failed: ${e.message}", e)
+            Log.e("GamificationRepo", "❌ processActivityCompletion failed: ${e.message}", e)
         }
     }
 
@@ -330,7 +354,9 @@ class FirestoreGamificationRepository : GamificationRepository {
             val snapshot    = userRef.get().await()
             val weeklyTarget    = snapshot.getLong("weekly_target")?.toInt() ?: 0
             val todayStatus     = getTodayStatus() ?: ""
-            val workoutDoneToday = todayStatus == "WORKOUT_DONE" || todayStatus == "STRETCHING_DONE"
+            val workoutDoneToday = todayStatus == "WORKOUT_DONE"
+                    || todayStatus == "REST_WORKOUT_DONE"
+                    || todayStatus == "STRETCHING_DONE"
             GamificationState(weeklyTarget = weeklyTarget, workoutDoneToday = workoutDoneToday)
         } catch (e: Exception) { GamificationState() }
     }
@@ -374,4 +400,6 @@ class FirestoreGamificationRepository : GamificationRepository {
         }
     }
 }
+
+
 
