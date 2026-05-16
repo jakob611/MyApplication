@@ -179,11 +179,17 @@ fun NutritionScreen(
 
     // KRITIČNO: Preberi nutrition plan iz NutritionPlanStore (posodobljiv plan)
     var nutritionPlan by remember { mutableStateOf<com.example.myapplication.data.NutritionPlan?>(null) }
+    // Faza 14b — varovalka: true šele ko loadNutritionPlan() NI VEČ pending
+    // (plan je null = uporabnik nima plana, kar je DRUGAČNO od "plan se še nalaga")
+    var nutritionPlanLoadComplete by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
         if (uid != null) {
             nutritionPlan = com.example.myapplication.persistence.NutritionPlanStore.loadNutritionPlan(uid)
         }
+        // Nastavi flag VEDNO na koncu — ne glede na to, ali je plan null ali ne.
+        // null = dokazano ni plana → fallback vrednosti so legitimne za zamrznitev.
+        nutritionPlanLoadComplete = true
     }
 
     // Nastavi dinamični TDEE: preberi BMR iz shranjenih algoritmičnih podatkov
@@ -303,23 +309,42 @@ fun NutritionScreen(
 
     // ── Identifikacija uporabnika ──────────────────────────────────────────────
     // POMEMBNO: uid mora biti v remember{} — getCurrentUserDocId() se ne sme klicati
-    // ob vsakem recomposition, ker bi to vsakič restartalo DisposableEffect(uid, todayId)
-    // in ustvarjalo nove Firestore listenerje (memory leak + napačno obnašanje).
+    // ob vsakem recomposition, ker bi to povzročalo nove Firestore kliche.
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
-    val todayId = remember { kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString() }
+
+    // Faza 14b: todayId NI VEČ remember{} — prihaja iz ViewModel.currentDate StateFlow.
+    // Ob polnočnem prehodu ViewModel kliče onDayTransition(newDate) → currentDate se posodobi
+    // → todayId se avtomatično posodobi → vsi LaunchedEffecti z todayId kot ključem se re-sprožijo.
+    val todayId by nutritionViewModel.currentDate.collectAsState()
+
+    // Faza 14b — Midnight Bug Fix: Preverjamo prehod dneva vsako minuto.
+    // Če se datum spremeni (00:00 prehod), pokličemo onDayTransition() → ViewModel resetira
+    // Firestore listener, frozenTargets, foods in totals za novi dan — brez ponovnega zagona app.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L) // preveri vsako minuto
+            val newDate = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+            if (newDate != todayId) {
+                nutritionViewModel.onDayTransition(newDate)
+                // todayId se samodejno posodobi prek currentDate StateFlow
+                Log.d("NutritionScreen", "⏰ Midnight transition: $todayId → $newDate")
+            }
+        }
+    }
 
     // Faza 14 — Zgodovinski Snapshoti: Zagotovi zamrznitev ciljnih vrednosti za današnji dan.
-    // Kliče se, ko so cilji (rawTargetCalories, makri) prvič znani in je todayId določen.
-    // DailyLogRepository ignorira initTarget* parametre, če dokument za ta dan že obstaja
-    // → idempotentno, varne za vsakič ponovni klic ob recomposition-u.
-    LaunchedEffect(rawTargetCalories, targetProtein, targetCarbs, targetFat) {
+    // Faza 14b — Varovalka: nutritionPlanLoadComplete kot ključ zagotovi re-trigger po nalaganju plana.
+    // DailyLogRepository ignorira initTarget* parametre, če dokument za ta dan že obstaja.
+    LaunchedEffect(rawTargetCalories, targetProtein, targetCarbs, targetFat, nutritionPlanLoadComplete) {
         if (rawTargetCalories > 0) {
             nutritionViewModel.ensureDayInitialized(
                 date           = todayId,
                 targetCalories = rawTargetCalories,
                 targetProtein  = targetProtein,
                 targetCarbs    = targetCarbs,
-                targetFat      = targetFat
+                targetFat      = targetFat,
+                isPlanLoaded   = nutritionPlanLoadComplete  // ← varovalka pred lažnimi fallbacki
             )
         }
     }

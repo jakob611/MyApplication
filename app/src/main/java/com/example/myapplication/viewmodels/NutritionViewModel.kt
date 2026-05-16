@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -61,6 +62,18 @@ class NutritionViewModel(
      *  null = dokument ni inicializiran ali je stari dan brez snapshota (UI bo uporabil fallback). */
     private val _frozenTargets = MutableStateFlow<FrozenDayTargets?>(null)
     val frozenTargets: StateFlow<FrozenDayTargets?> = _frozenTargets.asStateFlow()
+
+    // ── Faza 14b: Aktivni datum — reaktiven ob polnočnem prehodu ──────────────
+    /**
+     * Aktivni datum za Firestore subscription. Ko se dan zamenja, se `_activeDateFlow` posodobi
+     * prek [onDayTransition] → `observeDailyTotals()` collectLatest samodejno prekine stari
+     * Firestore listener in začne novega za novi datum. Brez ponovnega zagona aplikacije.
+     */
+    private val _activeDateFlow = MutableStateFlow(
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+    )
+    /** Izpostavljen aktivni datum za polnočni nadzor v NutritionScreen. */
+    val currentDate: StateFlow<String> = _activeDateFlow.asStateFlow()
 
     // ── Optimistična voda (Faza 13.1) ─────────────────────────────────────────
     /** Lokalna override vrednost za vodo — UI se posodobi TAKOJ, Firestore sync je debounced. */
@@ -276,43 +289,45 @@ class NutritionViewModel(
         viewModelScope.launch {
             uidFlow.collect { uid ->
                 if (uid != null) {
-                    val todayId = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-                    com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
-                        Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
+                    // Faza 14b: collectLatest na _activeDateFlow — ob spremembi datuma (onDayTransition)
+                    // coroutine za stari dan se samodejno prekine, zažene se nov listener za novi dan.
+                    _activeDateFlow.collectLatest { todayId ->
+                        com.example.myapplication.data.nutrition.FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
+                            Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
 
-                        val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
-                        val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
-                        val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+                            val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+                            val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
+                            val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
 
-                        updateDailyTotals(
-                            consumed = serverConsumed,
-                            burned   = serverBurned,
-                            water    = serverWater
-                        )
-
-                        // Faza 14 — Zgodovinski Snapshoti: preberi zamrznjene cilje tega dne
-                        val frozenCal = (doc.get("targetCalories") as? Number)?.toInt()
-                        if (frozenCal != null) {
-                            _frozenTargets.value = FrozenDayTargets(
-                                calories = frozenCal,
-                                protein  = (doc.get("targetProtein") as? Number)?.toInt(),
-                                carbs    = (doc.get("targetCarbs")   as? Number)?.toInt(),
-                                fat      = (doc.get("targetFat")     as? Number)?.toInt()
+                            updateDailyTotals(
+                                consumed = serverConsumed,
+                                burned   = serverBurned,
+                                water    = serverWater
                             )
-                        }
 
-                        // Debug store — posodobi surove vrednosti za DebugDashboard
-                        com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
-                        com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
-                        com.example.myapplication.debug.NutritionDebugStore.lastWaterMl = serverWater
+                            // Faza 14 — Zgodovinski Snapshoti: preberi zamrznjene cilje tega dne
+                            val frozenCal = (doc.get("targetCalories") as? Number)?.toInt()
+                            if (frozenCal != null) {
+                                _frozenTargets.value = FrozenDayTargets(
+                                    calories = frozenCal,
+                                    protein  = (doc.get("targetProtein") as? Number)?.toInt(),
+                                    carbs    = (doc.get("targetCarbs")   as? Number)?.toInt(),
+                                    fat      = (doc.get("targetFat")     as? Number)?.toInt()
+                                )
+                            }
 
-                        // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
-                        val rawItems = doc.get("items") as? List<*>
-                        if (rawItems != null) {
-                            val foods = parseRawItemsToTrackedFoods(rawItems)
-                            if (foods.isNotEmpty()) _firestoreFoods.value = foods
+                            // Debug store — posodobi surove vrednosti za DebugDashboard
+                            com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
+                            com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
+                            com.example.myapplication.debug.NutritionDebugStore.lastWaterMl = serverWater
+
+                            // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
+                            val rawItems = doc.get("items") as? List<*>
+                            if (rawItems != null) {
+                                val foods = parseRawItemsToTrackedFoods(rawItems)
+                                if (foods.isNotEmpty()) _firestoreFoods.value = foods
+                            }
                         }
-                        // ────────────────────────────────────────────────────────────────────
                     }
                 }
             }
@@ -365,29 +380,56 @@ class NutritionViewModel(
     }
 
     /**
+     * Faza 14b — Polnočni Prehod: Pokliči ko NutritionScreen zazna spremembo datuma.
+     *
+     * Resetira vse state starega dne in reaktivira Firestore subscription za novi dan.
+     * [_activeDateFlow] emitira novi datum → [observeDailyTotals] collectLatest samodejno
+     * prekine stari listener in zažene novega za [newDate]. Brez ponovnega zagona aplikacije.
+     *
+     * @param newDate Nov datum v obliki "YYYY-MM-DD"
+     */
+    fun onDayTransition(newDate: String) {
+        _frozenTargets.value = null         // Počisti zamrznjene cilje starega dne
+        _firestoreFoods.value = emptyList() // Počisti jedilnik starega dne
+        _uiState.value = DailyTotals()      // Reset kalorije, voda, burned
+        _localWaterMl.value = null          // Počisti optimistično vodo
+        _activeDateFlow.value = newDate     // ← Sproži collectLatest → nov Firestore listener
+        Log.d("NutritionVM", "⏰ onDayTransition → novi dan: $newDate")
+    }
+
+    /**
      * Faza 14 — Zgodovinski Snapshoti: Zagotovi, da dailyLogs dokument za današnji dan
      * vsebuje zamrznjene kalorične in makro cilje.
      *
-     * Kliče se ob odprtju NutritionScreen-a, ko so cilji že izračunani.
-     * Zamrznitev se izvede SAMO ob kreaciji novega dokumenta (nov dan) —
-     * [DailyLogRepository.updateDailyLog] ignorira initTarget* parametre, če dokument že obstaja.
+     * Faza 14b — Varovalka pred lažnimi fallbacki: Če je [isPlanLoaded] == false,
+     * plan iz Firestore še ni prispel — zamrznitev se odloži (ne bo zamrznila 2000 kcal fallbacka).
+     * LaunchedEffect v screenu bo poklican znova, ko se [isPlanLoaded] spremeni v true.
      *
      * @param date             Datum v obliki "YYYY-MM-DD"
      * @param targetCalories   Kalorični cilj tega dne
      * @param targetProtein    Proteinski cilj (g)
      * @param targetCarbs      Ogljikohidratni cilj (g)
      * @param targetFat        Maščobni cilj (g)
+     * @param isPlanLoaded     true = NutritionPlanStore.loadNutritionPlan() je zaključil (uspešno ali null)
      */
     fun ensureDayInitialized(
         date: String,
         targetCalories: Int,
         targetProtein: Int,
         targetCarbs: Int,
-        targetFat: Int
+        targetFat: Int,
+        isPlanLoaded: Boolean = false
     ) {
+        if (!isPlanLoaded) {
+            // Plan še ni naložen — ne zamrzni fallback vrednosti 2000 kcal.
+            // LaunchedEffect(rawTargetCalories, ..., nutritionPlanLoadComplete) bo poklican znova,
+            // ko nutritionPlanLoadComplete postane true.
+            Log.d("NutritionVM", "ensureDayInitialized: preskočeno — plan še ni naložen")
+            return
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(
-                date              = date,
+                date               = date,
                 initTargetCalories = targetCalories,
                 initTargetProtein  = targetProtein,
                 initTargetCarbs    = targetCarbs,
