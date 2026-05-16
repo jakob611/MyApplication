@@ -572,6 +572,14 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 11. ✅ Vzporedni `async` fetch-i za: `users/{uid}` (XP/level), `user_plans/{uid}` (plani), `weightLogs` (zadnjih 10). Vsi tečejo hkrati — čakamo z `.await()`. Po uspešnem prenosu: `"Profile Ready! ✓"` (1.5s) → overlay izgine.
 12. ✅ Po intenzivnem prenosu se nastavi `initial_sync_done_<uid> = true` → nadaljnji zagoni gredo skozi normalni (varčni) tok.
 
+### 2026-05-16 — Clean Architecture Build Fix (3 compile napake)
+
+**Napake odpravili po CA refactoringu:**
+- ✅ `GetBodyMetricsUseCase.kt` — dodan `import kotlinx.datetime.toLocalDateTime` (manjkal po refactoring-u)
+- ✅ `AppDrawer.kt` — `calculateAutoUnlockedBadgeCount()`: podaja `UserProfile` v `getBadgeProgress()` ki zdaj zahteva domenski model `AchievementProfile`. Dodan mapping `UserProfile → AchievementProfile` na klicnem mestu.
+- ✅ `WorkoutSessionScreen.kt:554` — `result.unlockedBadges` je `List<String>` (badge ID-ji), `onBadgeUnlocked` pa pričakuje `Badge` objekt. Dodan lookup `BadgeDefinitions.ALL_BADGES.find { it.id == badgeId }`.
+- ✅ BUILD SUCCESSFUL ✅
+
 ### 2026-05-03 — Faza 8: Unified Streak Engine + Stretching Button Fix
 
 **1. Unified Streak Engine (eliminacija Dual Engine):**
