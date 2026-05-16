@@ -168,16 +168,18 @@ class DonutProgressView @JvmOverloads constructor(
                 touchAngle = (touchAngle + 360) % 360
                 val adjustedAngle = (touchAngle - startAngle + 360) % 360
                 val consumedFraction = (consumedCalories / targetCalories.toFloat()).coerceIn(0f, 1f)
-                val availableSweep = sweepAngle * consumedFraction
+                val availableSweep   = sweepAngle * consumedFraction
                 if (adjustedAngle <= availableSweep) {
                     val totalMacroCalories = fatCalories + proteinCalories + carbsCalories
                     if (totalMacroCalories > 0) {
-                        val fatSweep = sweepAngle * (fatCalories.toFloat() / targetCalories.toFloat())
-                        val proteinSweep = sweepAngle * (proteinCalories.toFloat() / targetCalories.toFloat())
+                        // Faza 13b FIX: koti segmentov kot delež ZAUŽITIH kalorij (availableSweep),
+                        // ne targetCalories. Segmenti so zdaj vizualno vsebovani znotraj consumed loka.
+                        val fatSweep     = availableSweep * (fatCalories.toFloat() / totalMacroCalories)
+                        val proteinSweep = availableSweep * (proteinCalories.toFloat() / totalMacroCalories)
                         clickedSegment = when {
-                            adjustedAngle <= fatSweep -> "fat"
-                            adjustedAngle <= fatSweep + proteinSweep -> "protein"
-                            else -> "carbs"
+                            adjustedAngle <= fatSweep                      -> "fat"
+                            adjustedAngle <= fatSweep + proteinSweep       -> "protein"
+                            else                                           -> "carbs"
                         }
                         performClick(); return true
                     }
@@ -241,18 +243,19 @@ class DonutProgressView @JvmOverloads constructor(
             val unitLabel = if (isImperial) "oz" else "g"
             val details = when (clickedSegment) {
                 "fat" -> {
+                    // Faza 13b FIX: roundToInt() namesto round(g/10.0)*10 (1g natančnost)
                     val g = fatCalories / 9.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
                     SegmentDetails("$value $unitLabel", "Fat", 0xFFEF4444.toInt(), fatCalories)
                 }
                 "protein" -> {
                     val g = proteinCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
                     SegmentDetails("$value $unitLabel", "Protein", 0xFF10B981.toInt(), proteinCalories)
                 }
                 "carbs" -> {
                     val g = carbsCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else (kotlin.math.round(g / 10.0) * 10).toInt()
+                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
                     SegmentDetails("$value $unitLabel", "Carbs", 0xFF3B82F6.toInt(), carbsCalories)
                 }
                 else -> SegmentDetails(centerValue, centerLabel, textColor, 0)

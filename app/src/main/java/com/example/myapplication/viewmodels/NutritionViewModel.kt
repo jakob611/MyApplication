@@ -85,6 +85,36 @@ class NutritionViewModel(
      * Shrani hrano v Firestore asinhronično.
      * Nastavi [isLoading] = true med trajanjem operacije, da UI lahko onemogoči gumbe.
      */
+    /**
+     * Faza 13b — Briši sledeni vnos hrane.
+     * Kliče atomarno transakcijo v repozitoriju: odstrani iz items + odšteje kalorije.
+     *
+     * @param foodId       UUID vnosa (TrackedFood.id)
+     * @param todayId      Datum v obliki "YYYY-MM-DD"
+     * @param caloriesKcal Kalorije tega vnosa za odštevanje iz consumedCalories
+     * @param onDone       Callback po končani operaciji (uspeh ali neuspeh)
+     */
+    fun removeFoodItemAsync(
+        foodId: String,
+        todayId: String,
+        caloriesKcal: Double,
+        onDone: () -> Unit = {}
+    ) {
+        _isLoading.value = true
+        viewModelScope.launch {
+            try {
+                com.example.myapplication.data.nutrition.FoodRepositoryImpl
+                    .removeFoodItem(foodId, todayId, caloriesKcal)
+                Log.d("NutritionVM", "✅ Food removed: id=$foodId (−${caloriesKcal.toInt()} kcal)")
+            } catch (e: Exception) {
+                Log.e("NutritionVM", "❌ removeFoodItem failed: ${e.message}", e)
+            } finally {
+                _isLoading.value = false
+                onDone()
+            }
+        }
+    }
+
     fun logFoodAsync(foodMap: Map<String, Any>, todayId: String, onDone: () -> Unit = {}) {
         _isLoading.value = true
         viewModelScope.launch {

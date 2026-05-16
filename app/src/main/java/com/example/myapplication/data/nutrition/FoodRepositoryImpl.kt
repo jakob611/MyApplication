@@ -109,6 +109,47 @@ object FoodRepositoryImpl {
         }.await()
     }
 
+    /**
+     * Faza 13b — Briši sledeni vnos hrane iz dailyLogs/{dateStr}/items.
+     *
+     * Atomarna Firestore transakcija:
+     *  1. Prebere obstoječi seznam items
+     *  2. Poišče element po id polju in ga odstrani
+     *  3. Odšteje caloriesKcal od consumedCalories (coerceAtLeast(0.0) prepreči negativne)
+     *
+     * @param foodId      UUID vnosa (polje "id" v items mapi)
+     * @param dateStr     Datum v obliki "YYYY-MM-DD"
+     * @param caloriesKcal Kalorije tega vnosa za odštevanje
+     */
+    suspend fun removeFoodItem(foodId: String, dateStr: String, caloriesKcal: Double) {
+        val docRef      = FirestoreHelper.getCurrentUserDocRef()
+        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+
+        FirestoreHelper.getDb().runTransaction { transaction ->
+            val snapshot = transaction.get(dailyLogRef)
+
+            // Preberi obstoječi items seznam
+            @Suppress("UNCHECKED_CAST")
+            val existingItems = (snapshot.get("items") as? List<Map<String, Any>>) ?: emptyList()
+
+            // Poišči in odstrani element po id — varno tudi če id ne obstaja
+            val updatedItems = existingItems.filter { item ->
+                (item["id"] as? String) != foodId
+            }
+
+            // Odštej kalorije — coerceAtLeast(0.0) prepreči negativne vrednosti
+            val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
+            val newConsumed     = (currentConsumed - caloriesKcal).coerceAtLeast(0.0)
+
+            transaction.update(dailyLogRef, mapOf(
+                "items"             to updatedItems,
+                "consumedCalories"  to newConsumed,
+                "updatedAt"         to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            ))
+            null
+        }.await()
+    }
+
     suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) {
         val docRef = FirestoreHelper.getCurrentUserDocRef()
         val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
