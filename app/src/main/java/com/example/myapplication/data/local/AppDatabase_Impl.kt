@@ -12,6 +12,10 @@ package com.example.myapplication.data.local
 //   2. Dodaj ksp("androidx.room:room-compiler:2.6.1")
 //   3. Izbriši to datoteko ročno (Right-click → Delete v Android Studiu)
 //
+// Preizkušene KSP verzije za Kotlin 2.2.10 (vse FAIL):
+//   2.2.10-1.0.29, 1.0.30, 1.0.31, 1.0.32, 1.0.33, 1.0.34, 1.0.35
+// Preveri https://github.com/google/ksp/releases za novejše verzije.
+//
 // Velja za Room 2.6.1.
 // =============================================================================
 

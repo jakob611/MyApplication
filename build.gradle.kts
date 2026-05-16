@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.10" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.10" apply false
     id("com.google.gms.google-services") version "4.4.1" apply false
-    // KSP: Ko bo na voljo za Kotlin 2.2.x, dodaj:
-    //   id("com.google.devtools.ksp") version "2.2.x-1.0.Y" apply false
-    // In takrat izbriši src/main/java/.../AppDatabase_Impl.kt (ročno pisani stub).
+    // KSP: Kotlin 2.2.10 nima uradne KSP verzije na Maven (preizkušeno: 1.0.29–1.0.35).
+    // Ko Google objavi ksp za 2.2.10: id("com.google.devtools.ksp") version "2.2.10-1.0.XX" apply false
+    // Preveri: https://github.com/google/ksp/releases
 }
