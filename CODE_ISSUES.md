@@ -572,6 +572,17 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 11. ✅ Vzporedni `async` fetch-i za: `users/{uid}` (XP/level), `user_plans/{uid}` (plani), `weightLogs` (zadnjih 10). Vsi tečejo hkrati — čakamo z `.await()`. Po uspešnem prenosu: `"Profile Ready! ✓"` (1.5s) → overlay izgine.
 12. ✅ Po intenzivnem prenosu se nastavi `initial_sync_done_<uid> = true` → nadaljnji zagoni gredo skozi normalni (varčni) tok.
 
+### 2026-05-16 — Faza 11: Looksmaxing Engine Algorithmic Overhaul
+
+**1. CalculateGoldenRatioUseCase.kt — celotna matematična prenova:**
+- ✅ **Avtomatska normalizacija (Resolution Invariance)**: Odstranjen parameter `normalizeBy`. Normalizer se zdaj avtomatično izračuna kot razdalja med marker 15 (LEFT_EYE) in marker 16 (RIGHT_EYE). Če kateri koli manjka ali razdalja = 0.0, vrne `GoldenRatioAnalysis(emptyList(), 1.0)` — brez deljenja z ničlo.
+- ✅ **Odstranitev mrtve kode**: `calculateBeautyScore()` fizično izbrisana. Vsebovala je fantomske markerje 21 in 25, ki jih `AndroidMLKitFaceDetector` nikoli ne nastavi.
+- ✅ **Edini vir resnice**: `calculateAdvancedGoldenRatio().weightedScore` = Beauty Score.
+- ✅ **Novi proporec asimetrije ust**: `Proportion("Asimetrija ust (Levo/Desno od nosu)", Pair(27, 23), Pair(29, 23), weight = 1.4)`. `ideal = 1.0` specifično za ta proporec (ne phi) — popolna simetrija = score 1.0.
+- ✅ **Zamenjava markerja 11 → 1**: Vsi proporci zdaj uporabljajo marker 1 (vrh glave/čelo = `bounds.top center`) namesto 11, ki ga detektor ne pozna.
+- ✅ **manualMeasurementsToMarkers posodobljeno**: Dodana markerja 27 (MOUTH_LEFT) in 29 (MOUTH_RIGHT); zenici 15/16 vedno nastavljeni (potrebni za normalizer).
+- ✅ **Crash protection**: null-check za vse 4 markerje pred izračunom; `d2 == 0.0` guard pred vsakim deljenjem.
+
 ### 2026-05-16 — Faza 9: PlanPath Day Locking + Unified Calorie Algorithm
 
 **1. PlanPath Day Locking (PlanPathDialog.kt + SwapPlanDaysUseCase.kt):**
