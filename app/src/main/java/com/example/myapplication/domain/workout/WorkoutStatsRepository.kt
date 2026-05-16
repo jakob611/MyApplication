@@ -52,4 +52,3 @@ interface WorkoutStatsRepository {
      */
     suspend fun getDailyCalories(): Int
 }
-

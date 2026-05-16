@@ -179,6 +179,7 @@ fun NutritionScreen(
 
     // Nastavi dinamični TDEE: preberi BMR iz shranjenih algoritmičnih podatkov
     // Prioriteta: nutritionPlan.algorithmData.bmr > plan.algorithmData.bmr
+    // Faza 9: posredujemo activityLevel iz userProfile → UseCase bo pravilno izračunal TDEE faktor
     LaunchedEffect(nutritionPlan, plan) {
         val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
             ?: plan?.algorithmData?.bmr?.takeIf { it > 0.0 }
@@ -187,7 +188,8 @@ fun NutritionScreen(
             userProfile.workoutGoal.ifBlank { null }
         } ?: plan?.goal ?: userProfile.workoutGoal
         if (bmr != null && bmr > 0) {
-            nutritionViewModel.setUserMetrics(bmr, goal ?: "")
+            // Faza 9 — SSOT: CalculateDailyCalorieTargetUseCase bo apliciral pravi TDEE faktor
+            nutritionViewModel.setUserMetrics(bmr, goal, userProfile.activityLevel)
         }
     }
 

@@ -25,10 +25,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 import android.util.Log
-import com.example.myapplication.utils.calculateAdvancedBMR
-import com.example.myapplication.utils.calculateEnhancedTDEE
-import com.example.myapplication.utils.calculateSmartCalories
 import com.example.myapplication.utils.calculateOptimalMacros
+import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
 import com.example.myapplication.data.AlgorithmData
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.domain.generateAdvancedCustomPlan
@@ -731,10 +729,25 @@ private fun PlanResultStep(
             val ageYears = ageInt
             val bodyFatPercent = bodyFat?.toDoubleOrNull()
 
-            // Izračuni
-            val bmr = calculateAdvancedBMR(weightKg, heightCm, ageYears, isMale, bodyFatPercent)
-            val tdee = calculateEnhancedTDEE(bmr, frequency, experience, ageYears, limitations, sleep)
-            val targetCalories = calculateSmartCalories(tdee, goal, experience, bmi, ageYears, isMale, bodyFatPercent, limitations)
+            // Faza 9 — SSOT: CalculateDailyCalorieTargetUseCase za BMR + TDEE + kalorični cilj
+            val useCaseInput = CalculateDailyCalorieTargetUseCase.Input(
+                weightKg = weightKg,
+                heightCm = heightCm,
+                ageYears = ageYears,
+                isMale = isMale,
+                activityLevel = frequency,
+                goal = goal ?: "",
+                bodyFatPercent = bodyFatPercent,
+                experience = experience,
+                limitations = limitations,
+                sleep = sleep
+            )
+            val calorieResult = CalculateDailyCalorieTargetUseCase().invoke(useCaseInput)
+            val bmr = calorieResult.bmr
+            val tdee = calorieResult.tdee
+            val targetCalories = calorieResult.dailyCalorieTarget.toDouble()
+
+            // Makrohranila še vedno računamo prek obstoječe funkcije (precision macros)
             val macros = calculateOptimalMacros(targetCalories, weightKg, goal, experience, ageYears, isMale, bodyFatPercent, nutrition, limitations)
             val proteinPerKg = macros.first.toDouble() / weightKg
             val caloriesPerKg = targetCalories / weightKg

@@ -3,8 +3,21 @@ package com.example.myapplication.domain.workout
 import com.example.myapplication.data.PlanResult
 
 class SwapPlanDaysUseCase {
-    fun invoke(currentPlan: PlanResult, dayA: Int, dayB: Int): Result<PlanResult> {
+    /**
+     * Zamenjaj dan A ↔ dan B v planu.
+     *
+     * @param lockedDay Opcijsko — danes opravljen dan (WORKOUT_DONE / STRETCHING_DONE).
+     *                  Če je lockedDay == dayA ali dayB, swap ni dovoljen (Faza 9: Day Locking).
+     *                  Preverjanje v UI sloju (PlanPathDialog) je primarna zapora;
+     *                  ta parameter je varnostna plast na domenskem sloju.
+     */
+    fun invoke(currentPlan: PlanResult, dayA: Int, dayB: Int, lockedDay: Int? = null): Result<PlanResult> {
         return try {
+            // 🔒 Faza 9: varnostna domeska zapora za zaklenjen dan
+            if (lockedDay != null && (lockedDay == dayA || lockedDay == dayB)) {
+                return Result.failure(Exception("Day $lockedDay is locked (already completed today). Cannot swap."))
+            }
+
             val weekA = (dayA - 1) / 7
             val weekB = (dayB - 1) / 7
 

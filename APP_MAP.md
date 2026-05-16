@@ -58,9 +58,10 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | Datoteka | Kaj dela | Klici |
 |----------|---------|-------|
 | `domain/usecase/UpdateStreakUseCase.kt` | **EDINI domenski vhod za streak posodobitve.** `workout()`, `restDayStretching()`, `runMidnightCheck()`, `markRestDayPending()`, `getCurrentStreak()` | `GamificationRepository` |
+| `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` | **⚡ SSOT za kalorični izračun (Faza 9).** Mifflin-St Jeor BMR + TDEE faktor aktivnosti + konzervativna ciljna prilagoditev (−500/0/+300). `invoke(Input)` = polni izračun iz bio-metrik; `fromBmr(bmr, goal, activityLevel)` = ko je BMR že znan. | `utils/NutritionCalculations.kt` |
 | `domain/workout/GetBodyMetricsUseCase.kt` | Bere profil in plan iz Firestore → `BodyHomeUiState` Flow | `WorkoutRepository`, `UserPreferencesRepository` |
 | `domain/workout/UpdateBodyMetricsUseCase.kt` | Zapiše workout sejo + sproži XP logiko. **Guard: `isExtra && isRestDay` → samo XP, brez streak.** | `WorkoutRepository`, `ManageGamificationUseCase`, `UserProfileManager.updateUserProgressAfterWorkout()` |
-| `domain/workout/SwapPlanDaysUseCase.kt` | Zamenjaj dan A ↔ dan B v planu | pure Kotlin |
+| `domain/workout/SwapPlanDaysUseCase.kt` | Zamenjaj dan A ↔ dan B v planu. **Guard: `lockedDay` parameter — danes opravljen dan ne sme biti swap-an (Faza 9).** | pure Kotlin |
 | `domain/gamification/ManageGamificationUseCase.kt` | XP, badge, `restDayInitiated()`, Workout-Nutrition Bridge. **NE kliče `repository.updateStreak()` za redne workouty** (Faza 7 Audit). | `GamificationRepository`, `DailyLogRepository` |
 
 ### ⚠️ ARHITEKTURNA OPOMBA — Unified Streak Engine (Faza 8)
@@ -114,6 +115,14 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | `DonutProgressView.kt` | Custom Canvas donut graf |
 | `NutritionComponents.kt` | Manjše UI komponente |
 | `NutritionDialogs.kt` | Custom Meal dialog |
+
+### 🔑 Prehranska logika — SSOT (Faza 9)
+| Komponenta | Datoteka | Opis |
+|-----------|---------|------|
+| **Kalorični izračun (SSOT)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` | **EDINI vir resnice za dnevni kalorični cilj.** Mifflin-St Jeor + TDEE faktor + konzervativna ciljna prilagoditev. Kliče se iz BodyModule.kt (kviz) in NutritionViewModel. |
+| Dinamični TDEE (ViewModel) | `viewmodels/NutritionViewModel.kt` → `setUserMetrics(bmr, goal, activityLevel)` | Delegira na UseCase. Upošteva WeightPredictorStore hibridni TDEE če na voljo. |
+| Adaptivni hibridni TDEE | `utils/NutritionCalculations.kt` → `calculateAdaptiveTDEE()` | Iz realnih telesnih meritev (EMA teže × kalorije). Posodablja `WeightPredictorStore`. |
+| Makro izračun | `utils/NutritionCalculations.kt` → `calculateOptimalMacros()` | Protein/ogljikohidrati/maščobe iz ciljnih kalorij. |
 
 ### Napredek in statistike
 | Datoteka | Kaj prikaže |
@@ -297,6 +306,7 @@ follows/{uid_follower}_{uid_following}: { ... }
 | **GPS tek** | `RunTrackerScreen.kt` + `service/RunTrackingService.kt` |
 | **Tek tip (Run/Walk/Cycling...)** | `data/RunSession.kt` → `ActivityType` enum |
 | **Food tracking** | `NutritionScreen.kt` + `DailySyncManager.kt` |
+| **Kalorični cilj (TDEE)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` ⚡ SSOT |
 | **Donut graf** | `NutritionComponents.kt` |
 | **BMI/BF% izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
 | **Body home (streak, daily plan)** | `BodyModuleHomeScreen.kt` |

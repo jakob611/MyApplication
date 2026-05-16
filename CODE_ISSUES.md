@@ -572,6 +572,29 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 11. ✅ Vzporedni `async` fetch-i za: `users/{uid}` (XP/level), `user_plans/{uid}` (plani), `weightLogs` (zadnjih 10). Vsi tečejo hkrati — čakamo z `.await()`. Po uspešnem prenosu: `"Profile Ready! ✓"` (1.5s) → overlay izgine.
 12. ✅ Po intenzivnem prenosu se nastavi `initial_sync_done_<uid> = true` → nadaljnji zagoni gredo skozi normalni (varčni) tok.
 
+### 2026-05-16 — Faza 9: PlanPath Day Locking + Unified Calorie Algorithm
+
+**1. PlanPath Day Locking (PlanPathDialog.kt + SwapPlanDaysUseCase.kt):**
+- ✅ `PlanPathDialog.kt`: `onDragSwap` blok dodana zapora — če `isTodayDone && (fromDay == currentDay || toDay == currentDay)`, swap je blokiran + `AppToast.showWarning("Today's completed day is locked! 🔒")`.
+- ✅ `isTodayDone` pokriva oba statusa: `WORKOUT_DONE` in `STRETCHING_DONE` (GetBodyMetricsUseCase.kt vrstica 33).
+- ✅ `SwapPlanDaysUseCase.kt`: Dodan opcijski parameter `lockedDay: Int?` — varnostna zapora na domenskem sloju (če UI ne blokira, usecase bo).
+- ✅ Swap za ostale (prihodnje, neopravljene) dneve znotraj tedna ostane omogočen.
+
+**2. CalculateDailyCalorieTargetUseCase.kt (NOVO):**
+- ✅ `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` — SSOT za dnevni kalorični cilj.
+  - `invoke(Input)`: polni izračun iz bio-metrik (weight, height, age, gender, activityLevel, goal, …) → Mifflin-St Jeor BMR + TDEE + ±500/300 konzervativna ciljna prilagoditev.
+  - `fromBmr(bmr, goal, activityLevel)`: ko je BMR že izračunan (NutritionViewModel postopek).
+  - Companion: `activityFactor(level)`, `goalAdjustment(goal)` — testabilni pomožniki.
+- ✅ `NutritionViewModel.setUserMetrics()`: Refaktoriran — ne več `bmr * 1.2` hardkodiran, zdaj delegira na `calorieTargetUseCase.fromBmr(bmr, goal, activityLevel)`. Dodan parameter `activityLevel: String? = null`.
+- ✅ `NutritionScreen.kt`: `setUserMetrics(bmr, goal, userProfile.activityLevel)` — pošlje realni faktor aktivnosti.
+- ✅ `BodyModule.kt algorithmData blok`: Odstranjeni direktni klici `calculateAdvancedBMR/calculateEnhancedTDEE/calculateSmartCalories`; nadomeščeni z `CalculateDailyCalorieTargetUseCase().invoke(Input(...))`. Makrohranila (protein/carbs/fat) še vedno prek `calculateOptimalMacros`.
+- ✅ Razlog za "overshoot" kviza pojasnjen: `calculateSmartCalories()` je uporabljal agresivne BMI-odvisne deficite/suficite (npr. −750 kcal za BMI > 35). UseCase uporablja konzervativno ±500/300 metodo.
+
+**3. APP_MAP.md posodobitev:**
+- ✅ Dodana sekcija "Prehranska logika — SSOT (Faza 9)" z `CalculateDailyCalorieTargetUseCase.kt` kot edinim virom resnice.
+- ✅ `SwapPlanDaysUseCase.kt` opomba posodobljena (lockedDay guard).
+- ✅ Hitri vodič: dodano "Kalorični cilj (TDEE) → CalculateDailyCalorieTargetUseCase".
+
 ### 2026-05-16 — Clean Architecture Build Fix (3 compile napake)
 
 **Napake odpravili po CA refactoringu:**

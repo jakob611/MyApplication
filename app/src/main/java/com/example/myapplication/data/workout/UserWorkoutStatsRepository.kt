@@ -60,4 +60,3 @@ class UserWorkoutStatsRepository(
 
     override suspend fun getDailyCalories(): Int = prefs.getDailyCalories().toInt()
 }
-

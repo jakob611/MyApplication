@@ -138,7 +138,7 @@ class ManageGamificationUseCase(
     /**
      * Faza 4b: Uporabnik je opravil raztezanje na rest dnevu.
      * Streak +1, XP +10. Shrani status "STRETCHING_DONE" v dailyHistory mapo.
-     * @return Novi streak (za Toast "Daily Goal Met! Streak: X days 🔥")
+     * @return Novi streak (za Toast "Daily Goal Met! Streak: X days ")
      */
     suspend fun restDayInitiated(): Int {
         val newStreak = repository.updateStreak(

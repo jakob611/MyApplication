@@ -111,13 +111,22 @@ fun PlanPathDialog(
                         selectedDayNumber = clickedGlobalDay
                     },
                     onDragSwap = { fromDay, toDay ->
-                        val plan = localPlan
-                        if (plan != null && vm != null) {
-                            com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                        // 🔒 Faza 9: Day Locking — danas že opravljen dan se ne sme premikati.
+                        // isTodayDone = true ko je dailyHistory[today] == WORKOUT_DONE ali STRETCHING_DONE.
+                        if (isTodayDone && (fromDay == currentDay || toDay == currentDay)) {
+                            com.example.myapplication.utils.AppToast.showWarning(
                                 context,
-                                com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
+                                "Today's completed day is locked and cannot be moved! 🔒"
                             )
-                            pendingSwap = Pair(fromDay, toDay)
+                        } else {
+                            val plan = localPlan
+                            if (plan != null && vm != null) {
+                                com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
+                                    context,
+                                    com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
+                                )
+                                pendingSwap = Pair(fromDay, toDay)
+                            }
                         }
                     },
                     footerContent = {}

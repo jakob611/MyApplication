@@ -3,6 +3,7 @@ package com.example.myapplication.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
+import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.Job
@@ -33,6 +34,9 @@ data class DailyTotals(
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase
 ) : ViewModel() {
+
+    /** Faza 9 — SSOT za kalorični izračun */
+    private val calorieTargetUseCase = CalculateDailyCalorieTargetUseCase()
 
     private val _healthConnectSyncTrigger = MutableStateFlow(0)
     val healthConnectSyncTrigger: StateFlow<Int> = _healthConnectSyncTrigger.asStateFlow()
@@ -168,29 +172,28 @@ class NutritionViewModel(
      * Nastavi BMR in cilj, ko je plan/profil naložen.
      * Kliče se iz NutritionScreen z LaunchedEffect ob spremembi plana ali nutritionPlan.
      *
-     * @param bmr     Bazalna presnova (kcal/dan) iz AlgorithmData plana
-     * @param goal    Cilj ("Lose fat", "Build muscle", "General health" …)
+     * Faza 9 — SSOT: delegira izračun TDEE in ciljne prilagoditve na
+     * [CalculateDailyCalorieTargetUseCase.fromBmr] (ne več inline `bmr × 1.2`).
+     *
+     * @param bmr           Bazalna presnova (kcal/dan) iz AlgorithmData plana
+     * @param goal          Cilj ("Lose fat", "Build muscle", "General health" …)
+     * @param activityLevel Frekvenca treningov ("2x"–"6x"); null → sedentarni fallback 1.2
      */
-    fun setUserMetrics(bmr: Double, goal: String) {
-        val staticBase = bmr * 1.2  // Mifflin-St Jeor sedentarni TDEE
+    fun setUserMetrics(bmr: Double, goal: String, activityLevel: String? = null) {
+        // Faza 9: CalculateDailyCalorieTargetUseCase je SSOT — ne hardkodiramo bmr * 1.2
+        val calorieResult = calorieTargetUseCase.fromBmr(bmr, goal, activityLevel)
 
         // Če je hibridni TDEE že izračunan iz ProgressScreen (WeightPredictorStore),
-        // ga uporabimo namesto fiksnega Mifflin množilnika.
+        // ga uporabimo namesto statičnega TDEE iz plana.
         val hybridTDEE = com.example.myapplication.debug.WeightPredictorStore.lastHybridTDEE
-        _baseTdee.value = if (hybridTDEE > 800) hybridTDEE.toDouble() else staticBase
+        _baseTdee.value = if (hybridTDEE > 800) hybridTDEE.toDouble() else calorieResult.tdee
+        _goalAdjustment.value = calorieResult.goalAdjustment
 
-        _goalAdjustment.value = when {
-            goal.contains("Lose", ignoreCase = true) ||
-            goal.contains("Cut",  ignoreCase = true) -> -500
-            goal.contains("Build", ignoreCase = true) ||
-            goal.contains("Gain",  ignoreCase = true) -> 300
-            else -> 0
-        }
         // Debug store — za DebugDashboard
         com.example.myapplication.debug.NutritionDebugStore.lastBmr = bmr
         com.example.myapplication.debug.NutritionDebugStore.lastGoal = goal
         com.example.myapplication.debug.NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics: BMR=${"%.0f".format(bmr)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+        Log.d("NutritionVM", "✅ setUserMetrics [SSOT UseCase]: BMR=${"%.0f".format(bmr)} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
     }
 
     /**

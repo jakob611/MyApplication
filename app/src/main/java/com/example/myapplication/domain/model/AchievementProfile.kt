@@ -17,4 +17,3 @@ data class AchievementProfile(
     val currentLoginStreak: Int = 0,
     val totalPlansCreated: Int = 0
 )
-

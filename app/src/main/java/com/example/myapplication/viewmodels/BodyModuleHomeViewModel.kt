@@ -88,7 +88,7 @@ class BodyModuleHomeViewModel(
     private val _ui = MutableStateFlow(BodyHomeUiState())
     val ui: StateFlow<BodyHomeUiState> = _ui.asStateFlow()
 
-    /** Faza 4b: Event za prikaz Toast "Daily Goal Met! Streak: X days 🔥" + HapticFeedback */
+    /** Faza 4b: Event za prikaz Toast "Daily Goal Met! Streak: X days " + HapticFeedback */
     private val _streakUpdatedEvent = MutableSharedFlow<StreakUpdateEvent>(extraBufferCapacity = 1)
     val streakUpdatedEvent: SharedFlow<StreakUpdateEvent> = _streakUpdatedEvent.asSharedFlow()
 
