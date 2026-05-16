@@ -116,13 +116,17 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | `NutritionComponents.kt` | Manjše UI komponente |
 | `NutritionDialogs.kt` | Custom Meal dialog |
 
-### 🔑 Prehranska logika — SSOT (Faza 9)
+### 🔑 Prehranska logika — SSOT (Faza 9 + Faza 10)
 | Komponenta | Datoteka | Opis |
 |-----------|---------|------|
-| **Kalorični izračun (SSOT)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` | **EDINI vir resnice za dnevni kalorični cilj.** Mifflin-St Jeor + TDEE faktor + konzervativna ciljna prilagoditev. Kliče se iz BodyModule.kt (kviz) in NutritionViewModel. |
-| Dinamični TDEE (ViewModel) | `viewmodels/NutritionViewModel.kt` → `setUserMetrics(bmr, goal, activityLevel)` | Delegira na UseCase. Upošteva WeightPredictorStore hibridni TDEE če na voljo. |
+| **Kalorični izračun (SSOT)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` | **EDINI vir resnice za dnevni kalorični cilj.** Hibridni BMR motor: **Katch-McArdle** (če BF% poznan) ali **Mifflin-St Jeor fallback** + konzervativni FAO/WHO TDEE faktorji + ciljna prilagoditev. Kliče se iz BodyModule.kt (kviz) in NutritionViewModel. |
+| Hibridni BMR motor (Faza 10) | `CalculateDailyCalorieTargetUseCase.calculateBmr()` | Katch-McArdle: `lbm = weight×(1−BF%/100); BMR=370+21.6×lbm`. Pogoj: BF% != null && BF% ∈ (0,60). Sicer Mifflin-St Jeor z starostno korekcijo. |
+| Konzervativni TDEE faktorji (Faza 10) | `CalculateDailyCalorieTargetUseCase.activityFactor()` | SEDENTARY=1.20 \| LIGHT(2x)=1.375 \| **MODERATE(3x)=1.45** \| **ACTIVE(4x)=1.65** \| **EXTREME(5x)=1.85** \| MAX(6x)=2.00. Znižano vs. standard za preprečevanje overshoot. |
+| Dinamični TDEE (ViewModel) | `viewmodels/NutritionViewModel.kt` → `setUserMetrics(bmr, goal, activityLevel, bodyFatPercentage)` | Delegira na UseCase. Upošteva WeightPredictorStore hibridni TDEE če na voljo. |
 | Adaptivni hibridni TDEE | `utils/NutritionCalculations.kt` → `calculateAdaptiveTDEE()` | Iz realnih telesnih meritev (EMA teže × kalorije). Posodablja `WeightPredictorStore`. |
 | Makro izračun | `utils/NutritionCalculations.kt` → `calculateOptimalMacros()` | Protein/ogljikohidrati/maščobe iz ciljnih kalorij. |
+
+> ⚠️ **Faza 10 opomba**: Vključena Katch-McArdle formula za uporabnike z znanim BF% ter znižani, konzervativni TDEE faktorji (Moderate = 1.45, Active = 1.65). Vse spremembe so v `CalculateDailyCalorieTargetUseCase.kt` — brez android odvisnosti (KMP-ready).
 
 ### Napredek in statistike
 | Datoteka | Kaj prikaže |

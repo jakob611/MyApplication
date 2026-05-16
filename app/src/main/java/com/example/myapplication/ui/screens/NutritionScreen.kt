@@ -188,8 +188,16 @@ fun NutritionScreen(
             userProfile.workoutGoal.ifBlank { null }
         } ?: plan?.goal ?: userProfile.workoutGoal
         if (bmr != null && bmr > 0) {
-            // Faza 9 — SSOT: CalculateDailyCalorieTargetUseCase bo apliciral pravi TDEE faktor
-            nutritionViewModel.setUserMetrics(bmr, goal, userProfile.activityLevel)
+            // Faza 9/10 — SSOT: konzervativni FAO/WHO faktorji + opcijski Katch-McArdle (BF%)
+            // userProfile.bodyFat je npr. "15", "20.5" ali "15-20" → vzamemo prvo število
+            val bfPercentage = userProfile.bodyFat
+                ?.replace("%", "")
+                ?.trim()
+                ?.split("-", "–")
+                ?.firstOrNull()
+                ?.trim()
+                ?.toDoubleOrNull()
+            nutritionViewModel.setUserMetrics(bmr, goal, userProfile.activityLevel, bfPercentage)
         }
     }
 

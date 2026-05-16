@@ -731,16 +731,16 @@ private fun PlanResultStep(
 
             // Faza 9 — SSOT: CalculateDailyCalorieTargetUseCase za BMR + TDEE + kalorični cilj
             val useCaseInput = CalculateDailyCalorieTargetUseCase.Input(
-                weightKg = weightKg,
-                heightCm = heightCm,
-                ageYears = ageYears,
-                isMale = isMale,
-                activityLevel = frequency,
-                goal = goal ?: "",
-                bodyFatPercent = bodyFatPercent,
-                experience = experience,
-                limitations = limitations,
-                sleep = sleep
+                weightKg          = weightKg,
+                heightCm          = heightCm,
+                ageYears          = ageYears,
+                isMale            = isMale,
+                activityLevel     = frequency,
+                goal              = goal ?: "",
+                bodyFatPercentage = bodyFatPercent,   // Faza 10: Katch-McArdle se aktivira avtomatsko
+                experience        = experience,
+                limitations       = limitations,
+                sleep             = sleep
             )
             val calorieResult = CalculateDailyCalorieTargetUseCase().invoke(useCaseInput)
             val bmr = calorieResult.bmr

@@ -1,26 +1,21 @@
 package com.example.myapplication.domain.usecase
 
-import com.example.myapplication.utils.calculateAdvancedBMR
-import com.example.myapplication.utils.calculateEnhancedTDEE
 import kotlin.math.roundToInt
 
 /**
  * CalculateDailyCalorieTargetUseCase — SSOT za izračun dnevnega kaloričnega cilja.
  *
- * ## Algoritem (Mifflin-St Jeor + faktor aktivnosti + konzervativna ciljna prilagoditev):
- *  1. BMR = Mifflin-St Jeor (z opcijskim Katch-McArdle, če je body fat podan)
- *  2. TDEE = BMR × faktor_aktivnosti (iz frekvence treningov)
+ * ## Algoritem (Hibridni kalorični motor — Faza 10):
+ *  1. BMR:
+ *     - Katch-McArdle: če je `bodyFatPercentage` podan (0 < BF% < 60)
+ *       → lbm = weight × (1 − BF%/100); BMR = 370 + 21.6 × lbm
+ *     - Mifflin-St Jeor fallback (ločeno za M/Ž + starostna korekcija)
+ *  2. TDEE = BMR × faktor_aktivnosti (konzervativni FAO/WHO faktorji)
  *  3. Dnevni cilj = TDEE + prilagoditev_cilja (−500 / 0 / +300)
  *
- * ## Zakaj ne calculateSmartCalories() (kviz)?
- *  `calculateSmartCalories()` uporablja agresivne BMI-dependent suficite/deficite
- *  (npr. −750 kcal za BMI > 35), kar povzroča pretirane ocene pri kalibraciji.
- *  Ta UseCase uporablja konzervativno ±500/300 kcal metodo, ki je v skladu z
- *  NutritionScreen pristopom "kalorični minimum + aktivnost".
- *
- * ## Kje se kliče (Faza 9):
- *  - `NutritionViewModel.setUserMetrics()` → prek [fromBmr]
- *  - `BodyModule.kt algorithmData` → prek [invoke] z vsemi vhodnimi podatki
+ * ## Aktivnostni faktorji (Faza 10 — konzervativni):
+ *  null/sedentarno = 1.20 | 2x (LIGHT) = 1.375 | 3x (MODERATE) = 1.45 |
+ *  4x (ACTIVE) = 1.65 | 5x (EXTREME) = 1.85 | 6x = 2.0
  *
  * KMP-ready: brez Android odvisnosti.
  */
@@ -39,7 +34,11 @@ class CalculateDailyCalorieTargetUseCase {
         val activityLevel: String? = null,
         /** Cilj: "Lose fat", "Build muscle", "General health", "Recomposition", … */
         val goal: String = "",
-        val bodyFatPercent: Double? = null,
+        /**
+         * Odstotek telesne maščobe (0–59).
+         * Če je podan → Katch-McArdle BMR; sicer → Mifflin-St Jeor fallback.
+         */
+        val bodyFatPercentage: Double? = null,
         val experience: String? = null,
         val limitations: List<String> = emptyList(),
         val sleep: String? = null
@@ -64,29 +63,23 @@ class CalculateDailyCalorieTargetUseCase {
      * Kliče se iz BodyModule.kt (kviz) pri ustvarjanju novega plana.
      */
     fun invoke(input: Input): Result {
-        val bmr = calculateAdvancedBMR(
-            weight = input.weightKg,
-            height = input.heightCm,
-            age = input.ageYears,
-            isMale = input.isMale,
-            bodyFat = input.bodyFatPercent
+        val bmr = calculateBmr(
+            weightKg          = input.weightKg,
+            heightCm          = input.heightCm,
+            ageYears          = input.ageYears,
+            isMale            = input.isMale,
+            bodyFatPercentage = input.bodyFatPercentage
         )
-        val tdee = calculateEnhancedTDEE(
-            bmr = bmr,
-            frequency = input.activityLevel,
-            experience = input.experience,
-            age = input.ageYears,
-            limitations = input.limitations,
-            sleep = input.sleep
-        )
+        val factor = activityFactor(input.activityLevel)
+        val tdee = bmr * factor
         val goalAdj = goalAdjustment(input.goal)
         val target = (tdee + goalAdj).coerceAtLeast(1200.0).roundToInt()
 
         return Result(
-            bmr = bmr,
-            tdee = tdee,
+            bmr               = bmr,
+            tdee              = tdee,
             dailyCalorieTarget = target,
-            goalAdjustment = goalAdj
+            goalAdjustment    = goalAdj
         )
     }
 
@@ -94,22 +87,66 @@ class CalculateDailyCalorieTargetUseCase {
      * Prikladen vstop ko je BMR že izračunan (npr. shranjen v Firestore planu).
      * Kliče se iz NutritionViewModel.setUserMetrics().
      *
-     * @param bmr  Predhodno izračunana bazalna presnova (kcal/dan)
-     * @param goal Cilj (besedilo)
-     * @param activityLevel Frekvenca treningov ("2x"–"6x") ali null
+     * @param bmr              Predhodno izračunana bazalna presnova (kcal/dan)
+     * @param goal             Cilj (besedilo)
+     * @param activityLevel    Frekvenca treningov ("2x"–"6x") ali null
+     * @param bodyFatPercentage Opcijsko BF% za beleženje/debug (BMR ni preračunan)
      */
-    fun fromBmr(bmr: Double, goal: String, activityLevel: String? = null): Result {
+    fun fromBmr(
+        bmr: Double,
+        goal: String,
+        activityLevel: String? = null,
+        bodyFatPercentage: Double? = null
+    ): Result {
         val factor = activityFactor(activityLevel)
         val tdee = bmr * factor
         val goalAdj = goalAdjustment(goal)
         val target = (tdee + goalAdj).coerceAtLeast(1200.0).roundToInt()
 
         return Result(
-            bmr = bmr,
-            tdee = tdee,
+            bmr               = bmr,
+            tdee              = tdee,
             dailyCalorieTarget = target,
-            goalAdjustment = goalAdj
+            goalAdjustment    = goalAdj
         )
+    }
+
+    // ── Interna BMR logika (hibridni motor) ────────────────────────────────────
+
+    /**
+     * Hibridni BMR izračun:
+     * - Katch-McArdle: če je BF% podan, > 0 in < 60
+     * - Mifflin-St Jeor + starostna korekcija: fallback
+     */
+    private fun calculateBmr(
+        weightKg: Double,
+        heightCm: Double,
+        ageYears: Int,
+        isMale: Boolean,
+        bodyFatPercentage: Double?
+    ): Double {
+        // ── Katch-McArdle pogoj ──────────────────────────────────────────────
+        if (bodyFatPercentage != null && bodyFatPercentage > 0.0 && bodyFatPercentage < 60.0) {
+            val lbm = weightKg * (1.0 - bodyFatPercentage / 100.0)
+            return 370.0 + (21.6 * lbm)
+        }
+
+        // ── Mifflin-St Jeor fallback ─────────────────────────────────────────
+        val baseBmr = if (isMale) {
+            10.0 * weightKg + 6.25 * heightCm - 5.0 * ageYears + 5.0
+        } else {
+            10.0 * weightKg + 6.25 * heightCm - 5.0 * ageYears - 161.0
+        }
+        // Starostna metabolna korekcija
+        return when {
+            ageYears < 18          -> baseBmr * 1.12
+            ageYears in 18..25     -> baseBmr * 1.05
+            ageYears in 26..35     -> baseBmr * 1.00
+            ageYears in 36..45     -> baseBmr * 0.97
+            ageYears in 46..55     -> baseBmr * 0.94
+            ageYears in 56..65     -> baseBmr * 0.91
+            else                   -> baseBmr * 0.87
+        }
     }
 
     // ── Pomožne funkcije (companion-level, testabilne) ──────────────────────────
@@ -117,15 +154,22 @@ class CalculateDailyCalorieTargetUseCase {
     companion object {
         /**
          * Pretvori frekvenco treningov v TDEE množilnik.
-         * Skladno z Mifflin-St Jeor TDEE tabelami.
+         *
+         * Faza 10 — Konzervativni FAO/WHO faktorji (preprečevanje overshoot):
+         *  null  → SEDENTARY  = 1.20
+         *  "2x"  → LIGHT      = 1.375
+         *  "3x"  → MODERATE   = 1.45  (−0.10 vs. standard 1.55)
+         *  "4x"  → ACTIVE     = 1.65  (−0.075 vs. standard 1.725)
+         *  "5x"  → EXTREME    = 1.85  (−0.05 vs. standard 1.9)
+         *  "6x"  → MAX        = 2.00  (nepremenjeno)
          */
         fun activityFactor(activityLevel: String?): Double = when (activityLevel) {
-            "2x" -> 1.375   // Lightly active
-            "3x" -> 1.55    // Moderately active
-            "4x" -> 1.725   // Very active
-            "5x" -> 1.9     // Extra active
-            "6x" -> 2.0     // Extreme active
-            else -> 1.2     // Sedentary (fallback)
+            "2x" -> 1.375   // LIGHT — lahka aktivnost
+            "3x" -> 1.45    // MODERATE — znižano z 1.55 (FAO/WHO konzervativna ocena)
+            "4x" -> 1.65    // ACTIVE — znižano z 1.725 (realnejša ocena za rekreativce)
+            "5x" -> 1.85    // EXTREME — znižano z 1.9 (zgornja meja varnosti)
+            "6x" -> 2.00    // MAX — intenziven profesionalni trening
+            else -> 1.20    // SEDENTARY — sedeč življenjski slog (fallback)
         }
 
         /**
@@ -143,4 +187,3 @@ class CalculateDailyCalorieTargetUseCase {
         }
     }
 }
-

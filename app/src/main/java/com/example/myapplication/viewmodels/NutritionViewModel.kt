@@ -179,9 +179,19 @@ class NutritionViewModel(
      * @param goal          Cilj ("Lose fat", "Build muscle", "General health" …)
      * @param activityLevel Frekvenca treningov ("2x"–"6x"); null → sedentarni fallback 1.2
      */
-    fun setUserMetrics(bmr: Double, goal: String, activityLevel: String? = null) {
-        // Faza 9: CalculateDailyCalorieTargetUseCase je SSOT — ne hardkodiramo bmr * 1.2
-        val calorieResult = calorieTargetUseCase.fromBmr(bmr, goal, activityLevel)
+    /**
+     * @param bodyFatPercentage Opcijsko BF% iz userProfile.bodyFat (parsiran v Double).
+     *   Posreduje se v [CalculateDailyCalorieTargetUseCase.fromBmr] za debug beleženje.
+     *   V prihodnji verziji: lahko sproži polni invoice() za svež Katch-McArdle BMR.
+     */
+    fun setUserMetrics(
+        bmr: Double,
+        goal: String,
+        activityLevel: String? = null,
+        bodyFatPercentage: Double? = null
+    ) {
+        // Faza 9/10: CalculateDailyCalorieTargetUseCase je SSOT — konzervativni FAO/WHO faktorji
+        val calorieResult = calorieTargetUseCase.fromBmr(bmr, goal, activityLevel, bodyFatPercentage)
 
         // Če je hibridni TDEE že izračunan iz ProgressScreen (WeightPredictorStore),
         // ga uporabimo namesto statičnega TDEE iz plana.
@@ -193,7 +203,7 @@ class NutritionViewModel(
         com.example.myapplication.debug.NutritionDebugStore.lastBmr = bmr
         com.example.myapplication.debug.NutritionDebugStore.lastGoal = goal
         com.example.myapplication.debug.NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics [SSOT UseCase]: BMR=${"%.0f".format(bmr)} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+        Log.d("NutritionVM", "✅ setUserMetrics [SSOT UseCase Faza10]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
     }
 
     /**
