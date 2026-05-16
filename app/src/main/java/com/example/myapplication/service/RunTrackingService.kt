@@ -183,6 +183,11 @@ class RunTrackingService : Service() {
     // Samo točke od zadnjega checkpointa (za delta vpis v Room)
     private val newPointsBuffer = ArrayDeque<Location>()
 
+    // Faza 16: Anti-Drift Engine — EMA (Exponential Moving Average) stanje
+    // Shranjuje zadnjo zglajenost pozicijo za izračun EMA naslednje točke
+    private var emaLat: Double? = null
+    private var emaLon: Double? = null
+
     private data class GpsProfile(
         val intervalMs: Long,
         val minIntervalMs: Long,
@@ -324,6 +329,9 @@ class RunTrackingService : Service() {
         distanceAtLastCheckpoint = 0.0
         locationBuffer.clear()
         newPointsBuffer.clear()
+        // Faza 16: ponastavi EMA filter
+        emaLat = null
+        emaLon = null
 
         // Fix 2: WakeLock timeout 4h (preprečuje Samsung battery kill)
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -455,32 +463,71 @@ class RunTrackingService : Service() {
     }
 
     private fun processLocationUpdate(location: Location) {
-        Log.d(TAG, "Location update: ${location.latitude}, ${location.longitude}, accuracy: ${location.accuracy}")
+        Log.d(TAG, "GPS raw: (${location.latitude}, ${location.longitude}) acc=${location.accuracy}m spd=${location.speed}m/s")
 
+        // ── Korak 0: Natančnostni filter (obstoječ) ────────────────────────────
         if (location.accuracy > 20) {
-            Log.d(TAG, "Skipping inaccurate location: ${location.accuracy}m")
+            Log.d(TAG, "Natančnostni filter: zavrnjen acc=${location.accuracy}m")
             return
         }
 
-        // Faza 15: O(1) vpis v interni buffer
-        locationBuffer.addLast(location)
-        newPointsBuffer.addLast(location)
-        // Posodobi StateFlow iz bufferja (UI potrebuje celotno listo za prikaz na karti)
-        _locationPoints.value = locationBuffer.toList()
+        // ── Korak 1 (Faza 16): EMA glajenje koordinat ────────────────────────
+        // Alpha = zaupanje novi točki. Dober signal → višja alpha (bolj zaupamo GPS).
+        // Slab signal → nižja alpha (bolj gladimo, zanašamo se na preteklo pozicijo).
+        val alpha = when {
+            location.accuracy < 5f  -> 0.8   // Odličen signal (open sky)
+            location.accuracy < 10f -> 0.6   // Dober signal
+            location.accuracy < 15f -> 0.4   // Zmeren signal
+            else                    -> 0.3   // Šibek signal (urbano canyon)
+        }
+        val smoothedLat = emaLat?.let { alpha * location.latitude  + (1.0 - alpha) * it } ?: location.latitude
+        val smoothedLon = emaLon?.let { alpha * location.longitude + (1.0 - alpha) * it } ?: location.longitude
+        emaLat = smoothedLat
+        emaLon = smoothedLon
 
-        // Calculate distance
-        lastLocation?.let { last ->
-            val distance = last.distanceTo(location)
-            if (distance < 100) {
-                totalDistance += distance
+        // Ustvari zglajen Location objekt za vse nadaljnje izračune
+        val smoothed = Location(location).apply {
+            latitude  = smoothedLat
+            longitude = smoothedLon
+        }
+
+        // ── Korak 2 (Faza 16): Dynamični Anti-Spike filter ────────────────────
+        // Fiksni prag 100m nadomestimo z: maxSpeed(activityType) × timeDelta
+        val last = lastLocation
+        if (last != null) {
+            val timeDeltaS = when {
+                smoothed.time > last.time -> (smoothed.time - last.time) / 1000.0
+                else -> resolveGpsProfile(currentActivityType).intervalMs / 1000.0  // fallback
+            }
+            val maxAllowedDistance = resolveMaxSpeedMps(currentActivityType) * timeDeltaS
+            val rawDistance = last.distanceTo(smoothed)
+
+            if (rawDistance > maxAllowedDistance) {
+                // ❌ Anomalija signala (GPS skok) — zavrni, a posodobi EMA
+                Log.w(TAG, "Anti-spike: zavrnjen skok ${rawDistance.toInt()}m > max ${maxAllowedDistance.toInt()}m (Δt=${timeDeltaS}s, ${currentActivityType.name})")
+                // Zadrži lastLocation — ne posodabljamo ga, ker je to verjetno GPS drift
+                return
+            }
+
+            // ── Korak 3 (Faza 16): Velocity Guard — mirovanje ne nabira razdalje ──
+            // location.speed (ne smoothed) — hitrost je direktna meritev senzorja, ne EMA
+            val isMoving = location.hasSpeed() && location.speed >= 0.5f
+            if (isMoving) {
+                totalDistance += rawDistance
                 _distanceMeters.value = totalDistance
             } else {
-                Log.d(TAG, "Skipping unrealistic distance jump: ${distance}m")
+                Log.d(TAG, "Velocity guard: mirovanje (${location.speed}m/s) — ${rawDistance.toInt()}m zavrnjen")
             }
         }
-        lastLocation = location
+        // Posodobi lastLocation z zglajenoLocation (ne raw) za naslednje izračune
+        lastLocation = smoothed
 
-        // Update speed — sliding window max 500 vrednosti
+        // ── Vpis v buffer (za karti in Room) ─────────────────────────────────
+        locationBuffer.addLast(smoothed)
+        newPointsBuffer.addLast(smoothed)
+        _locationPoints.value = locationBuffer.toList()
+
+        // ── Posodobi hitrost ──────────────────────────────────────────────────
         if (location.hasSpeed()) {
             val speed = location.speed
             _currentSpeed.value = speed
@@ -492,13 +539,36 @@ class RunTrackingService : Service() {
             }
         }
 
-        // Fix 3: Checkpoint logika — vsake 10 točk ali vsakih 50m
+        // ── Checkpoint logika (Faza 15) ───────────────────────────────────────
         pointsSinceLastCheckpoint++
         val distanceSinceCheckpoint = totalDistance - distanceAtLastCheckpoint
         if (pointsSinceLastCheckpoint >= CHECKPOINT_EVERY_N_POINTS ||
             distanceSinceCheckpoint >= CHECKPOINT_EVERY_M) {
             triggerCheckpoint()
         }
+    }
+
+    /**
+     * Faza 16: Maksimalna teoretična hitrost za posamezno aktivnost (m/s).
+     * Dinamični anti-spike prag = maxSpeed × timeDelta (sekunde med točkama).
+     *
+     * Vrednosti so nastavljene ~50% nad realnim rekordom za varnost:
+     *  - RUN:    10 m/s = 36 km/h  (svetoven rekord 100m = 10.44 m/s)
+     *  - SPRINT: 12 m/s = 43 km/h
+     *  - CYCLING/SKATING: 20 m/s = 72 km/h
+     *  - SKIING/SNOWBOARD: 30 m/s = 108 km/h
+     *  - WALK/HIKE/NORDIC: 3.5 m/s = 12.6 km/h
+     */
+    private fun resolveMaxSpeedMps(activityType: ActivityType): Double = when (activityType) {
+        ActivityType.SPRINT              -> 12.0
+        ActivityType.RUN                 -> 10.0
+        ActivityType.CYCLING,
+        ActivityType.SKATING             -> 20.0
+        ActivityType.SKIING,
+        ActivityType.SNOWBOARD           -> 30.0
+        ActivityType.WALK,
+        ActivityType.HIKE,
+        ActivityType.NORDIC              ->  3.5
     }
 
     // Fix 3: Checkpoint shranjevanje v Room (asinhrono, ne blokira GPS callback)
@@ -601,7 +671,12 @@ class RunTrackingService : Service() {
             }
             locationBuffer.addAll(restoredLocations)
             _locationPoints.value = locationBuffer.toList()
-            if (restoredLocations.isNotEmpty()) lastLocation = restoredLocations.last()
+            if (restoredLocations.isNotEmpty()) {
+                lastLocation = restoredLocations.last()
+                // Faza 16: Seed EMA z zadnjo znano pozicijo — prepreči skok ob prvem novem GPS signalu
+                emaLat = lastLocation!!.latitude
+                emaLon = lastLocation!!.longitude
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Napaka pri obnovi GPS točk: ${e.message}")
         }
