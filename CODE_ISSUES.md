@@ -69,6 +69,23 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-05-16 — Faza 14: Zgodovinski Snapshoti + Odprava Health Connect Pollinga
+
+**1. Zgodovinski Snapshoti (DailyLogRepository.kt + NutritionViewModel.kt):**
+- ✅ `DailyLogRepository.updateDailyLog()`: Dodani opcijski parametri `initTargetCalories`, `initTargetProtein`, `initTargetCarbs`, `initTargetFat`. Ob kreaciji NOVEGA dokumenta (nov dan) se vrednosti zapišejo v Firestore — za vedno zamrznjene za ta dan.
+- ✅ `NutritionViewModel.kt`: Dodan `data class FrozenDayTargets(calories, protein, carbs, fat)` in `_frozenTargets: MutableStateFlow<FrozenDayTargets?>`. `observeDailyTotals()` bere polja `targetCalories/Protein/Carbs/Fat` iz Firestore snapshota.
+- ✅ `NutritionViewModel.ensureDayInitialized()`: Nova funkcija — kliče `updateDailyLog` z init parametri ob odprtju zaslona. Idempotentna (brez učinka, če dokument že obstaja).
+- ✅ `NutritionScreen.kt`: `targetCalories/Protein/Carbs/Fat` najprej preverijo `frozenTargets` (iz dailyLog), šele nato `nutritionPlan` kot fallback. **Stari dnevi so zaščiteni** — ne kažejo spremenjenega novega plana.
+
+**2. Odprava Health Connect Pollinga (NutritionScreen.kt):**
+- ✅ **IZBRISANA** smrtonosna `while(true) { delay(5000) }` zanka (sproži Health Connect branje + Firestore transakcijo vsakih 5s = 12× na minuto).
+- ✅ **ZAMENJANO** z `DisposableEffect(lifecycleOwner)` + `LifecycleEventObserver { ON_RESUME → syncHealthConnectNow() }`. Sync se sproži natanko enkrat ob vsakem vstopu na zaslon (ne vsakih 5s).
+
+**Root cause (Polling):** `while(true) { delay(5000) }` je bil v LaunchedEffect — nikoli se ni ustavil dokler je bila celotna NutritionScreen v composable drevesi. Vsak obisk zaslona je prožil nov timer loop. Po 5 minutah aktivne rabe = 60 Health Connect bralnih + Firestore transakcij.
+
+**Root cause (Snapshoti):** `NutritionScreen` je bral `targetCalories` dinamično iz `nutritionPlan?.calories` ob vsakem odprtju — brez upoštevanja, kateri plan je bil aktiven ob tistem dnevu. Sprememba plana je retroaktivno spremenila cilje za vse pretekle dneve.
+
+
 ### 2026-05-03 — Faza 7: Camera Fix, Rest Day Lock, Deep Logic Audit, APP_MAP Refresh
 
 **1. Camera Rendering Fix (GoldenRatioScreen.kt):**
