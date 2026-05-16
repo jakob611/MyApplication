@@ -54,19 +54,25 @@ interface GamificationRepository {
     suspend fun consumeStreakFreeze(): Boolean
 
     /**
-     * Faza 8 — Unified Streak Engine.
-     * NADOMEŠČA UserProfileManager.updateUserProgressAfterWorkout().
-     *
-     * V ENI Firestore transakciji:
+     * Faza 12 — Unified Streak + XP + Calories Engine.
+     * Vsa logika za zaključeno vadbo v Eni atomarni Firestore transakciji:
      * - Epoch-based streak izračun (dayDiff z Streak Freeze podporo)
      * - Zapiše dailyHistory.$today = "WORKOUT_DONE"
-     * - Posodobi streak_days, last_workout_epoch, plan_day
+     * - Posodobi streak_days, last_activity_epoch, plan_day
+     * - Atomarno dodeli XP in beleži xp_history
+     * - Zapiše porabljene kalorije v dailyLogs
      *
-     * iOS-ready: vsa logika v domain/data layer, brez Android odvisnosti.
-     *
-     * @param incrementPlanDay true za redne workouty, false za extra treninge
+     * @param incrementPlanDay  true za redne workouty, false za extra treninge
+     * @param xpToBeAwarded     skupni XP za to vadbo (base + kalorije, critical pomnoženo)
+     * @param xpReason          razlog za XP log (npr. "WORKOUT_COMPLETE")
+     * @param caloriesBurned    porabljene kalorije za Nutrition bridge (0.0 = preskoči)
      */
-    suspend fun processWorkoutCompletion(incrementPlanDay: Boolean)
+    suspend fun processWorkoutCompletion(
+        incrementPlanDay: Boolean,
+        xpToBeAwarded: Int,
+        xpReason: String,
+        caloriesBurned: Double
+    )
 
     /**
      * Vrni status današnjega dne iz dailyHistory mape.
