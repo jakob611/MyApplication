@@ -43,6 +43,17 @@ enum class WorkoutGoal {
 class WorkoutGenerator {
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Faza 17: Mišični ključi za klasifikacijo zgornjega/spodnjega dela telesa.
+    // Uporablja se v resolveWeightIncrement() za določitev primernega inkrementa.
+    // ─────────────────────────────────────────────────────────────────────────
+    companion object {
+        /** Spodnji del telesa → večji inkrement (+5.0 kg) */
+        private val LOWER_BODY_KEYWORDS = setOf(
+            "leg", "quad", "hamstring", "glute", "calf", "calves", "hip", "adductor", "tibial"
+        )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // DETERMINISTIČNA NAKLJUČNOST
     // Seed = (danes kot EpochDay) * 1000 + planDay
     // Rezultat: isti nabor vaj cel dan, ne glede na to koliko krat generiramo.
@@ -333,11 +344,27 @@ class WorkoutGenerator {
     }
 
     /**
-     * Weighted random (kolo sreče):
-     * Vsaka vaja ima verjetnost izbire sorazmerno svojemu score-u.
-     * Vaja z score 8.0 ima ~4x večjo verjetnost kot vaja s score 2.0,
-     * ampak vaja s score 2.0 ima še vedno realno možnost → raznolikost.
-     * @param rng Deterministični Random — zagotavlja enako selekcijo za isti dan/planDay.
+     * Faza 17: Weighted roulette wheel z STATEFUL diversity penaltiji.
+     *
+     * Za vsako iteracijo:
+     *  1. Vzame pre-izračunane base score-e (deterministični jitter že vključen).
+     *  2. Pomnoži vsak score z getDiversityMultiplier() → penalizira ponavljanje
+     *     istih PRIMARY mišičnih skupin.
+     *  3. Zavrti kolo sreče in izbere vajo.
+     *  4. Posodobi selectedPrimaryMuscles tracker.
+     *
+     * Penalty lestvica (na PRIMARY mišico):
+     *   1. pojavitev → ×1.0  (brez penaltija)
+     *   2. pojavitev → ×0.5  (50 % manj verjetna)
+     *   3. pojavitev → ×0.2  (80 % manj verjetna)
+     *   4.+ pojavitev → ×0.1 (90 % manj verjetna — ni blokirana, da ohranimo raznolikost)
+     *
+     * Primer: Po chest vaji dobi vsaka naslednja chest vaja 50 % manjšo verjetnost →
+     *   naravno se premakne na shoulders ali back.
+     *
+     * @param scored Pre-izračunani base score-i (vključno z jitterjem).
+     * @param count  Število vaj, ki jih izberemo.
+     * @param rng    Deterministični Random (isti seed za isti dan/planDay).
      */
     private fun selectExercisesWeighted(
         scored: List<Pair<RefinedExercise, Double>>,
@@ -347,97 +374,215 @@ class WorkoutGenerator {
         val selected = mutableListOf<RefinedExercise>()
         val pool = scored.toMutableList()
 
+        // Faza 17: Sledimo koliko krat je bila katera PRIMARY mišica že izbrana danes.
+        // Key = lowercase mišično ime (npr. "chest", "legs – quads")
+        val selectedPrimaryMuscles = mutableMapOf<String, Int>()
+
         android.util.Log.d("WorkoutGenerator", "Weighted selection from ${pool.size} exercises, need $count")
 
         repeat(count) {
             if (pool.isEmpty()) return@repeat
 
-            // Seštej vse pozitivne score-e
-            val totalScore = pool.sumOf { (_, s) -> s.coerceAtLeast(0.0) }
-            if (totalScore <= 0.0) {
-                android.util.Log.e("WorkoutGenerator", "ERROR: totalScore=0 in pool of ${pool.size} exercises — skipping")
+            // Izračunaj efektivni score za vsako vajo v aktualnem pool-u.
+            // Base score je stabilen (jitter je že vključen), diversity multiplier
+            // se posodablja glede na aktualno stanje selectedPrimaryMuscles.
+            val totalEffectiveScore = pool.sumOf { (ex, baseScore) ->
+                (baseScore * getDiversityMultiplier(ex, selectedPrimaryMuscles)).coerceAtLeast(0.0)
+            }
+
+            if (totalEffectiveScore <= 0.0) {
+                android.util.Log.e("WorkoutGenerator",
+                    "ERROR: totalEffectiveScore=0 in pool of ${pool.size} — skipping")
                 return@repeat
             }
 
-            // Zavrti kolo sreče (z deterministično rng)
-            var rand = rng.nextDouble(0.0, totalScore)
-            var pickedPair = pool.last()  // fallback
-            for (pair in pool) {
-                rand -= pair.second.coerceAtLeast(0.0)
-                if (rand <= 0.0) {
-                    pickedPair = pair
-                    break
-                }
+            // Zavrti kolo sreče z diversity-penaliziranimi score-i
+            var rand = rng.nextDouble(0.0, totalEffectiveScore)
+            var pickedIndex = pool.size - 1  // fallback: zadnja vaja
+            for (i in pool.indices) {
+                val (ex, baseScore) = pool[i]
+                rand -= (baseScore * getDiversityMultiplier(ex, selectedPrimaryMuscles)).coerceAtLeast(0.0)
+                if (rand <= 0.0) { pickedIndex = i; break }
             }
 
-            selected.add(pickedPair.first)
-            pool.remove(pickedPair)
+            val pickedExercise = pool[pickedIndex].first
+            selected.add(pickedExercise)
+            pool.removeAt(pickedIndex)  // O(N) shift, sprejemljivo za pool ~20–100
+
+            // Posodobi diversity tracker: beleži vsako PRIMARY mišico izbrane vaje
+            val primaryKeys = if (pickedExercise.muscleIntensities.isNotEmpty()) {
+                pickedExercise.muscleIntensities.entries
+                    .filter { it.value.role == MuscleRole.PRIMARY }
+                    .map { it.key.lowercase() }
+            } else if (pickedExercise.primaryMuscle.isNotBlank()) {
+                listOf(pickedExercise.primaryMuscle.lowercase())
+            } else emptyList()
+
+            primaryKeys.forEach { key ->
+                selectedPrimaryMuscles[key] = (selectedPrimaryMuscles[key] ?: 0) + 1
+            }
+
+            android.util.Log.d("WorkoutGenerator",
+                "  PICKED: ${pickedExercise.name} | diversity state: $selectedPrimaryMuscles")
         }
 
-        android.util.Log.d("WorkoutGenerator", "=== SELECTED (weighted) ===")
+        android.util.Log.d("WorkoutGenerator", "=== SELECTED (weighted + diversity) ===")
         selected.forEachIndexed { i, ex ->
-            android.util.Log.d("WorkoutGenerator", "  ${i+1}. ${ex.name} muscles=${ex.muscleIntensities.keys}")
+            android.util.Log.d("WorkoutGenerator",
+                "  ${i+1}. ${ex.name} muscles=${ex.muscleIntensities.keys}")
         }
 
         return selected
     }
 
+    /**
+     * Faza 17: Diversity penalty multiplier.
+     *
+     * Vrne faktor, ki se pomnoži z base score-om vaje glede na to,
+     * kolikokrat je njena PRIMARY mišica bila že izbrana v tej seji.
+     *
+     * @param exercise             Kandidatna vaja.
+     * @param selectedPrimaryMuscles Mapa: lowercase mišično ime → število izbir do sedaj.
+     */
+    private fun getDiversityMultiplier(
+        exercise: RefinedExercise,
+        selectedPrimaryMuscles: Map<String, Int>
+    ): Double {
+        if (selectedPrimaryMuscles.isEmpty()) return 1.0
+
+        // Določi primary muscle ključe — preferiramo muscleIntensities (richer data),
+        // fallback na primaryMuscle string polje
+        val primaryKeys: List<String> = if (exercise.muscleIntensities.isNotEmpty()) {
+            exercise.muscleIntensities.entries
+                .filter { it.value.role == MuscleRole.PRIMARY }
+                .map { it.key.lowercase() }
+        } else if (exercise.primaryMuscle.isNotBlank()) {
+            listOf(exercise.primaryMuscle.lowercase())
+        } else {
+            return 1.0  // Neznane mišice → brez penaltija
+        }
+
+        // Najdi maksimalno število izbir katere koli primary mišice te vaje
+        val maxSelectCount = primaryKeys.maxOf { selectedPrimaryMuscles.getOrDefault(it, 0) }
+
+        return when (maxSelectCount) {
+            0    -> 1.0   // Prva izbira te mišice — brez penaltija
+            1    -> 0.5   // Drugi hit — 50 % manj verjetna
+            2    -> 0.2   // Tretji hit — 80 % manj verjetna
+            else -> 0.1   // 4.+ hit — 90 % manj verjetna (ni blokirana)
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // VOLUME PROGRESSION — The Memory Bridge
-    // Pripravljeno za Firestore podatke (Faza 12).
-    // Kliči po generateWorkout(), ko imaš lastSession iz WorkoutViewModel / Firestore.
+    // VOLUME PROGRESSION — The Memory Bridge (Faza 17: True Progressive Overload)
     //
-    // Logika:
-    //   - Za vsako vajo v generiranem treningu poišči njen zapis iz zadnje seje.
-    //   - Če obstaja → predlagaj +5 % reps (zaokroženo navzgor) in zabeleži predlog.
-    //   - Teža: če je weightKg > 0 v zadnji seji, predlagaj +5 % (zaokroženo na 0.5 kg).
-    //   - MAX guard: reps ne sme preseči 1.5× parsedReps originalne vaje.
+    // Hierarhija napredka (v prednosti):
+    //   1. REPS FIRST: povečaj ponovitve za +5 % (min +1) do varnostnega stropa 1.5×
+    //   2. WEIGHT SHIFT: ko so reps na stropu, povečaj targetWeightKg:
+    //        - Spodnji del telesa (noge, glutes):  +5.0 kg na 0.5 kg zaokroženo
+    //        - Zgornji del telesa (prsni, hrbet…): +2.5 kg na 0.5 kg zaokroženo
+    //        - Telesna teža (weightKg == 0f):      samo ohranjamo rep cap
     //
-    // Struktura: SAMO generator; shranjevanje in branje iz Firestore
-    //            bo dodano v WorkoutViewModel v Fazi 12.
+    // Razlika od prejšnje verzije:
+    //   PREJ: reps+5% IN weight+5% hkrati — vedno oboje
+    //   ZDAJ: reps DOKLER je prostor, nato weight — nikoli oboje hkrati
     // ─────────────────────────────────────────────────────────────────────────
     fun applyVolumeProgression(
         exercises: List<RefinedExercise>,
         lastSession: List<LastExerciseRecord>?
     ): List<RefinedExercise> {
         if (lastSession.isNullOrEmpty()) {
-            android.util.Log.d("WorkoutGenerator", "applyVolumeProgression: no lastSession data — skipping")
+            android.util.Log.d("WorkoutGenerator", "applyVolumeProgression: ni podatkov iz zadnje seje — preskakujem")
             return exercises
         }
 
-        // Index po lowercase imenu za O(1) lookup
-        val lastSessionIndex = lastSession.associateBy { it.exerciseName.trim().lowercase() }
+        // O(1) lookup po lowercase imenu — gradimo enkrat, iščemo N-krat
+        val lastSessionIndex: Map<String, LastExerciseRecord> =
+            lastSession.associateBy { it.exerciseName.trim().lowercase() }
 
         return exercises.map { exercise ->
             val key = exercise.name.trim().lowercase()
             val last = lastSessionIndex[key]
+                ?: return@map exercise  // vaja ni bila v zadnji seji → brez spremembe
 
-            if (last == null) {
-                // Vaja ni bila opravljena v zadnji seji → ne spremenimo volumna
-                exercise
+            // ── Varnostni strop: ne presegi 1.5× originalnih parsedReps ─────────
+            val repsCap = (exercise.parsedReps * 1.5f).roundToInt()
+
+            // +5 % reps, zaokroženo navzgor, min +1
+            val proposedReps = (last.reps * 1.05f).roundToInt()
+                .coerceAtLeast(last.reps + 1)
+
+            if (proposedReps <= repsCap) {
+                // ── Koridor 1: Reps progresija (prostor še obstaja) ───────────────
+                android.util.Log.d("WorkoutGenerator",
+                    "  Progression[REPS] ${exercise.name}: ${last.reps}→$proposedReps reps")
+                exercise.copy(
+                    parsedReps  = proposedReps,
+                    repsDisplay = proposedReps.toString(),
+                    // Ohrani obstoječo težo brez spremembe (ne zwibujo oboje hkrati)
+                    targetWeightKg = if (last.weightKg > 0f) last.weightKg.toDouble() else null
+                )
             } else {
-                // +5 % reps (zaokroženo navzgor, min +1, max 1.5× original)
-                val rawNewReps = (last.reps * 1.05f).roundToInt().coerceAtLeast(last.reps + 1)
-                val maxReps = (exercise.parsedReps * 1.5f).roundToInt()
-                val newReps = rawNewReps.coerceAtMost(maxReps)
-
-                // +5 % teža (zaokroženo na 0.5 kg, samo če je teža bila > 0)
-                val newWeight = if (last.weightKg > 0f) {
-                    val raw = last.weightKg * 1.05f
-                    // Zaokroži na najbližjih 0.5 kg
-                    (kotlin.math.round(raw * 2) / 2.0f)
-                } else 0f
+                // ── Koridor 2: Weight progresija (reps jsou na stropu) ───────────
+                val lastWeightKg = last.weightKg.toDouble()
+                val newTargetWeight: Double? = when {
+                    lastWeightKg <= 0.0 -> null  // Telesna teža → ni weight progression
+                    else -> {
+                        val increment = resolveWeightIncrement(exercise)
+                        val raw = lastWeightKg + increment
+                        roundToNearestHalf(raw)  // zaokroži na 0.5 kg (standard plošče)
+                    }
+                }
 
                 android.util.Log.d("WorkoutGenerator",
-                    "Progression ${exercise.name}: reps ${last.reps}→$newReps, weight ${last.weightKg}→$newWeight kg")
+                    "  Progression[WEIGHT] ${exercise.name}: reps capped@$repsCap, " +
+                    "weight ${last.weightKg} kg → $newTargetWeight kg " +
+                    "(+${resolveWeightIncrement(exercise)} kg)")
 
                 exercise.copy(
-                    parsedReps = newReps,
-                    repsDisplay = if (newReps != exercise.parsedReps) newReps.toString() else exercise.repsDisplay,
-                    // Opomba: weightKg ni del RefinedExercise (Faza 12 bo to razširila).
-                    // Za zdaj beležimo samo reps progresijo.
+                    parsedReps     = repsCap,
+                    repsDisplay    = repsCap.toString(),
+                    targetWeightKg = newTargetWeight
                 )
             }
         }
     }
+
+    /**
+     * Faza 17: Določi standardni weight increment glede na tip vaje.
+     *
+     * Logika:
+     *   - Spodnji del telesa (quad, glute, hamstring…): +5.0 kg
+     *     (večje mišice, večje plošče, hitrejša adaptacija)
+     *   - Vse ostalo (zgornji del, core, cardio):       +2.5 kg
+     *     (manjše mišice, standardni dumbbell/barbell korak)
+     *
+     * Podatkovni vir: muscleIntensities (PRIMARY mišice) — isti ključi kot v
+     * focusToMuscleKeys() in calculateScore().
+     */
+    private fun resolveWeightIncrement(exercise: RefinedExercise): Double {
+        val primaryMuscles: List<String> = if (exercise.muscleIntensities.isNotEmpty()) {
+            exercise.muscleIntensities.entries
+                .filter { it.value.role == MuscleRole.PRIMARY }
+                .map { it.key.lowercase() }
+        } else if (exercise.primaryMuscle.isNotBlank()) {
+            listOf(exercise.primaryMuscle.lowercase())
+        } else {
+            return 2.5  // konservativen fallback za neznane vaje
+        }
+
+        val isLowerBody = primaryMuscles.any { muscle ->
+            LOWER_BODY_KEYWORDS.any { keyword -> muscle.contains(keyword) }
+        }
+        return if (isLowerBody) 5.0 else 2.5
+    }
+
+    /**
+     * Zaokroži double vrednost na najbližnih 0.5 kg — standard Olympic barbell
+     * plošče in večina dumbbell setov.
+     *
+     * Primeri: 22.3 → 22.5 | 22.7 → 23.0 | 100.1 → 100.0
+     */
+    private fun roundToNearestHalf(kg: Double): Double =
+        kotlin.math.round(kg * 2.0) / 2.0
 }

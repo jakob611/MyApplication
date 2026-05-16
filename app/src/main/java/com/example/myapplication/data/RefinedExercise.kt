@@ -24,7 +24,12 @@ data class RefinedExercise(
     val repsDisplay: String = "12", // Original string preserving dashes, e.g., "10-12"
     val recommendedRestSeconds: Int = 60,
 
-    val muscleIntensities: Map<String, MuscleIntensity> = emptyMap()
+    val muscleIntensities: Map<String, MuscleIntensity> = emptyMap(),
+
+    // Faza 17: Progressive Overload — predlagana ciljna teža za to sejo.
+    // null = telesna teža (ne zahteva opreme) ali ni znane zgodovine.
+    // Vrednot je prenesena iz applyVolumeProgression() in prikazana v UI.
+    val targetWeightKg: Double? = null
 )
 
 @Serializable
