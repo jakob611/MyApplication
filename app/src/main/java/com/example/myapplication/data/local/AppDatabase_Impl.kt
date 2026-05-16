@@ -54,7 +54,8 @@ class AppDatabase_Impl : AppDatabase() {
     override fun gpsPointDao(): GpsPointDao = _gpsPointDao
 
     override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper {
-        val cb = object : SupportSQLiteOpenHelper.Callback(version = 1) {
+        // Faza 15: verzija 2 — dodan status stolpec
+        val cb = object : SupportSQLiteOpenHelper.Callback(version = 2) {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `workout_sessions` (
@@ -72,6 +73,7 @@ class AppDatabase_Impl : AppDatabase() {
                         `elevationLossM` REAL NOT NULL,
                         `activityType` TEXT NOT NULL,
                         `isSmoothed` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL DEFAULT 'COMPLETED',
                         PRIMARY KEY(`id`)
                     )
                 """.trimIndent())
@@ -93,7 +95,12 @@ class AppDatabase_Impl : AppDatabase() {
             }
 
             override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
-                // V1 beta: destructive migration prek fallbackToDestructiveMigration() v AppDatabase.kt
+                // V1 → V2: Faza 15 — dodamo status stolpec za sledenje IN_PROGRESS/COMPLETED
+                if (oldVersion < 2) {
+                    db.execSQL(
+                        "ALTER TABLE workout_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'COMPLETED'"
+                    )
+                }
             }
         }
         return config.sqliteOpenHelperFactory.create(
@@ -142,7 +149,10 @@ class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionD
             .map { querySessions() }
 
     private fun querySessions(): List<WorkoutSessionEntity> {
-        val c = db.getReadableDb().query("SELECT * FROM workout_sessions ORDER BY createdAt DESC")
+        // Faza 15: izključi IN_PROGRESS seje iz Activity Log (vidne so samo dokončane)
+        val c = db.getReadableDb().query(
+            "SELECT * FROM workout_sessions WHERE status != 'IN_PROGRESS' ORDER BY createdAt DESC"
+        )
         return c.use { cur ->
             buildList {
                 while (cur.moveToNext()) add(cur.toWorkoutSessionEntity())
@@ -164,7 +174,8 @@ class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionD
         elevationGainM  = getFloat(getColumnIndexOrThrow("elevationGainM")),
         elevationLossM  = getFloat(getColumnIndexOrThrow("elevationLossM")),
         activityType    = getString(getColumnIndexOrThrow("activityType")),
-        isSmoothed      = getInt(getColumnIndexOrThrow("isSmoothed")) != 0
+        isSmoothed      = getInt(getColumnIndexOrThrow("isSmoothed")) != 0,
+        status          = getString(getColumnIndexOrThrow("status"))
     )
 
     override suspend fun upsertAll(sessions: List<WorkoutSessionEntity>) = withContext(Dispatchers.IO) {
@@ -196,8 +207,8 @@ class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionD
         val stmt: SupportSQLiteStatement = wdb.compileStatement(
             "INSERT OR REPLACE INTO workout_sessions " +
             "(id,userId,startTime,endTime,durationSeconds,distanceMeters,maxSpeedMps,avgSpeedMps," +
-            "createdAt,caloriesKcal,elevationGainM,elevationLossM,activityType,isSmoothed) " +
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            "createdAt,caloriesKcal,elevationGainM,elevationLossM,activityType,isSmoothed,status) " +
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
         stmt.use {
             it.bindString(1,  s.id)
@@ -214,6 +225,7 @@ class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionD
             it.bindDouble(12, s.elevationLossM.toDouble())
             it.bindString(13, s.activityType)
             it.bindLong(14,   if (s.isSmoothed) 1L else 0L)
+            it.bindString(15, s.status)
             it.executeInsert()
         }
     }
@@ -233,6 +245,23 @@ class WorkoutSessionDao_Impl(private val db: AppDatabase_Impl) : WorkoutSessionD
         db.getReadableDb().query(
             "SELECT COUNT(*) FROM workout_sessions WHERE userId = ?", arrayOf(userId)
         ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    // Faza 15: vrne zadnjo aktivno (nedokončano) sejo za OOM obnovo
+    override suspend fun getInProgressSession(): WorkoutSessionEntity? = withContext(Dispatchers.IO) {
+        db.getReadableDb().query(
+            "SELECT * FROM workout_sessions WHERE status = 'IN_PROGRESS' ORDER BY startTime DESC LIMIT 1"
+        ).use { c ->
+            if (c.moveToFirst()) c.toWorkoutSessionEntity() else null
+        }
+    }
+
+    // Faza 15: posodobi status (IN_PROGRESS → COMPLETED)
+    override suspend fun updateStatus(id: String, status: String) = withContext(Dispatchers.IO) {
+        db.getWritableDb().execSQL(
+            "UPDATE workout_sessions SET status = ? WHERE id = ?", arrayOf(status, id)
+        )
+        db.notifyInvalidation()
     }
 }
 

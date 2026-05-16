@@ -143,7 +143,7 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
      * Kliče se POLEG Firestore save v RunTrackerScreen — ne zamenja ga.
      */
     suspend fun insertLocalSession(session: RunSession, rawPoints: List<LocationPoint>) {
-        db.workoutSessionDao().upsert(session.toEntity())
+        db.workoutSessionDao().upsert(session.toEntity()) // toEntity() → status = "COMPLETED"
         if (rawPoints.isNotEmpty()) {
             // Zbrišemo morebitne stare (kompresiran GPS) in nadomestimo s surovimi
             db.gpsPointDao().deleteBySessionId(session.id)
@@ -152,6 +152,34 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
             )
             Log.d(TAG, "Local save: ${rawPoints.size} surovih GPS točk za ${session.id}")
         }
+    }
+
+    // ─── Faza 15: Checkpoint med tekom (IN_PROGRESS) ──────────────────────
+    /**
+     * Vmesno shranjevanje med aktivnim sledenjem — status ostane IN_PROGRESS.
+     * Prepreči izgubo podatkov ob OOM-kill ali sesutju.
+     * Ko se tek konča, insertLocalSession() prepiše status v COMPLETED.
+     */
+    suspend fun saveCheckpoint(session: RunSession, rawPoints: List<LocationPoint>) {
+        db.workoutSessionDao().upsert(session.toEntity().copy(status = "IN_PROGRESS"))
+        if (rawPoints.isNotEmpty()) {
+            // IGNORE strategija — točke z enakim uid se ne podvajajo
+            db.gpsPointDao().insertAll(
+                rawPoints.map { it.toGpsPointEntity(session.id, isRaw = true) }
+            )
+            Log.d(TAG, "Checkpoint saved: ${rawPoints.size} GPS točk za ${session.id}")
+        }
+    }
+
+    // ─── Faza 15: Obnova po OOM restartu ─────────────────────────────────
+    /** Vrne zadnjo aktivno (nedokončano) sejo za obnovo po OOM-kill */
+    suspend fun getInProgressSession(): WorkoutSessionEntity? =
+        db.workoutSessionDao().getInProgressSession()
+
+    /** Označi sejo kot dokončano (kliče se ob normalnem zaustavitvi) */
+    suspend fun markSessionCompleted(sessionId: String) {
+        // updateStatus() že interno kliče notifyInvalidation() v AppDatabase_Impl
+        db.workoutSessionDao().updateStatus(sessionId, "COMPLETED")
     }
 
     // ─── GPS točke za prikaz ──────────────────────────────────────────────

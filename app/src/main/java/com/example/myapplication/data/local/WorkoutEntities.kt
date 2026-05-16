@@ -27,7 +27,9 @@ data class WorkoutSessionEntity(
     val elevationGainM: Float,
     val elevationLossM: Float,
     val activityType: String,   // shranjeno kot enum.name → ActivityType.RUN.name = "RUN"
-    val isSmoothed: Boolean
+    val isSmoothed: Boolean,
+    // Faza 15: Odpornost — "IN_PROGRESS" med sledenjem, "COMPLETED" po shranjevanju
+    val status: String = "COMPLETED"
 )
 
 // ─── GpsPointEntity ────────────────────────────────────────────────────────
@@ -92,7 +94,8 @@ fun RunSession.toEntity(): WorkoutSessionEntity = WorkoutSessionEntity(
     elevationGainM = elevationGainM,
     elevationLossM = elevationLossM,
     activityType = activityType.name,
-    isSmoothed = isSmoothed
+    isSmoothed = isSmoothed,
+    status = "COMPLETED"
 )
 
 fun GpsPointEntity.toLocationPoint(): LocationPoint = LocationPoint(

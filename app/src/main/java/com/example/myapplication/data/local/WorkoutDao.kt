@@ -28,6 +28,14 @@ interface WorkoutSessionDao {
 
     @Query("SELECT COUNT(*) FROM workout_sessions WHERE userId = :userId")
     suspend fun getSessionCount(userId: String): Int
+
+    // Faza 15: Obnova po OOM — vrne zadnjo aktivno (nedokončano) sejo
+    @Query("SELECT * FROM workout_sessions WHERE status = 'IN_PROGRESS' ORDER BY startTime DESC LIMIT 1")
+    suspend fun getInProgressSession(): WorkoutSessionEntity?
+
+    // Faza 15: Posodobi status seje (IN_PROGRESS → COMPLETED)
+    @Query("UPDATE workout_sessions SET status = :status WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String)
 }
 
 // ─── GpsPointDao ──────────────────────────────────────────────────────────
