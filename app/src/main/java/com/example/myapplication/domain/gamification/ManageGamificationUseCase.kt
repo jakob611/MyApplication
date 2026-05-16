@@ -1,16 +1,16 @@
 package com.example.myapplication.domain.gamification
 
-import com.example.myapplication.domain.gamification.GamificationRepository
-import com.example.myapplication.data.UserProfile
-import com.example.myapplication.data.Badge
-import com.example.myapplication.data.BadgeDefinitions
+import com.example.myapplication.domain.model.AchievementProfile
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.toLocalDateTime
 
+/**
+ * Rezultat zaključenega workout-a.
+ * unlockedBadges: seznam badge ID-jev (ne Badge objektov — brez data layer odvisnosti).
+ */
 data class WorkoutCompletionResult(
-    val unlockedBadges: List<Badge>,
+    val unlockedBadges: List<String> = emptyList(),
     val xpAwarded: Int,
     val isCritical: Boolean
 )
@@ -21,29 +21,32 @@ data class GamificationState(
 )
 
 /**
- * UseCase (KMP) razred za logiko doloŤanja gamifikacije na Ťisto Kotlin strukturo.
- * Predstavlja most med UI-jem/Workerji in Repozitorijem,
- * brez zlorabe ali napačnega pomnenja v prejšnjih SharedPreferences.
+ * UseCase za gamification logiko.
+ *
+ * Clean Architecture: komunicira SAMO z GamificationRepository (domain interface).
+ * KMP-ready: brez Android, data.settings, data.UserProfile odvisnosti.
+ *
+ * @param repository GamificationRepository (implementira FirestoreGamificationRepository)
  */
 class ManageGamificationUseCase(
-    private val repository: GamificationRepository,
-    private val workoutDoneProvider: () -> Boolean = { false },
-    private val weeklyTargetProvider: () -> Flow<Int> = { flowOf(0) }
+    private val repository: GamificationRepository
 ) {
 
-    fun getGamificationStateFlow(): Flow<GamificationState> {
-        return weeklyTargetProvider().combine(flowOf(workoutDoneProvider())) { target, _ ->
-            GamificationState(
-                weeklyTarget = target,
-                workoutDoneToday = workoutDoneProvider()
-            )
+    /**
+     * Flow za GamificationState (weeklyTarget, workoutDoneToday).
+     * Podatke bere prek repository (ne prek SharedPrefs lambda-jev).
+     */
+    fun getGamificationStateFlow(): Flow<GamificationState> = flow {
+        try {
+            emit(repository.getGamificationState())
+        } catch (_: Exception) {
+            emit(GamificationState())
         }
     }
 
     /** @deprecated Používaj recordWorkoutCompletion() — ta funkcija je legacy stub */
     suspend fun completeWorkoutSession(calKcal: Int) {
         // ⚠️ AUDIT: Ne kliče več repository.updateStreak() — streak posodobi UpdateBodyMetricsUseCase.
-        // Obdržano za backwards compatibility, logika je v recordWorkoutCompletion().
         val workoutXp = 100 + (calKcal / 10)
         repository.awardXP(workoutXp, "WORKOUT_COMPLETE")
     }
@@ -60,7 +63,6 @@ class ManageGamificationUseCase(
         incrementPlanDay: Boolean = true
     ): WorkoutCompletionResult {
         // Faza 8: Unified Streak Engine — kliči processWorkoutCompletion SAMO če ni extra-na-rest-dnevu
-        // isRestDay tukaj pomeni "extra workout na rest dnevu" (propagirano iz UpdateBodyMetricsUseCase)
         if (!isRestDay) {
             repository.processWorkoutCompletion(incrementPlanDay)
         }
@@ -76,19 +78,15 @@ class ManageGamificationUseCase(
 
         // ── Workout-Nutrition Bridge ─────────────────────────────────────────────
         // Piše burned calories v dailyLogs → NutritionScreen prikaže pravilni net balance.
-        // To je edino mesto pisanja (UpdateBodyMetricsUseCase step 6 odstranjen).
+        // Prek repository interface (ne direktna DailyLogRepository instantiacija).
         if (caloriesBurned > 0.0) {
             try {
                 val todayStr = kotlinx.datetime.Clock.System.now()
                     .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
                     .date.toString()
-                com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(todayStr) { data ->
-                    val existingBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
-                    data["burnedCalories"] = existingBurned + caloriesBurned
-                }
-                // ℹ️ Log je dostopen prek DailyLogRepository.lastTransactions (iOS-ready)
+                repository.logBurnedCalories(todayStr, caloriesBurned)
             } catch (_: Exception) {
-                // Napaka je tiha — DailyLogRepository.lastTransactions zabeleži neuspeh
+                // Napaka je tiha
             }
         }
         // ────────────────────────────────────────────────────────────────────────
@@ -108,7 +106,11 @@ class ManageGamificationUseCase(
         repository.awardXP(10, "DAILY_LOGIN")
     }
 
-    fun getBadgeProgress(badgeId: String, profile: UserProfile): Int {
+    /**
+     * Vrni badge napredek za danega uporabnika.
+     * @param profile AchievementProfile domenski model (ViewModel ga konvertira iz data.UserProfile)
+     */
+    fun getBadgeProgress(badgeId: String, profile: AchievementProfile): Int {
         return when (badgeId) {
             "first_workout", "committed_10", "committed_50", "committed_100",
             "committed_250", "committed_500" ->
@@ -129,7 +131,7 @@ class ManageGamificationUseCase(
         }
     }
 
-    suspend fun checkAndSyncBadgesOnStartup(): List<Badge> {
+    suspend fun checkAndSyncBadgesOnStartup(): List<String> {
         return emptyList() // delegated to future KMP sync logic
     }
 
@@ -150,7 +152,5 @@ class ManageGamificationUseCase(
     /** Worker (ob polnoči) pozove, da naj bi bil tisti dan odtreniran ali zamujen. */
     suspend fun executeMidnightStreakCheck() {
         repository.runMidnightStreakCheck()
-        // Repository bo morda preveril uporabo Freeze in zamujenega stanja
-        // in ponastavil na 0 neposredno v skupni bazi (v resnici brez uničujočih SharedPreferences).
     }
 }

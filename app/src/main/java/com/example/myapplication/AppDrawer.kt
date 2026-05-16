@@ -768,9 +768,20 @@ fun SettingsDropdownRow(
 fun calculateAutoUnlockedBadgeCount(userProfile: UserProfile): Pair<Set<String>, Int> {
     val repo = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
     val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repo)
+    // Pretvori data.UserProfile → domain.model.AchievementProfile (Clean Architecture mapping)
+    val profile = com.example.myapplication.domain.model.AchievementProfile(
+        totalWorkoutsCompleted = userProfile.totalWorkoutsCompleted,
+        totalCaloriesBurned    = userProfile.totalCaloriesBurned,
+        level                  = userProfile.level,
+        followers              = userProfile.followers,
+        earlyBirdWorkouts      = userProfile.earlyBirdWorkouts,
+        nightOwlWorkouts       = userProfile.nightOwlWorkouts,
+        currentLoginStreak     = userProfile.currentLoginStreak,
+        totalPlansCreated      = userProfile.totalPlansCreated
+    )
     val ids = com.example.myapplication.data.BadgeDefinitions.ALL_BADGES
         .filter { badge ->
-            useCase.getBadgeProgress(badge.id, userProfile) >= badge.requirement
+            useCase.getBadgeProgress(badge.id, profile) >= badge.requirement
         }
         .map { it.id }
         .toSet()

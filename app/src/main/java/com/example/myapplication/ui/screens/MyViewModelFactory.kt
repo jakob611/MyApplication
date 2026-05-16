@@ -12,10 +12,11 @@ import com.example.myapplication.domain.workout.GetBodyMetricsUseCase
 import com.example.myapplication.domain.workout.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.workout.SwapPlanDaysUseCase
 import com.example.myapplication.data.workout.FirestoreWorkoutRepository
-import com.example.myapplication.domain.gamification.GamificationProvider
+import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.data.local.OfflineFirstWorkoutRepository
+import com.example.myapplication.data.workout.UserWorkoutStatsRepository
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -25,8 +26,7 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
         }
         if (modelClass.isAssignableFrom(RunTrackerViewModel::class.java)) {
             requireNotNull(context) { "Context required for RunTrackerViewModel" }
-            val gamificationUseCase = GamificationProvider.provide(context)
-            // Faza 3: Offline-First — posreduj Room repository
+            val gamificationUseCase = GamificationFactory.provide(context)
             val db = AppDatabase.getInstance(context)
             val offlineRepo = OfflineFirstWorkoutRepository(db)
             @Suppress("UNCHECKED_CAST")
@@ -34,31 +34,32 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
         }
         if (modelClass.isAssignableFrom(NutritionViewModel::class.java)) {
             requireNotNull(context) { "Context required for NutritionViewModel" }
-            val gamificationUseCase = GamificationProvider.provide(context)
+            val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
             return NutritionViewModel(gamificationUseCase) as T
         }
         if (modelClass.isAssignableFrom(ProgressViewModel::class.java)) {
             requireNotNull(context) { "Context required for ProgressViewModel" }
-            val gamificationUseCase = GamificationProvider.provide(context)
+            val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
             return ProgressViewModel(gamificationUseCase) as T
         }
         if (modelClass.isAssignableFrom(GamificationSharedViewModel::class.java)) {
             requireNotNull(context) { "Context required for GamificationSharedViewModel" }
-            val gamificationUseCase = GamificationProvider.provide(context)
+            val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
             return GamificationSharedViewModel(gamificationUseCase) as T
         }
         if (modelClass.isAssignableFrom(BodyModuleHomeViewModel::class.java)) {
             requireNotNull(context) { "Context required for BodyModuleHomeViewModel" }
             val workoutRepo = FirestoreWorkoutRepository()
-            val gamificationUseCase = GamificationProvider.provide(context)
+            val gamificationUseCase = GamificationFactory.provide(context)
             val settingsRepo = UserPreferencesRepository(context)
+            val statsRepo = UserWorkoutStatsRepository(settingsRepo)
 
             @Suppress("UNCHECKED_CAST")
             return BodyModuleHomeViewModel(
-                GetBodyMetricsUseCase(workoutRepo, settingsRepo),
+                GetBodyMetricsUseCase(statsRepo),
                 UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
                 SwapPlanDaysUseCase(),
                 gamificationUseCase  // Faza 4b: za CompleteRestDay stretching logiko

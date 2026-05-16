@@ -3,6 +3,7 @@ package com.example.myapplication.data.gamification
 import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
+import com.example.myapplication.domain.gamification.GamificationState
 import com.example.myapplication.persistence.FirestoreHelper
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
@@ -280,6 +281,47 @@ class FirestoreGamificationRepository : GamificationRepository {
      *
      * checkIfFutureRestDaysExistAndSwap() je IZBRISAN (Faza 4b).
      */
+    /**
+     * Zapiši porabljene kalorije v dailyLogs/{todayStr}.burnedCalories (atomarna transakcija).
+     * Kličejo jo domain use cases (ManageGamificationUseCase) brez direktnega dostopa do DailyLogRepository.
+     */
+    override suspend fun logBurnedCalories(todayStr: String, calories: Double) {
+        try {
+            val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
+            val db = FirestoreHelper.getDb()
+            val dailyLogRef = db.collection("dailyLogs").document(todayStr)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(dailyLogRef)
+                val existing = (snapshot.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
+                transaction.set(dailyLogRef,
+                    mapOf("burnedCalories" to existing + calories,
+                          "userId" to (userRef.id)),
+                    SetOptions.merge()
+                )
+                null
+            }.await()
+        } catch (e: Exception) {
+            Log.e("GamificationRepo", "logBurnedCalories failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Vrni GamificationState (weeklyTarget, workoutDoneToday) iz Firestore.
+     * Nadomešča workoutDoneProvider/weeklyTargetProvider lambda-je.
+     */
+    override suspend fun getGamificationState(): GamificationState {
+        return try {
+            val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return GamificationState()
+            val snapshot = userRef.get().await()
+            val weeklyTarget = snapshot.getLong("weekly_target")?.toInt() ?: 0
+            val todayStatus = getTodayStatus() ?: ""
+            val workoutDoneToday = todayStatus == "WORKOUT_DONE" || todayStatus == "STRETCHING_DONE"
+            GamificationState(weeklyTarget = weeklyTarget, workoutDoneToday = workoutDoneToday)
+        } catch (e: Exception) {
+            GamificationState()
+        }
+    }
+
     override suspend fun runMidnightStreakCheck() {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
         val yesterdayStr = getYesterdayStr()

@@ -52,7 +52,10 @@ data class BodyHomeUiState(
 )
 
 sealed class BodyHomeIntent {
-    /** @param plan Trenutni plan — za določitev todayIsRest (ali je planDay rest day?) */
+    /**
+     * @param plan Trenutni plan — ViewModel ga uporabi za izračun todayIsRest (presentation layer concern).
+     * GetBodyMetricsUseCase ne dobi plana (Clean Architecture: UseCase ne pozna data.PlanResult).
+     */
     data class LoadMetrics(val email: String, val plan: com.example.myapplication.data.PlanResult? = null) : BodyHomeIntent()
     object CompleteRestDay : BodyHomeIntent()
     object HideCompletionAnimation : BodyHomeIntent()
@@ -95,8 +98,27 @@ class BodyModuleHomeViewModel(
                 viewModelScope.launch {
                     _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
                     try {
-                        getBodyMetrics.invoke(intent.email, intent.plan).collect { newState ->
-                            _ui.value = newState
+                        getBodyMetrics.invoke(intent.email).collect { metrics ->
+                            // ViewModel izračuna todayIsRest iz plan modela (presentation concern)
+                            val todayIsRest = intent.plan?.weeks
+                                ?.flatMap { it.days }
+                                ?.firstOrNull { it.dayNumber == metrics.planDay }
+                                ?.isRestDay ?: false
+
+                            _ui.value = _ui.value.copy(
+                                streakDays = metrics.streakDays,
+                                streakFreezes = metrics.streakFreezes,
+                                weeklyDone = metrics.weeklyDone,
+                                weeklyTarget = metrics.weeklyTarget,
+                                planDay = metrics.planDay,
+                                totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
+                                isWorkoutDoneToday = metrics.isWorkoutDoneToday,
+                                dailyKcal = metrics.dailyKcal,
+                                todayIsRest = todayIsRest,
+                                todayStatus = metrics.todayStatus,
+                                isLoading = metrics.isLoading,
+                                errorMessage = metrics.errorMessage
+                            )
                         }
                     } catch (e: Exception) {
                         _ui.value = _ui.value.copy(errorMessage = e.message, isLoading = false)
@@ -163,14 +185,21 @@ class BodyModuleHomeViewModel(
                     result.onSuccess { completionResult ->
                         if (intent.email.isNotBlank()) {
                             try {
-                                getBodyMetrics.invoke(intent.email).collect { freshState ->
-                                    val newStreak = freshState.streakDays
-                                    _ui.value = freshState.copy(
-                                        showCompletionAnimation = !intent.isExtraWorkout,
+                                getBodyMetrics.invoke(intent.email).collect { metrics ->
+                                    val newStreak = metrics.streakDays
+                                    _ui.value = _ui.value.copy(
+                                        streakDays = metrics.streakDays,
+                                        streakFreezes = metrics.streakFreezes,
+                                        weeklyDone = metrics.weeklyDone,
+                                        weeklyTarget = metrics.weeklyTarget,
+                                        planDay = metrics.planDay,
+                                        totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
                                         isWorkoutDoneToday = true,
+                                        dailyKcal = metrics.dailyKcal,
+                                        todayStatus = metrics.todayStatus,
+                                        showCompletionAnimation = !intent.isExtraWorkout,
                                         isLoading = false
                                     )
-                                    // Faza 4b: Sproži Toast + Haptic tudi za dokončan workout
                                     _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = false))
                                 }
                             } catch (_: Exception) {

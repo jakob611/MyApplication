@@ -74,4 +74,20 @@ interface GamificationRepository {
      * "FROZEN", "MISSED", ali null (dan ni bil zabeležen).
      */
     suspend fun getTodayStatus(): String?
+
+    /**
+     * Zapiši porabljene kalorije v dnevni log (dailyLogs/{todayStr}).
+     * Nadomešča direktno klicanje DailyLogRepository iz domain layer-a.
+     *
+     * @param todayStr Datum v formatu "YYYY-MM-DD"
+     * @param calories Porabljene kalorije (dodane k obstoječim)
+     */
+    suspend fun logBurnedCalories(todayStr: String, calories: Double)
+
+    /**
+     * Vrni trenutno gamification stanje (weeklyTarget, workoutDoneToday).
+     * Nadomešča workoutDoneProvider/weeklyTargetProvider lambde v ManageGamificationUseCase.
+     * KMP-ready: suspending namesto Flow-based lambda injection.
+     */
+    suspend fun getGamificationState(): com.example.myapplication.domain.gamification.GamificationState
 }

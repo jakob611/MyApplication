@@ -1,27 +1,17 @@
 package com.example.myapplication.domain.gamification
 
-import android.content.Context
-import com.example.myapplication.data.gamification.FirestoreGamificationRepository
-import com.example.myapplication.data.settings.UserPreferencesRepository
-
-object GamificationProvider {
-    @Volatile
-    private var instance: ManageGamificationUseCase? = null
-
-    fun provide(context: Context): ManageGamificationUseCase {
-        return instance ?: synchronized(this) {
-            instance ?: createUseCase(context).also { instance = it }
-        }
-    }
-
-    private fun createUseCase(context: Context): ManageGamificationUseCase {
-        val repository = FirestoreGamificationRepository()
-        val prefs = UserPreferencesRepository(context.applicationContext)
-        return ManageGamificationUseCase(
-            repository = repository,
-            workoutDoneProvider = { prefs.isWorkoutDoneToday() },
-            weeklyTargetProvider = { prefs.getWeeklyTargetFlow() }
-        )
-    }
-}
-
+/**
+ * ⚠️ DEPRECATED — ta razred je bil premaknjen v data/gamification/GamificationFactory.kt
+ *
+ * GamificationProvider je bil factory ki je klical data layer konstruktorje (AndroidFirestore, SharedPrefs).
+ * To krši Clean Architecture — factory (composition root) ne sme biti v domain sloju.
+ *
+ * @see com.example.myapplication.data.gamification.GamificationFactory
+ *
+ * Ostane kot kompilacijska lupina za backward compatibility, ne vsebuje logike.
+ * Posodobitev kličočih krajev: zamenjaj z GamificationFactory.provide(context).
+ */
+@Deprecated("Premaknjeno v data/gamification/GamificationFactory.kt",
+    replaceWith = ReplaceWith("GamificationFactory.provide(context)",
+        "com.example.myapplication.data.gamification.GamificationFactory"))
+object GamificationProvider

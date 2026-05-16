@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.*
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.data.auth.AuthRepository
+import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.persistence.PlanDataStore
@@ -177,7 +178,7 @@ fun MainAppContent(
                 } catch (_: Exception) {}
             }
             scope.launch(Dispatchers.IO) {
-                try { com.example.myapplication.domain.gamification.GamificationProvider.provide(context).recordLoginOnly() }
+                try { GamificationFactory.provide(context).recordLoginOnly() }
                 catch (e: Exception) { Log.e("MainApp", "Login streak: ${e.message}") }
             }
             scope.launch(Dispatchers.IO) {
@@ -187,7 +188,7 @@ fun MainAppContent(
             try { com.example.myapplication.worker.RunRouteCleanupWorker.ensureScheduled(context) } catch (_: Exception) {}
             scope.launch(Dispatchers.IO) {
                 delay(1500)
-                try { com.example.myapplication.domain.gamification.GamificationProvider.provide(context).checkAndSyncBadgesOnStartup() }
+                try { GamificationFactory.provide(context).checkAndSyncBadgesOnStartup() }
                 catch (e: Exception) { Log.e("MainApp", "Badge sync: ${e.message}") }
             }
             scope.launch {
@@ -470,7 +471,7 @@ fun MainAppContent(
                                             val finalProfile = currentProfile.copy(equipment = plan.equipment, focusAreas = plan.focusAreas)
                                             UserProfileManager.saveProfileFirestore(finalProfile); UserProfileManager.saveProfile(finalProfile)
                                             appViewModel.handleIntent(AppIntent.SetProfile(finalProfile))
-                                            com.example.myapplication.domain.gamification.GamificationProvider.provide(context).recordPlanCreation()
+                                            GamificationFactory.provide(context).recordPlanCreation()
                                             appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
                                             com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()?.let { uid ->
                                                 val nutritionPlan = com.example.myapplication.data.NutritionPlan(

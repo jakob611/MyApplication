@@ -551,7 +551,12 @@ fun WorkoutSessionScreen(
                         onCompletion = { result: com.example.myapplication.domain.gamification.WorkoutCompletionResult? ->
                             // Handle badges and navigation only AFTER save is complete
                             if (result != null) {
-                                result.unlockedBadges.firstOrNull()?.let { badge -> onBadgeUnlocked(badge) }
+                                result.unlockedBadges.firstOrNull()?.let { badgeId ->
+                                    // Poiščemo Badge objekt iz BadgeDefinitions po ID-ju (unlockedBadges je List<String>)
+                                    val badge = com.example.myapplication.data.BadgeDefinitions.ALL_BADGES
+                                        .find { it.id == badgeId }
+                                    if (badge != null) onBadgeUnlocked(badge)
+                                }
                             }
                             onXPAdded()
                             onFinished()
