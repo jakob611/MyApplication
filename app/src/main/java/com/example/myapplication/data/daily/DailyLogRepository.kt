@@ -41,8 +41,24 @@ class DailyLogRepository {
      * Rešuje predhodne `SetOptions.merge()` in `FieldValue.increment()` napake
      * in preprečuje 'Race Conditions' med večimi UseCase-i in Widgeti, ki istočasno
      * poizkušajo pisati v isti dokument (npr. waterMl in burnedCalories).
+     *
+     * Faza 14 — Zgodovinski Snapshoti: Ob inicializaciji NOVEGA dne (dokument še ne obstaja)
+     * zamrzne kalorične in makro cilje, ki so bili aktivni ob tistem datumu.
+     * S tem zavarujemo statistiko — stari dnevi ostanejo z originalnimi cilji, ne s trenutnimi.
+     *
+     * @param initTargetCalories  Kalorični cilj za zamrznitev (samo ob kreaciji novega dokumenta)
+     * @param initTargetProtein   Proteinski cilj (g) za zamrznitev
+     * @param initTargetCarbs     Ogljikohidratni cilj (g) za zamrznitev
+     * @param initTargetFat       Maščobni cilj (g) za zamrznitev
      */
-    suspend fun updateDailyLog(date: String, action: (MutableMap<String, Any>) -> Unit) {
+    suspend fun updateDailyLog(
+        date: String,
+        initTargetCalories: Int? = null,
+        initTargetProtein: Int? = null,
+        initTargetCarbs: Int? = null,
+        initTargetFat: Int? = null,
+        action: (MutableMap<String, Any>) -> Unit
+    ) {
         val uid = FirestoreHelper.getCurrentUserDocId() ?: return
         val ref = db.collection("users").document(uid).collection("dailyLogs").document(date)
 
@@ -54,13 +70,22 @@ class DailyLogRepository {
                 val data = if (snapshot.exists()) {
                     snapshot.data?.toMutableMap() ?: mutableMapOf()
                 } else {
-                    mutableMapOf(
+                    // Nov dan — inicializiraj z osnovno strukturo
+                    val init = mutableMapOf<String, Any>(
                         "date" to date,
                         "burnedCalories" to 0.0,
                         "waterMl" to 0,
                         "consumedCalories" to 0.0,
                         "items" to emptyList<Any>()
                     )
+                    // Faza 14: Zamrzni kalorične cilje tega dne (Zgodovinski Snapshoti).
+                    // Te vrednosti se NE prepisujejo pri kasnejših klicih updateDailyLog,
+                    // ker jih vključujemo samo v init (ne v action lambda).
+                    if (initTargetCalories != null) init["targetCalories"] = initTargetCalories
+                    if (initTargetProtein  != null) init["targetProtein"]  = initTargetProtein
+                    if (initTargetCarbs    != null) init["targetCarbs"]    = initTargetCarbs
+                    if (initTargetFat      != null) init["targetFat"]      = initTargetFat
+                    init
                 }
                 action(data)
                 data["updatedAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()

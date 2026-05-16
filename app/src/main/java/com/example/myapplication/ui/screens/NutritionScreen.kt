@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,6 +128,9 @@ fun NutritionScreen(
     val isLoading by nutritionViewModel.isLoading.collectAsState()
     // Faza 16.1: navigating stanje za takojšen odziv ob kliku na +
     val isNavigating by nutritionViewModel.isNavigating.collectAsState()
+    // Faza 14: Zamrznjeni kalorični in makro cilji tega dne (Zgodovinski Snapshoti)
+    // null = nov dan brez snapshota ali stari dan → fallback na nutritionPlan
+    val frozenTargets by nutritionViewModel.frozenTargets.collectAsState()
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -136,14 +141,18 @@ fun NutritionScreen(
         }
     }
 
-    // Active Calories (Health Connect) sync logic prenesena v ViewModel
-    LaunchedEffect(Unit) {
-        // Taksen loop avtomatsko sproži syncHealthConnectNow vsakih 5 sekund. 
-        // Sync funkcija preveri delto in updejta Firestore, kar nato osveži uiState.burned preko listenerja.
-        while (true) {
-            nutritionViewModel.syncHealthConnectNow(context)
-            kotlinx.coroutines.delay(5000)
+    // ── Health Connect sinhronizacija — lifecycle-aware (Faza 14) ────────────────
+    // ⛔ ODSTRANJENO: while(true) { delay(5000) } polling (uničeval Firestore kvoto)
+    // ✅ ZAMENJANO: single sync ob vsaki ON_RESUME — enkrat ob vstopu, ne vsakih 5s
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                nutritionViewModel.syncHealthConnectNow(context)
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Faza 5: Začenemo s praznim listom — Firestore snapshot listener (observeDailyLog)
@@ -204,12 +213,15 @@ fun NutritionScreen(
     // TarÄŤe
     val parsed = remember(plan?.algorithmData?.macroBreakdown) { parseMacroBreakdown(plan?.algorithmData?.macroBreakdown) }
     // Round target calories down to nearest 100
-    val rawTargetCalories = nutritionPlan?.calories ?: parsed.calories ?: plan?.calories ?: 2000
+    // Faza 14 — Zgodovinski Snapshoti: za DANAŠNJI dan uporabi zamrznjene cilje iz Firestore.
+    // Za stare dneve ali nov dan brez snapshota: fallback na nutritionPlan (kot prej).
+    val rawTargetCalories = frozenTargets?.calories
+        ?: nutritionPlan?.calories ?: parsed.calories ?: plan?.calories ?: 2000
     val targetCalories = (rawTargetCalories / 100) * 100
 
-    val targetProtein  = nutritionPlan?.protein ?: parsed.proteinG ?: plan?.protein ?: 100
-    val targetCarbs    = nutritionPlan?.carbs ?: parsed.carbsG ?: plan?.carbs ?: 200
-    val targetFat      = nutritionPlan?.fat ?: parsed.fatG ?: plan?.fat ?: 60
+    val targetProtein  = frozenTargets?.protein  ?: nutritionPlan?.protein ?: parsed.proteinG ?: plan?.protein ?: 100
+    val targetCarbs    = frozenTargets?.carbs    ?: nutritionPlan?.carbs   ?: parsed.carbsG   ?: plan?.carbs   ?: 200
+    val targetFat      = frozenTargets?.fat      ?: nutritionPlan?.fat     ?: parsed.fatG     ?: plan?.fat     ?: 60
 
     // Modali/sheets
     var sheetMeal by remember { mutableStateOf<MealType?>(null) }
@@ -295,6 +307,22 @@ fun NutritionScreen(
     // in ustvarjalo nove Firestore listenerje (memory leak + napačno obnašanje).
     val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
     val todayId = remember { kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date.toString() }
+
+    // Faza 14 — Zgodovinski Snapshoti: Zagotovi zamrznitev ciljnih vrednosti za današnji dan.
+    // Kliče se, ko so cilji (rawTargetCalories, makri) prvič znani in je todayId določen.
+    // DailyLogRepository ignorira initTarget* parametre, če dokument za ta dan že obstaja
+    // → idempotentno, varne za vsakič ponovni klic ob recomposition-u.
+    LaunchedEffect(rawTargetCalories, targetProtein, targetCarbs, targetFat) {
+        if (rawTargetCalories > 0) {
+            nutritionViewModel.ensureDayInitialized(
+                date           = todayId,
+                targetCalories = rawTargetCalories,
+                targetProtein  = targetProtein,
+                targetCarbs    = targetCarbs,
+                targetFat      = targetFat
+            )
+        }
+    }
 
     // ── Data Budgeting: brez novega Firestore listenerja ────────────────────────
     // Items se parsajo enkrat v NutritionViewModel.observeDailyTotals() in delijo

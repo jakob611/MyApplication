@@ -31,6 +31,18 @@ data class DailyTotals(
     val water: Int = 0
 )
 
+/**
+ * Faza 14 — Zgodovinski Snapshoti: Zamrznjeni kalorični in makro cilji za posamezen dan.
+ * Berejo se iz dailyLogs/{date}.targetCalories/targetProtein/targetCarbs/targetFat.
+ * Vrednosti so null, dokler dokument ni inicializiran ALI za stare dneve brez snapshota.
+ */
+data class FrozenDayTargets(
+    val calories: Int,
+    val protein: Int?,
+    val carbs: Int?,
+    val fat: Int?
+)
+
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase
 ) : ViewModel() {
@@ -43,6 +55,12 @@ class NutritionViewModel(
 
     private val _uiState = MutableStateFlow(DailyTotals())
     val uiState: StateFlow<DailyTotals> = _uiState.asStateFlow()
+
+    // ── Faza 14: Zamrznjeni cilji tega dne (Zgodovinski Snapshoti) ────────────
+    /** Kalorični in makro cilji, kot so bili ob prvem zapisu tega dne v Firestore.
+     *  null = dokument ni inicializiran ali je stari dan brez snapshota (UI bo uporabil fallback). */
+    private val _frozenTargets = MutableStateFlow<FrozenDayTargets?>(null)
+    val frozenTargets: StateFlow<FrozenDayTargets?> = _frozenTargets.asStateFlow()
 
     // ── Optimistična voda (Faza 13.1) ─────────────────────────────────────────
     /** Lokalna override vrednost za vodo — UI se posodobi TAKOJ, Firestore sync je debounced. */
@@ -271,6 +289,18 @@ class NutritionViewModel(
                             burned   = serverBurned,
                             water    = serverWater
                         )
+
+                        // Faza 14 — Zgodovinski Snapshoti: preberi zamrznjene cilje tega dne
+                        val frozenCal = (doc.get("targetCalories") as? Number)?.toInt()
+                        if (frozenCal != null) {
+                            _frozenTargets.value = FrozenDayTargets(
+                                calories = frozenCal,
+                                protein  = (doc.get("targetProtein") as? Number)?.toInt(),
+                                carbs    = (doc.get("targetCarbs")   as? Number)?.toInt(),
+                                fat      = (doc.get("targetFat")     as? Number)?.toInt()
+                            )
+                        }
+
                         // Debug store — posodobi surove vrednosti za DebugDashboard
                         com.example.myapplication.debug.NutritionDebugStore.lastBurnedCalories = serverBurned
                         com.example.myapplication.debug.NutritionDebugStore.lastConsumedCalories = serverConsumed
@@ -331,6 +361,38 @@ class NutritionViewModel(
         viewModelScope.launch {
             val syncUseCase = com.example.myapplication.domain.workout.SyncHealthConnectUseCase()
             syncUseCase(context)
+        }
+    }
+
+    /**
+     * Faza 14 — Zgodovinski Snapshoti: Zagotovi, da dailyLogs dokument za današnji dan
+     * vsebuje zamrznjene kalorične in makro cilje.
+     *
+     * Kliče se ob odprtju NutritionScreen-a, ko so cilji že izračunani.
+     * Zamrznitev se izvede SAMO ob kreaciji novega dokumenta (nov dan) —
+     * [DailyLogRepository.updateDailyLog] ignorira initTarget* parametre, če dokument že obstaja.
+     *
+     * @param date             Datum v obliki "YYYY-MM-DD"
+     * @param targetCalories   Kalorični cilj tega dne
+     * @param targetProtein    Proteinski cilj (g)
+     * @param targetCarbs      Ogljikohidratni cilj (g)
+     * @param targetFat        Maščobni cilj (g)
+     */
+    fun ensureDayInitialized(
+        date: String,
+        targetCalories: Int,
+        targetProtein: Int,
+        targetCarbs: Int,
+        targetFat: Int
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.example.myapplication.data.daily.DailyLogRepository().updateDailyLog(
+                date              = date,
+                initTargetCalories = targetCalories,
+                initTargetProtein  = targetProtein,
+                initTargetCarbs    = targetCarbs,
+                initTargetFat      = targetFat
+            ) { /* brez dodatnih sprememb — samo inicializacija */ }
         }
     }
 
