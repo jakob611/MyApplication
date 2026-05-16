@@ -1,75 +1,113 @@
 package com.example.myapplication.utils
 
 /**
- * Nutrition Calculations - Utility functions for calculating BMR, TDEE, calories, and macros
- * These functions are used by both BodyModule (plan creation) and NutritionPlanStore (recalculation)
+ * Nutrition Calculations — Faza 13: Arhitekturna in matematična prenova
+ *
+ * Popravljene napake:
+ *  1. calculateAdvancedBMR: starostni faktor za mladostnike (<18) apliciran GLOBALNO
+ *     na obe formuli (Katch-McArdle in Mifflin-St Jeor).
+ *  2. calculateEnhancedTDEE: experience/sleep/limitations vplivajo SAMO na aktivnostni
+ *     del metabolizma (delta = TDEE − BMR), ne na bazalni metabolizem organov.
+ *  3. calculateOptimalMacros: vsi makrohranili zaščiteni s coerceAtLeast(0).
+ *     Keto/LCHF karbohidrati imajo fiksno spodnjo mejo 20g (ne negativne vrednosti).
+ *  4. calculateAdaptiveTDEE: emaWeightChangeDelta delimo vedno z 7.0 (dejanski
+ *     časovni interval telesne mase), ne z activeDays.
  */
 
-fun calculateAdvancedBMR(weight: Double, height: Double, age: Int, isMale: Boolean, bodyFat: Double?): Double {
-    return if (bodyFat != null && bodyFat > 0) {
-        // Katch-McArdle formula (more accurate with body fat)
-        val leanBodyMass = weight * (1 - bodyFat / 100)
-        370 + (21.6 * leanBodyMass)
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. BMR — Basal Metabolic Rate
+//    Faza 13: Starostni metabolni faktor za mladostnike (1.12) je zdaj GLOBALEN —
+//    aplicira se na končni BMR ne glede na to, katera enačba je bila primarna.
+// ══════════════════════════════════════════════════════════════════════════════
+fun calculateAdvancedBMR(
+    weight: Double,
+    height: Double,
+    age: Int,
+    isMale: Boolean,
+    bodyFat: Double?
+): Double {
+    // ── Primarna formula: Katch-McArdle (z merjenjem maščobe) ali Mifflin-St Jeor ─
+    val rawBMR = if (bodyFat != null && bodyFat > 0) {
+        // Katch-McArdle: bolj natančna z izmerjenim % maščobe
+        //   LBM = weight × (1 − bodyFat/100)
+        //   BMR = 370 + 21.6 × LBM
+        val leanBodyMass = weight * (1.0 - bodyFat / 100.0)
+        370.0 + (21.6 * leanBodyMass)
     } else {
-        // Enhanced Mifflin-St Jeor with age adjustments
-        val baseBMR = if (isMale) {
-            10 * weight + 6.25 * height - 5 * age + 5
-        } else {
-            10 * weight + 6.25 * height - 5 * age - 161
-        }
+        // Enhanced Mifflin-St Jeor (brez meritve maščobe)
+        //   Moški:  10×kg + 6.25×cm − 5×leta + 5
+        //   Ženska: 10×kg + 6.25×cm − 5×leta − 161
+        if (isMale)
+            10.0 * weight + 6.25 * height - 5.0 * age + 5.0
+        else
+            10.0 * weight + 6.25 * height - 5.0 * age - 161.0
+    }
 
-        // Age-based metabolic adjustments (more precise)
-        when {
-            age < 18 -> baseBMR * 1.12
-            age in 18..25 -> baseBMR * 1.05
-            age in 26..35 -> baseBMR * 1.0
-            age in 36..45 -> baseBMR * 0.97
-            age in 46..55 -> baseBMR * 0.94
-            age in 56..65 -> baseBMR * 0.91
-            else -> baseBMR * 0.87
-        }
+    // ── Globalni starostni metabolni faktor ──────────────────────────────────
+    // FIX Faza 13: faktor apliciran na rawBMR ne glede na primarno formulo.
+    // Starejši faktorji (26–65) so odstranjeni — standardna Mifflin-St Jeor
+    // že vključuje linearno starostno korekcijo (−5×age). Ohranimo samo
+    // fiziološko utemeljene robne primere: mladostniki in 66+.
+    return when {
+        age < 18 -> rawBMR * 1.12   // Mladostniki: višji BMR (rast + razvoj)
+        age > 65 -> rawBMR * 0.87   // 66+: pospešen metabolni upad
+        else     -> rawBMR          // 18–65: Mifflin-St Jeor je že kalibriran
     }
 }
 
-fun calculateEnhancedTDEE(bmr: Double, frequency: String?, experience: String?, age: Int, limitations: List<String>, sleep: String?): Double {
-    // Base activity multiplier (more nuanced)
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. TDEE — Total Daily Energy Expenditure
+//    Faza 13: experience/sleep/limitations vplivajo SAMO na aktivnostni del
+//    metabolizma (activityDelta = baseTDEE − bmr), ne na BMR v mirovanju.
+//
+//    Biološka utemeljitev:
+//      BMR = metabolizem organov v mirovanju → nespremenljiv glede na izkušnje
+//      activityDelta = energija, ki jo porabimo z gibanjem → tukaj so razlike
+//
+//    Formula:
+//      baseTDEE    = bmr × baseMultiplier
+//      activityDelta = baseTDEE − bmr
+//      adjustedDelta = activityDelta × experienceMultiplier × sleepMultiplier × limitationMultiplier
+//      TDEE = (bmr + adjustedDelta) × ageMultiplier
+// ══════════════════════════════════════════════════════════════════════════════
+fun calculateEnhancedTDEE(
+    bmr: Double,
+    frequency: String?,
+    experience: String?,
+    age: Int,
+    limitations: List<String>,
+    sleep: String?
+): Double {
+    // Frekvenčni multiplikator (klasični aktivnostni nivo Harris/Ainsworth)
     val baseMultiplier = when (frequency) {
         "2x" -> 1.375
         "3x" -> 1.55
         "4x" -> 1.725
         "5x" -> 1.9
         "6x" -> 2.0
-        else -> 1.2
+        else -> 1.2   // Sedentarno / 0–1x
     }
 
-    // Experience efficiency factor
+    // ── Izkušnje: vpliv na UČINKOVITOST gibanja ──────────────────────────────
+    // Začetnik porablja več energije za enako delo (neučinkovito gibanje)
     val experienceMultiplier = when (experience) {
-        "Beginner" -> 1.08  // Higher energy expenditure due to inefficiency
+        "Beginner"     -> 1.08
         "Intermediate" -> 1.0
-        "Advanced" -> 0.96  // More efficient movement patterns
-        else -> 1.0
+        "Advanced"     -> 0.96
+        else           -> 1.0
     }
 
-    // Age-based activity adjustment
-    val ageMultiplier = when {
-        age < 25 -> 1.02
-        age in 25..35 -> 1.0
-        age in 36..50 -> 0.98
-        age > 50 -> 0.95
-        else -> 1.0
-    }
-
-    // Sleep quality significantly affects metabolism
+    // ── Spanje: vpliv na OKREVANJE in aktivno porabo kalorij ─────────────────
     val sleepMultiplier = when (sleep) {
-        "Less than 6" -> 0.90  // Poor recovery, reduced metabolism
-        "6-7" -> 0.97
-        "7-8" -> 1.0  // Optimal
-        "8-9" -> 1.02
-        "9+" -> 1.01  // Diminishing returns
-        else -> 1.0
+        "Less than 6" -> 0.90
+        "6-7"         -> 0.97
+        "7-8"         -> 1.0
+        "8-9"         -> 1.02
+        "9+"          -> 1.01
+        else          -> 1.0
     }
 
-    // Medical limitations adjustment
+    // ── Zdravstvene omejitve: vpliv na OBSEG aktivnosti ──────────────────────
     val limitationMultiplier = when {
         limitations.contains("Asthma") -> 0.92
         limitations.any { it in listOf("High blood pressure", "Diabetes") } -> 0.94
@@ -77,38 +115,62 @@ fun calculateEnhancedTDEE(bmr: Double, frequency: String?, experience: String?, 
         else -> 1.0
     }
 
-    return bmr * baseMultiplier * experienceMultiplier * ageMultiplier * sleepMultiplier * limitationMultiplier
+    // ── Starostni faktor aktivnosti ───────────────────────────────────────────
+    // Apliciran na celoten TDEE (ne samo delta), ker zajema splošno metabolno
+    // upočasnitev, ki presega čisto aktivnostni del.
+    val ageMultiplier = when {
+        age < 25      -> 1.02
+        age in 25..35 -> 1.0
+        age in 36..50 -> 0.98
+        age > 50      -> 0.95
+        else          -> 1.0
+    }
+
+    // ── Faza 13: Modulirani aktivnostni delta ─────────────────────────────────
+    val baseTDEE      = bmr * baseMultiplier
+    val activityDelta = baseTDEE - bmr
+    val adjustedDelta = activityDelta * experienceMultiplier * sleepMultiplier * limitationMultiplier
+
+    return (bmr + adjustedDelta) * ageMultiplier
 }
 
-fun calculateSmartCalories(tdee: Double, goal: String?, experience: String?, bmi: Double, age: Int, isMale: Boolean, bodyFat: Double?, limitations: List<String>): Double {
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. Kalorijski cilj (Smart Calories) — nespremenjen
+// ══════════════════════════════════════════════════════════════════════════════
+fun calculateSmartCalories(
+    tdee: Double,
+    goal: String?,
+    experience: String?,
+    bmi: Double,
+    age: Int,
+    isMale: Boolean,
+    bodyFat: Double?,
+    limitations: List<String>
+): Double {
     val baseCalories = when (goal) {
         "Build muscle" -> {
             val baseSurplus = when (experience) {
-                "Beginner" -> 450
+                "Beginner"     -> 450
                 "Intermediate" -> 350
-                "Advanced" -> 250
-                else -> 350
+                "Advanced"     -> 250
+                else           -> 350
             }
-
-            // Age and body fat adjustments for muscle building
             val ageFactor = when {
-                age < 25 -> 1.0
-                age in 25..35 -> 0.95
-                age in 36..45 -> 0.85
-                age in 46..55 -> 0.75
-                else -> 0.65
+                age < 25          -> 1.0
+                age in 25..35     -> 0.95
+                age in 36..45     -> 0.85
+                age in 46..55     -> 0.75
+                else              -> 0.65
             }
-
             val bodyFatFactor = if (bodyFat != null) {
                 when {
-                    bodyFat < 10 && isMale -> 1.1  // Very lean, can gain more aggressively
-                    bodyFat < 18 && !isMale -> 1.1
-                    bodyFat > 20 && isMale -> 0.8   // Higher body fat, smaller surplus
-                    bodyFat > 28 && !isMale -> 0.8
+                    bodyFat < 10 && isMale   -> 1.1
+                    bodyFat < 18 && !isMale  -> 1.1
+                    bodyFat > 20 && isMale   -> 0.8
+                    bodyFat > 28 && !isMale  -> 0.8
                     else -> 1.0
                 }
             } else 1.0
-
             tdee + (baseSurplus * ageFactor * bodyFatFactor)
         }
 
@@ -118,190 +180,183 @@ fun calculateSmartCalories(tdee: Double, goal: String?, experience: String?, bmi
                 bmi > 30 -> 650
                 bmi > 27 -> 550
                 bmi > 25 -> 450
-                else -> 350
+                else     -> 350
             }
-
-            // Gender-specific fat loss adjustments
             val genderFactor = if (isMale) 1.0 else 0.85
-
-            // Age-based metabolic considerations
             val ageFactor = when {
-                age > 50 -> 0.85  // Slower fat loss for older adults
-                age < 25 -> 1.1   // Faster metabolism in younger people
-                else -> 1.0
+                age > 50 -> 0.85
+                age < 25 -> 1.1
+                else     -> 1.0
             }
-
-            val adjustedDeficit = baseDeficit * genderFactor * ageFactor
             val minCalories = if (isMale) 1500.0 else 1200.0
-
-            maxOf(tdee - adjustedDeficit, minCalories)
+            maxOf(tdee - baseDeficit * genderFactor * ageFactor, minCalories)
         }
 
-        "Recomposition" -> {
-            when {
-                experience == "Beginner" && bmi < 25 -> tdee + 150  // Slight surplus for beginners
-                bmi > 25 -> tdee - 200  // Slight deficit for overweight
-                bodyFat != null && bodyFat > (if (isMale) 15 else 25) -> tdee - 150
-                else -> tdee  // Maintenance
-            }
+        "Recomposition" -> when {
+            experience == "Beginner" && bmi < 25 -> tdee + 150
+            bmi > 25 -> tdee - 200
+            bodyFat != null && bodyFat > (if (isMale) 15 else 25) -> tdee - 150
+            else     -> tdee
         }
 
         "Improve endurance" -> {
             val baseSurplus = when (experience) {
-                "Advanced" -> 300  // Advanced endurance athletes need more fuel
+                "Advanced"     -> 300
                 "Intermediate" -> 250
-                else -> 200
+                else           -> 200
             }
             tdee + baseSurplus
         }
 
-        "General health" -> {
-            when {
-                bmi > 25 -> tdee - 250  // Gentle deficit for overweight
-                bmi < 20 -> tdee + 200  // Slight surplus for underweight
-                else -> tdee  // Maintenance for healthy weight
-            }
+        "General health" -> when {
+            bmi > 25 -> tdee - 250
+            bmi < 20 -> tdee + 200
+            else     -> tdee
         }
 
         else -> tdee
     }
 
-    // Additional adjustments for medical conditions
     return when {
-        limitations.contains("Diabetes") -> baseCalories * 0.98
-        limitations.contains("High blood pressure") -> baseCalories * 0.97
+        limitations.contains("Diabetes")             -> baseCalories * 0.98
+        limitations.contains("High blood pressure")  -> baseCalories * 0.97
         else -> baseCalories
     }
 }
 
-fun calculateDailyWaterMl(weightKg: Double, isMale: Boolean, activityLevel: String, isWorkoutDay: Boolean): Float {
-    // Base: 35ml per kg
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. Dnevna voda — nespremenjena
+// ══════════════════════════════════════════════════════════════════════════════
+fun calculateDailyWaterMl(
+    weightKg: Double,
+    isMale: Boolean,
+    activityLevel: String,
+    isWorkoutDay: Boolean
+): Float {
     var water = weightKg * 35.0
-
-    // Gender adjustment
     if (isMale) water *= 1.1
-
-    // Activity level adjustment
     water += when (activityLevel) {
-        "Sedentary" -> 0.0
-        "Lightly active" -> 250.0
-        "Moderately active" -> 500.0
-        "Very active" -> 750.0
-        else -> 250.0
+        "Sedentary"          -> 0.0
+        "Lightly active"     -> 250.0
+        "Moderately active"  -> 500.0
+        "Very active"        -> 750.0
+        else                 -> 250.0
     }
-
-    // Workout day bonus
     if (isWorkoutDay) water += 500.0
-
-    // Round to nearest 100
     water = (water / 100.0).let { kotlin.math.round(it) * 100.0 }
-
-    // Clamp between realistic bounds (1.5L - 5L)
     return water.coerceIn(1500.0, 5000.0).toFloat()
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. Rest day kalorije — nespremenjen
+// ══════════════════════════════════════════════════════════════════════════════
 fun calculateRestDayCalories(tdee: Double, goal: String?, isMale: Boolean): Int {
-    // Rest day calibration based on goal
     val adjustment = when (goal) {
-        "Lose fat" -> -250
-        "Build muscle" -> 100 // Slight surplus even on rest days for recovery
+        "Lose fat"      -> -250
+        "Build muscle"  -> 100
         "Recomposition" -> -150
-        else -> 0
+        else            -> 0
     }
-
-    val target = tdee + adjustment
     val minCalories = if (isMale) 1500 else 1200
-    return target.coerceAtLeast(minCalories.toDouble()).toInt()
+    return (tdee + adjustment).coerceAtLeast(minCalories.toDouble()).toInt()
 }
 
-fun calculateOptimalMacros(calories: Double, weight: Double, goal: String?, experience: String?, age: Int, isMale: Boolean, bodyFat: Double?, nutrition: String?, limitations: List<String>): Triple<Int, Int, Int> {
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. Makrohranila — Triple<protein, carbs, fat> v gramih
+//    Faza 13:
+//      - Vse vrednosti zaščitene s coerceAtLeast(0) → nikoli negativne grame
+//      - Keto/LCHF carbs: fiksna spodnja meja 20g (esencialni minimalni vnos)
+//      - remainingCalories negativen scenarij: pokrit z carbs.coerceAtLeast(0)
+// ══════════════════════════════════════════════════════════════════════════════
+fun calculateOptimalMacros(
+    calories: Double,
+    weight: Double,
+    goal: String?,
+    experience: String?,
+    age: Int,
+    isMale: Boolean,
+    bodyFat: Double?,
+    nutrition: String?,
+    limitations: List<String>
+): Triple<Int, Int, Int> {
 
-    // Protein calculation with multiple factors
+    // ── Protein (g/kg telesne mase) ──────────────────────────────────────────
     val baseProteinPerKg = when (goal) {
         "Build muscle" -> when (experience) {
-            "Beginner" -> 1.8
+            "Beginner"     -> 1.8
             "Intermediate" -> 2.0
-            "Advanced" -> 2.2
-            else -> 1.9
+            "Advanced"     -> 2.2
+            else           -> 1.9
         }
-        "Lose fat" -> when {
-            bodyFat != null && bodyFat > (if (isMale) 20 else 30) -> 2.4  // Higher protein for aggressive cuts
-            else -> 2.0
-        }
-        "Recomposition" -> 2.2
+        "Lose fat" -> if (bodyFat != null && bodyFat > (if (isMale) 20 else 30)) 2.4 else 2.0
+        "Recomposition"     -> 2.2
         "Improve endurance" -> 1.4
-        "General health" -> 1.6
-        else -> 1.7
+        "General health"    -> 1.6
+        else                -> 1.7
     }
 
-    // Age and gender protein adjustments
     val ageProteinFactor = when {
-        age < 25 -> 1.0
+        age < 25      -> 1.0
         age in 25..40 -> 1.05
         age in 41..55 -> 1.15
         age in 56..70 -> 1.25
-        else -> 1.35  // Increased protein needs for elderly
+        else          -> 1.35
     }
-
-    val genderProteinFactor = if (isMale) 1.0 else 0.95
-
-    // Nutrition style adjustments
+    val genderProteinFactor    = if (isMale) 1.0 else 0.95
     val nutritionProteinFactor = when (nutrition) {
-        "Vegetarian", "Vegan" -> 1.15  // Higher total to ensure complete amino acids
-        "Keto/LCHF" -> 1.1
-        else -> 1.0
+        "Vegetarian", "Vegan" -> 1.15
+        "Keto/LCHF"           -> 1.1
+        else                  -> 1.0
     }
 
-    val totalProtein = (baseProteinPerKg * weight * ageProteinFactor * genderProteinFactor * nutritionProteinFactor).toInt()
+    val totalProtein = (baseProteinPerKg * weight * ageProteinFactor * genderProteinFactor * nutritionProteinFactor)
+        .toInt()
+        .coerceAtLeast(0)   // FIX: nikoli negativen protein
 
-    // Fat calculation based on goals and health
+    // ── Maščoba (g/kg telesne mase) ──────────────────────────────────────────
     val fatPerKg = when {
         nutrition == "Keto/LCHF" -> when (goal) {
             "Build muscle" -> 1.8
-            "Lose fat" -> 1.5
-            else -> 1.6
+            "Lose fat"     -> 1.5
+            else           -> 1.6
         }
-        goal == "Lose fat" && bodyFat != null && bodyFat > 25 -> 0.7  // Lower fat for aggressive cuts
-        limitations.contains("High blood pressure") -> 0.8  // Lower saturated fat
-        isMale -> when {
-            age < 30 -> 0.9
-            age < 50 -> 1.0
-            else -> 1.1
-        }
-        else -> when {  // Female
-            age < 30 -> 1.1  // Higher fat needs for hormones
-            age < 50 -> 1.2
-            else -> 1.3
-        }
+        goal == "Lose fat" && bodyFat != null && bodyFat > 25 -> 0.7
+        limitations.contains("High blood pressure") -> 0.8
+        isMale -> when { age < 30 -> 0.9; age < 50 -> 1.0; else -> 1.1 }
+        else   -> when { age < 30 -> 1.1; age < 50 -> 1.2; else -> 1.3 }
     }
 
-    val totalFat = (fatPerKg * weight).toInt()
+    val totalFat = (fatPerKg * weight)
+        .toInt()
+        .coerceAtLeast(0)   // FIX: nikoli negativna maščoba
 
-    // Carbohydrate calculation (remaining calories)
-    val proteinCalories = totalProtein * 4
-    val fatCalories = totalFat * 9
-    val remainingCalories = calories - proteinCalories - fatCalories
+    // ── Ogljikovi hidrati (preostale kalorije) ────────────────────────────────
+    // FIX Faza 13: remainingCalories je lahko negativen pri agresivnih rezih.
+    // Zaščita s coerceAtLeast(0) prepreči negativne grame ogljikovih hidratov,
+    // kar bi sesulo Donut Canvas graf v UI.
+    // Keto/LCHF: fiksna spodnja meja 20g (esencialni minimalni vnos za možgane),
+    // namesto da dovoljujemo 0g ali negativne vrednosti.
+    val proteinCalories   = totalProtein * 4
+    val fatCalories       = totalFat * 9
+    val remainingCalories = (calories - proteinCalories - fatCalories).coerceAtLeast(0.0)
 
     val totalCarbs = when (nutrition) {
-        "Keto/LCHF" -> minOf(50, (remainingCalories / 4).toInt())  // Very low carb
-        "Intermittent fasting" -> maxOf(100, (remainingCalories / 4).toInt())  // Moderate carb
-        else -> maxOf(80, (remainingCalories / 4).toInt())  // Minimum for brain function
+        "Keto/LCHF" ->
+            // FIX: spodnja meja 20g (biološki minimum), ne 0g ali negativno
+            (remainingCalories / 4).toInt().coerceIn(20, 50)
+        "Intermittent fasting" ->
+            (remainingCalories / 4).toInt().coerceAtLeast(100)
+        else ->
+            (remainingCalories / 4).toInt().coerceAtLeast(80)
     }
 
     return Triple(totalProtein, totalCarbs, totalFat)
 }
 
-// ── Faza 7: EMA & Adaptive TDEE ─────────────────────────────────────────────
-
-/**
- * Izračuna Exponential Moving Average (EMA) za seznam meritev teže.
- *
- * Formula: EMAₜ = α × wₜ + (1−α) × EMA_(t−1), kjer α = 2 / (period + 1)
- *
- * @param weights  Časovno urejen seznam meritev teže (kg)
- * @param period   Širina drsečega okna (privzeto 7 dni)
- * @return         EMA zadnje vrednosti (oz. first value pri 1-elementnem seznamu)
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. EMA — Exponential Moving Average (nespremenjen)
+//    EMAₜ = α × wₜ + (1−α) × EMA_(t−1),  α = 2 / (period + 1)
+// ══════════════════════════════════════════════════════════════════════════════
 fun calculateEMA(weights: List<Double>, period: Int = 7): Double {
     if (weights.isEmpty()) return 0.0
     val alpha = 2.0 / (period + 1)
@@ -314,10 +369,9 @@ fun calculateEMA(weights: List<Double>, period: Int = 7): Double {
 
 /**
  * Rezultat hibridnega TDEE izračuna.
- *
- * @param hybridTDEE       Končni dnevni kalorični cilj (kcal) — mešanica adaptivnega in teoretičnega
+ * @param hybridTDEE       Končni dnevni kalorični cilj (kcal)
  * @param adaptiveTDEE     Čisti adaptivni TDEE izpeljan iz opazovane spremembe teže
- * @param confidenceFactor C ∈ {0.0, 0.5, 1.0} — zaupanje v adaptivni izračun glede na število dni podatkov
+ * @param confidenceFactor C ∈ {0.0, 0.5, 1.0} — zaupanje glede na dni podatkov
  */
 data class AdaptiveTDEEResult(
     val hybridTDEE: Int,
@@ -325,26 +379,23 @@ data class AdaptiveTDEEResult(
     val confidenceFactor: Double
 )
 
-/**
- * Izračuna hibridni TDEE iz opazovanih dnevnih kalorij, izmerjene spremembe EMA teže
- * in teoretičnega TDEE iz anketnih podatkov (Mifflin-St Jeor).
- *
- * ## Zaupanje v adaptivni izračun (Confidence factor C):
- *  - C = 0.0  → < 3 dni podatkov  → uporabimo samo teoretični TDEE
- *  - C = 0.5  → 3–5 dni podatkov  → enakovredno mešamo oba
- *  - C = 1.0  → 6+ dni podatkov   → zaupamo samo adaptivnemu
- *
- * ## Hibridna formula:
- *   hybridTDEE = C × adaptivni + (1 − C) × teoretični
- *
- * ## Adaptivni TDEE temelji na termodinamičnem zakonu:
- *   TDEE_adaptivni = avgConsumed − (ΔmasaKg × 7700 / aktivniDni)
- *
- * @param last7DaysCalories    Dnevno zaužite kalorije za aktivne dni zadnjega tedna
- * @param emaWeightChangeDelta Razlika EMA teže v obdobju (kg; negativno = hujšanje)
- * @param theoreticalTDEE      Teoretični TDEE iz vprašalnika (BMR × aktiv. množilnik)
- * @return [AdaptiveTDEEResult] z vsemi vmesnimi vrednostmi za debug
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// 8. Adaptivni TDEE — Hibridni izračun iz opazovane telesne mase
+//    Faza 13 FIX: Dimenzijska napaka popravljena.
+//
+//    PROBLEM PRED FIX: kod je delil z activeDays (npr. 3), ki predstavlja
+//    samo dni z vpisano hrano — ne 7-dnevni interval telesne mase.
+//    Rezultat: umetno napihnjen dnevni deficit (npr. delta/3 namesto delta/7).
+//
+//    POPRAVEK: emaWeightChangeDelta × 7700 VEDNO delimo z 7.0.
+//    Razlog: EMA delta telesne mase pokriva celotno 7-dnevno obdobje,
+//    ne glede na to, koliko dni je uporabnik vpisoval hrano.
+//    activeDays vpliva SAMO na confidence faktor in avgCalories.
+//
+//    Formula:
+//      adaptiveTDEE = avgCalories − (emaWeightChangeDelta × 7700 / 7.0)
+//      hybridTDEE   = C × adaptivni + (1−C) × teoretični
+// ══════════════════════════════════════════════════════════════════════════════
 fun calculateAdaptiveTDEE(
     last7DaysCalories: List<Int>,
     emaWeightChangeDelta: Double,
@@ -352,33 +403,34 @@ fun calculateAdaptiveTDEE(
 ): AdaptiveTDEEResult {
     val activeDays = last7DaysCalories.size
 
-    // Confidence factor C
+    // Confidence faktor C — temelji na št. dni vpisane hrane
     val confidence = when {
-        activeDays < 3 -> 0.0
+        activeDays < 3  -> 0.0
         activeDays <= 5 -> 0.5
-        else -> 1.0   // 6+ dni
+        else            -> 1.0
     }
 
-    // Adaptivni TDEE iz opazovane telesne mase (termodinamika)
+    // FIX Faza 13: deli z 7.0 (fiksni 7-dnevni interval), ne z activeDays
     val adaptiveTDEE: Int = if (activeDays == 0) {
         theoreticalTDEE.coerceAtLeast(800)
     } else {
-        val avgCalories = last7DaysCalories.average()
-        val observedDailyBalance = (emaWeightChangeDelta * 7700.0) / activeDays.toDouble()
+        val avgCalories          = last7DaysCalories.average()
+        // Dnevni metabolni balans iz spremembe telesne mase v 7 dneh
+        val observedDailyBalance = (emaWeightChangeDelta * 7700.0) / 7.0
         (avgCalories - observedDailyBalance).toInt().coerceAtLeast(800)
     }
 
     // Hibridni TDEE: C × adaptivni + (1−C) × teoretični
     val hybrid = if (theoreticalTDEE <= 0) {
-        adaptiveTDEE  // ni teoretičnih podatkov → samo adaptivni
+        adaptiveTDEE
     } else {
         (confidence * adaptiveTDEE + (1.0 - confidence) * theoreticalTDEE)
             .toInt().coerceAtLeast(800)
     }
 
     return AdaptiveTDEEResult(
-        hybridTDEE = hybrid,
-        adaptiveTDEE = adaptiveTDEE,
+        hybridTDEE       = hybrid,
+        adaptiveTDEE     = adaptiveTDEE,
         confidenceFactor = confidence
     )
 }

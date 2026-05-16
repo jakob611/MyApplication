@@ -78,23 +78,30 @@ internal fun formatMacroWeight(grams: Double?, unitPreference: String): String {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Faza 13 FIX: Odstranjeno zaokroževanje na 10g v metričnem sistemu.
+//
+// PROBLEM: `round(consumed / 10.0) * 10` je zaokroževal na najbližjih 10g.
+// 14g maščob → 10g, 16g maščob → 20g → napaka do ±9g → 81 kcal razlike.
+// To je unič natančnost sledenja in zmede uporabnika.
+//
+// POPRAVEK: roundToInt() — enako natančno kot že unče (oz) veja.
+// ══════════════════════════════════════════════════════════════════════════════
 internal fun macroLabel(label: String, consumed: Double, target: Int, unitPreference: String): String {
     val emoji = when (label) {
         "Protein" -> "🥩"
-        "Fat" -> "🥑"
-        "Carbs" -> "🍞"
-        else -> ""
+        "Fat"     -> "🥑"
+        "Carbs"   -> "🍞"
+        else      -> ""
     }
     val unit = if (unitPreference == "lbs" || unitPreference == "lb") "oz" else "g"
-    val cVal = if (unit == "oz") {
+    val cVal = if (unit == "oz")
         (consumed / 28.3495).roundToInt()
-    } else {
-        (kotlin.math.round(consumed / 10.0) * 10).toInt()
-    }
-    val tVal = if (unit == "oz") {
+    else
+        consumed.roundToInt()                 // FIX: 1g natančnost namesto 10g zaokroževanja
+    val tVal = if (unit == "oz")
         (target.toDouble() / 28.3495).roundToInt()
-    } else {
-        (kotlin.math.round(target / 10.0) * 10).toInt()
-    }
+    else
+        target                                // Int tarča je že celo število
     return if (target > 0) "$emoji $label: $cVal/$tVal $unit" else "$emoji $label: $cVal $unit"
 }

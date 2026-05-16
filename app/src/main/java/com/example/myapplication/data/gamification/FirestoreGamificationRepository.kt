@@ -362,7 +362,15 @@ class FirestoreGamificationRepository : GamificationRepository {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // runMidnightStreakCheck — Faza 12: DST-safe getYesterdayStr()
+    // runMidnightStreakCheck — Faza 12c: Strogi statusni check
+    //
+    // KRITIČNA FIX: containsKey() je bil "free pass" hrošč.
+    // "PENDING_STRETCHING" je obstoječ ključ → stari check je vrnil null → kazen preskočena.
+    // Len uporabnik je ohranil streak brezplačno.
+    //
+    // Nova logika: preveri VREDNOST, ne zgolj obstoj ključa.
+    // Samo eksplicitno uspešni statusi štejejo: WORKOUT_DONE, REST_WORKOUT_DONE,
+    // STRETCHING_DONE, FROZEN. Vse ostalo (null, PENDING_STRETCHING, MISSED) → kazen.
     // ─────────────────────────────────────────────────────────────────────────
     override suspend fun runMidnightStreakCheck() {
         val userRef      = FirestoreHelper.getCurrentUserDocRef() ?: return
@@ -374,16 +382,22 @@ class FirestoreGamificationRepository : GamificationRepository {
                 @Suppress("UNCHECKED_CAST")
                 val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
 
-                if (dailyHistory.containsKey(yesterdayStr)) {
-                    Log.d("GamificationRepo", "Včeraj ($yesterdayStr) zabeležen: ${dailyHistory[yesterdayStr]}")
+                // Strogi check: samo eksplicitno uspešni statusi osvobodijo od kazni
+                val yesterdayStatus = dailyHistory[yesterdayStr]?.toString()
+                val safeStatuses    = setOf("WORKOUT_DONE", "REST_WORKOUT_DONE", "STRETCHING_DONE", "FROZEN")
+
+                if (yesterdayStatus in safeStatuses) {
+                    Log.d("GamificationRepo", "✅ Midnight check: včeraj ($yesterdayStr) = '$yesterdayStatus' — ni kazni.")
                     return@runTransaction null
                 }
 
+                // Vse ostalo (null, "PENDING_STRETCHING", "MISSED") → kazen
+                Log.d("GamificationRepo", "⚠️ Midnight check: včeraj ($yesterdayStr) = '$yesterdayStatus' → kazen.")
                 val currentFreezes = (snapshot.getLong("streak_freezes") ?: 0L).toInt()
                 if (currentFreezes > 0) {
                     transaction.update(userRef, mapOf(
-                        "streak_freezes"              to (currentFreezes - 1),
-                        "dailyHistory.$yesterdayStr"  to "FROZEN"
+                        "streak_freezes"             to (currentFreezes - 1),
+                        "dailyHistory.$yesterdayStr" to "FROZEN"
                     ))
                     Log.d("GamificationRepo", "❄️ Midnight Freeze auto-porabljen. Ostalo: ${currentFreezes - 1}")
                 } else {
@@ -399,6 +413,7 @@ class FirestoreGamificationRepository : GamificationRepository {
             Log.e("GamificationRepo", "Polnočni streak check je spodletel.", e)
         }
     }
+
 }
 
 
