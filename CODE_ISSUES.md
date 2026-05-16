@@ -69,7 +69,25 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
-### 2026-05-16 — Faza 14: Zgodovinski Snapshoti + Odprava Health Connect Pollinga
+### 2026-05-16 — Faza 14b: Race Conditions Fix (isPlanLoaded + Midnight Transition)
+
+**1. Varovalka pred lažnimi fallbacki (isPlanLoaded guard):**
+- ✅ `NutritionScreen.kt`: Dodan `var nutritionPlanLoadComplete by remember { mutableStateOf(false) }` — nastavi se na `true` VEDNO po koncu `loadNutritionPlan()`, ne glede na to ali je rezultat null ali dejanski plan. Razlika med "loading" in "nima plana" je zdaj eksplicitna.
+- ✅ `NutritionViewModel.ensureDayInitialized()`: Dodan opcijski parameter `isPlanLoaded: Boolean = false`. Ob `isPlanLoaded == false` se funkcija takoj vrne brez Firestore klica — ne more zamrzniti 2000 kcal hardkodiranega fallbacka.
+- ✅ `LaunchedEffect` za `ensureDayInitialized`: Dodan `nutritionPlanLoadComplete` kot key → ob spremembi iz `false` → `true` se efekt avtomatično re-sproži z dejanskim planom.
+
+**2. Midnight Bug Fix — Avtomatski prehod čez polnoč:**
+- ✅ `NutritionViewModel.kt`: Dodan `private val _activeDateFlow: MutableStateFlow<String>` + `val currentDate: StateFlow<String>`. Inicializiran z aujourd'hui.
+- ✅ `NutritionViewModel.observeDailyTotals()`: Refaktoriran na `_activeDateFlow.collectLatest` — ob spremembi datuma stari Firestore listener samodejno prekine, novi se zažene za novi datum. Brez ponovnega zagona aplikacije.
+- ✅ `NutritionViewModel.onDayTransition(newDate)`: Nova funkcija — resetira `frozenTargets`, `firestoreFoods`, `uiState`, `localWaterMl`; posodobi `_activeDateFlow.value = newDate`.
+- ✅ `NutritionScreen.kt`: `todayId` ni več `remember {}` (statičen) → `val todayId by nutritionViewModel.currentDate.collectAsState()` (reaktiven). Vsi `LaunchedEffect`-i z `todayId` kot ključem se ob polnoči re-sprožijo.
+- ✅ `NutritionScreen.kt`: Dodan `LaunchedEffect(Unit)` z `while(true) { delay(60_000L) }` — vsako minuto primerja sistemski datum z `todayId`; ob razliki kliče `onDayTransition(newDate)`.
+
+**Root cause (Race condition):** `ensureDayInitialized` je bil klican takoj ob odprtju zaslona, ko `nutritionPlan` še ni bil naložen → `rawTargetCalories` je bil `2000` (fallback) → zamrznilo 2000 kcal namesto dejanskega cilja.
+
+**Root cause (Midnight bug):** `todayId = remember { ... }` in `val todayId` v ViewModel sta bila izračunana enkrat ob zagonu in nikoli posodobljena → aplikacija je do ponovnega zagona vedno brala dailyLog za včerajšnji dan.
+
+
 
 **1. Zgodovinski Snapshoti (DailyLogRepository.kt + NutritionViewModel.kt):**
 - ✅ `DailyLogRepository.updateDailyLog()`: Dodani opcijski parametri `initTargetCalories`, `initTargetProtein`, `initTargetCarbs`, `initTargetFat`. Ob kreaciji NOVEGA dokumenta (nov dan) se vrednosti zapišejo v Firestore — za vedno zamrznjene za ta dan.
