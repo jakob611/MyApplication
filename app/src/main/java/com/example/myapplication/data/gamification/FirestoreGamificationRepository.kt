@@ -212,11 +212,13 @@ class FirestoreGamificationRepository : GamificationRepository {
                     return@runTransaction null
                 }
 
-                val oldStreak    = (snapshot.getLong("streak_days")         ?: 0L).toInt()
-                val oldLastEpoch =  snapshot.getLong("last_activity_epoch") ?: 0L
-                val oldPlanDay   = (snapshot.getLong("plan_day")            ?: 1L).toInt()
-                val oldFreezes   = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
-                val currentXp    = (snapshot.getLong("xp")                  ?: 0L).toInt()
+                val oldStreak      = (snapshot.getLong("streak_days")         ?: 0L).toInt()
+                val oldLastEpoch   =  snapshot.getLong("last_activity_epoch") ?: 0L
+                val oldPlanDay     = (snapshot.getLong("plan_day")            ?: 1L).toInt()
+                val oldFreezes     = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
+                val currentXp      = (snapshot.getLong("xp")                  ?: 0L).toInt()
+                // ✅ Fix weekly_done: beremo in atomarno inkrementiramo v isti transakciji
+                val oldWeeklyDone  = (snapshot.getLong("weekly_done")         ?: 0L).toInt()
 
                 // Atomarno branje dailyLogs dokumenta (za akumulacijo kalorij)
                 val dailyLogRef      = db.collection("dailyLogs").document(todayStr)
@@ -253,7 +255,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                 val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
 
                 // ── WRITE faza ─────────────────────────────────────────────
-                // 1. Glavni user dokument — streak + XP + plan_day + epoch + dailyHistory
+                // 1. Glavni user dokument — streak + XP + plan_day + epoch + dailyHistory + weekly_done
                 val userUpdates = mutableMapOf<String, Any>(
                     "streak_days"             to newStreak,
                     "plan_day"                to newPlanDay,
@@ -261,7 +263,9 @@ class FirestoreGamificationRepository : GamificationRepository {
                     "last_streak_update_date" to todayStr,
                     "dailyHistory.$todayStr"  to todayStatus,  // "WORKOUT_DONE" ali "REST_WORKOUT_DONE"
                     "xp"                      to newXp,
-                    "level"                   to newLevel
+                    "level"                   to newLevel,
+                    // ✅ Fix: weekly_done se posodablja atomarno v isti transakciji
+                    "weekly_done"             to (oldWeeklyDone + 1)
                 )
                 if (newFreezes != oldFreezes) userUpdates["streak_freezes"] = newFreezes
                 transaction.update(userRef, userUpdates)
@@ -294,6 +298,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                     "streak=$newStreak, planDay=$newPlanDay, " +
                     "xp=+$xpToBeAwarded (→$newXp), level=$newLevel, " +
                     "calories=$caloriesBurned, status=$todayStatus, " +
+                    "weekly_done=${oldWeeklyDone + 1}, " +
                     "freezeUsed=${newFreezes != oldFreezes}")
                 null
             }.await()

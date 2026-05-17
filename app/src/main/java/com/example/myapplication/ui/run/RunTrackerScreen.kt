@@ -42,8 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.domain.model.ActivityType
 import com.example.myapplication.domain.model.LocationPoint
@@ -290,22 +293,48 @@ fun RunTrackerScreen(onBack: () -> Unit) {
         if (isMapFollowingTarget) isMapFollowingTarget = false
     }
 
+    // ✅ Faza 15: Lifecycle-usklajeno upravljanje MapView.onResume/onPause
+    // Prej je bil map.onResume() v `update` lambdi → klical se je ob VSAKI rekomposiciji → glitch
+    // Zdaj: DisposableEffect(lifecycleOwner, mapView) doda observer ENKRAT ko mapView postane non-null
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, mapView) {
+        val map = mapView
+        if (map != null) {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> map.onResume()
+                    Lifecycle.Event.ON_PAUSE  -> map.onPause()
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            // Pokliči onResume takoj, če je lifecycle že v RESUMED stanju (ob prvem vstopu)
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                map.onResume()
+            }
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        } else {
+            onDispose {}
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Mapa
         AndroidView(
             factory = { ctx ->
                 MapView(ctx).apply {
                     setTileSource(if (isTopoMap) TileSourceFactory.OpenTopo else TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true); controller.setZoom(17.0)
+                    setMultiTouchControls(true)
+                    // ✅ Nastavi zoom in center TAKOJ ob kreaciji — preprečimo "skok kamere čez cel globus"
+                    val lastLat = prefs.getFloat("last_run_lat", 46.0569f).toDouble()
+                    val lastLng = prefs.getFloat("last_run_lng", 14.5058f).toDouble()
+                    controller.setZoom(16.0)
+                    controller.setCenter(GeoPoint(lastLat, lastLng))
+
                     val overlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this).apply {
                         enableMyLocation(); enableFollowLocation(); setDrawAccuracyEnabled(true)
                     }
                     overlays.add(overlay); myLocationOverlay = overlay
-
-                    // ✅ Faza 14: Obnovi zadnjo znano lokacijo — brez tresenja na SLO center
-                    val lastLat = prefs.getFloat("last_run_lat", 46.0569f).toDouble()
-                    val lastLng = prefs.getFloat("last_run_lng", 14.5058f).toDouble()
-                    controller.setCenter(GeoPoint(lastLat, lastLng))
 
                     overlay.runOnFirstFix { post { overlay.myLocation?.let { controller.animateTo(it) } } }
                     mapView = this
@@ -322,7 +351,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
             },
             modifier = Modifier.fillMaxSize(),
             update = { map ->
-                map.onResume()
+                // ❌ map.onResume() tukaj ODSTRANJEN — lifecycle observer (zgoraj) skrbi za to
                 val currentSource = if (isTopoMap) TileSourceFactory.OpenTopo else TileSourceFactory.MAPNIK
                 if (map.tileProvider.tileSource != currentSource) {
                     map.setTileSource(currentSource)
