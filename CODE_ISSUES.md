@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-03 (Faza 7: Camera fix, Rest Day lock, Deep Audit, APP_MAP refresh)  
+**Zadnja posodobitev:** 2026-05-17 (Faza 18: Room crash fix, Rest Day Lock, Visual Glitch, Progress Bar)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -68,6 +68,31 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-17 — Faza 18: Room Crash Fix, Rest Day Lock, Visual Glitch, Live Progress Bar
+
+**1. AppDatabase_Impl.kt — Observer Leak + Threading Crash:**
+- ✅ **Root cause**: `getSessionsFlow()` je ob vsakem klicu doregistriral nov `InvalidationTracker.Observer` → po N klicih N vzporednih observerjev → redundantni DB queryi + potencialni crash
+- ✅ **Fix**: Dodan `@Volatile private var _observerRegistered = false` → observer se registrira SAMO enkrat na DAO instanco
+- ✅ **Root cause**: `refreshSessions()` je klical `db.openHelper.writableDatabase.query(...)` sinhronsko na klicoči niti. Ko `getSessionsFlow()` kliče android main thread → StrictMode crash ali ANR
+- ✅ **Fix**: `refreshSessions()` premaknjen v `GlobalScope.launch(Dispatchers.IO)` — vedno teče v ozadju
+- ✅ **Root cause**: `InvalidationTracker(this, "workout_sessions", "gps_points")` je matched deprecated 2-arg konstruktor. Room 2.6.1 zahteva 4-arg: `(RoomDatabase, Map<String,String>, Map<String,Set<String>>, vararg String)`
+- ✅ **Fix**: `InvalidationTracker(this, emptyMap<String,String>(), emptyMap<String,Set<String>>(), "workout_sessions", "gps_points")`
+
+**2. BodyModuleHomeScreen.kt — Visual Glitch (ozadje utripanje):**
+- ✅ **Root cause**: `MaterialTheme.colorScheme.background` se izračuna iz teme med kompozicijo → en frame brez pravilne barve
+- ✅ **Fix**: Zamenjano z `UppColors.Background` (#181818 hardkodiran) → nič utripanja
+- ✅ Rest day stretching kartica zdaj preveri `!ui.isLoading` → ne prikaže se med nalaganjem
+
+**3. ManageGamificationUseCase.kt — Rest Day Calendar Lock (Stretching Loop):**
+- ✅ **Root cause**: `restDayInitiated()` ni preverjal ali je bil redni trening danes že opravljen → omogočal `STRETCHING_DONE` po `WORKOUT_DONE` na isti dan
+- ✅ **Fix**: Dodan `repository.getTodayStatus()` check — če `WORKOUT_DONE` ali `REST_WORKOUT_DONE` vrni obstoječi streak brez zapisa
+- ✅ UI guard v `BodyModuleHomeScreen`: kartica skrita za `todayStatus == WORKOUT_DONE || REST_WORKOUT_DONE` (dvojna zaščita)
+
+**4. BodyModuleHomeViewModel.kt — Live Progress Bar (weeklyDone nič-crash):**
+- ✅ **Root cause**: `CompleteWorkoutSession` success handler je klical `getBodyMetrics.invoke(email).collect { metrics -> }` brez filtriranja loading emisije. Prva emisija `BodyMetrics(isLoading=true)` ima `weeklyDone=0` → PREPISAL pravilne vrednosti → progress bar je začasno padel na 0 + lažni streak Toast z 0
+- ✅ **Fix**: Dodan `if (metrics.isLoading) return@collect` → loading emisija ignorirana
+- ✅ Optimistični fallback vključuje `weeklyDone + 1` takoj ko Firestore ni dostopen
 
 ### 2026-05-17 — Faza 17: Vizualni prenos Figma Design System (UppColors globalen)
 
