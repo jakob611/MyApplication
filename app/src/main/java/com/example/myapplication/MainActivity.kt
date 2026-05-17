@@ -7,12 +7,17 @@ package com.example.myapplication
 // =====================================================================
 
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.core.worker.DailySyncWorker
 import com.example.myapplication.data.repository.AdvancedExerciseRepository
@@ -60,6 +65,9 @@ class MainActivity : ComponentActivity() {
         coldStartEpochMs = android.os.SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
 
+        // Prepreči bel blisk: nastavi temno ozadje okna PRED setContent
+        window.setBackgroundDrawable(ColorDrawable(0xFF181818.toInt()))
+
         // Sinhrono preberi dark mode PRED setContent → prepreči bel blisk
         initialDarkMode = getSharedPreferences("user_prefs", MODE_PRIVATE)
             .getBoolean("dark_mode", false)
@@ -78,21 +86,27 @@ class MainActivity : ComponentActivity() {
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         setContent {
-            val appViewModel: AppViewModel = viewModel()
-            val navViewModel: NavigationViewModel = viewModel()
+            // Surface z eksplicitnim Background barvo — prepreči privzeto belo Material ozadje
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color(0xFF181818)
+            ) {
+                val appViewModel: AppViewModel = viewModel()
+                val navViewModel: NavigationViewModel = viewModel()
 
-            MainAppContent(
-                appViewModel = appViewModel,
-                navViewModel = navViewModel,
-                initialDarkMode = initialDarkMode,
-                intentExtras = intentExtras,
-                coldStartEpochMs = coldStartEpochMs,
-                googleSignInClient = googleSignInClient,
-                onFirebaseGoogleAuth = { account, onSuccess, onError ->
-                    firebaseAuthWithGoogle(account, onSuccess, onError)
-                },
-                onFinishActivity = { finish() }
-            )
+                MainAppContent(
+                    appViewModel = appViewModel,
+                    navViewModel = navViewModel,
+                    initialDarkMode = initialDarkMode,
+                    intentExtras = intentExtras,
+                    coldStartEpochMs = coldStartEpochMs,
+                    googleSignInClient = googleSignInClient,
+                    onFirebaseGoogleAuth = { account, onSuccess, onError ->
+                        firebaseAuthWithGoogle(account, onSuccess, onError)
+                    },
+                    onFinishActivity = { finish() }
+                )
+            }
         }
     }
 
