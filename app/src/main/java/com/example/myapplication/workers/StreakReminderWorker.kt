@@ -14,8 +14,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.MainActivity
 import com.example.myapplication.data.settings.UserProfileManager
-import com.example.myapplication.persistence.FirestoreHelper
-import com.example.myapplication.data.workout.FirestoreWorkoutRepository
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.repository.FirestoreWorkoutRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await

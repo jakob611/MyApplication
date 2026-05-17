@@ -3,10 +3,9 @@ package com.example.myapplication.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import com.example.myapplication.persistence.PlanDataStore
-import com.example.myapplication.data.PlanResult
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.PlanDataStore
+import com.example.myapplication.domain.model.PlanResult
+import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @OptIn(ExperimentalCoroutinesApi::class)

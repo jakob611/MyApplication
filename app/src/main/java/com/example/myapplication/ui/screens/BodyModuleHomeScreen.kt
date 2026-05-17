@@ -8,7 +8,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape // ADDED
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,11 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.myapplication.data.PlanResult
+import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.setValue // Add this
+import com.example.myapplication.ui.run.EpicCounter
+import com.example.myapplication.ui.run.PlanPathDialog
+import com.example.myapplication.viewmodels.BodyHomeIntent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +48,7 @@ fun BodyModuleHomeScreen(
     onStartPlan: () -> Unit,
     onStartWorkout: (PlanResult?) -> Unit,
     onStartAdditionalWorkout: () -> Unit = {},
-    currentPlan: com.example.myapplication.data.PlanResult? = null,
+    currentPlan: PlanResult? = null,
     onOpenHistory: () -> Unit = {},
     onOpenManualLog: () -> Unit = {},
     onStartRun: () -> Unit = {},
@@ -302,7 +304,7 @@ fun BodyModuleHomeScreen(
                                     EpicCounter(
                                         targetValue = animTargetDay,
                                         animate = ui.showCompletionAnimation, // Pass animation flag
-                                        onAnimationEnd = { vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.HideCompletionAnimation) }, // Reset flag
+                                        onAnimationEnd = { vm.handleIntent(BodyHomeIntent.HideCompletionAnimation) }, // Reset flag
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 34.sp,
                                         fontWeight = FontWeight.Bold

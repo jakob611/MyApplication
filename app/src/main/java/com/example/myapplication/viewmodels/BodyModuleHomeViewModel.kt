@@ -2,12 +2,12 @@ package com.example.myapplication.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.PlanResult
+import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
-import com.example.myapplication.domain.workout.GetBodyMetricsUseCase
-import com.example.myapplication.domain.workout.SwapPlanDaysUseCase
-import com.example.myapplication.domain.workout.UpdateBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
+import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -56,7 +56,7 @@ sealed class BodyHomeIntent {
      * @param plan Trenutni plan — ViewModel ga uporabi za izračun todayIsRest (presentation layer concern).
      * GetBodyMetricsUseCase ne dobi plana (Clean Architecture: UseCase ne pozna data.PlanResult).
      */
-    data class LoadMetrics(val email: String, val plan: com.example.myapplication.data.PlanResult? = null) : BodyHomeIntent()
+    data class LoadMetrics(val email: String, val plan: PlanResult? = null) : BodyHomeIntent()
     object CompleteRestDay : BodyHomeIntent()
     object HideCompletionAnimation : BodyHomeIntent()
     data class AcceptChallenge(val id: String) : BodyHomeIntent()

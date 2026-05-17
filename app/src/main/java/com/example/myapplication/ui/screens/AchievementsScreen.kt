@@ -1,19 +1,13 @@
 package com.example.myapplication.ui.screens
 
-import com.example.myapplication.data.PlanResult
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import com.example.myapplication.domain.model.PlanResult
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,12 +26,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.example.myapplication.data.*
-import com.example.myapplication.persistence.FollowStore
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.store.FollowStore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import com.example.myapplication.domain.gamification.GamificationProvider
+import com.example.myapplication.ui.run.PlanPathVisualizer
+import com.example.myapplication.ui.shared.GamificationSharedViewModel
 
 @Composable
 fun AchievementsScreen(
@@ -70,12 +65,12 @@ fun AchievementsScreen(
     var followingList by remember { mutableStateOf<List<FollowUserInfo>>(emptyList()) }
     var isLoadingFollowList by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+    val currentUserId = FirestoreHelper.getCurrentUserDocId() ?: ""
 
     // Convert badge IDs to Badge objects with LIVE progress calculation
     val allBadges = BadgeDefinitions.ALL_BADGES
     val context = androidx.compose.ui.platform.LocalContext.current
-    val gamificationViewModel: com.example.myapplication.viewmodels.GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+    val gamificationViewModel: GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
 
@@ -614,7 +609,7 @@ private fun getBadgeIcon(iconName: String): ImageVector {
 // Helper funkcija za nalaganje info o uporabniku
 private suspend fun loadUserInfo(userId: String): FollowUserInfo? {
     return try {
-        val doc = com.example.myapplication.persistence.FirestoreHelper.getUserRef(userId)
+        val doc = FirestoreHelper.getUserRef(userId)
             .get()
             .await()
 

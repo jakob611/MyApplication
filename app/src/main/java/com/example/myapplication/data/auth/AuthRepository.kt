@@ -2,7 +2,7 @@ package com.example.myapplication.data.auth
 
 import android.content.Context
 import android.util.Log
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.auth.ktx.auth

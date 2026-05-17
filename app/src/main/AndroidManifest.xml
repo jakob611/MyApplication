@@ -197,7 +197,7 @@
 
         <!-- Run Tracking Foreground Service -->
         <service
-            android:name="com.example.myapplication.service.RunTrackingService"
+            android:name="com.example.myapplication.core.service.RunTrackingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />

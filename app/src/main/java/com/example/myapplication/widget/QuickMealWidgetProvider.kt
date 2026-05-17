@@ -11,6 +11,7 @@ import android.widget.RemoteViews
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.example.myapplication.data.daily.DailyLogRepository
+import com.example.myapplication.data.store.FirestoreHelper
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +53,7 @@ class QuickMealWidgetProvider : AppWidgetProvider() {
     }
 
     private fun handleAddMeal(context: Context, mealId: String) {
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        val uid = FirestoreHelper.getCurrentUserDocId()
         if (uid == null) {
             Log.w(TAG, "Not logged in, cannot add meal")
             return
@@ -228,7 +229,7 @@ class QuickMealWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(labelId, mealLabel)
 
             // Fetch custom meals from Firestore and update widget
-            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+            val uid = FirestoreHelper.getCurrentUserDocId()
             if (uid != null) {
                 fetchCustomMealsAndUpdate(context, manager, appWidgetId, views, uid)
             } else {

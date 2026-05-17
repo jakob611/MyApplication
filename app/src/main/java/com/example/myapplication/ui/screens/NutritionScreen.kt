@@ -16,7 +16,7 @@ import kotlinx.datetime.toLocalDateTime
 
 import android.content.Context
 import android.util.Log
-import com.example.myapplication.data.PlanResult
+import com.example.myapplication.domain.model.PlanResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -33,25 +33,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.myapplication.data.HealthStorage
-import com.example.myapplication.health.HealthConnectManager
+import com.example.myapplication.data.repository.FoodRepositoryImpl
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.network.OpenFoodFactsProduct
+import com.example.myapplication.ui.nutrition.NutritionViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toJavaInstant
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 // -----------------------------------------------------------------------
 // ActiveCaloriesBar - navpicna progresna vrstica za porabljene kalorije
@@ -116,7 +113,7 @@ fun NutritionScreen(
     onOpenAdditives: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+    val nutritionViewModel: NutritionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
     val uiState by nutritionViewModel.uiState.collectAsState()
@@ -183,9 +180,9 @@ fun NutritionScreen(
     // (plan je null = uporabnik nima plana, kar je DRUGAČNO od "plan se še nalaga")
     var nutritionPlanLoadComplete by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        val uid = FirestoreHelper.getCurrentUserDocId()
         if (uid != null) {
-            nutritionPlan = com.example.myapplication.persistence.NutritionPlanStore.loadNutritionPlan(uid)
+            nutritionPlan = NutritionPlanStore.loadNutritionPlan(uid)
         }
         // Nastavi flag VEDNO na koncu — ne glede na to, ali je plan null ali ne.
         // null = dokazano ni plana → fallback vrednosti so legitimne za zamrznitev.
@@ -310,7 +307,7 @@ fun NutritionScreen(
     // ── Identifikacija uporabnika ──────────────────────────────────────────────
     // POMEMBNO: uid mora biti v remember{} — getCurrentUserDocId() se ne sme klicati
     // ob vsakem recomposition, ker bi to povzročalo nove Firestore kliche.
-    val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
+    val uid = remember { FirestoreHelper.getCurrentUserDocId() }
 
     // Faza 14b: todayId NI VEČ remember{} — prihaja iz ViewModel.currentDate StateFlow.
     // Ob polnočnem prehodu ViewModel kliče onDayTransition(newDate) → currentDate se posodobi
@@ -418,7 +415,7 @@ fun NutritionScreen(
         }
         val isMale = userProfile.gender == "Male"
         val actLevel = userProfile.activityLevel ?: "Sedentary"
-        com.example.myapplication.utils.calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDayToday)
+        com.example.myapplication.domain.nutrition.calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDayToday)
     }
 
     // Prilagojene kalorije — workout day vs rest day (statični fallback)
@@ -428,7 +425,7 @@ fun NutritionScreen(
         } else {
             val isMale = userProfile.gender == "Male"
             val goal = userProfile.workoutGoal.ifBlank { null }
-            com.example.myapplication.utils.calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
+            com.example.myapplication.domain.nutrition.calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
         }
     }
 
@@ -818,7 +815,7 @@ fun NutritionScreen(
             },
             onConfirmAsync = { mealChosen ->
                 val cm = pendingCustomMeal!!
-                val currentUid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                val currentUid = FirestoreHelper.getCurrentUserDocId()
 
                 if (currentUid == null) {
                     // Removed redundant qualifier
@@ -903,12 +900,12 @@ fun NutritionScreen(
             onDismissRequest = { confirmDelete = null },
             confirmButton = {
                 Button(onClick = {
-                    val uidDel = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                    val uidDel = FirestoreHelper.getCurrentUserDocId()
                     if (uidDel != null) {
                         val scope = kotlinx.coroutines.MainScope()
                         scope.launch {
                             try {
-                                com.example.myapplication.data.nutrition.FoodRepositoryImpl.deleteCustomMeal(mealToDelete.id)
+                                FoodRepositoryImpl.deleteCustomMeal(mealToDelete.id)
                                 confirmDelete = null
                                 // Refresh quick meal widget after deletion
                                 com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)

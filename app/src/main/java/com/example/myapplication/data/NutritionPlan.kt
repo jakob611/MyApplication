@@ -1,5 +1,6 @@
 package com.example.myapplication.data
 
+import com.example.myapplication.data.store.AlgorithmData
 import kotlinx.datetime.Clock
 
 // AlgorithmData je v istem paketu (data) — import ni potreben

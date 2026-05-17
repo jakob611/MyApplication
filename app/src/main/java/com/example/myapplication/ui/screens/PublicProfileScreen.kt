@@ -27,9 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.data.ActivityType
+import com.example.myapplication.domain.model.ActivityType
 import com.example.myapplication.data.PublicProfile
-import com.example.myapplication.persistence.FollowStore
+import com.example.myapplication.data.store.FollowStore
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -40,6 +40,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.toArgb
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.ui.progress.activityColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +50,7 @@ fun PublicProfileScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+    val currentUserId = FirestoreHelper.getCurrentUserDocId() ?: ""
     var isFollowing by remember { mutableStateOf(false) }
     var followerCount by remember { mutableIntStateOf(profile.followers ?: 0) }
     var isLoading by remember { mutableStateOf(false) }

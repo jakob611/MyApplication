@@ -1,7 +1,7 @@
 package com.example.myapplication.data.daily
 
 import android.util.Log
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.tasks.await
 import java.util.Collections
 

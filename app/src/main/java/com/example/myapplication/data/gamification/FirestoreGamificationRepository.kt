@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock

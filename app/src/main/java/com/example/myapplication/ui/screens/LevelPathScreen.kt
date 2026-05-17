@@ -1,9 +1,6 @@
 package com.example.myapplication.ui.screens
 
-import com.example.myapplication.data.PlanResult
-import com.example.myapplication.data.WeekPlan
-import com.example.myapplication.data.DayPlan
-import androidx.compose.foundation.Canvas
+import com.example.myapplication.domain.model.PlanResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,12 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -38,10 +31,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.myapplication.data.Badge
-import com.example.myapplication.data.BadgeDefinitions
 import com.example.myapplication.data.UserProfile
-import com.example.myapplication.persistence.FollowStore
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.store.FollowStore
+import com.example.myapplication.ui.run.PlanPathVisualizer
+import com.example.myapplication.ui.shared.GamificationSharedViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -71,10 +65,10 @@ fun LevelPathScreen(
     var followingList by remember { mutableStateOf<List<FollowUserInfo>>(emptyList()) }
     var isLoadingFollowList by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+    val currentUserId = FirestoreHelper.getCurrentUserDocId() ?: ""
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    val gamificationViewModel: com.example.myapplication.viewmodels.GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+    val gamificationViewModel: GamificationSharedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context)
     )
 
@@ -513,7 +507,7 @@ data class FollowUserInfo(
 // Helper funkcija za nalaganje info o uporabniku
 private suspend fun loadFollowUserInfo(userId: String): FollowUserInfo? {
     return try {
-        val doc = com.example.myapplication.persistence.FirestoreHelper.getUserRef(userId)
+        val doc = FirestoreHelper.getUserRef(userId)
             .get()
             .await()
 

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
 import com.example.myapplication.R
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.datetime.daysUntil
@@ -77,14 +78,14 @@ class PlanDayWidgetProvider : AppWidgetProvider() {
         }
 
         private fun syncFromFirestore(context: Context) {
-            val userDocId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+            val userDocId = FirestoreHelper.getCurrentUserDocId()
             if (userDocId == null) {
                 refreshWidgetUI(context)
                 return
             }
 
             // Korak 1: streak_days + plan_day iz users/{resolvedDocId} (email-first)
-            com.example.myapplication.persistence.FirestoreHelper.getUserRef(userDocId)
+            FirestoreHelper.getUserRef(userDocId)
                 .get()
                 .addOnSuccessListener { userSnap ->
                     val streak = (userSnap.getLong("streak_days") ?: 0L).toInt()

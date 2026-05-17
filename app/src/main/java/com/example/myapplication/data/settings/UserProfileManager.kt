@@ -2,6 +2,7 @@ package com.example.myapplication.data.settings
 
 import android.util.Log
 import com.example.myapplication.data.UserProfile
+import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.domain.settings.SettingsManager
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
@@ -165,7 +166,7 @@ object UserProfileManager {
 
     suspend fun setDarkMode(email: String, isDark: Boolean) {
         try {
-            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            FirestoreHelper.getCurrentUserDocRef()
                 .set(mapOf("darkMode" to isDark), SetOptions.merge())
                 .await()
         } catch (e: Exception) {
@@ -176,7 +177,7 @@ object UserProfileManager {
     suspend fun isDarkMode(email: String): Boolean {
         if (email.isBlank()) return false
         return try {
-            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            FirestoreHelper.getCurrentUserDocRef()
                 .get().await()
                 .getBoolean("darkMode") ?: false
         } catch (e: Exception) {
@@ -187,7 +188,7 @@ object UserProfileManager {
     suspend fun saveProfileFirestore(profile: UserProfile, batch: com.google.firebase.firestore.WriteBatch? = null) {
         if (profile.email.isBlank()) return
         val uid = Firebase.auth.currentUser?.uid ?: return
-        val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+        val resolvedRef = FirestoreHelper.getCurrentUserDocRef()
 
         // VARNO: xp, followers, following so IZVZETI iz tega merge-a.
         // Ti podatki se smejo posodabljati IZKLJUČNO prek atomarnih Firestore transakcij:
@@ -238,7 +239,7 @@ object UserProfileManager {
             if (batch != null) {
                 batch.set(resolvedRef, data, SetOptions.merge())
             } else {
-                com.example.myapplication.persistence.FirestoreHelper.withRetry {
+                FirestoreHelper.withRetry {
                     resolvedRef.set(data, SetOptions.merge()).await()
                 }
             }
@@ -251,7 +252,7 @@ object UserProfileManager {
         if (email.isBlank()) return null
         val uid = Firebase.auth.currentUser?.uid ?: return null
         return try {
-            val resolvedRef = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+            val resolvedRef = FirestoreHelper.getCurrentUserDocRef()
             val doc = resolvedRef.get().await()
             if (!doc.exists()) return null
             documentToUserProfile(doc, email)
@@ -363,15 +364,15 @@ object UserProfileManager {
             "weekly_target" to weeklyTarget
         )
         if (batch != null) {
-            batch.set(com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef(), data, SetOptions.merge())
+            batch.set(FirestoreHelper.getCurrentUserDocRef(), data, SetOptions.merge())
         } else {
-            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef().set(data, SetOptions.merge()).await()
+            FirestoreHelper.getCurrentUserDocRef().set(data, SetOptions.merge()).await()
         }
     }
 
     suspend fun getWorkoutStats(email: String): Map<String, Any>? {
         return try {
-            val doc = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef().get().await()
+            val doc = FirestoreHelper.getCurrentUserDocRef().get().await()
             if (doc.exists()) {
                 // Faza 8: Beri today_status iz dailyHistory mape (za Stretching button vidnost)
                 val todayStr = kotlinx.datetime.Clock.System.now()
@@ -399,7 +400,7 @@ object UserProfileManager {
     suspend fun deleteUserData(email: String) {
         if (email.isBlank()) return
         val uid = Firebase.auth.currentUser?.uid
-        val db = com.example.myapplication.persistence.FirestoreHelper.getDb()
+        val db = FirestoreHelper.getDb()
         try {
             val subcollections = listOf(
                 "weightLogs", "dailyLogs", "dailyMetrics", "daily_health",
@@ -424,7 +425,7 @@ object UserProfileManager {
                 try { db.collection("users").document(uid).delete().await() } catch (_: Exception) {}
             }
 
-            val resolvedId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: email
+            val resolvedId = FirestoreHelper.getCurrentUserDocId() ?: email
             for (key in setOf(resolvedId, uid, email).filterNotNull()) {
                 try { db.collection("user_plans").document(key).delete().await() } catch (_: Exception) {}
             }

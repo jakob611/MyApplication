@@ -25,16 +25,36 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.*
-import com.example.myapplication.data.PlanResult
+import com.example.myapplication.core.worker.RunRouteCleanupWorker
+import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.data.auth.AuthRepository
 import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.store.DailySyncManager
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.network.OpenFoodFactsProduct
-import com.example.myapplication.persistence.PlanDataStore
+import com.example.myapplication.data.store.PlanDataStore
+import com.example.myapplication.data.store.ProfileStore
 import com.example.myapplication.ui.home.CommunityScreen
+import com.example.myapplication.ui.main.AppIntent
+import com.example.myapplication.ui.main.AppViewModel
+import com.example.myapplication.ui.navigation.NavigationViewModel
+import com.example.myapplication.ui.nutrition.NutritionViewModel
+import com.example.myapplication.ui.plans.MyPlansScreen
+import com.example.myapplication.ui.progress.ActivityLogScreen
+import com.example.myapplication.ui.progress.ProgressScreen
+import com.example.myapplication.ui.run.RunTrackerScreen
 import com.example.myapplication.ui.screens.*
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.ui.workout.ExerciseHistoryScreen
+import com.example.myapplication.ui.workout.GenerateWorkoutScreen
+import com.example.myapplication.ui.workout.LoadingWorkoutScreen
+import com.example.myapplication.ui.workout.ManualExerciseLogScreen
+import com.example.myapplication.ui.workout.WorkoutSessionScreen
 import com.example.myapplication.utils.HapticFeedback
+import com.example.myapplication.widget.PlanDayWidgetProvider
+import com.example.myapplication.widget.StreakWidgetProvider
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.firebase.auth.ktx.auth
@@ -71,7 +91,7 @@ fun MainAppContent(
     val bodyOverviewViewModel: BodyOverviewViewmodel = viewModel(factory = MyViewModelFactory())
     val plans: List<PlanResult> by bodyOverviewViewModel.plans.collectAsState()
     val userProfile by appViewModel.userProfile.collectAsState()
-    val nutritionViewModel: com.example.myapplication.viewmodels.NutritionViewModel =
+    val nutritionViewModel: NutritionViewModel =
         viewModel(factory = MyViewModelFactory(context))
     val networkObserver = remember { com.example.myapplication.utils.NetworkObserver(context) }
     val isOnline by networkObserver.observe().collectAsState(initial = true)
@@ -152,7 +172,7 @@ fun MainAppContent(
         }
         val migPrefs = context.getSharedPreferences("migration_flags", Context.MODE_PRIVATE)
         if (!migPrefs.getBoolean("faza5_legacy_purge_done", false)) {
-            com.example.myapplication.persistence.DailySyncManager.clearLegacyCache(context)
+            DailySyncManager.clearLegacyCache(context)
             migPrefs.edit().putBoolean("faza5_legacy_purge_done", true).apply()
         }
         val user = Firebase.auth.currentUser
@@ -185,7 +205,7 @@ fun MainAppContent(
                 try { com.example.myapplication.workers.WeeklyStreakWorker.ensureScheduled(context, UserProfileManager.loadProfile(userEmail).startOfWeek) }
                 catch (e: Exception) { Log.e("MainApp", "WeeklyStreakWorker: ${e.message}") }
             }
-            try { com.example.myapplication.worker.RunRouteCleanupWorker.ensureScheduled(context) } catch (_: Exception) {}
+            try { RunRouteCleanupWorker.ensureScheduled(context) } catch (_: Exception) {}
             scope.launch(Dispatchers.IO) {
                 delay(1500)
                 try { GamificationFactory.provide(context).checkAndSyncBadgesOnStartup() }
@@ -195,8 +215,8 @@ fun MainAppContent(
                 try { PlanDataStore.migrateLocalPlansToFirestore(context) } catch (_: Exception) {}
                 try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
                 try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
-                com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()?.let {
-                    try { com.example.myapplication.persistence.DailySyncManager.syncOnAppOpen(context, it) } catch (_: Exception) {}
+                FirestoreHelper.getCurrentUserDocId()?.let {
+                    try { DailySyncManager.syncOnAppOpen(context, it) } catch (_: Exception) {}
                 }
             }
         } else navViewModel.navigateTo(Screen.Index)
@@ -338,9 +358,14 @@ fun MainAppContent(
                         Box(Modifier.fillMaxSize().then(if (shouldApplyPadding) Modifier.padding(innerPadding) else Modifier)) {
                             // ── Screen Routing ────────────────────────────────
                             when {
-                                currentScreen is Screen.LoadingWorkout -> LoadingWorkoutScreen(onLoadingComplete = {
-                                    scope.launch { isExtraWorkoutSession = false; navViewModel.replaceTo(Screen.WorkoutSession) }
-                                })
+                                currentScreen is Screen.LoadingWorkout -> LoadingWorkoutScreen(
+                                    onLoadingComplete = {
+                                        scope.launch {
+                                            isExtraWorkoutSession = false; navViewModel.replaceTo(
+                                            Screen.WorkoutSession
+                                        )
+                                        }
+                                    })
                                 currentScreen is Screen.BodyModuleHome -> BodyModuleHomeScreen(
                                     onBack = ::navigateBack, onStartPlan = { navigateTo(Screen.BodyOverview) },
                                     onStartWorkout = { plan -> if (plan == null) { navigateTo(Screen.BodyOverview); return@BodyModuleHomeScreen }; selectedPlan = plan; navigateTo(Screen.LoadingWorkout) },
@@ -355,17 +380,43 @@ fun MainAppContent(
                                 currentScreen is Screen.WorkoutSession -> {
                                     val frozenPlan = remember(currentScreen) { selectedPlan ?: plans.maxByOrNull { it.createdAt } }
                                     WorkoutSessionScreen(
-                                        currentPlan = frozenPlan, isExtra = isExtraWorkoutSession,
-                                        extraFocusAreas = extraFocusAreas, extraEquipment = extraEquipment,
-                                        onBack = { selectedPlan = null; isExtraWorkoutSession = false; extraFocusAreas = emptyList(); extraEquipment = emptySet(); navViewModel.popTo(Screen.BodyModuleHome) },
-                                        onFinished = {
-                                            selectedPlan = null; isExtraWorkoutSession = false; extraFocusAreas = emptyList(); extraEquipment = emptySet()
-                                            navViewModel.popTo(Screen.BodyModuleHome)
-                                            try { com.example.myapplication.widget.PlanDayWidgetProvider.refreshAll(context) } catch (_: Exception) {}
-                                            try { com.example.myapplication.widget.StreakWidgetProvider.refreshAll(context) } catch (_: Exception) {}
+                                        currentPlan = frozenPlan,
+                                        isExtra = isExtraWorkoutSession,
+                                        extraFocusAreas = extraFocusAreas,
+                                        extraEquipment = extraEquipment,
+                                        onBack = {
+                                            selectedPlan = null; isExtraWorkoutSession =
+                                            false; extraFocusAreas = emptyList(); extraEquipment =
+                                            emptySet(); navViewModel.popTo(Screen.BodyModuleHome)
                                         },
-                                        onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) },
-                                        onBadgeUnlocked = { badge -> unlockedBadge = badge; appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) }
+                                        onFinished = {
+                                            selectedPlan = null; isExtraWorkoutSession =
+                                            false; extraFocusAreas = emptyList(); extraEquipment =
+                                            emptySet()
+                                            navViewModel.popTo(Screen.BodyModuleHome)
+                                            try {
+                                                PlanDayWidgetProvider.refreshAll(context)
+                                            } catch (_: Exception) {
+                                            }
+                                            try {
+                                                StreakWidgetProvider.refreshAll(context)
+                                            } catch (_: Exception) {
+                                            }
+                                        },
+                                        onXPAdded = {
+                                            appViewModel.handleIntent(
+                                                AppIntent.SetProfile(
+                                                    UserProfileManager.loadProfile(userEmail)
+                                                )
+                                            )
+                                        },
+                                        onBadgeUnlocked = { badge ->
+                                            unlockedBadge = badge; appViewModel.handleIntent(
+                                            AppIntent.SetProfile(
+                                                UserProfileManager.loadProfile(userEmail)
+                                            )
+                                        )
+                                        }
                                     )
                                 }
                                 currentScreen is Screen.FaceModule -> FaceModuleScreen(
@@ -376,9 +427,20 @@ fun MainAppContent(
                                 currentScreen is Screen.HairModule -> HairModuleScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.Shop -> ShopScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.Progress -> ProgressScreen(
-                                    openWeightInput = showWeightInputDialog, userProfile = userProfile, isOnline = isOnline,
-                                    onOpenMenu = { HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN); scope.launch { drawerState.open() } },
-                                    onProClick = { errorMessage = null; navViewModel.navigateTo(Screen.ProFeatures) }
+                                    openWeightInput = showWeightInputDialog,
+                                    userProfile = userProfile,
+                                    isOnline = isOnline,
+                                    onOpenMenu = {
+                                        HapticFeedback.performHapticFeedback(
+                                            context,
+                                            HapticFeedback.FeedbackType.DRAWER_OPEN
+                                        ); scope.launch { drawerState.open() }
+                                    },
+                                    onProClick = {
+                                        errorMessage = null; navViewModel.navigateTo(
+                                        Screen.ProFeatures
+                                    )
+                                    }
                                 )
                                 currentScreen is Screen.Nutrition -> NutritionScreen(
                                     plan = plans.maxByOrNull { it.createdAt },
@@ -398,18 +460,26 @@ fun MainAppContent(
                                     onProductScanned = { product, barcode -> scannedProduct = Pair(product, barcode); navigateBack() }
                                 )
                                 currentScreen is Screen.EAdditives -> EAdditivesScreen(onNavigateBack = ::navigateBack)
-                                currentScreen is Screen.ExerciseHistory -> ExerciseHistoryScreen(onBack = ::navigateBack)
-                                currentScreen is Screen.ManualExerciseLog -> ManualExerciseLogScreen(onBack = ::navigateBack)
+                                currentScreen is Screen.ExerciseHistory -> ExerciseHistoryScreen(
+                                    onBack = ::navigateBack
+                                )
+                                currentScreen is Screen.ManualExerciseLog -> ManualExerciseLogScreen(
+                                    onBack = ::navigateBack
+                                )
                                 currentScreen is Screen.RunTracker -> RunTrackerScreen(onBack = ::navigateBack)
                                 currentScreen is Screen.GenerateWorkout -> GenerateWorkoutScreen(
-                                    onBack = ::navigateBack, currentPlan = plans.maxByOrNull { it.createdAt },
+                                    onBack = ::navigateBack,
+                                    currentPlan = plans.maxByOrNull { it.createdAt },
                                     onSelectWorkout = { gen ->
                                         val latestPlan = plans.maxByOrNull { it.createdAt }
                                         if (latestPlan != null) {
                                             isExtraWorkoutSession = true
-                                            extraFocusAreas = gen.focus.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                            extraEquipment = gen.equipment.ifEmpty { setOf("bodyweight") }
-                                            selectedPlan = latestPlan; navigateTo(Screen.WorkoutSession)
+                                            extraFocusAreas = gen.focus.split(",").map { it.trim() }
+                                                .filter { it.isNotBlank() }
+                                            extraEquipment =
+                                                gen.equipment.ifEmpty { setOf("bodyweight") }
+                                            selectedPlan =
+                                                latestPlan; navigateTo(Screen.WorkoutSession)
                                         } else navigateTo(Screen.BodyOverview)
                                     }
                                 )
@@ -473,17 +543,17 @@ fun MainAppContent(
                                             appViewModel.handleIntent(AppIntent.SetProfile(finalProfile))
                                             GamificationFactory.provide(context).recordPlanCreation()
                                             appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
-                                            com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()?.let { uid ->
+                                            FirestoreHelper.getCurrentUserDocId()?.let { uid ->
                                                 val nutritionPlan = com.example.myapplication.data.NutritionPlan(
                                                     calories = plan.calories, protein = plan.protein, carbs = plan.carbs, fat = plan.fat,
                                                     algorithmData = plan.algorithmData, lastUpdated = System.currentTimeMillis()
                                                 )
-                                                com.example.myapplication.persistence.NutritionPlanStore.saveNutritionPlan(uid, nutritionPlan)
+                                                NutritionPlanStore.saveNutritionPlan(uid, nutritionPlan)
                                             }
                                             val weeklyTargetToSave = userProfile.activityLevel?.replace("x","")?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: plan.trainingDays.takeIf { it > 0 } ?: 3
                                             if (userEmail.isNotBlank()) {
                                                 try {
-                                                    com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocRef()
+                                                    FirestoreHelper.getCurrentUserDocRef()
                                                         .set(mapOf("plan_day" to 1, "weekly_target" to weeklyTargetToSave, "weekly_done" to 0),
                                                             com.google.firebase.firestore.SetOptions.merge()).await()
                                                 } catch (e: Exception) { Log.e("MainApp", "New plan Firestore init: ${e.message}") }
@@ -496,7 +566,14 @@ fun MainAppContent(
                                 currentScreen is Screen.ProSubscription -> ProSubscriptionScreen(onBack = ::navigateBack, onSubscribed = { navigateTo(Screen.Dashboard) })
                                 currentScreen is Screen.MyPlans -> MyPlansScreen(
                                     plans = plans, onPlanClick = { selectedPlan = it },
-                                    onPlanDelete = { plan -> scope.launch { PlanDataStore.deletePlan(context, plan.id) } }
+                                    onPlanDelete = { plan ->
+                                        scope.launch {
+                                            PlanDataStore.deletePlan(
+                                                context,
+                                                plan.id
+                                            )
+                                        }
+                                    }
                                 )
                                 currentScreen is Screen.MyAccount -> MyAccountScreen(
                                     userProfile = userProfile,
@@ -512,7 +589,7 @@ fun MainAppContent(
                                         scope.launch {
                                             try {
                                                 UserProfileManager.deleteUserData(userEmail); PlanDataStore.deleteAllPlans(); PlanDataStore.clearPlan(context); UserProfileManager.clearAllLocalData()
-                                                com.example.myapplication.persistence.FirestoreHelper.clearCache()
+                                                FirestoreHelper.clearCache()
                                                 try { Firebase.auth.currentUser?.delete()?.await() }
                                                 catch (_: com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException) {
                                                     Firebase.auth.signOut(); errorMessage = "Account data deleted. Please sign in again and retry."
@@ -543,7 +620,7 @@ fun MainAppContent(
                                 currentScreen is Screen.PublicProfile -> {
                                     val userId = (currentScreen as Screen.PublicProfile).userId
                                     var profileData by remember { mutableStateOf<com.example.myapplication.data.PublicProfile?>(null) }
-                                    LaunchedEffect(userId) { profileData = com.example.myapplication.persistence.ProfileStore.getPublicProfile(userId) }
+                                    LaunchedEffect(userId) { profileData = ProfileStore.getPublicProfile(userId) }
                                     profileData?.let { PublicProfileScreen(profile = it, onBack = ::navigateBack) }
                                         ?: Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                                 }

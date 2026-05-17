@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.repository.FoodRepositoryImpl
+import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -49,7 +51,7 @@ class WaterInputActivity : ComponentActivity() {
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
         // uid v remember{} — ne sme se klicati ob vsakem recomposition
-        val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
+        val uid = remember { FirestoreHelper.getCurrentUserDocId() }
         var waterInput by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -109,7 +111,7 @@ class WaterInputActivity : ComponentActivity() {
 
                         coroutineScope.launch {
                             try {
-                                com.example.myapplication.data.nutrition.FoodRepositoryImpl.logWater(w, today)
+                                FoodRepositoryImpl.logWater(w, today)
                                 // Faza 5: Lokalni cache odstranjen — FoodRepositoryImpl.logWater() piše direktno v Firestore.
                                 // Firestore SDK (isPersistenceEnabled=true) skrbi za offline sinhronizacijo.
                                 // Update widget

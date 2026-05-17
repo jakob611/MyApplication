@@ -11,6 +11,7 @@ import android.widget.RemoteViews
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.example.myapplication.data.daily.DailyLogRepository
+import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,7 +59,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
     }
 
     private fun syncFromFirestore(context: Context) {
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        val uid = FirestoreHelper.getCurrentUserDocId()
         if (uid == null) {
             // Not logged in, just refresh with local cache
             refreshAll(context)

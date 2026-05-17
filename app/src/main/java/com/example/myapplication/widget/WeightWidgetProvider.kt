@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
+import com.example.myapplication.data.repository.MetricsRepositoryImpl
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
@@ -60,7 +62,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
     }
 
     private fun syncFromFirestore(context: Context) {
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        val uid = FirestoreHelper.getCurrentUserDocId()
         if (uid == null) {
             // Not logged in, just refresh with local cache
             refreshAll(context)
@@ -70,7 +72,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
         val today = todayId()
         kotlinx.coroutines.GlobalScope.launch {
             val useCase = com.example.myapplication.domain.metrics.SyncWeightUseCase(
-                com.example.myapplication.data.metrics.MetricsRepositoryImpl()
+                MetricsRepositoryImpl()
             )
             val result = useCase.execute(uid, today)
             
@@ -91,7 +93,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
 
     private fun handleDelta(context: Context, delta: Float) {
 
-        val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+        val uid = FirestoreHelper.getCurrentUserDocId()
         val today = todayId()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val key = "weight_$today"
@@ -108,7 +110,7 @@ class WeightWidgetProvider : AppWidgetProvider() {
         if (uid != null) {
             kotlinx.coroutines.GlobalScope.launch {
                 val useCase = com.example.myapplication.domain.metrics.SaveWeightUseCase(
-                    com.example.myapplication.data.metrics.MetricsRepositoryImpl()
+                    MetricsRepositoryImpl()
                 )
                 val result = useCase.execute(uid, newVal, today)
                 if (result.isFailure) {

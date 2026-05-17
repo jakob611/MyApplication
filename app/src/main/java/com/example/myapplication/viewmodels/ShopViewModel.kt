@@ -5,7 +5,7 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.UserProfile
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.utils.AppToast
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions

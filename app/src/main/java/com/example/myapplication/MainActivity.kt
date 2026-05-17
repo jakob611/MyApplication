@@ -14,7 +14,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myapplication.core.worker.DailySyncWorker
+import com.example.myapplication.data.repository.AdvancedExerciseRepository
 import com.example.myapplication.ui.MainAppContent
+import com.example.myapplication.ui.main.AppViewModel
+import com.example.myapplication.ui.navigation.NavigationViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -47,7 +51,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        try { com.example.myapplication.worker.DailySyncWorker.schedule(this) } catch (_: Exception) {}
+        try { DailySyncWorker.schedule(this) } catch (_: Exception) {}
     }
 
     @Suppress("DEPRECATION")
@@ -63,7 +67,7 @@ class MainActivity : ComponentActivity() {
         // Prednalaganje exercises.json v ozadju (eager init)
         GlobalScope.launch(Dispatchers.IO) {
             val json = applicationContext.assets.open("exercises.json").bufferedReader().use { it.readText() }
-            com.example.myapplication.data.AdvancedExerciseRepository.init(json)
+            AdvancedExerciseRepository.init(json)
         }
 
         intentExtras.value = intent.extras

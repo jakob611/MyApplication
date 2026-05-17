@@ -1,7 +1,7 @@
 # APP_MAP.md — Ground Truth
 > **NAVODILO ZA AI:** Ko dobiš nalogo "popravi X", najprej poglej v to datoteko da ugotoviš KATERO datoteko odpreti. Ne ugibaj.
 
-**Zadnja posodobitev:** 2026-05-03 (Faza 5 Clean Architecture + Faza 7 Audit)
+**Zadnja posodobitev:** 2026-05-17 (Faza 17 Clean Architecture Refactoring — novi paketi)
 
 ---
 
@@ -16,7 +16,7 @@
 
 ---
 
-## ARHITEKTURNI PREGLED (Clean Architecture Faza 5)
+## ARHITEKTURNI PREGLED (Clean Architecture — Faza 17 Refactoring)
 
 ```
 MainActivity (100 vrstic) — samo onCreate + setContent
@@ -25,10 +25,38 @@ MainActivity (100 vrstic) — samo onCreate + setContent
             ├── navViewModel (NavigationViewModel.kt)
             └── vsi screen Composables (Screen.XYZ → XYZScreen())
 
-domain/model/     — čisti domenski modeli, brez Android
-domain/usecase/   — posamezne logične operacije, ios-ready
-data/repository/  — Firestore implementacije interfacev
-data/settings/    — UserProfileManager (legacy, migrira v data/repository)
+PAKETNA STRUKTURA (po refaktoringu):
+├── domain/
+│   ├── model/          — čisti domenski modeli, brez Android
+│   ├── usecase/        — posamezne logične operacije, ios-ready
+│   ├── nutrition/      — NutritionCalculations.kt (SSOT za vse kalkulacije: BMR, TDEE, makri, voda, rest day)
+│   ├── workout/        — WorkoutGenerator.kt, WorkoutPlanGenerator.kt
+│   ├── run/            — RouteCompressor.kt (RDP), MapboxMapMatcher.kt
+│   ├── gamification/   — AchievementStore.kt, ManageGamificationUseCase.kt
+│   └── looksmaxing/    — CalculateGoldenRatioUseCase.kt
+├── data/
+│   ├── store/          — FirestoreHelper.kt, NutritionPlanStore.kt, PlanDataStore.kt, ProfileStore.kt, RunRouteStore.kt, DailySyncManager.kt, FollowStore.kt
+│   ├── local/          — AppDatabase.kt, OfflineFirstWorkoutRepository.kt, Room DAOs/Entities
+│   ├── gamification/   — FirestoreGamificationRepository.kt
+│   ├── settings/       — UserProfileManager.kt
+│   └── auth/           — AuthRepository.kt
+├── ui/
+│   ├── screens/        — NutritionScreen.kt, BodyModule*.kt, FaceModule.kt, Dashboard*, Login, Index...
+│   ├── workout/        — WorkoutSessionScreen.kt, GenerateWorkoutScreen.kt, ManualExerciseLogScreen.kt, ExerciseHistoryScreen.kt, LoadingWorkoutScreen.kt
+│   ├── run/            — RunTrackerScreen.kt, RunTrackerViewModel.kt, PlanPathDialog.kt, PlanPathVisualizer.kt
+│   ├── progress/       — Progress.kt
+│   ├── home/           — CommunityScreen.kt
+│   ├── nutrition/      — (AddFoodSheet, NutritionDialogs, Barcode)
+│   └── components/     — skupne UI komponente
+├── service/            — RunTrackingService.kt (Foreground GPS, Android 14+)
+├── viewmodels/         — NutritionViewModel.kt, BodyModuleHomeViewModel.kt, RunTrackerViewModel.kt
+├── persistence/        — (legacy, postopoma migrira v data/store)
+├── workers/ + worker/  — WeeklyStreakWorker.kt, DailySyncWorker.kt, StreakReminderWorker.kt
+└── utils/              — HapticFeedback.kt, AppToast.kt, RouteCompressor (PREMAKNI → domain/run)
+
+⚠️  MRTVA KODA (Safe Delete že opravljen ali v teku):
+- domain/run/CompressRouteUseCase.kt → IZBRISANO (nadomeščen z RouteCompressor, RDP algoritem)
+- domain/nutrition/NutritionCalculations.kt (stub) → IZBRISANO (canonical je domain/nutrition/NutritionCalculations.kt)
 ```
 
 ---
@@ -90,23 +118,28 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 |----------|------------|
 | `DashboardScreen.kt` | Glavni home screen po prijavi |
 
-### Trening modul
-| Datoteka | Kaj prikaže | Kaj popravljaš tu |
-|----------|------------|-------------------|
-| `BodyModuleHomeScreen.kt` | Home za Body tab: streak, dnevni plan, weekly progress | **"Start Stretching" gumb** (rest day only), Extra Workout, Streak UI |
-| `BodyModule.kt` | 14-koračni kviz za ustvarjanje plana | Vprašanja v kvizu |
-| `BodyOverviewScreen.kt` | Pregled obstoječih planov | Plan overview UI |
-| `WorkoutSessionScreen.kt` | Aktivna vadba — timer, vaje, kalorije | Med-vadba UI |
-| `GenerateWorkoutScreen.kt` | Extra workout — izbira fokusa in opreme | Extra workout generiranje |
-| `LoadingWorkoutScreen.kt` | Loading animacija | Loading UI |
-| `ManualExerciseLogScreen.kt` | Ročno beleženje vaje | Log vaje, kalorij izračun |
-| `ExerciseHistoryScreen.kt` | Zgodovina vadb (Workouts, Exercises) | Prikaz vadb |
-| `MyPlansScreen.kt` | Seznam vseh planov | Plan CRUD UI |
-| `PlanPathVisualizer.kt` | Vizualni prikaz 4-tedne plana | Plan path vizual |
-| `PlanPathDialog.kt` | **Swap dni v planu** — drag & drop + Firestore persist | Swap dni |
-| `KnowledgeHubScreen.kt` | Baza znanja treninga | Knowledge hub |
+### Trening modul 🆕 (premaknjeno v `ui/workout/`)
+| Datoteka | Paket | Kaj prikaže |
+|----------|-------|-------------|
+| `BodyModuleHomeScreen.kt` | `ui/screens/` | Home za Body tab: streak, dnevni plan, weekly progress |
+| `BodyModule.kt` | `ui/screens/` | 14-koračni kviz za ustvarjanje plana |
+| `BodyOverviewScreen.kt` | `ui/screens/` | Pregled obstoječih planov |
+| `WorkoutSessionScreen.kt` | `ui/workout/` 🆕 | Aktivna vadba — timer, vaje, kalorije |
+| `GenerateWorkoutScreen.kt` | `ui/workout/` 🆕 | Extra workout — izbira fokusa in opreme |
+| `LoadingWorkoutScreen.kt` | `ui/workout/` 🆕 | Loading animacija |
+| `ManualExerciseLogScreen.kt` | `ui/workout/` 🆕 | Ročno beleženje vaje |
+| `ExerciseHistoryScreen.kt` | `ui/workout/` 🆕 | Zgodovina vadb (Workouts, Exercises) |
+| `MyPlansScreen.kt` | `ui/screens/` | Seznam vseh planov |
+| `PlanPathVisualizer.kt` | `ui/run/` 🆕 | Vizualni prikaz 4-tedne plana |
+| `PlanPathDialog.kt` | `ui/run/` 🆕 | **Swap dni v planu** — drag & drop + Firestore persist |
+| `KnowledgeHubScreen.kt` | `ui/screens/` | Baza znanja treninga |
 
-### Prehrana modul
+### Tek modul 🆕 (premaknjeno v `ui/run/`)
+| Datoteka | Paket | Kaj prikaže |
+|----------|-------|-------------|
+| `RunTrackerScreen.kt` | `ui/run/` 🆕 | GPS tek s live OSMDroid zemljevidom, vse activity types |
+| `RunTrackerViewModel.kt` | `ui/run/` 🆕 | GPS seje, Room offline |
+| `ActivityLogScreen.kt` | `ui/screens/` | Celozaslonski zemljevid vseh aktivnosti |
 | Datoteka | Kaj prikaže |
 |----------|------------|
 | `NutritionScreen.kt` | Food tracking, makri, voda, donut graf |
@@ -116,22 +149,29 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | `NutritionComponents.kt` | Manjše UI komponente |
 | `NutritionDialogs.kt` | Custom Meal dialog |
 
-### 🔑 Prehranska logika — SSOT (Faza 9 + Faza 10)
+### 🔑 Prehranska logika — SSOT (Faza 9 + Faza 10 + Faza 17 Refactoring)
 | Komponenta | Datoteka | Opis |
 |-----------|---------|------|
 | **Kalorični izračun (SSOT)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` | **EDINI vir resnice za dnevni kalorični cilj.** Hibridni BMR motor: **Katch-McArdle** (če BF% poznan) ali **Mifflin-St Jeor fallback** + konzervativni FAO/WHO TDEE faktorji + ciljna prilagoditev. Kliče se iz BodyModule.kt (kviz) in NutritionViewModel. |
 | Hibridni BMR motor (Faza 10) | `CalculateDailyCalorieTargetUseCase.calculateBmr()` | Katch-McArdle: `lbm = weight×(1−BF%/100); BMR=370+21.6×lbm`. Pogoj: BF% != null && BF% ∈ (0,60). Sicer Mifflin-St Jeor z starostno korekcijo. |
 | Konzervativni TDEE faktorji (Faza 10) | `CalculateDailyCalorieTargetUseCase.activityFactor()` | SEDENTARY=1.20 \| LIGHT(2x)=1.375 \| **MODERATE(3x)=1.45** \| **ACTIVE(4x)=1.65** \| **EXTREME(5x)=1.85** \| MAX(6x)=2.00. Znižano vs. standard za preprečevanje overshoot. |
 | Dinamični TDEE (ViewModel) | `viewmodels/NutritionViewModel.kt` → `setUserMetrics(bmr, goal, activityLevel, bodyFatPercentage)` | Delegira na UseCase. Upošteva WeightPredictorStore hibridni TDEE če na voljo. |
-| Adaptivni hibridni TDEE | `utils/NutritionCalculations.kt` → `calculateAdaptiveTDEE()` | Iz realnih telesnih meritev (EMA teže × kalorije). Posodablja `WeightPredictorStore`. |
-| Makro izračun | `utils/NutritionCalculations.kt` → `calculateOptimalMacros()` | Protein/ogljikohidrati/maščobe iz ciljnih kalorij. |
+| **🆕 Vse prehranske kalkulacije (SSOT)** | `domain/nutrition/NutritionCalculations.kt` | `calculateAdvancedBMR()`, `calculateEnhancedTDEE()`, `calculateSmartCalories()`, `calculateOptimalMacros()`, `calculateAdaptiveTDEE()`, `calculateDailyWaterMl()`, `calculateRestDayCalories()`, `calculateEMA()` — **EDINA lokacija, vse ostalo je dead code!** |
 
 > ⚠️ **Faza 10 opomba**: Vključena Katch-McArdle formula za uporabnike z znanim BF% ter znižani, konzervativni TDEE faktorji (Moderate = 1.45, Active = 1.65). Vse spremembe so v `CalculateDailyCalorieTargetUseCase.kt` — brez android odvisnosti (KMP-ready).
+
+### Profil in socialno
+| Datoteka | Kaj prikaže |
+|----------|------------|
+| `MyAccountScreen.kt` | Nastavitve računa |
+| `PublicProfileScreen.kt` | Javni profil |
+| `ui/home/CommunityScreen.kt` | Community tab — iskalnik, leaderboard |
+| `LevelPathScreen.kt` | Level path + followers/following dialogi |
 
 ### Napredek in statistike
 | Datoteka | Kaj prikaže |
 |----------|------------|
-| `Progress.kt` | 4 grafi: teža, kalorije, voda, burned |
+| `ui/progress/Progress.kt` 🆕 | 4 grafi: teža, kalorije, voda, burned |
 | `GoldenRatioScreen.kt` | **Face Analysis** — ML Kit detekcija + golden ratio |
 | `AchievementsScreen.kt` | XP bar, level, XP history |
 | `BadgesScreen.kt` | Grid badge-ev |
@@ -145,13 +185,7 @@ data/settings/    — UserProfileManager (legacy, migrira v data/repository)
 | `domain/looksmaxing/CalculateGoldenRatioUseCase.kt` | Golden Ratio izračun | iOS-ready |
 | `data/looksmaxing/AndroidMLKitFaceDetector.kt` | Android ML Kit face detekcija | Android (data layer) |
 
-### Tek modul
-| Datoteka | Kaj prikaže |
-|----------|------------|
-| `RunTrackerScreen.kt` | GPS tek s live OSMDroid zemljevidom, vse activity types |
-| `ActivityLogScreen.kt` | Celozaslonski zemljevid vseh aktivnosti |
-
-### Profil in socialno
+### Prehrana modul
 | Datoteka | Kaj prikaže |
 |----------|------------|
 | `MyAccountScreen.kt` | Nastavitve računa |
@@ -294,23 +328,30 @@ follows/{uid_follower}_{uid_following}: { ... }
 | **"Start Stretching" gumb (UI)** | `ui/screens/BodyModuleHomeScreen.kt` (rest day card sekcija) |
 | **Extra Workout streak lock** | `domain/workout/UpdateBodyMetricsUseCase.kt` (guard `isExtra && isRestDay`) |
 | **Streak Freeze logika** | `data/settings/UserProfileManager.kt` → `updateUserProgressAfterWorkout()` |
-| **Plan swap (UI)** | `ui/screens/PlanPathDialog.kt` |
-| **Plan swap (Firestore persist)** | `persistence/PlanDataStore.kt` → `updatePlan()` |
+| **Plan swap (UI)** | `ui/run/PlanPathDialog.kt` 🆕 |
+| **Plan swap (Firestore persist)** | `data/store/PlanDataStore.kt` → `updatePlan()` 🆕 |
 | **Face Analysis (kamera/galerija)** | `ui/screens/GoldenRatioScreen.kt` → `AutoAnalysisSection()` |
 | **Face Analysis (algoritem)** | `domain/looksmaxing/CalculateGoldenRatioUseCase.kt` |
 | **Camera foto ne prikaže** | `GoldenRatioScreen.kt` → `displayUri` / `cameraFileUri` / Coil `diskCachePolicy` |
 | **Community tab** | `ui/home/CommunityScreen.kt` |
-| **Firestore dokument routing** | `persistence/FirestoreHelper.kt` ⛔ ne obidi |
+| **Firestore dokument routing** | `data/store/FirestoreHelper.kt` ⛔ ne obidi 🆕 |
 | **XP podeljevanje** | `domain/gamification/AchievementStore.kt` → `awardXP()` |
 | **Badge unlock** | `ManageGamificationUseCase.kt` + `data/BadgeDefinitions.kt` |
 | **Navigation med screeni** | `AppNavigation.kt` + `ui/MainAppContent.kt` routing blok |
 | **Auth (login/logout)** | `ui/MainAppContent.kt` + `data/auth/AuthRepository.kt` |
 | **Sync overlay** | `ui/MainAppContent.kt` (`isProfileReady`, `syncStatusMessage`) |
 | **Dark mode** | `AppDrawer.kt` + `data/UserPreferences.kt` |
-| **GPS tek** | `RunTrackerScreen.kt` + `service/RunTrackingService.kt` |
-| **Tek tip (Run/Walk/Cycling...)** | `data/RunSession.kt` → `ActivityType` enum |
-| **Food tracking** | `NutritionScreen.kt` + `DailySyncManager.kt` |
-| **Kalorični cilj (TDEE)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` ⚡ SSOT |
+| **GPS tek** | `ui/run/RunTrackerScreen.kt` 🆕 + `service/RunTrackingService.kt` |
+| **GPS anti-drift / route compression** | `domain/run/RouteCompressor.kt` (RDP) 🆕 |
+| **Tek tip (Run/Walk/Cycling...)** | `data/workout/RunSession.kt` → `ActivityType` enum |
+| **Workout generiranje** | `domain/workout/WorkoutGenerator.kt` + `WorkoutPlanGenerator.kt` 🆕 |
+| **Workout UI (aktivna vadba)** | `ui/workout/WorkoutSessionScreen.kt` 🆕 |
+| **Extra workout generiranje** | `ui/workout/GenerateWorkoutScreen.kt` 🆕 |
+| **Ročno beleženje vaje** | `ui/workout/ManualExerciseLogScreen.kt` 🆕 |
+| **Workout zgodovina** | `ui/workout/ExerciseHistoryScreen.kt` 🆕 |
+| **Food tracking** | `ui/screens/NutritionScreen.kt` + `data/store/DailySyncManager.kt` 🆕 |
+| **Prehranske kalkulacije (TDEE/BMR/voda)** | `domain/nutrition/NutritionCalculations.kt` ⚡ SSOT 🆕 |
+| **Kalorični cilj (UseCase)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` ⚡ |
 | **Donut graf** | `NutritionComponents.kt` |
 | **BMI/BF% izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
 | **Body home (streak, daily plan)** | `BodyModuleHomeScreen.kt` |

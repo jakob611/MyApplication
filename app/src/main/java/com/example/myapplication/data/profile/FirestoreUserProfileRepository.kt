@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.domain.profile.UserProfileRepository
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow

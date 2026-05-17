@@ -25,21 +25,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 import android.util.Log
+import com.example.myapplication.data.repository.MetricsRepositoryImpl
 import com.example.myapplication.domain.nutrition.calculateOptimalMacros
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
-import com.example.myapplication.data.AlgorithmData
-import com.example.myapplication.data.PlanResult
-import com.example.myapplication.domain.generateAdvancedCustomPlan
-import com.example.myapplication.domain.generatePlanWeeks
-import com.example.myapplication.domain.determineOptimalTrainingDays
-import com.example.myapplication.domain.generateIntelligentTrainingPlan
-import com.example.myapplication.domain.calculateOptimalSessionLength
-import com.example.myapplication.domain.generatePersonalizedTips
-import kotlin.math.*
-import kotlinx.coroutines.withContext
-import kotlinx.datetime.TimeZone
+import com.example.myapplication.data.store.AlgorithmData
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.domain.model.PlanResult
+import com.example.myapplication.domain.workout.generateAdvancedCustomPlan
+import com.example.myapplication.domain.workout.generateIntelligentTrainingPlan
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.encodeToString
 
 @Composable
 fun BodyPlanQuizScreen(
@@ -898,7 +892,7 @@ private fun PlanResultStep(
                         nameError = true
                         return@Button
                     }
-                    if (com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() == null) {
+                    if (FirestoreHelper.getCurrentUserDocId() == null) {
                         aiError = "Please log in to generate plan"
                         return@Button
                     }
@@ -942,11 +936,11 @@ private fun PlanResultStep(
 
                             // Save weight to weightLogs for Progress graph
                             val weightKg = weight.toDoubleOrNull()
-                            val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                            val uid = FirestoreHelper.getCurrentUserDocId()
                             if (weightKg != null && uid != null) {
                                 try {
                                     val dateStr = kotlinx.datetime.Clock.System.now().let { it.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()) }.date.toString()
-                                    val result = com.example.myapplication.data.metrics.MetricsRepositoryImpl().saveWeight(uid, weightKg.toFloat(), dateStr)
+                                    val result = MetricsRepositoryImpl().saveWeight(uid, weightKg.toFloat(), dateStr)
                                     if (result.isSuccess) {
                                         Log.d("BodyPlanQuiz", "Saved initial weight $weightKg kg to weightLogs")
                                     } else {

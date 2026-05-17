@@ -30,6 +30,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.repository.FoodRepositoryImpl
+import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.network.FatSecretApi
 import com.example.myapplication.network.FoodDetail
 import com.google.firebase.firestore.ktx.firestore
@@ -510,7 +512,7 @@ internal fun MakeCustomMealsDialog(
                         OutlinedButton(
                             onClick = {
                                 if (isSaving) return@OutlinedButton
-                                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                val uid = FirestoreHelper.getCurrentUserDocId()
                                 if (uid != null) {
                                     isSaving = true
                                     val itemsList = ingredients.map { tf ->
@@ -527,7 +529,7 @@ internal fun MakeCustomMealsDialog(
                                     }
                                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                         try {
-                                            val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                            val newId = FoodRepositoryImpl.logCustomMeal(name, itemsList)
                                             // isSaveOnly = true → NutritionScreen will NOT open ChooseMealDialog
                                             onSaved(SavedCustomMeal(newId, name, itemsList), MealType.Breakfast, true)
                                             isSaving = false
@@ -541,7 +543,7 @@ internal fun MakeCustomMealsDialog(
                         Button(
                             onClick = {
                                 if (isSaving) return@Button
-                                val uid = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId()
+                                val uid = FirestoreHelper.getCurrentUserDocId()
                                 if (uid != null) {
                                     isSaving = true
                                     val itemsList = ingredients.map { tf ->
@@ -558,7 +560,7 @@ internal fun MakeCustomMealsDialog(
                                     }
                                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                         try {
-                                            val newId = com.example.myapplication.data.nutrition.FoodRepositoryImpl.logCustomMeal(name, itemsList)
+                                            val newId = FoodRepositoryImpl.logCustomMeal(name, itemsList)
                                             onSaved(SavedCustomMeal(newId, name, itemsList), selectedMeal, false)
                                             isSaving = false
                                         } catch (e: Exception) { isSaving = false }

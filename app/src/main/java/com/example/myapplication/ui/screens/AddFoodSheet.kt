@@ -44,8 +44,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController // Added import
-import com.example.myapplication.persistence.RecentFoodStore // Added import
+import com.example.myapplication.data.store.RecentFoodStore // Added import
 import androidx.compose.ui.platform.LocalContext // Added import
+import com.example.myapplication.data.repository.FoodRepositoryImpl
 
 // -----------------------------------------------------------------------
 // AddFoodSheet — bottom sheet za iskanje in dodajanje hrane
@@ -112,7 +113,7 @@ internal fun AddFoodSheet(    meal: MealType,
         autocompleteSuggestions = emptyList()
         scope.launch {
             searching = true; searchError = null; hasSearched = true
-            runCatching { com.example.myapplication.data.nutrition.FoodRepositoryImpl.searchFoodByName(query, 20) }
+            runCatching { FoodRepositoryImpl.searchFoodByName(query, 20) }
                 .onSuccess { results = it }
                 .onFailure { e -> searchError = e.message ?: "Search failed" }
             searching = false
@@ -134,7 +135,7 @@ internal fun AddFoodSheet(    meal: MealType,
         LaunchedEffect(query) {
             if (query.length >= 2 && !hasSearched) {
                 runCatching {
-                    autocompleteSuggestions = com.example.myapplication.data.nutrition.FoodRepositoryImpl.getFoodAutocomplete(query, 5)
+                    autocompleteSuggestions = FoodRepositoryImpl.getFoodAutocomplete(query, 5)
                 }.onFailure { autocompleteSuggestions = emptyList() }
             } else {
                 autocompleteSuggestions = emptyList()
@@ -257,7 +258,7 @@ internal fun AddFoodSheet(    meal: MealType,
                         Button(onClick = {
                             clickedFoodSummary = item // Save this for recent cache
                             scope.launch {
-                                runCatching { com.example.myapplication.data.nutrition.FoodRepositoryImpl.getFoodDetail(item.id) }
+                                runCatching { FoodRepositoryImpl.getFoodDetail(item.id) }
                                     .onSuccess { d -> showAmountDialogFor = d }
                                     .onFailure { e -> searchError = e.message ?: "Failed to load food detail" }
                             }
@@ -312,7 +313,7 @@ fun RecipesSearchSection(
         keyboardController?.hide() // Auto-hide keyboard
         scope.launch {
             searching = true; errorMsg = null; hasSearched = true
-            runCatching { com.example.myapplication.data.nutrition.FoodRepositoryImpl.searchRecipes(query, 20) }
+            runCatching { FoodRepositoryImpl.searchRecipes(query, 20) }
                 .onSuccess { results = it; Log.d("RecipesSearch", "Found ${it.size} recipes") }
                 .onFailure { e -> errorMsg = e.message ?: "Search failed"; Log.e("RecipesSearch", "Failed", e) }
             searching = false
@@ -405,7 +406,7 @@ fun RecipesSearchSection(
                     RecipeCard(recipe = recipe,
                         onClick = {
                             scope.launch {
-                                runCatching { com.example.myapplication.data.nutrition.FoodRepositoryImpl.getRecipeDetail(recipe.id) }
+                                runCatching { FoodRepositoryImpl.getRecipeDetail(recipe.id) }
                                     .onSuccess { selectedRecipe = it }
                             }
                         },

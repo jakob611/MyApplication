@@ -188,7 +188,7 @@
 
 ## 2026-04-10 — Firestore email-first cleanup + debug logging (Option B + A)
 **Datoteke:** `persistence/FirestoreHelper.kt`, `ui/screens/RunTrackerScreen.kt`, `viewmodels/RunTrackerViewModel.kt`, `ui/screens/ActivityLogScreen.kt`, `worker/DailySyncWorker.kt`, `widget/WeightWidgetProvider.kt`, `widget/WaterWidgetProvider.kt`, `widget/QuickMealWidgetProvider.kt`, `widget/StreakWidgetProvider.kt`, `widget/PlanDayWidgetProvider.kt`, `widget/WeightInputActivity.kt`, `widget/WaterInputActivity.kt`, `ui/screens/NutritionScreen.kt`, `ui/screens/Progress.kt`, `persistence/DailySyncManager.kt`, `ui/screens/ExerciseHistoryScreen.kt`, `ui/screens/BodyModule.kt`, `ui/screens/LevelPathScreen.kt`, `persistence/ProfileStore.kt`
-**Kaj:** Poenoten je users document routing prek `FirestoreHelper` (email-first), odstranjeni so kriticni direktni `users/{uid}` klici v run/activity/widget/worker tokih, dodani diagnostični logi za write/read tocke, in v `ActivityLogScreen` je odstranjena podvojena logika z helperjem za `isSmoothed` update.
+**Kaj:** Poenoten je users document routing prek `FirestoreHelper` (email-first), odstranjeni so kriticni direktni `users/{uid}` klici v run/activity/widget/worker tokih, dodani diagnostični logi za write/read tocke, in v `ActivityLogScreen.kt` je odstranjena podvojena logika z helperjem za `isSmoothed` update.
 **Zakaj:** Podatki so se deloma zapisovali v razlicne dokumente (`uid` vs `email`), zato v konzoli niso bili vidni na enem mestu in je bila diagnostika počasna.
 **Tveganje:**  srednje
 
@@ -312,7 +312,7 @@ no replicira staro SimpleDateFormat obliko.
 3. **Navigation:** `NavigationViewModel.replaceTo()` — nova metoda brez push v stack; LoadingWorkout → WorkoutSession zdaj ne kuri back-stack
 4. **GPS cleanup Worker:** `RunRouteCleanupWorker` — periodičen Worker (1x tedensko) zbriše `.json` datoteke v `run_routes/` starejše od 60 dni
 5. **GPS 1MB načrt:** `GPS_POINTS_MIGRATION_PLAN.md` — detajlen načrt za migracijo `polylinePoints` iz vgrajenega array-a v sub-kolekcijo `points/`
-**Zakaj:** Finalni arhitekturni pregled pred UI/UX prenovo — odstranitev dead code, varnostni stropi za Firestore branje, navigation stack optimizacija.
+**Zakaj:** Finalni arhitekturni pregled pred UI/UX prenovo — odstranitev dead code, varnostni stropi za Firestore branj, navigation stack optimizacija.
 **Tveganje:**  nizko (`.limit(20)` je varnostni strop ki ne vpliva na funkcionalnost)
 
 ## 2026-04-26 — Global Audit & bm_prefs SharedPrefs Purge (pred iOS migracijo)
@@ -380,3 +380,14 @@ no replicira staro SimpleDateFormat obliko.
 **Kaj:** Eliminiran Dual Streak Engine — vsa streak logika (epoch, Streak Freeze, dailyHistory, plan_day) preseljena v `FirestoreGamificationRepository.processWorkoutCompletion()`. `GetBodyMetricsUseCase` sedaj sprejme `plan`, izračuna `todayIsRest` in bere `todayStatus` iz `dailyHistory`. Stretching kartica zdaj pravilno prikaže, ko je dan rest dan in raztezanje še ni opravljeno.
 **Zakaj:** `UserProfileManager.updateUserProgressAfterWorkout()` je računal streak neodvisno od `FirestoreGamificationRepository.updateStreak()` → dvojne posodobitve, neskladnost. `todayIsRest` je bil vedno `false` → Stretching gumb se nikoli ni prikazal.
 **Tveganje:** 🟡 srednje (večja refaktoracija streak patha, obsežno testiranje priporočeno)
+
+## [2026-05-17] — Faza 17 Clean Architecture Refactoring + NutritionScreen uvoz fix
+**Datoteke:** `ui/screens/NutritionScreen.kt`, `domain/nutrition/NutritionCalculations.kt`, `APP_MAP.md`
+**Kaj:**
+1. `NutritionScreen.kt` liniji 418 in 428: Popravljeni fully-qualified klici `com.example.myapplication.utils.calculateDailyWaterMl` in `com.example.myapplication.utils.calculateRestDayCalories` → preusmerjeni na `com.example.myapplication.domain.nutrition.*` (nova lokacija po refaktoringu).
+2. Vzrok treh compile napak (Cannot infer type @ 407, Unresolved reference: calculateDailyWaterMl @ 418, Unresolved reference: calculateRestDayCalories @ 428) odpravljen.
+3. `APP_MAP.md` popolnoma posodobljen z novo paketno strukturo po Faza 17 refaktoringu: `ui/workout/`, `ui/run/`, `domain/nutrition/`, `domain/run/`, `domain/workout/`, `data/store/`.
+4. Verificirano: vse reference na prehranske kalkulacije v projektu (`NutritionPlanStore.kt`, `WorkoutPlanGenerator.kt`, `Progress.kt`, `BodyModule.kt`) že pravilno kažejo na `domain.nutrition.*`.
+**Zakaj:** Po fizičnem premikanju datotek v Android Studiu `NutritionScreen.kt` ni bil posodobljen — ostali so stari `utils` fully-qualified klici za 2 funkciji.
+**Tveganje:** 🟢 nizko (trivialna sprememba poti uvoza, nobena logika ni spremenjena)
+

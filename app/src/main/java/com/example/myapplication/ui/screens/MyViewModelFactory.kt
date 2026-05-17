@@ -4,19 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import android.content.Context
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
-import com.example.myapplication.viewmodels.RunTrackerViewModel
-import com.example.myapplication.viewmodels.NutritionViewModel
-import com.example.myapplication.viewmodels.ProgressViewModel
-import com.example.myapplication.viewmodels.GamificationSharedViewModel
-import com.example.myapplication.domain.workout.GetBodyMetricsUseCase
-import com.example.myapplication.domain.workout.UpdateBodyMetricsUseCase
-import com.example.myapplication.domain.workout.SwapPlanDaysUseCase
-import com.example.myapplication.data.workout.FirestoreWorkoutRepository
+import com.example.myapplication.ui.run.RunTrackerViewModel
+import com.example.myapplication.ui.nutrition.NutritionViewModel
+import com.example.myapplication.ui.progress.ProgressViewModel
+import com.example.myapplication.ui.shared.GamificationSharedViewModel
+import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
+import com.example.myapplication.data.repository.FirestoreWorkoutRepository
 import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.data.local.AppDatabase
-import com.example.myapplication.data.local.OfflineFirstWorkoutRepository
-import com.example.myapplication.data.workout.UserWorkoutStatsRepository
+import com.example.myapplication.data.repository.OfflineFirstWorkoutRepository
+import com.example.myapplication.data.repository.UserWorkoutStatsRepository
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

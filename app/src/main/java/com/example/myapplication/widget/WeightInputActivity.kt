@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.repository.MetricsRepositoryImpl
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.FieldValue
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -49,7 +51,7 @@ class WeightInputActivity : ComponentActivity() {
     private fun WeightInputDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
         val context = LocalContext.current
         // uid v remember{} — ne sme se klicati ob vsakem recomposition
-        val uid = remember { com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() }
+        val uid = remember { FirestoreHelper.getCurrentUserDocId() }
         var weightInput by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -109,7 +111,7 @@ class WeightInputActivity : ComponentActivity() {
 
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             val saveWeightUseCase = com.example.myapplication.domain.metrics.SaveWeightUseCase(
-                                com.example.myapplication.data.metrics.MetricsRepositoryImpl()
+                                MetricsRepositoryImpl()
                             )
                             val result = saveWeightUseCase.execute(uid, w.toFloat(), today)
 

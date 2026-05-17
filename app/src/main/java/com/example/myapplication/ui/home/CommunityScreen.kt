@@ -24,6 +24,8 @@ import com.example.myapplication.data.PublicProfile
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.animation.core.*
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.data.store.ProfileStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +36,7 @@ fun CommunityScreen(
     onViewProfile: (String) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
-    val currentUserId = com.example.myapplication.persistence.FirestoreHelper.getCurrentUserDocId() ?: ""
+    val currentUserId = FirestoreHelper.getCurrentUserDocId() ?: ""
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<PublicProfile>>(emptyList()) }
     var allUsers by remember { mutableStateOf<List<PublicProfile>>(emptyList()) }
@@ -61,7 +63,7 @@ fun CommunityScreen(
     // Load users on start
     LaunchedEffect(Unit) {
         isRefreshing = true
-        allUsers = com.example.myapplication.persistence.ProfileStore.getTopUsers(50)
+        allUsers = ProfileStore.getTopUsers(50)
             .filter { it.userId != currentUserId }
         isRefreshing = false
     }
@@ -142,7 +144,7 @@ fun CommunityScreen(
                             if (it.isNotBlank()) {
                                 scope.launch {
                                     isRefreshing = true
-                                    searchResults = com.example.myapplication.persistence.ProfileStore.searchPublicProfiles(it)
+                                    searchResults = ProfileStore.searchPublicProfiles(it)
                                     isRefreshing = false
                                 }
                             } else {

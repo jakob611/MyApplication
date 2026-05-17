@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.myapplication.data.local.doo.GpsPointDao
+import com.example.myapplication.data.local.doo.WorkoutSessionDao
+import com.example.myapplication.data.local.entity.GpsPointEntity
+import com.example.myapplication.data.local.entity.WorkoutSessionEntity
 
 /**
  * AppDatabase — Room baza podatkov za Offline-First strategijo (Faza 3).

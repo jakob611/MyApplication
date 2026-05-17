@@ -9,7 +9,7 @@ import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.daily.TransactionRecord
 import com.example.myapplication.debug.NutritionDebugStore
 import com.example.myapplication.debug.WeightPredictorStore
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase

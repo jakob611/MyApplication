@@ -4,9 +4,10 @@ import android.util.Log
 import java.util.Calendar
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
-import com.example.myapplication.persistence.FirestoreHelper
+import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.ktx.Firebase
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -92,7 +93,7 @@ object HealthStorage {
         return try {
             val snap = FirestoreHelper.getCurrentUserDocRef()
                 .collection("daily_health")
-                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .orderBy("date", Query.Direction.DESCENDING)
                 .get()
                 .await()
             snap.documents.mapNotNull { it.toObject(DailyHealthStats::class.java) }
