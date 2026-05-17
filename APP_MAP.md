@@ -207,12 +207,15 @@ PAKETNA STRUKTURA (po refaktoringu):
 
 ## 🧠 VIEWMODELS IN LOGIKA
 
-| Datoteka | Kaj dela | Kliče |
-|----------|---------|-------|
-| `viewmodels/BodyModuleHomeViewModel.kt` | Streak UI, `CompleteWorkoutSession`, `CompleteRestDay` (Stretching), `SwapDays` | `UpdateBodyMetricsUseCase`, `GetBodyMetricsUseCase`, `ManageGamificationUseCase`, `SwapPlanDaysUseCase` |
-| `viewmodels/RunTrackerViewModel.kt` | GPS seje, Room offline | `FirestoreWorkoutRepository`, `OfflineFirstWorkoutRepository` |
-| `ui/screens/BodyOverviewViewmodel.kt` | BMI, BF% izračuni | — |
-| `viewmodels/NutritionViewModel.kt` | Food tracking, water, burnedCalories sync | `ManageGamificationUseCase`, `DailySyncManager` |
+| Datoteka | Paket | Kaj dela | Kliče |
+|----------|-------|---------|-------|
+| `viewmodels/BodyModuleHomeViewModel.kt` | `viewmodels/` | Streak UI, `CompleteWorkoutSession`, `CompleteRestDay` (Stretching), `SwapDays` | `UpdateBodyMetricsUseCase`, `GetBodyMetricsUseCase`, `ManageGamificationUseCase`, `SwapPlanDaysUseCase` |
+| `ui/run/RunTrackerViewModel.kt` | `ui/run/` 🆕 | GPS seje, Room offline | `FirestoreWorkoutRepository`, `OfflineFirstWorkoutRepository` |
+| `ui/screens/BodyOverviewViewmodel.kt` | `ui/screens/` | BMI, BF% izračuni | — |
+| `ui/nutrition/NutritionViewModel.kt` | `ui/nutrition/` 🆕 | Food tracking, water, burnedCalories sync | `ManageGamificationUseCase`, `DailySyncManager` |
+| `ui/progress/ProgressViewModel.kt` | `ui/progress/` 🆕 | Grafi (teža, kalorije, voda, burned) | `ManageGamificationUseCase` |
+| `ui/shared/GamificationSharedViewModel.kt` | `ui/shared/` 🆕 | Skupni gamification state (badges, XP) | `ManageGamificationUseCase` |
+| `ui/workout/WorkoutSessionViewModel.kt` | `ui/workout/` 🆕 | Workout seje, timer, set management | `AdvancedExerciseRepository` |
 
 ---
 
@@ -243,18 +246,22 @@ PAKETNA STRUKTURA (po refaktoringu):
 
 ---
 
-## 🔑 STREAK LOGIC — ODGOVORNOST PO DATOTEKAH (SSOT) — Faza 8 Unified
+## 🔑 STREAK LOGIC — ODGOVORNOST PO DATOTEKAH (SSOT) — Faza 12 Unified
 
-| Scenarij | Odgovorna datoteka | Funkcija |
-|----------|-------------------|---------|
-| Redni workout zaključen | `data/gamification/FirestoreGamificationRepository.kt` | `processWorkoutCompletion(incrementPlanDay=true)` |
-| Extra workout (workout dan) | `data/gamification/FirestoreGamificationRepository.kt` | `processWorkoutCompletion(incrementPlanDay=false)` |
-| **Extra workout REST dan** | **BLOKIRAN** — samo XP | `ManageGamificationUseCase.recordWorkoutCompletion(isRestDay=true)` guard |
-| Rest day stretching (EDINI VELJAVNI NAČIN) | `ManageGamificationUseCase.kt` | `restDayInitiated()` → `repository.updateStreak("STRETCHING_DONE")` |
-| Polnočni check (Worker) | `workers/WeeklyStreakWorker.kt` | `executeMidnightStreakCheck()` |
-| Streak Freeze poraba | `data/gamification/FirestoreGamificationRepository.kt` | znotraj `processWorkoutCompletion()` (dayDiff guard) |
-| Označi rest day PENDING | `domain/usecase/UpdateStreakUseCase.kt` | `markRestDayPending()` |
-| ~~UserProfileManager.updateUserProgressAfterWorkout()~~ | ~~DEPRECATED~~ | ~~No-op stub — Faza 8~~ |
+| Scenarij | Odgovorna datoteka | Funkcija | dailyHistory status |
+|----------|-------------------|---------|---------------------|
+| Redni workout zaključen | `data/gamification/FirestoreGamificationRepository.kt` | `processActivityCompletion(isRestDay=false, incrementPlanDay=true)` | `"WORKOUT_DONE"` |
+| Extra workout (workout dan) | `data/gamification/FirestoreGamificationRepository.kt` | `processActivityCompletion(isRestDay=false, incrementPlanDay=false)` | `"WORKOUT_DONE"` |
+| **Extra workout REST dan** | **`data/gamification/FirestoreGamificationRepository.kt`** | `processActivityCompletion(isRestDay=true, incrementPlanDay=false)` → streak se OHRANI, NE poveča | `"REST_WORKOUT_DONE"` |
+| Rest day stretching (EDINI VELJAVNI NAČIN) | `domain/gamification/ManageGamificationUseCase.kt` | `restDayInitiated()` → `repository.updateStreak("STRETCHING_DONE")` | `"STRETCHING_DONE"` |
+| Polnočni check (Worker) | `workers/WeeklyStreakWorker.kt` | `executeMidnightStreakCheck()` → `repository.runMidnightStreakCheck()` | `"FROZEN"` ali `"MISSED"` |
+| Streak Freeze poraba | `data/gamification/FirestoreGamificationRepository.kt` | znotraj `processActivityCompletion()` (dayDiff guard) | `"FROZEN"` (midnight check) |
+| Označi rest day PENDING | `domain/usecase/UpdateStreakUseCase.kt` | `markRestDayPending()` | `"PENDING_STRETCHING"` |
+| ~~UserProfileManager.updateUserProgressAfterWorkout()~~ | ~~DEPRECATED~~ | ~~No-op stub~~ | ~~—~~ |
+
+> 🔑 **SSOT pravilo**: `dailyHistory` pišeta SAMO `FirestoreGamificationRepository` (workout/rest workflow) in `ManageGamificationUseCase.restDayInitiated()` (stretching). Nobena druga koda ne sme pisati v `dailyHistory`!
+>
+> ✅ **Strogi statusni check** (Faza 12c): Midnight check preveri VREDNOST, ne zgolj obstoj ključa. Samo `WORKOUT_DONE`, `REST_WORKOUT_DONE`, `STRETCHING_DONE`, `FROZEN` osvobodijo od kazni. `PENDING_STRETCHING` in `null` → kazen (Freeze ali reset).
 
 ---
 
@@ -262,11 +269,14 @@ PAKETNA STRUKTURA (po refaktoringu):
 
 | Scenarij | Odgovorna datoteka | Funkcija |
 |----------|-------------------|---------|
-| Prikaži plan path dialog | `ui/screens/PlanPathDialog.kt` | `PlanPathDialog()` composable |
-| Swap dni (UI) | `ui/screens/PlanPathDialog.kt` | Drag & drop + confirm |
-| Swap dni (Firestore persist) | `domain/workout/SwapPlanDaysUseCase.kt` + `persistence/PlanDataStore.kt` | `invoke()` + `updatePlan()` |
-| Plan CRUD | `persistence/PlanDataStore.kt` | `addPlan`, `deletePlan`, `updatePlan` |
-| Plan load v BodyHome | `domain/workout/GetBodyMetricsUseCase.kt` | `invoke(email)` → Flow<BodyHomeUiState> |
+| Prikaži plan path dialog | `ui/run/PlanPathDialog.kt` 🆕 | `PlanPathDialog()` composable |
+| Swap dni (UI guard) | `ui/run/PlanPathDialog.kt` 🆕 | `isTodayDone && (fromDay == currentDay || toDay == currentDay)` → Toast opozorilo, swap blokiran |
+| Swap dni (domenski guard) | `domain/usecase/SwapPlanDaysUseCase.kt` | `lockedDay` parameter — danes opravljen dan ne sme biti swapan ✅ **POPRAVLJENO Faza 17 Audit** |
+| Swap dni (Firestore persist) | `data/store/PlanDataStore.kt` 🆕 | `updatePlan()` |
+| Plan CRUD | `data/store/PlanDataStore.kt` 🆕 | `addPlan`, `deletePlan`, `updatePlan` |
+| Plan load v BodyHome | `domain/usecase/GetBodyMetricsUseCase.kt` | `invoke(email)` → Flow<BodyHomeUiState> |
+
+> ✅ **Audit fix**: `BodyModuleHomeViewModel.SwapDays` handler zdaj pravilno posreduje `lockedDay = planDay` (če `isWorkoutDoneToday == true`) v domenski UseCase. Pred tem domenski guard ni bil nikoli sprožen.
 
 ---
 
@@ -288,20 +298,22 @@ PAKETNA STRUKTURA (po refaktoringu):
 ```
 users/{uid}: {
   streak_days:          Int,
-  last_workout_epoch:   Long (epochDays),
+  last_activity_epoch:  Long (epochDays) — pokriva workout IN stretching (NE last_workout_epoch!),
   streak_freezes:       Int,
   plan_day:             Int,
   xp:                   Int,
+  level:                Int,
   profilePictureUrl:    String,
   dailyHistory: {
-    "2026-05-03": "WORKOUT_DONE" | "STRETCHING_DONE" | "FROZEN" | "MISSED" | "PENDING_STRETCHING"
+    "2026-05-17": "WORKOUT_DONE" | "REST_WORKOUT_DONE" | "STRETCHING_DONE" | "FROZEN" | "MISSED" | "PENDING_STRETCHING"
   }
 }
 
-user_plans/{uid}/plans/{planId}: { ... }
-dailyLogs/{date}: { burnedCalories, calories, water }
-workoutSessions/{uid}/{sessionId}: { timestamp, type, totalKcal, focusAreas, exercises, ... }
-users/{uid}/publicActivities/{sessionId}: { polylinePoints (RDP compressed), activityType, ... }
+user_plans/{uid}/plans/{planId}: { weeks: [...] }
+dailyLogs/{date}: { burnedCalories, calories, water, userId }
+workoutSessions/{uid}/{sessionId}: { timestamp, type, totalKcal, focusAreas, exercises, planDay, ... }
+users/{uid}/xp_history/{docId}: { amount, reason, date, timestamp, xpAfter, levelAfter }
+users/{uid}/publicActivities/{sessionId}: { polylinePoints (RDP compressed, max 500 pts), activityType, ... }
 follows/{uid_follower}_{uid_following}: { ... }
 ```
 
@@ -309,12 +321,14 @@ follows/{uid_follower}_{uid_following}: { ... }
 
 ## ⚙️ OZADNI PROCESI
 
-| Datoteka | Kdaj | Kaj dela |
-|----------|------|---------|
-| `workers/WeeklyStreakWorker.kt` | Vsako polnoč | `executeMidnightStreakCheck()` → dailyHistory |
-| `workers/StreakReminderWorker.kt` | Ob določenem času | Push notifikacija za streak |
-| `worker/DailySyncWorker.kt` | App v ozadje / ob odprtju | Food/water cache → Firestore |
-| `service/RunTrackingService.kt` | Med aktivnim tekom | GPS v ozadju |
+| Datoteka | Paket | Kdaj | Kaj dela |
+|----------|-------|------|---------|
+| `workers/WeeklyStreakWorker.kt` | `workers/` | Vsako polnoč (00:01) | `executeMidnightStreakCheck()` → delegira na `FirestoreGamificationRepository.runMidnightStreakCheck()`. Samodejno se reschedula za naslednjo polnoč. |
+| `workers/StreakReminderWorker.kt` | `workers/` | Ob določenem času | Push notifikacija za streak |
+| `core/worker/DailySyncWorker.kt` | `core/worker/` | App v ozadje / ob odprtju | Food/water cache → Firestore |
+| `service/RunTrackingService.kt` | `service/` | Med aktivnim tekom | GPS v ozadju, Android 14+ `FOREGROUND_SERVICE_TYPE_LOCATION` |
+
+> ⚠️ **OPOMBA**: Mapa `worker/` (brez 's') je zdaj **prazna** — `DailySyncWorker` je bil premaknjen v `core/worker/`. Ne ustvarjaj novih workerjev v `worker/`!
 
 ---
 
@@ -322,38 +336,45 @@ follows/{uid_follower}_{uid_following}: { ... }
 
 | Želiš popraviti | Odpri to datoteko |
 |----------------|-------------------|
-| **Streak (workout dan)** | `data/settings/UserProfileManager.kt` → `updateUserProgressAfterWorkout()` |
+| **Streak (workout dan)** | `data/gamification/FirestoreGamificationRepository.kt` → `processActivityCompletion()` ⚡ SSOT |
 | **Streak (rest dan stretching)** | `domain/gamification/ManageGamificationUseCase.kt` → `restDayInitiated()` |
 | **Streak domain (UseCase)** | `domain/usecase/UpdateStreakUseCase.kt` |
-| **"Start Stretching" gumb (UI)** | `ui/screens/BodyModuleHomeScreen.kt` (rest day card sekcija) |
-| **Extra Workout streak lock** | `domain/workout/UpdateBodyMetricsUseCase.kt` (guard `isExtra && isRestDay`) |
-| **Streak Freeze logika** | `data/settings/UserProfileManager.kt` → `updateUserProgressAfterWorkout()` |
-| **Plan swap (UI)** | `ui/run/PlanPathDialog.kt` 🆕 |
-| **Plan swap (Firestore persist)** | `data/store/PlanDataStore.kt` → `updatePlan()` 🆕 |
+| **"Start Stretching" gumb (UI)** | `ui/screens/BodyModuleHomeScreen.kt` → `BodyHomeIntent.CompleteRestDay` |
+| **Extra Workout streak lock** | `domain/usecase/UpdateBodyMetricsUseCase.kt` → `isRestDay = isRestDay && isExtra` guard |
+| **Streak Freeze logika** | `data/gamification/FirestoreGamificationRepository.kt` → `processActivityCompletion()` dayDiff guard |
+| **Polnočni streak check** | `workers/WeeklyStreakWorker.kt` → `executeMidnightStreakCheck()` |
+| **Plan swap (UI + guard)** | `ui/run/PlanPathDialog.kt` → `isTodayDone` guard |
+| **Plan swap (domenski guard)** | `domain/usecase/SwapPlanDaysUseCase.kt` → `lockedDay` parameter |
+| **Plan swap (Firestore persist)** | `data/store/PlanDataStore.kt` → `updatePlan()` |
 | **Face Analysis (kamera/galerija)** | `ui/screens/GoldenRatioScreen.kt` → `AutoAnalysisSection()` |
 | **Face Analysis (algoritem)** | `domain/looksmaxing/CalculateGoldenRatioUseCase.kt` |
 | **Camera foto ne prikaže** | `GoldenRatioScreen.kt` → `displayUri` / `cameraFileUri` / Coil `diskCachePolicy` |
 | **Community tab** | `ui/home/CommunityScreen.kt` |
-| **Firestore dokument routing** | `data/store/FirestoreHelper.kt` ⛔ ne obidi 🆕 |
-| **XP podeljevanje** | `domain/gamification/AchievementStore.kt` → `awardXP()` |
-| **Badge unlock** | `ManageGamificationUseCase.kt` + `data/BadgeDefinitions.kt` |
+| **Firestore dokument routing** | `data/store/FirestoreHelper.kt` ⛔ ne obidi |
+| **XP podeljevanje** | `domain/gamification/ManageGamificationUseCase.kt` → `awardXP()` |
+| **Badge unlock** | `domain/gamification/ManageGamificationUseCase.kt` + `data/BadgeDefinitions.kt` |
 | **Navigation med screeni** | `AppNavigation.kt` + `ui/MainAppContent.kt` routing blok |
 | **Auth (login/logout)** | `ui/MainAppContent.kt` + `data/auth/AuthRepository.kt` |
 | **Sync overlay** | `ui/MainAppContent.kt` (`isProfileReady`, `syncStatusMessage`) |
 | **Dark mode** | `AppDrawer.kt` + `data/UserPreferences.kt` |
-| **GPS tek** | `ui/run/RunTrackerScreen.kt` 🆕 + `service/RunTrackingService.kt` |
-| **GPS anti-drift / route compression** | `domain/run/RouteCompressor.kt` (RDP) 🆕 |
+| **GPS tek** | `ui/run/RunTrackerScreen.kt` + `service/RunTrackingService.kt` |
+| **GPS anti-drift / route compression** | `domain/run/RouteCompressor.kt` (RDP) |
 | **Tek tip (Run/Walk/Cycling...)** | `data/workout/RunSession.kt` → `ActivityType` enum |
-| **Workout generiranje** | `domain/workout/WorkoutGenerator.kt` + `WorkoutPlanGenerator.kt` 🆕 |
-| **Workout UI (aktivna vadba)** | `ui/workout/WorkoutSessionScreen.kt` 🆕 |
-| **Extra workout generiranje** | `ui/workout/GenerateWorkoutScreen.kt` 🆕 |
-| **Ročno beleženje vaje** | `ui/workout/ManualExerciseLogScreen.kt` 🆕 |
-| **Workout zgodovina** | `ui/workout/ExerciseHistoryScreen.kt` 🆕 |
-| **Food tracking** | `ui/screens/NutritionScreen.kt` + `data/store/DailySyncManager.kt` 🆕 |
-| **Prehranske kalkulacije (TDEE/BMR/voda)** | `domain/nutrition/NutritionCalculations.kt` ⚡ SSOT 🆕 |
+| **Workout generiranje** | `domain/workout/WorkoutGenerator.kt` + `WorkoutPlanGenerator.kt` |
+| **Vaje baza (exercises.json init)** | `data/repository/AdvancedExerciseRepository.kt` → `init()` pred `getAllExercises()` |
+| **Workout UI (aktivna vadba)** | `ui/workout/WorkoutSessionScreen.kt` |
+| **Extra workout generiranje** | `ui/workout/GenerateWorkoutScreen.kt` |
+| **Ročno beleženje vaje** | `ui/workout/ManualExerciseLogScreen.kt` |
+| **Workout zgodovina** | `ui/workout/ExerciseHistoryScreen.kt` |
+| **Food tracking** | `ui/screens/NutritionScreen.kt` + `data/store/DailySyncManager.kt` |
+| **Prehranske kalkulacije (TDEE/BMR/voda)** | `domain/nutrition/NutritionCalculations.kt` ⚡ SSOT |
 | **Kalorični cilj (UseCase)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` ⚡ |
-| **Donut graf** | `NutritionComponents.kt` |
+| **Donut graf** | `ui/screens/NutritionComponents.kt` |
 | **BMI/BF% izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
-| **Body home (streak, daily plan)** | `BodyModuleHomeScreen.kt` |
+| **Body home (streak, daily plan)** | `ui/screens/BodyModuleHomeScreen.kt` |
+| **BodyHome ViewModel** | `viewmodels/BodyModuleHomeViewModel.kt` |
+| **Grafi (teža, kalorije, voda)** | `ui/progress/Progress.kt` + `ui/progress/ProgressViewModel.kt` |
 | **Widget streak/plan day** | `widget/StreakWidgetProvider.kt` + `widget/PlanDayWidgetProvider.kt` |
+| **Daily food/water sync (Worker)** | `core/worker/DailySyncWorker.kt` |
+
 

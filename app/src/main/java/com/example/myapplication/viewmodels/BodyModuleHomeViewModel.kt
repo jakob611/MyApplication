@@ -161,7 +161,9 @@ class BodyModuleHomeViewModel(
                  // Update local state for challenges
             }
             is BodyHomeIntent.SwapDays -> {
-                val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB)
+                // Faza 9: lockedDay = planDay če je danes dan že opravljen → domenski guard aktiven
+                val lockedDay = if (_ui.value.isWorkoutDoneToday) _ui.value.planDay else null
+                val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
                 res.onSuccess { intent.onResult(it) }
                 res.onFailure { _ui.value = _ui.value.copy(errorMessage = it.message) }
             }

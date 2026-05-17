@@ -8,14 +8,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.example.myapplication.data.store.AlgorithmPreferences
 import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.SetOptions
 import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.concurrent.TimeUnit

@@ -265,7 +265,7 @@ no replicira staro SimpleDateFormat obliko.
 
 ## 2026-04-25 — Faza 4: Dinamični TDEE algoritem
 **Datoteke:** `viewmodels/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `shared/.../CalculateBodyMetricsUseCase.kt`
-**Kaj:** Zamenjava statičnega aktivnostnega multiplikatorja (1.2–1.9) z dinamičnim TDEE: `baseTdee = BMR × 1.2` + `burnedCalories` (real-time iz Firestore dailyLogs) + `goalAdj`. UI prikaže ` +X kcal boost` ko je aktivnost > 0. Fallback na statični target ko profil ni naložen.
+**Kaj:** Zamenjava statičnega aktivnostnega multiplikatorja (1.2–1.9) z dinamičnim TDEE: `baseTdee = BMR × 1.2` + `burnedCalories` (real-time iz Firestore dailyLogs) + `goalAdj`. UI prikazuje ` +X kcal boost` ko je aktivnost > 0. Fallback na statični target ko profil ni naložen.
 **Zakaj:** Statični TDEE ne upošteva dejanske aktivnosti. Zdaj: zjutraj v postelji = nizek limit; po teku 500 kcal = limit se poveča za 500 kcal v realnem času.
 **Tveganje:**  nizko (obstoječi statični fallback ohranjen)
 
@@ -381,13 +381,19 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** `UserProfileManager.updateUserProgressAfterWorkout()` je računal streak neodvisno od `FirestoreGamificationRepository.updateStreak()` → dvojne posodobitve, neskladnost. `todayIsRest` je bil vedno `false` → Stretching gumb se nikoli ni prikazal.
 **Tveganje:** 🟡 srednje (večja refaktoracija streak patha, obsežno testiranje priporočeno)
 
-## [2026-05-17] — Faza 17 Clean Architecture Refactoring + NutritionScreen uvoz fix
-**Datoteke:** `ui/screens/NutritionScreen.kt`, `domain/nutrition/NutritionCalculations.kt`, `APP_MAP.md`
+## [2026-05-17] — Deep Logic Audit (5 kritičnih sistemov) + SwapDays domenski guard fix
+**Datoteke:** `viewmodels/BodyModuleHomeViewModel.kt`, `workers/WeeklyStreakWorker.kt`, `APP_MAP.md`
 **Kaj:**
-1. `NutritionScreen.kt` liniji 418 in 428: Popravljeni fully-qualified klici `com.example.myapplication.utils.calculateDailyWaterMl` in `com.example.myapplication.utils.calculateRestDayCalories` → preusmerjeni na `com.example.myapplication.domain.nutrition.*` (nova lokacija po refaktoringu).
-2. Vzrok treh compile napak (Cannot infer type @ 407, Unresolved reference: calculateDailyWaterMl @ 418, Unresolved reference: calculateRestDayCalories @ 428) odpravljen.
-3. `APP_MAP.md` popolnoma posodobljen z novo paketno strukturo po Faza 17 refaktoringu: `ui/workout/`, `ui/run/`, `domain/nutrition/`, `domain/run/`, `domain/workout/`, `data/store/`.
-4. Verificirano: vse reference na prehranske kalkulacije v projektu (`NutritionPlanStore.kt`, `WorkoutPlanGenerator.kt`, `Progress.kt`, `BodyModule.kt`) že pravilno kažejo na `domain.nutrition.*`.
-**Zakaj:** Po fizičnem premikanju datotek v Android Studiu `NutritionScreen.kt` ni bil posodobljen — ostali so stari `utils` fully-qualified klici za 2 funkciji.
-**Tveganje:** 🟢 nizko (trivialna sprememba poti uvoza, nobena logika ni spremenjena)
-
+1. **BUG FIX — SwapDays domenski guard** (`BodyModuleHomeViewModel.kt`): `SwapDays` handler je klical `swapPlanDays.invoke(plan, dayA, dayB)` brez `lockedDay` parametra → domenski `SwapPlanDaysUseCase.lockedDay` guard nikoli ni bil sprožen. Popravljeno: `lockedDay = if (isWorkoutDoneToday) planDay else null`.
+2. **Dead import cleanup** (`WeeklyStreakWorker.kt`): Odstranjeni neuporabljeni uvozi `AlgorithmPreferences`, `SetOptions`, `flow.first`, `flow.firstOrNull`, `kotlinx.coroutines.tasks.await`, `LocalDate` (ostanki stare implementacije).
+3. **APP_MAP.md celoten pregled in popravek**: Odstranjene vse 3 napačne reference na `UserProfileManager` za streak; posodobljene lokacije ViewModelov (`ui/nutrition/`, `ui/run/`, `ui/progress/`, `ui/shared/`); popravljena Worker tabela (`core/worker/DailySyncWorker.kt`, `workers/` za streak delavce); posodobljen Firestore schema (`last_activity_epoch` namesto `last_workout_epoch`, `REST_WORKOUT_DONE` status).
+**Audit izid (5 točk):**
+- ✅ Streak SSOT: `FirestoreGamificationRepository.processActivityCompletion()` je edini SSOT
+- ✅ Polnočni check: `WeeklyStreakWorker` → `executeMidnightStreakCheck()` → strogi statusni check (vrednost, ne ključ)
+- ✅ Plan day increment: `incrementPlanDay = !isExtra` pravilno ločuje redni/extra workout
+- ⚠️→✅ Plan swap domain guard: popravljen (lockedDay zdaj prehaja)
+- ✅ Extra workout REST day: `isRestDay && isExtra` → `REST_WORKOUT_DONE` (streak ohranjen, NE poveča)
+- ✅ Stretching: `CompleteRestDay` → `restDayInitiated()` → `STRETCHING_DONE` ✓
+- ✅ WorkoutGenerator → AdvancedExerciseRepository: uvoz `data.repository.AdvancedExerciseRepository` pravilno deluje po refaktoringu
+**Zakaj:** Post-refactoring audit za zagotovitev, da premik paketov ni pokvaril poslovne logike. Odkrit 1 pravi bug (SwapDays lockedDay), 1 dead code (WeeklyStreakWorker imports).
+**Tveganje:** 🟢 nizko (bug fix je additive parameter, ničesar ne ruši; cleanup je samo import brisanje)
