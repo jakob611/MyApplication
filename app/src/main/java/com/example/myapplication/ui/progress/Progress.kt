@@ -57,6 +57,7 @@ import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.ui.components.XPPopup
 import com.example.myapplication.ui.screens.MyViewModelFactory
 import com.example.myapplication.ui.progress.ProgressViewModel
+import com.example.myapplication.ui.theme.UppColors
 
 // Data holders
 private data class DailyLogSummary(val date: LocalDate, val calories: Double, val waterMl: Int)
@@ -385,7 +386,7 @@ fun ProgressScreen(
                         ChartSectionWithAxis(
                             title = if (isLbs) "Weight (lb)" else "Weight (kg)",
                             unit = if (isLbs) "lb" else "kg",
-                            color = Color(0xFF2563EB),
+                            color = UppColors.Blue,
                             points = displayPoints,
                             previousPoints = prevDisplayPoints,
                             addWeightButton = if (uid != null) { { showWeightDialog = true } } else null,
@@ -408,7 +409,7 @@ fun ProgressScreen(
                     // ──────────────────────────────────────────────────────────────
                     item {
                         ChartSectionWithAxis(
-                            title = "Caloric intake", unit = "kcal", color = Color(0xFFF97316),
+                            title = "Caloric intake", unit = "kcal", color = UppColors.Orange,
                             points = zeroFilledDaily,
                             previousPoints = prevZeroFilledDaily,
                             edgePrev = dailyNeighbors.prev,
@@ -420,7 +421,7 @@ fun ProgressScreen(
                     }
                     item {
                         ChartSectionWithAxis(
-                            title = "Water (ml)", unit = "ml", color = Color(0xFF10B981),
+                            title = "Water (ml)", unit = "ml", color = UppColors.Blue,
                             points = zeroFilledWater,
                             previousPoints = prevZeroFilledWater,
                             edgePrev = waterNeighbors.prev,
@@ -434,7 +435,7 @@ fun ProgressScreen(
                     if (burnedByDay.isNotEmpty()) {
                         item {
                             ChartSectionWithAxis(
-                                title = "Calories burned", unit = "kcal", color = Color(0xFFE11D48),
+                                title = "Calories burned", unit = "kcal", color = UppColors.Error,
                                 points = zeroFilledBurned,
                                 previousPoints = prevZeroFilledBurned,
                                 edgePrev = burnedNeighbors.prev,
@@ -522,7 +523,7 @@ private fun ChartSectionWithAxis(
                     
                     if (abs(diff) >= 0.1) {
                         val trendText = if (diff < 0) "Lost" else "Gained"
-                        val trendColor = if (diff < 0) Color(0xFF10B981) else Color(0xFFE11D48)
+                        val trendColor = if (diff < 0) UppColors.Success else UppColors.Error
                         val periodText = when(rangeType) {
                             ProgressRange.WEEK -> "this week"
                             ProgressRange.MONTH -> "this month"
@@ -696,7 +697,7 @@ private fun InteractiveLineChart(
             // Horizontal grid lines (Values)
             tickValues.forEach { tv ->
                 val y = (innerH - ((tv - niceMin) / span * innerH)).toFloat()
-                drawLine(Color(0xFF4B5563), Offset(0f, y), Offset(innerW, y), 1f)
+                drawLine(UppColors.Divider, Offset(0f, y), Offset(innerW, y), 1f)
             }
 
             // Vertical Month Separators (if not week view)
@@ -724,7 +725,7 @@ private fun InteractiveLineChart(
             val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
             xPositions.forEach { x ->
                 drawLine(
-                    color = Color(0xFF3D4754),
+                    color = UppColors.Divider,
                     start = Offset(x, innerH),
                     end = Offset(x, 0f),
                     strokeWidth = 1.1f,
@@ -776,7 +777,7 @@ private fun InteractiveLineChart(
                      
                      if (firstX != lastX) {
                          val trendEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-                         val trendColor = if (lastY > firstY) Color(0xFF10B981).copy(alpha=0.6f) else Color(0xFFE11D48).copy(alpha=0.6f) // Note: higher Y means lower value.
+                         val trendColor = if (lastY > firstY) UppColors.Success.copy(alpha=0.6f) else UppColors.Error.copy(alpha=0.6f) // Note: higher Y means lower value.
                          drawLine(
                              color = trendColor,
                              start = Offset(firstX, firstY),
@@ -1266,9 +1267,9 @@ private fun WeightDestinyCard(
     val confidence = prediction.confidenceFactor
 
     val trendColor = when {
-        balance < -50 -> Color(0xFF10B981)
-        balance > 50  -> Color(0xFFE11D48)
-        else          -> Color(0xFF6B7280)
+        balance < -50 -> UppColors.Success
+        balance > 50  -> UppColors.Error
+        else          -> UppColors.MutedText
     }
 
     // Dynamic message based on C (confidence) and trend
@@ -1376,8 +1377,8 @@ private fun WeightDestinyCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
-                            whatIfDelta < 0f -> Color(0xFF10B981)
-                            whatIfDelta > 0f -> Color(0xFFE11D48)
+                            whatIfDelta < 0f -> UppColors.Success
+                            whatIfDelta > 0f -> UppColors.Error
                             else             -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )

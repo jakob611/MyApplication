@@ -72,6 +72,7 @@ import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.utils.AppToast
 import com.example.myapplication.utils.HapticFeedback
 import com.example.myapplication.viewmodels.BodyHomeIntent
+import com.example.myapplication.ui.theme.UppColors
 import com.google.firebase.auth.FirebaseAuth
 import com.russhwolf.settings.SharedPreferencesSettings
 import kotlinx.coroutines.Dispatchers
@@ -1015,7 +1016,7 @@ private fun WorkoutReportScreen(results: List<ExerciseResult>, skipped: List<Str
         Card(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f)
+                containerColor = UppColors.Success.copy(alpha = 0.15f)
             )
         ) {
             Row(
@@ -1163,7 +1164,7 @@ private fun WorkoutCelebrationScreen(
                     repeatMode = RepeatMode.Restart
                 ), label = "confettiOff"
             )
-            val confettiColors = listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary, Color(0xFF4CAF50), MaterialTheme.colorScheme.tertiary, Color(0xFF03A9F4))
+            val confettiColors = listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary, UppColors.Success, MaterialTheme.colorScheme.tertiary, UppColors.Blue)
             repeat(30) { i -> // Increased confetti count
                 val xPos = (i * 83 % 100) / 100f
                 val startY = ((i * 47 + confettiOffset * 100) % 110) / 100f

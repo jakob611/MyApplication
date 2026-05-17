@@ -334,12 +334,14 @@ follows/{uid_follower}_{uid_following}: { ... }
 
 ## 🗺️ HITRI VODIČ — "Kaj popraviti za X"
 
+> ⚠️ **Figma Design System (Faza 17):** Vse UI datoteke z gumbi/karticami/vhodnimi polji mora uporabiti `UppColors` in `UppComponents`. Barvna specifikacija: Orange #FF6411 · Blue #648DE5 · LightGray #E0E2DB · Background #181818 · White #FCFCFC. Skupne komponente: `UppPrimaryButton`, `UppCard`, `UppTextField`, `UppGoogleButton`. Gradient (`OrangeToBlackGradient`) SAMO za naslovne module.
+
 | Želiš popraviti | Odpri to datoteko |
 |----------------|-------------------|
 | **Streak (workout dan)** | `data/gamification/FirestoreGamificationRepository.kt` → `processActivityCompletion()` ⚡ SSOT |
 | **Streak (rest dan stretching)** | `domain/gamification/ManageGamificationUseCase.kt` → `restDayInitiated()` |
 | **Streak domain (UseCase)** | `domain/usecase/UpdateStreakUseCase.kt` |
-| **"Start Stretching" gumb (UI)** | `ui/screens/BodyModuleHomeScreen.kt` → `BodyHomeIntent.CompleteRestDay` |
+| **"Start Stretching" gumb (UI)** | `ui/screens/BodyModuleHomeScreen.kt` → `BodyHomeIntent.CompleteRestDay` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
 | **Extra Workout streak lock** | `domain/usecase/UpdateBodyMetricsUseCase.kt` → `isRestDay = isRestDay && isExtra` guard |
 | **Streak Freeze logika** | `data/gamification/FirestoreGamificationRepository.kt` → `processActivityCompletion()` dayDiff guard |
 | **Polnočni streak check** | `workers/WeeklyStreakWorker.kt` → `executeMidnightStreakCheck()` |
@@ -349,7 +351,7 @@ follows/{uid_follower}_{uid_following}: { ... }
 | **Face Analysis (kamera/galerija)** | `ui/screens/GoldenRatioScreen.kt` → `AutoAnalysisSection()` |
 | **Face Analysis (algoritem)** | `domain/looksmaxing/CalculateGoldenRatioUseCase.kt` |
 | **Camera foto ne prikaže** | `GoldenRatioScreen.kt` → `displayUri` / `cameraFileUri` / Coil `diskCachePolicy` |
-| **Community tab** | `ui/home/CommunityScreen.kt` |
+| **Community tab** | `ui/home/CommunityScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
 | **Firestore dokument routing** | `data/store/FirestoreHelper.kt` ⛔ ne obidi |
 | **XP podeljevanje** | `domain/gamification/ManageGamificationUseCase.kt` → `awardXP()` |
 | **Badge unlock** | `domain/gamification/ManageGamificationUseCase.kt` + `data/BadgeDefinitions.kt` |
@@ -357,24 +359,29 @@ follows/{uid_follower}_{uid_following}: { ... }
 | **Auth (login/logout)** | `ui/MainAppContent.kt` + `data/auth/AuthRepository.kt` |
 | **Sync overlay** | `ui/MainAppContent.kt` (`isProfileReady`, `syncStatusMessage`) |
 | **Dark mode** | `AppDrawer.kt` + `data/UserPreferences.kt` |
-| **GPS tek** | `ui/run/RunTrackerScreen.kt` + `service/RunTrackingService.kt` |
+| **GPS tek** | `ui/run/RunTrackerScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. + `service/RunTrackingService.kt` |
 | **GPS anti-drift / route compression** | `domain/run/RouteCompressor.kt` (RDP) |
 | **Tek tip (Run/Walk/Cycling...)** | `data/workout/RunSession.kt` → `ActivityType` enum |
 | **Workout generiranje** | `domain/workout/WorkoutGenerator.kt` + `WorkoutPlanGenerator.kt` |
 | **Vaje baza (exercises.json init)** | `data/repository/AdvancedExerciseRepository.kt` → `init()` pred `getAllExercises()` |
-| **Workout UI (aktivna vadba)** | `ui/workout/WorkoutSessionScreen.kt` |
-| **Extra workout generiranje** | `ui/workout/GenerateWorkoutScreen.kt` |
-| **Ročno beleženje vaje** | `ui/workout/ManualExerciseLogScreen.kt` |
-| **Workout zgodovina** | `ui/workout/ExerciseHistoryScreen.kt` |
-| **Food tracking** | `ui/screens/NutritionScreen.kt` + `data/store/DailySyncManager.kt` |
+| **Workout UI (aktivna vadba)** | `ui/workout/WorkoutSessionScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
+| **Extra workout generiranje** | `ui/workout/GenerateWorkoutScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
+| **Ročno beleženje vaje** | `ui/workout/ManualExerciseLogScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
+| **Workout zgodovina** | `ui/workout/ExerciseHistoryScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
+| **Food tracking** | `ui/screens/NutritionScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. + `data/store/DailySyncManager.kt` |
 | **Prehranske kalkulacije (TDEE/BMR/voda)** | `domain/nutrition/NutritionCalculations.kt` ⚡ SSOT |
 | **Kalorični cilj (UseCase)** | `domain/usecase/CalculateDailyCalorieTargetUseCase.kt` ⚡ |
-| **Donut graf** | `ui/screens/NutritionComponents.kt` |
+| **Donut graf** | `ui/screens/NutritionComponents.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
 | **BMI/BF% izračun** | `ui/screens/BodyOverviewViewmodel.kt` |
-| **Body home (streak, daily plan)** | `ui/screens/BodyModuleHomeScreen.kt` |
+| **Body home (streak, daily plan)** | `ui/screens/BodyModuleHomeScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
 | **BodyHome ViewModel** | `viewmodels/BodyModuleHomeViewModel.kt` |
-| **Grafi (teža, kalorije, voda)** | `ui/progress/Progress.kt` + `ui/progress/ProgressViewModel.kt` |
+| **Grafi (teža, kalorije, voda)** | `ui/progress/Progress.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. + `ui/progress/ProgressViewModel.kt` |
 | **Widget streak/plan day** | `widget/StreakWidgetProvider.kt` + `widget/PlanDayWidgetProvider.kt` |
 | **Daily food/water sync (Worker)** | `core/worker/DailySyncWorker.kt` |
+| **Dashboard moduli** | `ui/screens/DashboardScreen.kt` ⚠️ Vizualni prenos iz Figme: oranžni gumbi, temna siva obroba za kartice, KMP-ready barve. |
+| **Splash / onboarding** | `ui/screens/Indexscreen.kt` ✅ Figma aligned |
+| **Login / Sign-up / Forgot Password** | `ui/screens/LoginScreen.kt` ✅ Figma aligned |
+| **Skupne UI komponente (SSOT)** | `ui/components/UppComponents.kt` — `UppPrimaryButton`, `UppCard`, `UppTextField`, `UppGoogleButton`, `GradientHeaderText` |
+| **Barve sistema (SSOT)** | `ui/theme/UppColors.kt` — vse barve, `ui/theme/theme.kt` — Material3 tema |
 
 

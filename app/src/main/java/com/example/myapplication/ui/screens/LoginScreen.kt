@@ -60,13 +60,13 @@ fun LoginScreen(
         hasTriedLogin = false
     }
 
-    // Figma colors
-    val primaryBlue = Color(0xFF4285F4)
-    val lightGray = Color(0xFFF5F5F5)
-    val textGray = Color(0xFF666666)
-    val borderGray = Color(0xFFE0E0E0)
-    val textPrimary = MaterialTheme.colorScheme.onBackground
-    val textSecondary = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+    // Figma Design System colors
+    val primaryBlue = com.example.myapplication.ui.theme.UppColors.Orange       // CTA gumbi → oranžna
+    val lightGray   = com.example.myapplication.ui.theme.UppColors.InputSurface // ozadje polj
+    val textGray    = com.example.myapplication.ui.theme.UppColors.MutedText
+    val borderGray  = com.example.myapplication.ui.theme.UppColors.LightGray
+    val textPrimary = com.example.myapplication.ui.theme.UppColors.White
+    val textSecondary = com.example.myapplication.ui.theme.UppColors.LightGray
 
     Box(
         modifier = Modifier
@@ -699,13 +699,15 @@ private fun CustomTextField(
     lightGray: Color,
     borderGray: Color
 ) {
+    val uppBg = com.example.myapplication.ui.theme.UppColors.InputSurface
+    val uppBorder = com.example.myapplication.ui.theme.UppColors.LightGray
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = {
             Text(
                 text = placeholder,
-                color = Color(0xFF999999),
+                color = com.example.myapplication.ui.theme.UppColors.MutedText,
                 fontSize = 16.sp
             )
         },
@@ -713,12 +715,13 @@ private fun CustomTextField(
             .fillMaxWidth()
             .height(56.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = lightGray,
-            unfocusedContainerColor = lightGray,
-            focusedBorderColor = borderGray,
-            unfocusedBorderColor = borderGray,
-            focusedTextColor = Color.DarkGray,
-            unfocusedTextColor = Color.DarkGray
+            focusedContainerColor   = uppBg,
+            unfocusedContainerColor = uppBg,
+            focusedBorderColor      = com.example.myapplication.ui.theme.UppColors.Orange,
+            unfocusedBorderColor    = uppBorder,
+            focusedTextColor        = com.example.myapplication.ui.theme.UppColors.White,
+            unfocusedTextColor      = com.example.myapplication.ui.theme.UppColors.White,
+            cursorColor             = com.example.myapplication.ui.theme.UppColors.Orange
         ),
         shape = RoundedCornerShape(8.dp),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -736,13 +739,14 @@ private fun CustomPasswordField(
     lightGray: Color,
     borderGray: Color
 ) {
+    val uppBg = com.example.myapplication.ui.theme.UppColors.InputSurface
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = {
             Text(
                 text = placeholder,
-                color = Color(0xFF999999),
+                color = com.example.myapplication.ui.theme.UppColors.MutedText,
                 fontSize = 16.sp
             )
         },
@@ -750,12 +754,13 @@ private fun CustomPasswordField(
             .fillMaxWidth()
             .height(56.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = lightGray,
-            unfocusedContainerColor = lightGray,
-            focusedBorderColor = borderGray,
-            unfocusedBorderColor = borderGray,
-            focusedTextColor = Color.DarkGray,
-            unfocusedTextColor = Color.DarkGray
+            focusedContainerColor   = uppBg,
+            unfocusedContainerColor = uppBg,
+            focusedBorderColor      = com.example.myapplication.ui.theme.UppColors.Orange,
+            unfocusedBorderColor    = com.example.myapplication.ui.theme.UppColors.LightGray,
+            focusedTextColor        = com.example.myapplication.ui.theme.UppColors.White,
+            unfocusedTextColor      = com.example.myapplication.ui.theme.UppColors.White,
+            cursorColor             = com.example.myapplication.ui.theme.UppColors.Orange
         ),
         shape = RoundedCornerShape(8.dp),
         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -764,7 +769,7 @@ private fun CustomPasswordField(
                 Icon(
                     imageVector = if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                     contentDescription = if (showPassword) "Hide password" else "Show password",
-                    tint = Color(0xFF999999)
+                    tint = com.example.myapplication.ui.theme.UppColors.MutedText
                 )
             }
         },

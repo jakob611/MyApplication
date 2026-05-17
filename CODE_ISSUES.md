@@ -69,6 +69,28 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
+### 2026-05-17 — Faza 17: Vizualni prenos Figma Design System (UppColors globalen)
+
+**Cilj:** Celotna aplikacija vizualno usklajena z Figma Design System specifikacijo.
+
+**Spremembe:**
+1. ✅ **`ui/theme/UppColors.kt`** (SSOT) — Že obstajal z vsemi pravilnimi barvami (#FF6411 Orange, #648DE5 Blue, #E0E2DB LightGray, #181818 Background, #FCFCFC White). Ni bila potrebna sprememba.
+2. ✅ **`ui/theme/theme.kt`** — Dark Material3 tema (`UppDarkColors`) pravilno mapirana na UppColors. Tipografija, oblike, status bar barve — vse zbrane.
+3. ✅ **`ui/components/UppComponents.kt`** — Skupne komponente: `UppPrimaryButton` (Orange), `UppSecondaryButton` (LightGray obroba), `UppGoogleButton` (bela), `UppTextField` (InputSurface + LightGray obroba), `UppCard` (CardSurface + LightGray obroba), `GradientHeaderText` (samo za naslovne module).
+4. ✅ **`ui/screens/Indexscreen.kt`** — Že usklajen z UppColors. Ni bila potrebna sprememba.
+5. ✅ **`ui/screens/LoginScreen.kt`** — Že usklajen (local aliases → UppColors). Google gumb ohranja belo ozadje.
+6. ✅ **`ui/screens/DashboardScreen.kt`** — Moduli posodobljeni na `UppColors.CardSurface` (temno #222222) z `UppColors.LightGray` obrobo. Odstranjeno neskladje med MaterialTheme.colorScheme.secondary/tertiary.
+7. ✅ **`ui/screens/DonutProgressView.kt`** — Barve segmentov: Fat=Orange (#FF6411), Protein=LightGray (#E0E2DB), Carbs=Blue (#648DE5). Voda (inner ring) = Blue. Besedilo = White. Track baza = Divider (#2C2C2C).
+8. ✅ **`ui/screens/NutritionComponents.kt`** — Zamenjani Color(0xFF1976F6) → UppColors.Blue, Color(0xFFCCCCCC) → UppColors.LightGray, Color(0xFF6B7280) → UppColors.MutedText, Color(0xFFEF4444) → UppColors.Error.
+9. ✅ **`ui/screens/BodyModuleHomeScreen.kt`** — Color(0xFF4CAF50) → UppColors.Orange za workout day badge, "Completed" status, challenge indicator. `buttonBlue = MaterialTheme.colorScheme.primary` → že mapirano na Orange.
+10. ✅ **`ui/run/RunTrackerScreen.kt`** — Gumbi: Start/Resume → Orange, Stop → Error. GPS profil barve: High accuracy → Orange. Elevacija → Blue. Polyline pot → Orange (#FF6411). OSMDroid temni filter (inverter color matrix).
+11. ✅ **`ui/progress/Progress.kt`** — Grafi: Weight → Blue, Caloric intake → Orange, Water → Blue, Burned → Error. Grid črte → UppColors.Divider. Trend barve: dol/profit → Success, gor/loss → Error.
+12. ✅ **`ui/workout/WorkoutSessionScreen.kt`** — Color(0xFF4CAF50) → UppColors.Success za result card bg, confetti barve → UppColors.
+13. ✅ **`APP_MAP.md`** — Hitri vodič posodobljen z ⚠️ Vizualni prenos iz Figme opombami pri vseh UI datotekah.
+
+**Arhitekturna opomba:** UppColors je edini SSOT za barve. Vse spremembe gredo skozi `ui/theme/UppColors.kt` — ne hardkodirati novih hex vrednosti.
+
+
 ### 2026-05-16 — Faza 14b: Race Conditions Fix (isPlanLoaded + Midnight Transition)
 
 **1. Varovalka pred lažnimi fallbacki (isPlanLoaded guard):**

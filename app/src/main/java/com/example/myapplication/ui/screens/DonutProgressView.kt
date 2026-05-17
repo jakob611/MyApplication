@@ -17,6 +17,18 @@ import android.view.View
 import androidx.annotation.ColorInt
 import kotlin.math.roundToInt
 
+// UPP Design System colors (Figma spec)
+private object DonutUppColors {
+    val orange     = 0xFFFF6411.toInt()  // Fat segment / primary
+    val blue       = 0xFF648DE5.toInt()  // Carbs / water inner
+    val lightGray  = 0xFFE0E2DB.toInt()  // Protein / track
+    val error      = 0xFFFF4444.toInt()  // Exceeded kalorij
+    val mutedText  = 0xFF9E9E9E.toInt()  // Labels
+    val divider    = 0xFF2C2C2C.toInt()  // Base track
+    val darkBg     = 0xFF181818.toInt()  // Background
+    val white      = 0xFFFCFCFC.toInt()  // Primary text
+}
+
 @SuppressLint("ViewConstructor")
 class DonutProgressView @JvmOverloads constructor(
     context: Context,
@@ -30,7 +42,7 @@ class DonutProgressView @JvmOverloads constructor(
     var simpleMode: Boolean = true
         set(value) { field = value; invalidate() }
 
-    @ColorInt var outerBaseColor: Int = 0xFFE5E7EB.toInt()
+    @ColorInt var outerBaseColor: Int = DonutUppColors.divider
         set(value) { field = value; outerBasePaint.color = value; invalidate() }
 
     // Proportions for 3 segments (fat, protein, carbs)
@@ -44,18 +56,18 @@ class DonutProgressView @JvmOverloads constructor(
     var innerProgress: Float = 0f
         set(value) { field = value; invalidate() }
 
-    @ColorInt var innerBaseColor: Int = 0xFFE5E7EB.toInt()
+    @ColorInt var innerBaseColor: Int = DonutUppColors.divider
         set(value) { field = value; innerBasePaint.color = value; invalidate() }
-    @ColorInt var innerProgressColor: Int = 0xFF2563EB.toInt()
+    @ColorInt var innerProgressColor: Int = DonutUppColors.blue
         set(value) { field = value; innerProgressPaint.color = value; invalidate() }
 
     var startAngle: Float = 135f
     var sweepAngle: Float = 270f
 
-    @ColorInt var textColor: Int = 0xFF000000.toInt()
+    @ColorInt var textColor: Int = DonutUppColors.white
         set(value) { field = value; invalidate() }
 
-    @ColorInt var waterColor: Int = 0xFF3B82F6.toInt()
+    @ColorInt var waterColor: Int = DonutUppColors.blue
         set(value) { field = value; invalidate() }
 
     var weightUnit: String = "kg"
@@ -89,15 +101,15 @@ class DonutProgressView @JvmOverloads constructor(
     }
     private val outerFatPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
-        strokeWidth = outerThicknessPx; color = 0xFFEF4444.toInt()
+        strokeWidth = outerThicknessPx; color = DonutUppColors.orange   // Fat → oranžna (Figma)
     }
     private val outerProteinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
-        strokeWidth = outerThicknessPx; color = 0xFF10B981.toInt()
+        strokeWidth = outerThicknessPx; color = DonutUppColors.lightGray // Protein → svetlo siva (Figma)
     }
     private val outerCarbsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
-        strokeWidth = outerThicknessPx; color = 0xFF3B82F6.toInt()
+        strokeWidth = outerThicknessPx; color = DonutUppColors.blue      // Carbs → modra (Figma)
     }
     private val innerBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
@@ -108,7 +120,7 @@ class DonutProgressView @JvmOverloads constructor(
         strokeWidth = innerThicknessPx; color = innerProgressColor
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER; color = 0xFF000000.toInt()
+        textAlign = Paint.Align.CENTER; color = DonutUppColors.white
     }
     // Reusable paints — ne ustvarjamo novih v onDraw
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -211,7 +223,7 @@ class DonutProgressView @JvmOverloads constructor(
         val isExceeded = consumedCalories >= targetCalories
 
         // Dinamična barva za navadni progres - sivo ali rdeče (po navodilih "če dnevna norma še ni zaužita naj bo sivo...")
-        val activeColor = if (isExceeded) 0xFFEF4444.toInt() else 0xFF9CA3AF.toInt() // Red or Gray
+        val activeColor = if (isExceeded) DonutUppColors.error else DonutUppColors.orange // Red if exceeded, Orange if not
 
         if (simpleMode) {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -240,40 +252,39 @@ class DonutProgressView @JvmOverloads constructor(
 
         if (!simpleMode && clickedSegment != null) {
             val isImperial = weightUnit == "lbs" || weightUnit == "lb"
-            val unitLabel = if (isImperial) "oz" else "g"
-            val details = when (clickedSegment) {
-                "fat" -> {
-                    // Faza 13b FIX: roundToInt() namesto round(g/10.0)*10 (1g natančnost)
-                    val g = fatCalories / 9.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
-                    SegmentDetails("$value $unitLabel", "Fat", 0xFFEF4444.toInt(), fatCalories)
-                }
-                "protein" -> {
-                    val g = proteinCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
-                    SegmentDetails("$value $unitLabel", "Protein", 0xFF10B981.toInt(), proteinCalories)
-                }
-                "carbs" -> {
-                    val g = carbsCalories / 4.0
-                    val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
-                    SegmentDetails("$value $unitLabel", "Carbs", 0xFF3B82F6.toInt(), carbsCalories)
-                }
-                else -> SegmentDetails(centerValue, centerLabel, textColor, 0)
-            }
+                    val unitLabel = if (isImperial) "oz" else "g"
+                    val details = when (clickedSegment) {
+                        "fat" -> {
+                            val g = fatCalories / 9.0
+                            val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                            SegmentDetails("$value $unitLabel", "Fat", DonutUppColors.orange, fatCalories)
+                        }
+                        "protein" -> {
+                            val g = proteinCalories / 4.0
+                            val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                            SegmentDetails("$value $unitLabel", "Protein", DonutUppColors.lightGray, proteinCalories)
+                        }
+                        "carbs" -> {
+                            val g = carbsCalories / 4.0
+                            val value = if (isImperial) (g / 28.3495).roundToInt() else g.roundToInt()
+                            SegmentDetails("$value $unitLabel", "Carbs", DonutUppColors.blue, carbsCalories)
+                        }
+                        else -> SegmentDetails(centerValue, centerLabel, textColor, 0)
+                    }
             textPaint.color = details.color; textPaint.textSize = dp(48f); textPaint.isFakeBoldText = true
             canvas.drawText(details.value, centerX, centerY - dp(10f), textPaint)
-            textPaint.textSize = dp(18f); textPaint.isFakeBoldText = false; textPaint.color = 0xFF6B7280.toInt()
+            textPaint.textSize = dp(18f); textPaint.isFakeBoldText = false; textPaint.color = DonutUppColors.mutedText
             canvas.drawText(details.label, centerX, centerY + dp(15f), textPaint)
             textPaint.textSize = dp(22f); textPaint.isFakeBoldText = true; textPaint.color = details.color
             canvas.drawText("${details.calories} kcal", centerX, centerY + dp(45f), textPaint)
         } else {
             textPaint.color = waterColor; textPaint.textSize = dp(40f); textPaint.isFakeBoldText = true
             canvas.drawText(innerValue, centerX, centerY - dp(10f), textPaint)
-            textPaint.textSize = dp(16f); textPaint.isFakeBoldText = false; textPaint.color = 0xFF6B7280.toInt()
+            textPaint.textSize = dp(16f); textPaint.isFakeBoldText = false; textPaint.color = DonutUppColors.mutedText
             canvas.drawText(innerLabel, centerX, centerY + dp(10f), textPaint)
             textPaint.color = textColor; textPaint.textSize = dp(28f); textPaint.isFakeBoldText = true
             canvas.drawText(centerValue, centerX, centerY + dp(45f), textPaint)
-            textPaint.textSize = dp(14f); textPaint.isFakeBoldText = false; textPaint.color = 0xFF6B7280.toInt()
+            textPaint.textSize = dp(14f); textPaint.isFakeBoldText = false; textPaint.color = DonutUppColors.mutedText
             canvas.drawText(centerLabel, centerX, centerY + dp(62f), textPaint)
         }
     }

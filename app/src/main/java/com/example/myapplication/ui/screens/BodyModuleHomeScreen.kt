@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue // Add this
 import com.example.myapplication.ui.run.EpicCounter
 import com.example.myapplication.ui.run.PlanPathDialog
 import com.example.myapplication.viewmodels.BodyHomeIntent
+import com.example.myapplication.ui.theme.UppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,7 +264,7 @@ fun BodyModuleHomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (animIsRestDay) MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f) else Color(0xFF4CAF50).copy(alpha = 0.15f))
+                                .background(if (animIsRestDay) MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f) else UppColors.Orange.copy(alpha = 0.15f))
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -271,12 +272,12 @@ fun BodyModuleHomeScreen(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (animIsRestDay) MaterialTheme.colorScheme.secondary else Color(0xFF4CAF50))
+                                    .background(if (animIsRestDay) MaterialTheme.colorScheme.secondary else UppColors.Orange)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = if (animIsRestDay) "TODAY IS A REST DAY" else "TODAY IS A WORKOUT DAY",
-                                color = if (animIsRestDay) MaterialTheme.colorScheme.secondary else Color(0xFF4CAF50),
+                                color = if (animIsRestDay) MaterialTheme.colorScheme.secondary else UppColors.Orange,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp
@@ -321,7 +322,7 @@ fun BodyModuleHomeScreen(
 
                                     Text(
                                         text = if (ui.isWorkoutDoneToday) "Completed" else "Not yet\ncompleted",
-                                        color = if (ui.isWorkoutDoneToday) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (ui.isWorkoutDoneToday) UppColors.Orange else MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 14.sp,
                                         lineHeight = 16.sp,
                                         fontWeight = FontWeight.Medium,
@@ -607,7 +608,7 @@ private fun ChallengeCard(
                 if (challenge.accepted) {
                     Text(
                         text = if (challenge.completed) "COMPLETED" else "ACCEPTED",
-                        color = if (challenge.completed) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                        color = if (challenge.completed) UppColors.Orange else MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 8.dp)

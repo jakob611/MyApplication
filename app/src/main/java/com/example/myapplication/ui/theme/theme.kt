@@ -8,90 +8,104 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-// --- Custom FontFamily: Inter (ali Montserrat, po želji) ---
-// Najprej dodaj font datoteke v res/font/ (inter_regular.ttf, inter_bold.ttf, ...)
+// ── Tipografija ──────────────────────────────────────────────────────────────
 val Inter = FontFamily.Default
 
-val DrawerBlue = Color(0xFF2563EB)
+// Ostane za legacy reference, ne vključi v novih datotekah
+val DrawerBlue = UppColors.Blue
 
+// ── Figma Dark Color Scheme (edina uradna shema, od Faze 17) ─────────────────
+private val UppDarkColors = darkColorScheme(
+    primary             = UppColors.Orange,
+    onPrimary           = UppColors.White,
+    primaryContainer    = Color(0xFF6B2500),   // temno oranžna za filled variante
+    onPrimaryContainer  = UppColors.OrangeLight,
 
-// --- Barvna shema (temna in svetla) ---
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFFDCE4FF),      // Svetlo pastelna modra za temno temo
-    onPrimary = Color(0xFF38305A),
-    secondary = Color(0xFFFCF5C7),    // Rumena
-    onSecondary = Color(0xFF38305A),
-    tertiary = Color(0xFFF37B50),
-    onTertiary = Color.White,
-    background = Color(0xFF14121F),   // Zelo temno modra/vijolična
-    onBackground = Color(0xFFE6E5EA), // Bledo bela
-    surface = Color(0xFF26223B),      // Prigušena mornarska za kartice v dark mode
-    onSurface = Color(0xFFE6E5EA),
-    surfaceVariant = Color(0xFF363251),
-    onSurfaceVariant = Color(0xFFD1D5DB),
+    secondary           = UppColors.Blue,
+    onSecondary         = UppColors.White,
+    secondaryContainer  = Color(0xFF1A2A54),
+    onSecondaryContainer = UppColors.Blue,
+
+    tertiary            = UppColors.LightGray,
+    onTertiary          = UppColors.Background,
+
+    background          = UppColors.Background,
+    onBackground        = UppColors.White,
+
+    surface             = UppColors.CardSurface,
+    onSurface           = UppColors.White,
+    surfaceVariant      = UppColors.InputSurface,
+    onSurfaceVariant    = UppColors.LightGray,
+
+    outline             = UppColors.LightGray,
+    outlineVariant      = UppColors.Divider,
+
+    error               = UppColors.Error,
+    onError             = UppColors.White,
 )
 
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF38305A),      // Temno modra/vijolična
-    onPrimary = Color(0xFFFCFBF8),
-    secondary = Color(0xFFDCE4FF),    // Pastelno vijolična
-    onSecondary = Color(0xFF38305A),
-    tertiary = Color(0xFFF37B50),     // Lososovo oranžna
-    onTertiary = Color.White,
-    background = Color(0xFFFCFBF8),   // Smetanasto bela
-    onBackground = Color(0xFF38305A), // Temno modra
-    surface = Color.White,            // Bele kartice za večji kontrast
-    onSurface = Color(0xFF38305A),    // Temno modra teksta
-    surfaceVariant = Color(0xFFDCE4FF),// Pastelno vijolična preplastitev
-    onSurfaceVariant = Color(0xFF38305A),
+// Svetla shema ostane za sistemske komponente (npr. dialog sistem)
+private val UppLightColors = lightColorScheme(
+    primary             = UppColors.Orange,
+    onPrimary           = UppColors.White,
+    secondary           = UppColors.Blue,
+    onSecondary         = UppColors.White,
+    background          = Color(0xFFF5F5F5),
+    onBackground        = Color(0xFF181818),
+    surface             = Color(0xFFFFFFFF),
+    onSurface           = Color(0xFF181818),
+    outline             = Color(0xFFCCCCCC),
 )
 
-// --- Oblike (Shapes) ---
-val AppShapes = androidx.compose.material3.Shapes(
-    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+// ── Oblike ───────────────────────────────────────────────────────────────────
+val AppShapes = Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+    small      = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    medium     = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    large      = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
 )
 
-// --- Tipografija ---
+// ── Tipografija ───────────────────────────────────────────────────────────────
 val AppTypography = Typography(
-    displayLarge = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp),
-    titleLarge = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp),
-    titleMedium = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp),
-    bodyLarge = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-    labelLarge = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+    displayLarge  = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, color = UppColors.White),
+    titleLarge    = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = UppColors.White),
+    titleMedium   = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold,      fontSize = 18.sp, color = UppColors.White),
+    bodyLarge     = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal,    fontSize = 16.sp, color = UppColors.LightGray),
+    bodyMedium    = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal,    fontSize = 14.sp, color = UppColors.LightGray),
+    labelLarge    = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold,  fontSize = 14.sp, color = UppColors.White),
+    labelSmall    = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium,    fontSize = 11.sp, color = UppColors.MutedText),
 )
 
+// ── Tema composable ───────────────────────────────────────────────────────────
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = false, // Light mode as default
+    darkTheme: Boolean = true,   // ← Figma specifikacija: temna tema je privzeta
     content: @Composable () -> Unit
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
+    val colors = if (darkTheme) UppDarkColors else UppLightColors
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colors.background.toArgb()
-            window.navigationBarColor = colors.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+            window.statusBarColor = UppColors.Background.toArgb()
+            window.navigationBarColor = UppColors.Background.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
         }
     }
 
     MaterialTheme(
         colorScheme = colors,
-        typography = AppTypography,
-        shapes = AppShapes,
-        content = content
+        typography  = AppTypography,
+        shapes      = AppShapes,
+        content     = content
     )
 }

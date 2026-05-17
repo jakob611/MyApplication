@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.example.myapplication.ui.theme.UppColors
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,26 +57,26 @@ fun DashboardScreen(
         DashboardModule(
             title = "BODY MODULE",
             icon = Icons.Filled.FitnessCenter,
-            containerColor = MaterialTheme.colorScheme.secondary,
-            textColor = MaterialTheme.colorScheme.onSecondary
+            containerColor = UppColors.CardSurface,
+            textColor = UppColors.White
         ),
         DashboardModule(
             title = "HAIR MODULE",
             icon = Icons.Filled.Waves,
-            containerColor = MaterialTheme.colorScheme.tertiary,
-            textColor = MaterialTheme.colorScheme.onTertiary
+            containerColor = UppColors.CardSurface,
+            textColor = UppColors.LightGray
         ),
         DashboardModule(
             title = "FACE MODULE",
             icon = Icons.Filled.Face,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            textColor = MaterialTheme.colorScheme.onSurfaceVariant
+            containerColor = UppColors.CardSurface,
+            textColor = UppColors.LightGray
         ),
         DashboardModule(
             title = "SHOP",
             icon = Icons.Filled.ShoppingCart,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            textColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = UppColors.CardSurface,
+            textColor = UppColors.LightGray
         )
     )
 
@@ -118,6 +120,7 @@ private fun DashboardModuleCard(
             ),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, UppColors.LightGray.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(

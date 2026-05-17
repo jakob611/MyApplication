@@ -57,6 +57,7 @@ import com.example.myapplication.ui.screens.MyViewModelFactory
 import com.example.myapplication.utils.AppToast
 import com.example.myapplication.domain.run.RouteCompressor
 import com.example.myapplication.viewmodels.BodyHomeIntent
+import com.example.myapplication.ui.theme.UppColors
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentReference
@@ -266,7 +267,8 @@ fun RunTrackerScreen(onBack: () -> Unit) {
             routePolyline?.let { map.overlays.remove(it) }
             if (locationPoints.isNotEmpty()) {
                 val polyline = Polyline(map).apply {
-                    outlinePaint.color = android.graphics.Color.rgb(33, 150, 243)
+                    // UPP Design: oranžna pot (#FF6411) — Figma spec
+                    outlinePaint.color = android.graphics.Color.rgb(255, 100, 17)
                     outlinePaint.strokeWidth = 12f
                     outlinePaint.strokeCap = Paint.Cap.ROUND
                     outlinePaint.isAntiAlias = true
@@ -326,7 +328,16 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                     map.setTileSource(currentSource)
                 }
 
-                map.overlayManager.tilesOverlay.setColorFilter(null)
+                map.overlayManager.tilesOverlay.setColorFilter(
+                    android.graphics.ColorMatrixColorFilter(
+                        android.graphics.ColorMatrix(floatArrayOf(
+                            -1f,  0f,  0f, 0f, 255f,
+                             0f, -1f,  0f, 0f, 255f,
+                             0f,  0f, -1f, 0f, 255f,
+                             0f,  0f,  0f, 1f,   0f
+                        ))
+                    )
+                ) // OSMDroid temna tema — invertirani barvni filter (UPP Dark Theme)
             }
         )
 
@@ -387,9 +398,9 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                     if (isTracking) {
                         Spacer(Modifier.width(8.dp))
                         val (gpsProfile, gpsColor) = when (selectedActivity) {
-                            ActivityType.SPRINT, ActivityType.RUN -> "High accuracy" to Color(0xFF4CAF50)
+                            ActivityType.SPRINT, ActivityType.RUN -> "High accuracy" to UppColors.Orange
                             ActivityType.CYCLING, ActivityType.SKIING, ActivityType.SNOWBOARD, ActivityType.SKATING -> "Balanced" to MaterialTheme.colorScheme.tertiary
-                            ActivityType.WALK, ActivityType.HIKE, ActivityType.NORDIC -> "Battery saver" to Color(0xFF9E9E9E)
+                            ActivityType.WALK, ActivityType.HIKE, ActivityType.NORDIC -> "Battery saver" to UppColors.MutedText
                         }
                         Surface(
                             color = gpsColor.copy(alpha = 0.1f),
@@ -419,14 +430,14 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                     Text("Pace: ${paceMin.toInt()}:${"%02d".format(((paceMin - paceMin.toInt()) * 60).toInt())} /km", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
                 if (selectedActivity.showElevation && (elevationGain > 0f || elevationLoss > 0f)) {
-                    Text("↑ ${"%.0f".format(elevationGain)} m  ↓ ${"%.0f".format(elevationLoss)} m", fontSize = 13.sp, color = Color(0xFF4CAF50))
+                    Text("↑ ${"%.0f".format(elevationGain)} m  ↓ ${"%.0f".format(elevationLoss)} m", fontSize = 13.sp, color = UppColors.Blue)
                 }
                 if (isTracking) {
                     Text("🔥 $liveCalories kcal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.tertiary)
                     Text(
                         if (isPaused) "Paused" else "Tracking...",
                         fontSize = 12.sp,
-                        color = if (isPaused) MaterialTheme.colorScheme.tertiary else Color(0xFF4CAF50),
+                        color = if (isPaused) MaterialTheme.colorScheme.tertiary else UppColors.Orange,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -518,7 +529,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                 }
                             },
                             modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            colors = ButtonDefaults.buttonColors(containerColor = UppColors.Orange),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Filled.PlayArrow, null)
@@ -530,7 +541,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                             Button(
                                 onClick = { context.startService(Intent(context, RunTrackingService::class.java).apply { action = if (isPaused) RunTrackingService.ACTION_RESUME else RunTrackingService.ACTION_PAUSE }) },
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) Color(0xFF4CAF50) else MaterialTheme.colorScheme.tertiary),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) UppColors.Orange else MaterialTheme.colorScheme.tertiary),
                                 shape = RoundedCornerShape(12.dp)
                             ) { Icon(if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null); Spacer(Modifier.width(8.dp)); Text(if (isPaused) "Resume" else "Pause", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
 
@@ -565,7 +576,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                     showSummary = true
                                 },
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
+                                colors = ButtonDefaults.buttonColors(containerColor = UppColors.Error),
                                 shape = RoundedCornerShape(12.dp)
                             ) { Icon(Icons.Filled.Stop, null); Spacer(Modifier.width(8.dp)); Text("Stop", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                         }

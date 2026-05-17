@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.example.myapplication.ui.theme.UppColors
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -262,13 +263,13 @@ internal fun TrackedFoodItem(
                 Text(food.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textPrimary)
                 Text(
                     "${food.amount.toInt()} ${food.unit} • ${food.caloriesKcal.roundToInt()} kcal",
-                    fontSize = 12.sp, color = Color(0xFF6B7280)
+                    fontSize = 12.sp, color = UppColors.MutedText
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     painter = painterResource(android.R.drawable.ic_menu_delete),
-                    contentDescription = "Delete", tint = Color(0xFFEF4444)
+                    contentDescription = "Delete", tint = UppColors.Error
                 )
             }
         }
@@ -321,14 +322,14 @@ internal fun MealCard(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .background(Color(0xFF1976F6), shape = CircleShape)
+                        .background(UppColors.Blue, shape = CircleShape)
                 )
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(4.dp)
                         .padding(start = 8.dp)
-                        .background(Color(0xFFCCCCCC), shape = RoundedCornerShape(2.dp))
+                        .background(UppColors.LightGray.copy(alpha = 0.3f), shape = RoundedCornerShape(2.dp))
                 )
             }
 
@@ -355,7 +356,7 @@ internal fun MealCard(
 internal fun HintText(text: String) {
     Text(
         text = text,
-        color = Color(0xFF6B7280),
+        color = UppColors.MutedText,
         fontSize = 12.sp,
         fontStyle = FontStyle.Italic,
         textAlign = TextAlign.Center,
