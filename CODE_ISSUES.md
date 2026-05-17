@@ -715,3 +715,26 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 **3. APP_MAP.md posodobitev:**
 - ✅ Odstranjena opomba o "Dual Streak Engine", dodana "Unified Streak Engine (Faza 8)" sekcija.
 - ✅ Tabela "Streak Logic" posodobljena na eno pot.
+
+### 2026-05-17 — Faza 15: MapView Lifecycle Glitch + weekly_done Firestore Fix
+
+**1. MapView — OsmDroid Lifecycle Glitch (RunTrackerScreen.kt)**
+- 🐛 Root cause: `map.onResume()` se je klical v `AndroidView.update` lambdi → ob VSAKI rekomposiciji (npr. vsak sekundo ko se timer posodobi) → tiles so se reloadali → vizualni glitch
+- ✅ Rešitev: Dodan `DisposableEffect(lifecycleOwner, mapView)` z `LifecycleEventObserver`:
+  - `ON_RESUME` → `map.onResume()` (enkrat ob lifecycle prehodu)
+  - `ON_PAUSE` → `map.onPause()`
+  - `isAtLeast(Lifecycle.State.RESUMED)` check za takojšnji onResume ob prvem vstopu
+- ✅ `map.onResume()` odstranjen iz `update` lambde
+- ✅ Zoom (16.0) in center (SLO fallback) nastavljeni TAKOJ ob kreaciji MapView pred overlay dodajanjem
+- Import: `androidx.compose.ui.platform.LocalLifecycleOwner` (ne `lifecycle.compose` — ta ni resolvan)
+
+**2. weekly_done — Firestore ne posodablja vrednosti (FirestoreGamificationRepository.kt)**
+- 🐛 Root cause: `processActivityCompletion()` je pisala streak, xp, plan_day itd., NIKOLI pa `weekly_done`
+- ✅ Rešitev: V Firestore transakciji atomarno beremo `weekly_done` in pišemo `weekly_done + 1`
+- ✅ Nach `getBodyMetrics.invoke(email)` zdaj dobi pravilno posodobljeno vrednost
+- ✅ Log posodobljen: `weekly_done={old+1}`
+
+**3. KOTLIN & KSP identifikacija:**
+- Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
+- KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
+- Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
