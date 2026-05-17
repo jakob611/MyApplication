@@ -1,5 +1,4 @@
 ﻿package com.example.myapplication.ui.screens
-import com.example.myapplication.domain.run.CompressRouteUseCase
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -678,10 +677,9 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                         val shareActSnap = resolvedDocRef.get().await()
                                         val shareAct = shareActSnap.getBoolean("share_activities") ?: false
                                         if (shareAct && finalLocationPoints.isNotEmpty()) {
-                                            val rawPts = finalLocationPoints.map { Pair(it.latitude, it.longitude) }
-                                            val compressRoute = CompressRouteUseCase()
-                                        val compressed = compressRoute(rawPts)
-                                            val routeList = compressed.map { mapOf("lat" to it.first, "lng" to it.second) }
+                                            val routeList = com.example.myapplication.utils.RouteCompressor
+                                                .compress(finalLocationPoints)
+                                                .map { mapOf("lat" to it.latitude, "lng" to it.longitude) }
                                             val pubMap = hashMapOf<String, Any>(
                                                 "activityType" to selectedActivity.name,
                                                 "distanceMeters" to finalDistance,

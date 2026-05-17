@@ -47,8 +47,8 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import com.example.myapplication.utils.HapticFeedback
-import com.example.myapplication.utils.calculateEMA
-import com.example.myapplication.utils.calculateAdaptiveTDEE
+import com.example.myapplication.domain.nutrition.calculateEMA
+import com.example.myapplication.domain.nutrition.calculateAdaptiveTDEE
 import java.util.Locale
 import com.example.myapplication.data.UserProfile
 

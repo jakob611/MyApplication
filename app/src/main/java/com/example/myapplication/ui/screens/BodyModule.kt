@@ -25,7 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 import android.util.Log
-import com.example.myapplication.utils.calculateOptimalMacros
+import com.example.myapplication.domain.nutrition.calculateOptimalMacros
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
 import com.example.myapplication.data.AlgorithmData
 import com.example.myapplication.data.PlanResult

@@ -2,10 +2,10 @@ package com.example.myapplication.domain
 import com.example.myapplication.data.PlanResult
 import com.example.myapplication.data.WeekPlan
 import com.example.myapplication.data.DayPlan
-import com.example.myapplication.utils.calculateAdvancedBMR
-import com.example.myapplication.utils.calculateEnhancedTDEE
-import com.example.myapplication.utils.calculateSmartCalories
-import com.example.myapplication.utils.calculateOptimalMacros
+import com.example.myapplication.domain.nutrition.calculateAdvancedBMR
+import com.example.myapplication.domain.nutrition.calculateEnhancedTDEE
+import com.example.myapplication.domain.nutrition.calculateSmartCalories
+import com.example.myapplication.domain.nutrition.calculateOptimalMacros
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
