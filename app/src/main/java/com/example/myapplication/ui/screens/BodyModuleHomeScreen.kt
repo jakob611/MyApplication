@@ -106,10 +106,12 @@ fun BodyModuleHomeScreen(
     val prefs = context.getSharedPreferences("app_flags", android.content.Context.MODE_PRIVATE)
     var showOnboarding by remember { mutableStateOf(!prefs.getBoolean("hide_body_hint", false)) }
 
+    // FIX #2: Eksplicitno UppColors.Background za VSA stanja (loading, error, content).
+    // MaterialTheme.colorScheme.background bi utripal med theme init — hardkodirano prepreči glitch.
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(UppColors.Background)
     ) {
         Column(
             modifier = Modifier
@@ -203,9 +205,16 @@ fun BodyModuleHomeScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            // Rest Activity Card (prikaže se SAMO na rest dneh ko raztezanje še ni opravljeno)
-            // Faza 8: ui.todayIsRest = iz plana (planDay.isRestDay), todayStatus = iz dailyHistory
-            if (ui.todayIsRest && ui.todayStatus != "STRETCHING_DONE") {
+            // Rest Activity Card:
+            // FIX #2 + #3: Pogoji — rest dan, raztezanje še ni opravljeno, NISO v loading stanju,
+            // in danes NI bil že opravljen redni trening (prepreči Stretching Loop).
+            // Ref: ManageGamificationUseCase.restDayInitiated() ima server-side guard za dvojno varnost.
+            if (ui.todayIsRest
+                && !ui.isLoading
+                && ui.todayStatus != "STRETCHING_DONE"
+                && ui.todayStatus != "WORKOUT_DONE"
+                && ui.todayStatus != "REST_WORKOUT_DONE"
+            ) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
                     shape = MaterialTheme.shapes.large,

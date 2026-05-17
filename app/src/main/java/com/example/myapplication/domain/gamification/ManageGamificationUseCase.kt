@@ -124,11 +124,24 @@ class ManageGamificationUseCase(
 
     /**
      * Faza 4b: Uporabnik je opravil raztezanje na rest dnevu.
-     * Streak +1 prek epoch-based updateStreak(), XP +10.
-     * Status "STRETCHING_DONE" → dailyHistory.
-     * @return Novi streak (za Toast "Daily Goal Met! Streak: X days")
+     *
+     * FIX #3 — Koledarski zaklep:
+     * Preverimo DEJANSKI DATUM in status iz repozitorija. Če je na isti
+     * kalendarski dan dailyHistory že vseboval "WORKOUT_DONE" ali
+     * "REST_WORKOUT_DONE", raztezanje NI dovoljeno — vrnemo obstoječi streak
+     * brez spremembe in brez zapisa.
+     *
+     * @return Novi streak (ali obstoječi streak če akcija ni dovoljena)
      */
     suspend fun restDayInitiated(): Int {
+        // FIX: server-side guard — preveri aktualni datum v bazi
+        val todayStatus = runCatching { repository.getTodayStatus() }.getOrNull()
+        if (todayStatus == "WORKOUT_DONE" || todayStatus == "REST_WORKOUT_DONE") {
+            // Redni trening je bil danes že opravljen — raztezanje ni dovoljeno na isti dan.
+            // Vrni obstoječi streak brez spremembe.
+            return runCatching { repository.getCurrentStreak() }.getOrDefault(0)
+        }
+
         val newStreak = repository.updateStreak(
             isWorkoutSuccess = true,
             activityType = "STRETCHING_DONE"

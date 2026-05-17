@@ -5,7 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
-    // KSP: ko bo na voljo za Kotlin 2.2.10, dodaj: id("com.google.devtools.ksp")
+    // ─── KSP SETUP (Room code generation) ────────────────────────────────────
+    // KSP stability za Kotlin 2.2.10: preverite https://github.com/google/ksp/releases
+    // Ko bo verzija potrjena (npr. 2.2.10-1.0.29), odkomentirajte:
+    // id("com.google.devtools.ksp")
+    // IN V root build.gradle.kts odkomentirajte:
+    // id("com.google.devtools.ksp") version "2.2.10-1.0.29" apply false
+    // NATO: ročno ZBRIŠITE AppDatabase_Impl.kt in zaženite ./gradlew clean assembleDebug
+    // ─────────────────────────────────────────────────────────────────────────
 }
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -148,12 +155,15 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // Room — Offline-First baza podatkov (Faza 3)
-    // AppDatabase_Impl.kt je ročno napisan (KSP za Kotlin 2.2.10 ni na voljo — preizkušeno 1.0.29-1.0.35).
-    // Ko bo KSP podprl 2.2.10: dodaj ksp("androidx.room:room-compiler:$roomVersion")
-    // in ročno izbriši AppDatabase_Impl.kt (Right-click → Delete v Android Studiu).
-    // Preveri: https://github.com/google/ksp/releases
+    // AppDatabase_Impl.kt je ročno napisan (KSP za Kotlin 2.2.10 še ni uradno na voljo).
+    // Ko bo KSP potrjen na https://github.com/google/ksp/releases:
+    //   1. Odkomentirajte: ksp("androidx.room:room-compiler:$roomVersion")
+    //   2. Odkomentirajte KSP plugin zgoraj in v root build.gradle.kts
+    //   3. ROČNO ZBRIŠITE AppDatabase_Impl.kt (Right-click → Delete v Android Studiu)
+    //   4. ./gradlew clean assembleDebug
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
+    // ksp("androidx.room:room-compiler:$roomVersion")   // ← odkomentiraj ko bo KSP na voljo
 }
 

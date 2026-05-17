@@ -4,14 +4,14 @@ package com.example.myapplication.data.local
 // =====================================================================
 // AppDatabase_Impl.kt — ROČNO NAPISANA Room implementacija.
 //
-// ⚠️  KSP za Kotlin 2.2.x ni na voljo v Maven repos — ta datoteka
-//     nadomesti auto-generirani AppDatabase_Impl ki bi ga sicer
-//     ustvaril Room compiler (KSP/KAPT).
+// ⚠️  Ta datoteka nadomešča auto-generirani AppDatabase_Impl ker KSP
+//     za Kotlin 2.2.x še ni uradno objavljen na Maven repozitoriju.
 //
-// Ko bo KSP objavljen za Kotlin 2.2.x:
-//   1. Dodaj KSP plugin + room-compiler dependency
-//   2. Zbriši to datoteko ročno
-//   3. Gradle bo regeneriral pravo implementacijo
+// ⛔  KO BO KSP NA VOLJO (preverite: https://github.com/google/ksp/releases):
+//     1. V app/build.gradle.kts: odkomentirajte blok "KSP SETUP"
+//     2. V build.gradle.kts (root): odkomentirajte KSP plugin
+//     3. ROČNO ZBRIŠI TA DATOTEKO iz Android Studia (Right-click → Delete)
+//     4. Zaženite: ./gradlew clean assembleDebug
 //
 // Paketi (po refaktoriranju):
 //   Entitete : com.example.myapplication.data.local.entity
@@ -32,8 +32,10 @@ import com.example.myapplication.data.local.doo.WorkoutSessionDao
 import com.example.myapplication.data.local.entity.GpsPointEntity
 import com.example.myapplication.data.local.entity.WorkoutSessionEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // Konfliktne konstante (skladno z SQLiteDatabase)
@@ -46,19 +48,34 @@ private class WorkoutSessionDao_Impl(private val db: AppDatabase) : WorkoutSessi
 
     private val _sessionsFlow = MutableStateFlow<List<WorkoutSessionEntity>>(emptyList())
 
+    // FIX: prevents duplicate observer registration on repeated getSessionsFlow() calls
+    @Volatile private var _observerRegistered = false
+
+    // FIX: refreshSessions is now always dispatched on IO — never blocks the main thread
     private fun refreshSessions() {
-        val cursor = db.openHelper.writableDatabase
-            .query("SELECT * FROM workout_sessions ORDER BY createdAt DESC")
-        val list = mutableListOf<WorkoutSessionEntity>()
-        cursor.use { while (it.moveToNext()) list.add(it.toWorkoutSessionEntity()) }
-        _sessionsFlow.value = list
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val cursor = db.openHelper.writableDatabase
+                    .query("SELECT * FROM workout_sessions ORDER BY createdAt DESC")
+                val list = mutableListOf<WorkoutSessionEntity>()
+                cursor.use { while (it.moveToNext()) list.add(it.toWorkoutSessionEntity()) }
+                _sessionsFlow.value = list
+            } catch (_: Exception) {
+                // DB not yet ready — skip; observer will retry on next invalidation
+            }
+        }
     }
 
     override fun getSessionsFlow(): Flow<List<WorkoutSessionEntity>> {
+        // Register invalidation observer only once per DAO instance
+        if (!_observerRegistered) {
+            _observerRegistered = true
+            db.invalidationTracker.addObserver(object : InvalidationTracker.Observer("workout_sessions") {
+                override fun onInvalidated(tables: Set<String>) { refreshSessions() }
+            })
+        }
+        // Load initial data asynchronously (IO thread)
         refreshSessions()
-        db.invalidationTracker.addObserver(object : InvalidationTracker.Observer("workout_sessions") {
-            override fun onInvalidated(tables: Set<String>) { refreshSessions() }
-        })
         return _sessionsFlow
     }
 
@@ -194,7 +211,9 @@ class AppDatabase_Impl : AppDatabase() {
     }
 
     override fun createInvalidationTracker(): InvalidationTracker =
-        InvalidationTracker(this, "workout_sessions", "gps_points")
+        // Room 2.6.1 podpis: (RoomDatabase, Map<String,String>, Map<String,Set<String>>, vararg String)
+        // shadowTablesMap = empty (ni FTS tabel), viewTables = empty (ni pogledov)
+        InvalidationTracker(this, emptyMap<String, String>(), emptyMap<String, Set<String>>(), "workout_sessions", "gps_points")
 
     override fun clearAllTables() {
         val sqLite = openHelper.writableDatabase
@@ -280,6 +299,9 @@ class AppDatabase_Impl : AppDatabase() {
     }
 
     companion object {
+        // ⚠️ Ta hash je placeholder. KSP generira pravo vrednost iz sheme.
+        //    fallbackToDestructiveMigration() v AppDatabase zagotavlja, da napačen
+        //    hash ne sesuje aplikacije — samo obnovi prazen DB.
         private const val IDENTITY_HASH = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
     }
 }

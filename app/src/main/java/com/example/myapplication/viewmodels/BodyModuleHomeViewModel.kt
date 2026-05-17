@@ -181,13 +181,18 @@ class BodyModuleHomeViewModel(
                         isExtra = intent.isExtraWorkout,
                         exerciseResults = intent.exerciseResults,
                         focusAreas = intent.focusAreas,
-                        isRestDay = isRestDay  // FIX: propagiraj rest day status do use case
+                        isRestDay = isRestDay
                     )
 
                     result.onSuccess { completionResult ->
                         if (intent.email.isNotBlank()) {
                             try {
                                 getBodyMetrics.invoke(intent.email).collect { metrics ->
+                                    // FIX #4: Preskoči začetno loading emisijo — ta vsebuje vse privzeto 0.
+                                    // Brez tega bi weeklyDone/streakDays/planDay začasno padli na 0,
+                                    // kar povzroči utripanje progres bara in lažni streak Toast.
+                                    if (metrics.isLoading) return@collect
+
                                     val newStreak = metrics.streakDays
                                     _ui.value = _ui.value.copy(
                                         streakDays = metrics.streakDays,
@@ -212,6 +217,8 @@ class BodyModuleHomeViewModel(
                                     showCompletionAnimation = !intent.isExtraWorkout,
                                     planDay = _ui.value.planDay + if (!intent.isExtraWorkout) 1 else 0,
                                     streakDays = optimisticStreak,
+                                    // FIX #4: optimistično posodobi weeklyDone takoj
+                                    weeklyDone = (_ui.value.weeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget),
                                     dailyKcal = _ui.value.dailyKcal + intent.totalKcal
                                 )
                                 _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = optimisticStreak, isRestDay = false))
@@ -221,6 +228,7 @@ class BodyModuleHomeViewModel(
                                 isLoading = false,
                                 isWorkoutDoneToday = true,
                                 showCompletionAnimation = !intent.isExtraWorkout,
+                                weeklyDone = (_ui.value.weeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget),
                                 dailyKcal = _ui.value.dailyKcal + intent.totalKcal
                             )
                         }
