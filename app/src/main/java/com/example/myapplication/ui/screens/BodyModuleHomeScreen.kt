@@ -209,12 +209,8 @@ fun BodyModuleHomeScreen(
             // FIX #2 + #3: Pogoji — rest dan, raztezanje še ni opravljeno, NISO v loading stanju,
             // in danes NI bil že opravljen redni trening (prepreči Stretching Loop).
             // Ref: ManageGamificationUseCase.restDayInitiated() ima server-side guard za dvojno varnost.
-            if (ui.todayIsRest
-                && !ui.isLoading
-                && ui.todayStatus != "STRETCHING_DONE"
-                && ui.todayStatus != "WORKOUT_DONE"
-                && ui.todayStatus != "REST_WORKOUT_DONE"
-            ) {
+            // Faza 21: UserDayStatus.isDoneToday nadomešča trojno String primerjavo
+            if (ui.todayIsRest && !ui.isLoading && !ui.todayStatus.isDoneToday) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
                     shape = MaterialTheme.shapes.large,

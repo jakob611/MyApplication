@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
+import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
@@ -17,11 +18,10 @@ import kotlinx.datetime.toLocalDateTime
  * Zlata koda - KMP ready Firestore implementacija za Gamification.
  * NIMA NITI ENE SharedPreferences ODVISNOSTI.
  *
- * Faza 12: Unified Streak + XP + Calories Engine.
- * - getYesterdayStr() popravljena (DST-safe kotlinx.datetime algebra)
- * - processWorkoutCompletion: ENA atomarna transakcija za streak + XP + kalorije
- * - updateStreak: epoch-based (last_activity_epoch), enaka logika kot processWorkoutCompletion
- * - last_activity_epoch nadomešča last_workout_epoch (pokriva trening IN raztezanje)
+ * Faza 21: Unified moveToNextDay() nadomešča processActivityCompletion() + updateStreak().
+ * - Ena atomarna Firestore transakcija za VSE poti aktivnostnega zaključka
+ * - getYesterdayStr() DST-safe kotlinx.datetime algebra
+ * - UserDayStatus tipsko-varni enum nadomešča raztresene String konstante
  */
 class FirestoreGamificationRepository : GamificationRepository {
 
@@ -30,13 +30,11 @@ class FirestoreGamificationRepository : GamificationRepository {
     private fun getTodayStr(): String =
         Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
 
-    /** Faza 12: DST-safe izračun včerajšnjega datuma prek kotlinx.datetime algebre. */
+    /** DST-safe izračun včerajšnjega datuma prek kotlinx.datetime algebre. */
     private fun getYesterdayStr(): String =
         Clock.System.now()
             .toLocalDateTime(TimeZone.currentSystemDefault())
-            .date
-            .minus(1, DateTimeUnit.DAY)
-            .toString()
+            .date.minus(1, DateTimeUnit.DAY).toString()
 
     private fun getTodayEpoch(): Long =
         Clock.System.now()
@@ -44,33 +42,24 @@ class FirestoreGamificationRepository : GamificationRepository {
             .date.toEpochDays().toLong()
 
     // ─────────────────────────────────────────────────────────────────────────
-    // awardXP — ostane za neodvisne klice (login, plan, rest day, extra workout)
+    // awardXP — za neodvisne klice (login, plan, itd.)
     // ─────────────────────────────────────────────────────────────────────────
     override suspend fun awardXP(amount: Int, reason: String) {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return
         try {
             db.runTransaction { transaction ->
-                val snapshot    = transaction.get(userRef)
-                val currentXp   = snapshot.getLong("xp")?.toInt() ?: 0
-                val newXp       = currentXp + amount
-                val newLevel    = UserProfile.calculateLevel(newXp)
-
-                transaction.set(userRef, mapOf(
-                    "xp"    to newXp,
-                    "level" to newLevel
-                ), SetOptions.merge())
-
+                val snapshot  = transaction.get(userRef)
+                val currentXp = snapshot.getLong("xp")?.toInt() ?: 0
+                val newXp     = currentXp + amount
+                val newLevel  = UserProfile.calculateLevel(newXp)
+                transaction.set(userRef, mapOf("xp" to newXp, "level" to newLevel), SetOptions.merge())
                 val logRef = userRef.collection("xp_history").document()
                 transaction.set(logRef, mapOf(
-                    "amount"     to amount,
-                    "reason"     to reason,
-                    "date"       to getTodayStr(),
-                    "timestamp"  to Clock.System.now().toEpochMilliseconds(),
-                    "xpAfter"    to newXp,
-                    "levelAfter" to newLevel
+                    "amount" to amount, "reason" to reason, "date" to getTodayStr(),
+                    "timestamp" to Clock.System.now().toEpochMilliseconds(),
+                    "xpAfter" to newXp, "levelAfter" to newLevel
                 ))
             }.await()
-            Log.d("GamificationRepo", "✅ Dodeljeno $amount XP za '$reason'")
         } catch (e: Exception) {
             Log.e("GamificationRepo", "Napaka pri beleženju XP-ja", e)
         }
@@ -83,71 +72,6 @@ class FirestoreGamificationRepository : GamificationRepository {
         } catch (e: Exception) { 0 }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // updateStreak — Faza 12: Epoch-based (pokriva raztezanje na rest dnevu)
-    // Uporablja last_activity_epoch (skupno polje za trening IN raztezanje)
-    // ─────────────────────────────────────────────────────────────────────────
-    override suspend fun updateStreak(isWorkoutSuccess: Boolean, activityType: String): Int {
-        val userRef    = FirestoreHelper.getCurrentUserDocRef() ?: return 0
-        val todayStr   = getTodayStr()
-        val todayEpoch = getTodayEpoch()
-
-        return try {
-            var computedStreak = 0
-            db.runTransaction { transaction ->
-                val snapshot = transaction.get(userRef)
-
-                // De-dup: dan je že zabeležen → preskoči
-                @Suppress("UNCHECKED_CAST")
-                val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-                if (dailyHistory.containsKey(todayStr)) {
-                    computedStreak = snapshot.getLong("streak_days")?.toInt() ?: 0
-                    Log.d("GamificationRepo", "updateStreak: $todayStr že zabeležen (${dailyHistory[todayStr]}) — preskočim.")
-                    return@runTransaction null
-                }
-
-                val oldStreak    = (snapshot.getLong("streak_days")          ?: 0L).toInt()
-                val oldLastEpoch =  snapshot.getLong("last_activity_epoch")  ?: 0L
-                val oldFreezes   = (snapshot.getLong("streak_freezes")       ?: 0L).toInt()
-
-                val dayDiff = todayEpoch - oldLastEpoch
-                var newFreezes = oldFreezes
-
-                val newStreak: Int = when {
-                    !isWorkoutSuccess  -> oldStreak          // ni uspeh → ohrani brez spremembe
-                    oldLastEpoch == 0L -> 1                  // prvi zapis kdajkoli
-                    dayDiff == 0L      -> oldStreak          // isti dan (ne bi smelo sem, de-dup zgoraj)
-                    dayDiff == 1L      -> oldStreak + 1      // včeraj aktiven → podaljšaj
-                    else -> {
-                        // Vrzel — preveri Streak Freeze
-                        if (oldFreezes > 0) {
-                            newFreezes = oldFreezes - 1
-                            Log.d("GamificationRepo", "❄️ updateStreak Freeze porabljen! Ostalo: $newFreezes")
-                            oldStreak  // streak se ohrani, NE poveča
-                        } else { 1 }
-                    }
-                }
-                computedStreak = newStreak
-
-                val updates = mutableMapOf<String, Any>(
-                    "streak_days"             to newStreak,
-                    "last_activity_epoch"     to todayEpoch,
-                    "last_streak_update_date" to todayStr,
-                    "dailyHistory.$todayStr"  to activityType
-                )
-                if (newFreezes != oldFreezes) updates["streak_freezes"] = newFreezes
-
-                transaction.update(userRef, updates)
-                Log.d("GamificationRepo", "✅ updateStreak: streak=$newStreak, activityType=$activityType, dayDiff=$dayDiff")
-                null
-            }.await()
-            computedStreak
-        } catch (e: Exception) {
-            Log.e("GamificationRepo", "Napaka pri updateStreak()", e)
-            0
-        }
-    }
-
     override suspend fun markRestDayPending() {
         val userRef  = FirestoreHelper.getCurrentUserDocRef() ?: return
         val todayStr = getTodayStr()
@@ -156,191 +80,49 @@ class FirestoreGamificationRepository : GamificationRepository {
                 val snapshot = transaction.get(userRef)
                 @Suppress("UNCHECKED_CAST")
                 val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-                val existing = dailyHistory[todayStr]?.toString()
+                val existing = UserDayStatus.fromFirestore(dailyHistory[todayStr]?.toString())
                 // Idempotentno — ne prepiši zaključenih statusov
-                if (existing == "STRETCHING_DONE" || existing == "WORKOUT_DONE") return@runTransaction null
-                transaction.update(userRef, mapOf("dailyHistory.$todayStr" to "PENDING_STRETCHING"))
+                if (existing.isDoneToday) return@runTransaction null
+                transaction.update(userRef, mapOf(
+                    "dailyHistory.$todayStr" to UserDayStatus.REST_DAY_PENDING.firestoreValue
+                ))
                 null
             }.await()
-            Log.d("GamificationRepo", "✅ Rest day $todayStr → PENDING_STRETCHING")
         } catch (e: Exception) {
             Log.e("GamificationRepo", "Napaka pri markRestDayPending()", e)
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // processActivityCompletion — Faza 12b: ENA atomarna transakcija za VSE aktivnosti
-    //
-    // KRITIČNA FIX (Faza 12b): isRestDay=true NE sme zaobiti transakcije!
-    // Brez vpisa v dailyHistory in last_activity_epoch midnight worker vidi prazen dan
-    // in kaznuje uporabnika z Freeze porabo ali streakResetom — čeprav je treniral.
-    //
-    // Streak matrika:
-    //   dayDiff == 1L + isRestDay=true  → ohrani streak (rest day ne prispeva +1)
-    //   dayDiff == 1L + isRestDay=false → streak + 1     (redni workout)
-    //   dayDiff > 1L                    → freeze? ohrani : 1
-    //
-    // dailyHistory status:
-    //   isRestDay=false → "WORKOUT_DONE"
-    //   isRestDay=true  → "REST_WORKOUT_DONE"
-    // ─────────────────────────────────────────────────────────────────────────
-    override suspend fun processActivityCompletion(
-        isRestDay: Boolean,
-        incrementPlanDay: Boolean,
-        xpToBeAwarded: Int,
-        xpReason: String,
-        caloriesBurned: Double
-    ) {
-        val userRef    = FirestoreHelper.getCurrentUserDocRef() ?: return
-        val todayStr   = getTodayStr()
-        val todayEpoch = getTodayEpoch()
-        val nowMillis  = Clock.System.now().toEpochMilliseconds()
-        val todayStatus = if (isRestDay) "REST_WORKOUT_DONE" else "WORKOUT_DONE"
-
-        try {
-            db.runTransaction { transaction ->
-                // ── READ faza (vse read-e pred write-i) ────────────────────
-                val snapshot = transaction.get(userRef)
-
-                // De-dup: prepreči ponavljajoče klice istega tipa za isti dan
-                // "WORKOUT_DONE" je višja prioriteta — ne prepiši ga z "REST_WORKOUT_DONE"
-                @Suppress("UNCHECKED_CAST")
-                val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-                val existingStatus = dailyHistory[todayStr]?.toString()
-                if (existingStatus == "WORKOUT_DONE" || existingStatus == todayStatus) {
-                    Log.d("GamificationRepo", "processActivityCompletion: danes že '$existingStatus' — preskočim.")
-                    return@runTransaction null
-                }
-
-                val oldStreak      = (snapshot.getLong("streak_days")         ?: 0L).toInt()
-                val oldLastEpoch   =  snapshot.getLong("last_activity_epoch") ?: 0L
-                val oldPlanDay     = (snapshot.getLong("plan_day")            ?: 1L).toInt()
-                val oldFreezes     = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
-                val currentXp      = (snapshot.getLong("xp")                  ?: 0L).toInt()
-                // ✅ Fix weekly_done: beremo in atomarno inkrementiramo v isti transakciji
-                val oldWeeklyDone  = (snapshot.getLong("weekly_done")         ?: 0L).toInt()
-
-                // Atomarno branje dailyLogs dokumenta (za akumulacijo kalorij)
-                val dailyLogRef      = db.collection("dailyLogs").document(todayStr)
-                val dailyLogSnapshot = transaction.get(dailyLogRef)
-                val existingCals     = (dailyLogSnapshot.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
-
-                // ── Streak izračun (epoch-based z isRestDay matriko) ────────
-                val dayDiff    = todayEpoch - oldLastEpoch
-                var newFreezes = oldFreezes
-                val newStreak: Int = when {
-                    oldLastEpoch == 0L -> 1          // prvi zapis kdajkoli
-                    dayDiff == 0L      -> oldStreak  // isti dan (ne bi smelo sem — de-dup zgoraj)
-                    dayDiff == 1L      -> {
-                        // Včeraj aktiven: rest day ohrani streak, redni workout ga poveča
-                        if (isRestDay) oldStreak else oldStreak + 1
-                    }
-                    else -> {
-                        // Vrzel > 1 dan: preveri Streak Freeze
-                        if (oldFreezes > 0) {
-                            newFreezes = oldFreezes - 1
-                            Log.d("GamificationRepo", "❄️ processActivityCompletion Freeze porabljen! Ostalo: $newFreezes")
-                            oldStreak  // ohrani streak, NE poveča
-                        } else {
-                            1          // ni freeze → ponastavi na 1
-                        }
-                    }
-                }
-
-                // ── XP + Level ─────────────────────────────────────────────
-                val newXp    = currentXp + xpToBeAwarded
-                val newLevel = UserProfile.calculateLevel(newXp)
-
-                // ── Plan day (samo za redne workouty) ─────────────────────
-                val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
-
-                // ── WRITE faza ─────────────────────────────────────────────
-                // 1. Glavni user dokument — streak + XP + plan_day + epoch + dailyHistory + weekly_done
-                val userUpdates = mutableMapOf<String, Any>(
-                    "streak_days"             to newStreak,
-                    "plan_day"                to newPlanDay,
-                    "last_activity_epoch"     to todayEpoch,   // ← VEDNO posodobi (zavaruje pred midnight check)
-                    "last_streak_update_date" to todayStr,
-                    "dailyHistory.$todayStr"  to todayStatus,  // "WORKOUT_DONE" ali "REST_WORKOUT_DONE"
-                    "xp"                      to newXp,
-                    "level"                   to newLevel,
-                    // ✅ Fix: weekly_done se posodablja atomarno v isti transakciji
-                    "weekly_done"             to (oldWeeklyDone + 1)
-                )
-                if (newFreezes != oldFreezes) userUpdates["streak_freezes"] = newFreezes
-                transaction.update(userRef, userUpdates)
-
-                // 2. XP history log (subcollection)
-                val xpLogRef = userRef.collection("xp_history").document()
-                transaction.set(xpLogRef, mapOf(
-                    "amount"     to xpToBeAwarded,
-                    "reason"     to xpReason,
-                    "date"       to todayStr,
-                    "timestamp"  to nowMillis,
-                    "xpAfter"    to newXp,
-                    "levelAfter" to newLevel
-                ))
-
-                // 3. Burned calories v dailyLogs (Nutrition bridge)
-                if (caloriesBurned > 0.0) {
-                    transaction.set(
-                        dailyLogRef,
-                        mapOf(
-                            "burnedCalories" to existingCals + caloriesBurned,
-                            "userId"         to userRef.id
-                        ),
-                        SetOptions.merge()
-                    )
-                }
-
-                Log.d("GamificationRepo",
-                    "✅ processActivityCompletion [isRestDay=$isRestDay]: " +
-                    "streak=$newStreak, planDay=$newPlanDay, " +
-                    "xp=+$xpToBeAwarded (→$newXp), level=$newLevel, " +
-                    "calories=$caloriesBurned, status=$todayStatus, " +
-                    "weekly_done=${oldWeeklyDone + 1}, " +
-                    "freezeUsed=${newFreezes != oldFreezes}")
-                null
-            }.await()
-        } catch (e: Exception) {
-            Log.e("GamificationRepo", "❌ processActivityCompletion failed: ${e.message}", e)
-        }
-    }
-
-    override suspend fun getTodayStatus(): String? {
-        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return null
+    override suspend fun getTodayStatus(): UserDayStatus {
+        val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return UserDayStatus.WORKOUT_PENDING
         return try {
             val snapshot = userRef.get().await()
             @Suppress("UNCHECKED_CAST")
             val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-            dailyHistory[getTodayStr()]?.toString()
-        } catch (e: Exception) { null }
+            UserDayStatus.fromFirestore(dailyHistory[getTodayStr()]?.toString())
+        } catch (e: Exception) { UserDayStatus.WORKOUT_PENDING }
     }
 
     override suspend fun consumeStreakFreeze(): Boolean {
         val userRef = FirestoreHelper.getCurrentUserDocRef() ?: return false
         return try {
-            var freezeConsumed = false
+            var consumed = false
             db.runTransaction { transaction ->
-                val snapshot       = transaction.get(userRef)
-                val currentFreezes = snapshot.getLong("streak_freezes")?.toInt() ?: 0
-                if (currentFreezes > 0) {
-                    transaction.update(userRef, "streak_freezes", currentFreezes - 1)
-                    freezeConsumed = true
-                }
+                val snap = transaction.get(userRef)
+                val curr = snap.getLong("streak_freezes")?.toInt() ?: 0
+                if (curr > 0) { transaction.update(userRef, "streak_freezes", curr - 1); consumed = true }
             }.await()
-            freezeConsumed
+            consumed
         } catch (e: Exception) { false }
     }
 
-    /** Ostane v vmesniku za neodvisne callers (extra workout na rest dnevu). */
     override suspend fun logBurnedCalories(todayStr: String, calories: Double) {
         try {
             val userRef     = FirestoreHelper.getCurrentUserDocRef() ?: return
             val dailyLogRef = db.collection("dailyLogs").document(todayStr)
             db.runTransaction { transaction ->
-                val snapshot = transaction.get(dailyLogRef)
-                val existing = (snapshot.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
+                val snap     = transaction.get(dailyLogRef)
+                val existing = (snap.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
                 transaction.set(
                     dailyLogRef,
                     mapOf("burnedCalories" to existing + calories, "userId" to userRef.id),
@@ -355,27 +137,143 @@ class FirestoreGamificationRepository : GamificationRepository {
 
     override suspend fun getGamificationState(): GamificationState {
         return try {
-            val userRef     = FirestoreHelper.getCurrentUserDocRef() ?: return GamificationState()
-            val snapshot    = userRef.get().await()
-            val weeklyTarget    = snapshot.getLong("weekly_target")?.toInt() ?: 0
-            val todayStatus     = getTodayStatus() ?: ""
-            val workoutDoneToday = todayStatus == "WORKOUT_DONE"
-                    || todayStatus == "REST_WORKOUT_DONE"
-                    || todayStatus == "STRETCHING_DONE"
-            GamificationState(weeklyTarget = weeklyTarget, workoutDoneToday = workoutDoneToday)
+            val userRef  = FirestoreHelper.getCurrentUserDocRef() ?: return GamificationState()
+            val snapshot = userRef.get().await()
+            val weeklyTarget   = snapshot.getLong("weekly_target")?.toInt() ?: 0
+            val workoutDone    = getTodayStatus().isDoneToday
+            GamificationState(weeklyTarget = weeklyTarget, workoutDoneToday = workoutDone)
         } catch (e: Exception) { GamificationState() }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // runMidnightStreakCheck — Faza 12c: Strogi statusni check
+    // moveToNextDay — SSOT za VSE aktivnostne zaključke (Faza 21)
     //
-    // KRITIČNA FIX: containsKey() je bil "free pass" hrošč.
-    // "PENDING_STRETCHING" je obstoječ ključ → stari check je vrnil null → kazen preskočena.
-    // Len uporabnik je ohranil streak brezplačno.
+    // ENA atomarna Firestore transakcija za:
+    //   ① De-duplikacija (ne prepiše WORKOUT_DONE z nižjo prioriteto)
+    //   ② Streak izračun (epoch-based, Streak Freeze podpora)
+    //   ③ plan_day +1 (samo kadar incrementPlanDay=true)
+    //   ④ XP + Level atomarno
+    //   ⑤ dailyHistory vpis z UserDayStatus.firestoreValue
+    //   ⑥ burnedCalories v dailyLogs (Nutrition bridge)
     //
-    // Nova logika: preveri VREDNOST, ne zgolj obstoj ključa.
-    // Samo eksplicitno uspešni statusi štejejo: WORKOUT_DONE, REST_WORKOUT_DONE,
-    // STRETCHING_DONE, FROZEN. Vse ostalo (null, PENDING_STRETCHING, MISSED) → kazen.
+    // Če transakcija SPODLETI → Room ni posodobljena (callerji prejmejo 0).
+    // ─────────────────────────────────────────────────────────────────────────
+    override suspend fun moveToNextDay(
+        newStatus: UserDayStatus,
+        xpToBeAwarded: Int,
+        xpReason: String,
+        caloriesBurned: Double,
+        incrementPlanDay: Boolean
+    ): Int {
+        // Samo zaključitveni statusi so dovoljeni
+        require(newStatus.isDoneToday) {
+            "moveToNextDay zahteva zaključitveni status (WORKOUT_DONE, REST_DAY_DONE, REST_WORKOUT_DONE)."
+        }
+
+        val userRef    = FirestoreHelper.getCurrentUserDocRef() ?: return 0
+        val todayStr   = getTodayStr()
+        val todayEpoch = getTodayEpoch()
+        val nowMillis  = Clock.System.now().toEpochMilliseconds()
+        var resultStreak = 0
+
+        return try {
+            db.runTransaction { transaction ->
+                // ── READ faza ─────────────────────────────────────────────
+                val snapshot = transaction.get(userRef)
+
+                @Suppress("UNCHECKED_CAST")
+                val dailyHistory   = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
+                val existingStatus = UserDayStatus.fromFirestore(dailyHistory[todayStr]?.toString())
+
+                // De-dup: WORKOUT_DONE je najvišja prioriteta, ne prepiši ga
+                if (existingStatus == UserDayStatus.WORKOUT_DONE || existingStatus == newStatus) {
+                    Log.d("GamificationRepo", "moveToNextDay: $todayStr že '$existingStatus' — de-dup preskoček.")
+                    resultStreak = snapshot.getLong("streak_days")?.toInt() ?: 0
+                    return@runTransaction null
+                }
+
+                val oldStreak     = (snapshot.getLong("streak_days")         ?: 0L).toInt()
+                val oldLastEpoch  =  snapshot.getLong("last_activity_epoch") ?: 0L
+                val oldPlanDay    = (snapshot.getLong("plan_day")            ?: 1L).toInt()
+                val oldFreezes    = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
+                val currentXp     = (snapshot.getLong("xp")                  ?: 0L).toInt()
+
+                // Burned calories za Nutrition bridge
+                val dailyLogRef = db.collection("dailyLogs").document(todayStr)
+                val logSnapshot = if (caloriesBurned > 0.0) transaction.get(dailyLogRef) else null
+                val existingCals = (logSnapshot?.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
+
+                // ── Streak izračun ─────────────────────────────────────────
+                val dayDiff    = todayEpoch - oldLastEpoch
+                var newFreezes = oldFreezes
+                val newStreak: Int = when {
+                    !newStatus.contributesToStreak -> oldStreak          // REST_WORKOUT_DONE = ohrani
+                    oldLastEpoch == 0L             -> 1                  // Prva aktivnost kdajkoli
+                    dayDiff == 0L                  -> oldStreak          // Isti dan (de-dup zgoraj bi ujel)
+                    dayDiff == 1L                  -> oldStreak + 1      // Včeraj aktiven → podaljšaj
+                    oldFreezes > 0                 -> {                  // Vrzel > 1 dan → preveri Freeze
+                        newFreezes = oldFreezes - 1
+                        Log.d("GamificationRepo", "❄️ moveToNextDay: Streak Freeze porabljen! Ostalo: $newFreezes")
+                        oldStreak
+                    }
+                    else -> 1                                            // Ni freeze → ponastavi na 1
+                }
+                resultStreak = newStreak
+
+                // ── Plan day napredovanje ──────────────────────────────────
+                val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
+
+                // ── XP + Level ─────────────────────────────────────────────
+                val newXp    = currentXp + xpToBeAwarded
+                val newLevel = UserProfile.calculateLevel(newXp)
+
+                // ── WRITE faza ─────────────────────────────────────────────
+                val userUpdates = mutableMapOf<String, Any>(
+                    "streak_days"             to newStreak,
+                    "plan_day"                to newPlanDay,
+                    "last_activity_epoch"     to todayEpoch,
+                    "last_streak_update_date" to todayStr,
+                    "dailyHistory.$todayStr"  to newStatus.firestoreValue,
+                    "xp"                      to newXp,
+                    "level"                   to newLevel
+                )
+                if (newFreezes != oldFreezes) userUpdates["streak_freezes"] = newFreezes
+                transaction.update(userRef, userUpdates)
+
+                // XP history log
+                if (xpToBeAwarded > 0) {
+                    val xpLogRef = userRef.collection("xp_history").document()
+                    transaction.set(xpLogRef, mapOf(
+                        "amount" to xpToBeAwarded, "reason" to xpReason,
+                        "date" to todayStr, "timestamp" to nowMillis,
+                        "xpAfter" to newXp, "levelAfter" to newLevel
+                    ))
+                }
+
+                // Burned calories → Nutrition bridge
+                if (caloriesBurned > 0.0 && logSnapshot != null) {
+                    transaction.set(
+                        dailyLogRef,
+                        mapOf("burnedCalories" to existingCals + caloriesBurned, "userId" to userRef.id),
+                        SetOptions.merge()
+                    )
+                }
+
+                Log.d("GamificationRepo",
+                    "✅ moveToNextDay [$newStatus]: streak=$newStreak→$newStreak, " +
+                    "planDay=$oldPlanDay→$newPlanDay, xp=+$xpToBeAwarded(→$newXp), " +
+                    "level=$newLevel, cals=$caloriesBurned, freezeUsed=${newFreezes != oldFreezes}")
+                null
+            }.await()
+            resultStreak
+        } catch (e: Exception) {
+            Log.e("GamificationRepo", "❌ moveToNextDay spodletel: ${e.message}", e)
+            0
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // runMidnightStreakCheck — Strogi statusni check za včerajšnji dan
     // ─────────────────────────────────────────────────────────────────────────
     override suspend fun runMidnightStreakCheck() {
         val userRef      = FirestoreHelper.getCurrentUserDocRef() ?: return
@@ -387,30 +285,28 @@ class FirestoreGamificationRepository : GamificationRepository {
                 @Suppress("UNCHECKED_CAST")
                 val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
 
-                // Strogi check: samo eksplicitno uspešni statusi osvobodijo od kazni
-                val yesterdayStatus = dailyHistory[yesterdayStr]?.toString()
-                val safeStatuses    = setOf("WORKOUT_DONE", "REST_WORKOUT_DONE", "STRETCHING_DONE", "FROZEN")
-
+                val yesterdayStatus = UserDayStatus.fromFirestore(dailyHistory[yesterdayStr]?.toString())
+                val safeStatuses    = setOf(
+                    UserDayStatus.WORKOUT_DONE, UserDayStatus.REST_WORKOUT_DONE,
+                    UserDayStatus.REST_DAY_DONE, UserDayStatus.FROZEN
+                )
                 if (yesterdayStatus in safeStatuses) {
                     Log.d("GamificationRepo", "✅ Midnight check: včeraj ($yesterdayStr) = '$yesterdayStatus' — ni kazni.")
                     return@runTransaction null
                 }
 
-                // Vse ostalo (null, "PENDING_STRETCHING", "MISSED") → kazen
                 Log.d("GamificationRepo", "⚠️ Midnight check: včeraj ($yesterdayStr) = '$yesterdayStatus' → kazen.")
                 val currentFreezes = (snapshot.getLong("streak_freezes") ?: 0L).toInt()
                 if (currentFreezes > 0) {
                     transaction.update(userRef, mapOf(
                         "streak_freezes"             to (currentFreezes - 1),
-                        "dailyHistory.$yesterdayStr" to "FROZEN"
+                        "dailyHistory.$yesterdayStr" to UserDayStatus.FROZEN.firestoreValue
                     ))
-                    Log.d("GamificationRepo", "❄️ Midnight Freeze auto-porabljen. Ostalo: ${currentFreezes - 1}")
                 } else {
                     transaction.update(userRef, mapOf(
                         "streak_days"                to 0,
-                        "dailyHistory.$yesterdayStr" to "MISSED"
+                        "dailyHistory.$yesterdayStr" to UserDayStatus.MISSED.firestoreValue
                     ))
-                    Log.d("GamificationRepo", "💔 Ni freeze-a. Streak je padel na 0.")
                 }
                 null
             }.await()
@@ -418,8 +314,5 @@ class FirestoreGamificationRepository : GamificationRepository {
             Log.e("GamificationRepo", "Polnočni streak check je spodletel.", e)
         }
     }
-
 }
-
-
 

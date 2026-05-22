@@ -1,6 +1,7 @@
 package com.example.myapplication.domain.gamification
 
 import com.example.myapplication.domain.model.AchievementProfile
+import com.example.myapplication.domain.model.UserDayStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -22,11 +23,11 @@ data class GamificationState(
 /**
  * UseCase za gamification logiko.
  *
+ * Faza 21: recordWorkoutCompletion() in restDayInitiated() sedaj oba kličeta
+ * repository.moveToNextDay() — en SSOT za vse aktivnostne zaključke.
+ *
  * Clean Architecture: komunicira SAMO z GamificationRepository (domain interface).
  * KMP-ready: brez Android, data.settings, data.UserProfile odvisnosti.
- *
- * Faza 12: recordWorkoutCompletion() izračuna XP pred klicem atomarnega
- * processWorkoutCompletion(). completeWorkoutSession() IZBRISAN (legacy stub).
  */
 class ManageGamificationUseCase(
     private val repository: GamificationRepository
@@ -38,30 +39,11 @@ class ManageGamificationUseCase(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // recordWorkoutCompletion — Faza 12b: XP izračun + VEDNO en atomaren klic
+    // recordWorkoutCompletion — izračuna XP in delegira na moveToNextDay()
     //
-    // KRITIČNA FIX: isRestDay NE zaobide klica repozitorija!
-    // Brez vpisa v dailyHistory in last_activity_epoch midnight worker vidi prazen dan
-    // → porabi Streak Freeze ali resetira streak na 0, čeprav je uporabnik treniral.
-    //
-    // processActivityCompletion pokrije VSE scenarije v ENI transakciji:
-    //   isRestDay=false → "WORKOUT_DONE" + streak+1
-    //   isRestDay=true  → "REST_WORKOUT_DONE" + streak ohranjen (ne pade!)
+    // @param isRestDay      true = extra workout na rest dnevu → REST_WORKOUT_DONE
+    // @param incrementPlanDay true = redni workout → plan_day +1
     // ─────────────────────────────────────────────────────────────────────────
-    /**
-     * Zaključi vadbo: izračuna skupni XP, nato pokliče atomarni engine za vse scenarije.
-     *
-     * XP formula:
-     *   calorieXP  = caloriesBurned / 8   (1 XP na 8 kcal)
-     *   baseXP     = 50
-     *   Critical   = 10% verjetnost → baseXP × 2
-     *   totalXP    = finalBaseXP + calorieXP
-     *
-     * @param caloriesBurned kcal porabljene med vadbo
-     * @param hour           ura vadbe (rezervirano za Early Bird / Night Owl bonus)
-     * @param isRestDay      true = extra vadba na rest dnevu → streak se ohrani (ne poveča, ne pade)
-     * @param incrementPlanDay true = redni workout → plan_day +1 v Firestore
-     */
     suspend fun recordWorkoutCompletion(
         caloriesBurned: Double,
         hour: Int,
@@ -69,21 +51,21 @@ class ManageGamificationUseCase(
         incrementPlanDay: Boolean = true
     ): WorkoutCompletionResult {
 
-        // ── XP izračun (pred klicem repozitorija) ────────────────────────────
-        val calorieXP   = (caloriesBurned / 8).toInt()         // 1 XP = 8 kcal
+        val calorieXP   = (caloriesBurned / 8).toInt()
         val baseXP      = 50
         val isCritical  = kotlin.random.Random.nextFloat() < 0.1f
         val finalBaseXP = if (isCritical) baseXP * 2 else baseXP
         val totalXP     = finalBaseXP + calorieXP
-        // ─────────────────────────────────────────────────────────────────────
 
-        // VEDNO pokliči atomarni engine — isRestDay=true NE sme zaobiti tega klica!
-        repository.processActivityCompletion(
-            isRestDay        = isRestDay,
-            incrementPlanDay = incrementPlanDay,
+        val newStatus = if (isRestDay) UserDayStatus.REST_WORKOUT_DONE else UserDayStatus.WORKOUT_DONE
+        val xpReason  = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE"
+
+        repository.moveToNextDay(
+            newStatus        = newStatus,
             xpToBeAwarded    = totalXP,
-            xpReason         = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE",
-            caloriesBurned   = caloriesBurned
+            xpReason         = xpReason,
+            caloriesBurned   = caloriesBurned,
+            incrementPlanDay = incrementPlanDay && !isRestDay
         )
 
         return WorkoutCompletionResult(emptyList(), totalXP, isCritical)
@@ -95,10 +77,6 @@ class ManageGamificationUseCase(
 
     suspend fun recordLoginOnly() = repository.awardXP(10, "DAILY_LOGIN")
 
-    /**
-     * Vrni badge napredek za danega uporabnika.
-     * @param profile AchievementProfile domenski model (ViewModel ga konvertira iz data.UserProfile)
-     */
     fun getBadgeProgress(badgeId: String, profile: AchievementProfile): Int {
         return when (badgeId) {
             "first_workout", "committed_10", "committed_50",
@@ -123,31 +101,33 @@ class ManageGamificationUseCase(
     suspend fun checkAndSyncBadgesOnStartup(): List<String> = emptyList()
 
     /**
-     * Faza 4b: Uporabnik je opravil raztezanje na rest dnevu.
+     * Faza 4b / 21: Uporabnik je opravil raztezanje na rest dnevu.
      *
-     * FIX #3 — Koledarski zaklep:
-     * Preverimo DEJANSKI DATUM in status iz repozitorija. Če je na isti
-     * kalendarski dan dailyHistory že vseboval "WORKOUT_DONE" ali
-     * "REST_WORKOUT_DONE", raztezanje NI dovoljeno — vrnemo obstoječi streak
-     * brez spremembe in brez zapisa.
+     * Server-side guard: če je danes že "WORKOUT_DONE" ali "REST_WORKOUT_DONE",
+     * akcija ni dovoljena — vrne obstoječi streak brez spremembe.
      *
-     * @return Novi streak (ali obstoječi streak če akcija ni dovoljena)
+     * Faza 21: Kliče moveToNextDay(REST_DAY_DONE) namesto starih updateStreak() + awardXP().
+     *
+     * @return Novi streak po posodobitvi (ali obstoječi če akcija ni dovoljena).
      */
     suspend fun restDayInitiated(): Int {
-        // FIX: server-side guard — preveri aktualni datum v bazi
-        val todayStatus = runCatching { repository.getTodayStatus() }.getOrNull()
-        if (todayStatus == "WORKOUT_DONE" || todayStatus == "REST_WORKOUT_DONE") {
-            // Redni trening je bil danes že opravljen — raztezanje ni dovoljeno na isti dan.
-            // Vrni obstoječi streak brez spremembe.
+        val todayStatus = runCatching { repository.getTodayStatus() }
+            .getOrDefault(UserDayStatus.WORKOUT_PENDING)
+
+        // Guard: redni trening je danes že opravljen → raztezanje ni dovoljeno
+        if (todayStatus == UserDayStatus.WORKOUT_DONE || todayStatus == UserDayStatus.REST_WORKOUT_DONE) {
             return runCatching { repository.getCurrentStreak() }.getOrDefault(0)
         }
 
-        val newStreak = repository.updateStreak(
-            isWorkoutSuccess = true,
-            activityType = "STRETCHING_DONE"
+        // REST_DAY_DONE = streak+1, plan_day nespremenjen, +10 XP
+        val newStreak = repository.moveToNextDay(
+            newStatus      = UserDayStatus.REST_DAY_DONE,
+            xpToBeAwarded  = 10,
+            xpReason       = "REST_DAY",
+            caloriesBurned = 0.0,
+            incrementPlanDay = false
         )
-        repository.awardXP(10, "REST_DAY")
-        return newStreak
+        return if (newStreak > 0) newStreak else runCatching { repository.getCurrentStreak() }.getOrDefault(0)
     }
 
     /** Worker (ob polnoči) pozove streak check za včerajšnji dan. */

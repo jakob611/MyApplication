@@ -1,11 +1,14 @@
 package com.example.myapplication.domain.gamification
 
+import com.example.myapplication.domain.model.UserDayStatus
+
 /**
- * Ključni repozitorij za gamification.
+ * SSOT za gamification logiko.
  *
- * Ta interface se nahaja v DOMAIN sloju (brez Android odvisnosti).
- * Definira contract "kaj se da narediti glede streaka ali XP-jev"
- * in zagotavlja SAMO EN Vir Resnice.
+ * Faza 21: processActivityCompletion() in updateStreak() so zamenjani z
+ * moveToNextDay() — eno atomarno Firestore transakcijo za VSE poti.
+ *
+ * KMP-ready interface brez Android odvisnosti.
  */
 interface GamificationRepository {
 
@@ -22,23 +25,11 @@ interface GamificationRepository {
     suspend fun getCurrentStreak(): Int
 
     /**
-     * Povečaj ali ohrani streak. Zažene se, ko je uspešno zabeleženo,
-     * in pod kapuco reši tisti "Heisenbug".
-     * @param isWorkoutSuccess Je bil trening ali rest day uspešno obkljukan danes?
-     * @param activityType Tip aktivnosti za dailyHistory mapo: "WORKOUT_DONE" ali "STRETCHING_DONE"
-     * @return Novi streak po posodobitvi (0 ob napaki)
-     */
-    suspend fun updateStreak(isWorkoutSuccess: Boolean, activityType: String = "WORKOUT_DONE"): Int
-
-    /**
-     * Označi TODAY kot "PENDING_STRETCHING" v dailyHistory mapi.
+     * Označi TODAY kot [UserDayStatus.REST_DAY_PENDING] v dailyHistory mapi.
      * Kliče se, ko app ugotovi da je danes rest day — a uporabnik
      * še NI opravil raztezanja. Status ne pripiše streak +1.
-     * Prehod v "STRETCHING_DONE" se zgodi SAMO prek [updateStreak] ob
-     * eksplicitni uporabnikovi akciji.
      *
-     * ⛔ runMidnightCheck() NE sme klicati te metode — polnočni check
-     * preverja VČERAJ (ne danes) in ne sme avtokonkludirati rest dnevov.
+     * ⛔ runMidnightCheck() NE sme klicati te metode.
      */
     suspend fun markRestDayPending()
 
@@ -49,60 +40,55 @@ interface GamificationRepository {
     suspend fun runMidnightStreakCheck()
 
     /**
-     * Za uporabo Streak Freeze, če je na voljo.
+     * Porabi Streak Freeze, če je na voljo.
      */
     suspend fun consumeStreakFreeze(): Boolean
 
     /**
-     * Faza 12b — Unified Activity Completion Engine (nadomešča processWorkoutCompletion).
-     *
-     * ENA atomarna Firestore transakcija za VSAKO aktivnost — redni trening ALI extra rest-day workout:
-     * - Epoch-based streak izračun z isRestDay matriko (dayDiff z Streak Freeze podporo)
-     * - Vedno zapiše dailyHistory.$today ("WORKOUT_DONE" ali "REST_WORKOUT_DONE")
-     * - Vedno posodobi last_activity_epoch → midnight check nikoli ne vidi praznega dne
-     * - Atomarno dodeli XP in beleži xp_history
-     * - Zapiše porabljene kalorije v dailyLogs
-     *
-     * Streak matrika:
-     *   oldLastEpoch == 0L → 1 (prvi zapis)
-     *   dayDiff == 0L      → oldStreak (de-dup)
-     *   dayDiff == 1L      → if (isRestDay) oldStreak else oldStreak + 1
-     *   dayDiff > 1L       → freeze? ohrani : 1
-     *
-     * @param isRestDay        true = extra workout na rest dnevu (streak se NE poveča, a se zapiše)
-     * @param incrementPlanDay true za redne workouty (plan_day +1), false za extra
-     * @param xpToBeAwarded    skupni XP za to aktivnost
-     * @param xpReason         razlog za XP log
-     * @param caloriesBurned   porabljene kalorije za Nutrition bridge (0.0 = preskoči)
+     * Vrni tipsko-varni [UserDayStatus] za danes iz dailyHistory mape.
+     * Vrne [UserDayStatus.WORKOUT_PENDING] če dan ni bil zabeležen.
      */
-    suspend fun processActivityCompletion(
-        isRestDay: Boolean,
-        incrementPlanDay: Boolean,
-        xpToBeAwarded: Int,
-        xpReason: String,
-        caloriesBurned: Double
-    )
-
-    /**
-     * Vrni status današnjega dne iz dailyHistory mape.
-     * Možne vrednosti: "WORKOUT_DONE", "STRETCHING_DONE", "PENDING_STRETCHING",
-     * "FROZEN", "MISSED", ali null (dan ni bil zabeležen).
-     */
-    suspend fun getTodayStatus(): String?
+    suspend fun getTodayStatus(): UserDayStatus
 
     /**
      * Zapiši porabljene kalorije v dnevni log (dailyLogs/{todayStr}).
-     * Nadomešča direktno klicanje DailyLogRepository iz domain layer-a.
-     *
-     * @param todayStr Datum v formatu "YYYY-MM-DD"
-     * @param calories Porabljene kalorije (dodane k obstoječim)
+     * Uporablja se za ručno beleženje (RunTracker, ManualExercise) izven moveToNextDay().
      */
     suspend fun logBurnedCalories(todayStr: String, calories: Double)
 
     /**
      * Vrni trenutno gamification stanje (weeklyTarget, workoutDoneToday).
-     * Nadomešča workoutDoneProvider/weeklyTargetProvider lambde v ManageGamificationUseCase.
-     * KMP-ready: suspending namesto Flow-based lambda injection.
      */
-    suspend fun getGamificationState(): com.example.myapplication.domain.gamification.GamificationState
+    suspend fun getGamificationState(): GamificationState
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // moveToNextDay — SSOT za VSE aktivnostne zaključke (Faza 21)
+    //
+    // Nadomešča oba stara klica:
+    //   • processActivityCompletion(isRestDay, incrementPlanDay, xp, reason, cals)
+    //   • updateStreak(isWorkoutSuccess, activityType)
+    //
+    // ENA atomarna Firestore transakcija za:
+    //   ① Preveritev in de-duplikacija (ne prepiše višje prioritete)
+    //   ② Streak izračun (epoch-based, Freeze podpora)
+    //   ③ Posodobitev plan_day (samo za WORKOUT_DONE z incrementPlanDay=true)
+    //   ④ XP + Level posodobitev
+    //   ⑤ Zapis v dailyHistory z UserDayStatus.firestoreValue
+    //   ⑥ Porabljene kalorije v dailyLogs (Nutrition bridge)
+    //
+    // Logika glede na [newStatus]:
+    //   WORKOUT_DONE     → streak+1, plan_day+1 (če incrementPlanDay=true)
+    //   REST_WORKOUT_DONE → streak ohranjen, plan_day nespremenjen
+    //   REST_DAY_DONE    → streak+1, plan_day nespremenjen
+    //
+    // @return Novi streak po transakciji (0 ob napaki ali de-dup preskoček).
+    // ─────────────────────────────────────────────────────────────────────────
+    suspend fun moveToNextDay(
+        newStatus: UserDayStatus,
+        xpToBeAwarded: Int = 0,
+        xpReason: String = "",
+        caloriesBurned: Double = 0.0,
+        /** true = plan_day +1. Privzeto: samo za WORKOUT_DONE. */
+        incrementPlanDay: Boolean = newStatus.shouldIncrementPlanDay
+    ): Int
 }

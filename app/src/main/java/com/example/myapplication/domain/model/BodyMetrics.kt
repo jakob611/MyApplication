@@ -6,6 +6,8 @@ package com.example.myapplication.domain.model
  *
  * KMP-ready: brez Android, brez viewmodels, brez data layer odvisnosti.
  * ViewModel je odgovoren za mapiranje BodyMetrics → BodyHomeUiState (za UI).
+ *
+ * todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
  */
 data class BodyMetrics(
     val streakDays: Int = 0,
@@ -17,8 +19,8 @@ data class BodyMetrics(
     val isWorkoutDoneToday: Boolean = false,
     val dailyKcal: Int = 0,
     val todayIsRest: Boolean = false,
-    /** Vrednosti: "WORKOUT_DONE" | "STRETCHING_DONE" | "PENDING_STRETCHING" | "FROZEN" | "MISSED" | "" */
-    val todayStatus: String = "",
+    /** Tipsko-varni status današnjega dne */
+    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )

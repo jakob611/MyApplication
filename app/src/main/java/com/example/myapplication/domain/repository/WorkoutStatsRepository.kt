@@ -1,11 +1,13 @@
 package com.example.myapplication.domain.repository
 
+import com.example.myapplication.domain.model.UserDayStatus
+
 /**
  * Domenski model za workout statistike.
  * KMP-ready: čista Kotlin data class.
  *
+ * todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
  * todayIsRest: data layer implementacija izračuna iz plan_day + plana.
- * todayStatus: vrednosti "WORKOUT_DONE"|"STRETCHING_DONE"|"PENDING_STRETCHING"|"FROZEN"|"MISSED"|""
  */
 data class WorkoutStats(
     val streakDays: Int = 0,
@@ -15,7 +17,7 @@ data class WorkoutStats(
     val planDay: Int = 1,
     val totalWorkoutsCompleted: Int = 0,
     val lastWorkoutEpoch: Long = 0L,
-    val todayStatus: String = "",
+    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
     val todayIsRest: Boolean = false,
     val dailyKcal: Int = 0
 )
@@ -27,7 +29,7 @@ data class WorkoutStats(
  * iz domain layer-a (Clean Architecture: UseCase komunicira samo z interfejsi).
  *
  * KMP-ready: brez Android odvisnosti.
- * Implementacija živi v data/workout/UserWorkoutStatsRepository.kt.
+ * Implementacija živi v data/repository/UserWorkoutStatsRepository.kt.
  */
 interface WorkoutStatsRepository {
     /**
@@ -37,18 +39,12 @@ interface WorkoutStatsRepository {
      */
     suspend fun getWorkoutStats(email: String): WorkoutStats?
 
-    /**
-     * Lokalni fallback: ali je trening opravljen danes (SharedPrefs)?
-     */
+    /** Lokalni fallback: ali je trening opravljen danes (SharedPrefs)? */
     suspend fun isWorkoutDoneToday(): Boolean
 
-    /**
-     * Lokalni fallback: trenutni plan day (SharedPrefs).
-     */
+    /** Lokalni fallback: trenutni plan day (SharedPrefs). */
     suspend fun getPlanDay(): Int
 
-    /**
-     * Lokalni fallback: dnevni kalorični cilj (SharedPrefs).
-     */
+    /** Lokalni fallback: dnevni kalorični cilj (SharedPrefs). */
     suspend fun getDailyCalories(): Int
 }

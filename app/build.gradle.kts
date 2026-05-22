@@ -75,7 +75,9 @@ android {
     packaging {
         jniLibs {
             excludes += listOf("lib/x86/**", "lib/x86_64/**")
-            // Forced extraction for 16KB compatibility
+            // useLegacyPackaging = true je zahtevano (AndroidManifest ima extractNativeLibs=true).
+            // 16KB page size popravek pride iz posodobljenih knjižnic (camera 1.4.x, media3 1.4.x itd.)
+            // kjer so .so datoteke že prevedene z 16KB-usklajenim ELF formatom.
             useLegacyPackaging = true
         }
     }
@@ -85,9 +87,9 @@ dependencies {
     implementation("com.russhwolf:multiplatform-settings:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
-    // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    // Compose BOM — 2024.12 vsebuje 16KB-kompatibilne native libs
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-text")
@@ -101,18 +103,18 @@ dependencies {
     // Material Components
     implementation("com.google.android.material:material:1.12.0")
     // Core KTX
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    // Lifecycle
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    // Lifecycle — 2.8.x = 16KB page size aligned
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.activity:activity-compose:1.9.3")
     // Navigation (samo Compose)
     implementation("androidx.navigation:navigation-compose:2.7.7")
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-    // Firebase prek BoM
-    implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
+    // Firebase prek BoM — 33.7+ vsebuje 16KB-kompatibilne native libs (Crashlytics, Perf)
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
@@ -121,31 +123,31 @@ dependencies {
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
-    // Image loading
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    // Image loading — 2.7.0 = 16KB page size aligned (.so-ji)
+    implementation("io.coil-kt:coil-compose:2.7.0")
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    // CameraX
-    implementation("androidx.camera:camera-camera2:1.3.1")
-    implementation("androidx.camera:camera-lifecycle:1.3.1")
-    implementation("androidx.camera:camera-view:1.3.1")
-    // ML Kit Barcode Scanning
+    // CameraX — 1.4.1 = 16KB page size aligned (arm64 .so)
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
+    // ML Kit Barcode Scanning — 17.3.0 stabilna
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
-    // ML Kit Face Detection
-    implementation("com.google.mlkit:face-detection:16.1.6")
+    // ML Kit Face Detection — 16.1.7 = posodobljene TFLite native libs za 16KB pages
+    implementation("com.google.mlkit:face-detection:16.1.7")
     // Location services
     implementation("com.google.android.gms:play-services-location:21.3.0")
     // OpenStreetMap za RunTracker
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     // Health Connect API
     implementation("androidx.health.connect:connect-client:1.1.0-alpha08")
-    // ExoPlayer
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
-    implementation("androidx.media3:media3-common:1.2.1")
-    // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // ExoPlayer / Media3 — 1.4.1 = 16KB page size aligned native codecs
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-common:1.4.1")
+    // WorkManager — 2.9.1
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")

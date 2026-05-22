@@ -2,75 +2,44 @@ package com.example.myapplication.domain.usecase
 
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.model.Streak
+import com.example.myapplication.domain.model.UserDayStatus
 
 /**
- * UpdateStreakUseCase — posamezna, focused operacija za posodabljanje streaka.
+ * UpdateStreakUseCase — Faza 21: poenostavljen zgoraj moveToNextDay() SSOT.
  *
- * Clean Architecture: UseCase je most med UI/ViewModel in Repository.
- * Nadomešča direktne klice repository.updateStreak() razpršene po kodi.
- *
- * Lokacija: domain/usecase/ (skupna mapa za vse use cases, neodvisno od poddomen)
- *
- * iOS-ready: brez Android odvisnosti.
+ * workout() in restDayStretching() delegirata na repository.moveToNextDay().
+ * Brez android odvisnosti — iOS-ready.
  */
 class UpdateStreakUseCase(
     private val repository: GamificationRepository
 ) {
-    /**
-     * Posodobi streak kot "Workout Done" dan.
-     * @return posodobljeni Streak domenski model
-     */
+    /** Posodobi streak kot "Workout Done" dan. */
     suspend fun workout(): Streak {
-        val newDays = repository.updateStreak(
-            isWorkoutSuccess = true,
-            activityType = "WORKOUT_DONE"
+        val newDays = repository.moveToNextDay(
+            newStatus        = UserDayStatus.WORKOUT_DONE,
+            incrementPlanDay = true
         )
-        return Streak(days = newDays, todayStatus = "WORKOUT_DONE")
+        return Streak(days = newDays, todayStatus = UserDayStatus.WORKOUT_DONE)
     }
 
-    /**
-     * Posodobi streak kot "Stretching Done" (rest dan opravil).
-     * @return posodobljeni Streak domenski model
-     */
+    /** Posodobi streak kot "Stretching Done" (rest dan opravil). */
     suspend fun restDayStretching(): Streak {
-        val newDays = repository.updateStreak(
-            isWorkoutSuccess = true,
-            activityType = "STRETCHING_DONE"
+        val newDays = repository.moveToNextDay(
+            newStatus        = UserDayStatus.REST_DAY_DONE,
+            xpToBeAwarded    = 10,
+            xpReason         = "REST_DAY",
+            incrementPlanDay = false
         )
-        return Streak(days = newDays, todayStatus = "STRETCHING_DONE")
+        return Streak(days = newDays, todayStatus = UserDayStatus.REST_DAY_DONE)
     }
 
-    /**
-     * Preveri polnočni streak (zamrznjena / zamujeni dnevi).
-     * ⚠️ Preverja IZKLJUČNO včerajšnji dan — nikoli ne auto-complete rest dnevov za danes.
-     * Kliče se iz WeeklyStreakWorker.
-     */
-    suspend fun runMidnightCheck() {
-        repository.runMidnightStreakCheck()
-    }
+    /** Preveri polnočni streak — kliče se iz WeeklyStreakWorker. */
+    suspend fun runMidnightCheck() = repository.runMidnightStreakCheck()
 
-    /**
-     * Označi današnji dan kot REST DAY v čakanju (PENDING_STRETCHING).
-     *
-     * Status ostane PENDING_STRETCHING, DOKLER uporabnik ne klikne
-     * "Done" na Stretching kartici → takrat se kliče [restDayStretching()].
-     *
-     * Kliče se iz BodyModuleHomeScreen ob odprtju, ko je today rest day
-     * in ni bilo raztezanja. Idempotentno — že zaključenih dni ne prepiše.
-     *
-     * iOS-ready: brez Android odvisnosti.
-     */
-    suspend fun markRestDayPending() {
-        repository.markRestDayPending()
-    }
+    /** Označi danes kot REST_DAY_PENDING. */
+    suspend fun markRestDayPending() = repository.markRestDayPending()
 
-    /**
-     * Vrni trenutni streak iz Firestore-a.
-     */
-    suspend fun getCurrentStreak(): Streak {
-        val days = repository.getCurrentStreak()
-        return Streak(days = days)
-    }
+    /** Vrni trenutni streak iz Firestore-a. */
+    suspend fun getCurrentStreak(): Streak =
+        Streak(days = repository.getCurrentStreak())
 }
-
-

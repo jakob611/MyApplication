@@ -1,6 +1,7 @@
 package com.example.myapplication.data.repository
 
 import com.example.myapplication.data.settings.UserPreferencesRepository
+import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.repository.WorkoutStats
 import com.example.myapplication.domain.repository.WorkoutStatsRepository
 import com.example.myapplication.data.store.FirestoreHelper
@@ -39,7 +40,8 @@ class UserWorkoutStatsRepository(
 
             @Suppress("UNCHECKED_CAST")
             val dailyHistory = (doc.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
-            val todayStatus = dailyHistory[todayStr]?.toString() ?: ""
+            // Faza 21: pretvori surovi Firestore string v tipsko-varni UserDayStatus
+            val todayStatus = UserDayStatus.fromFirestore(dailyHistory[todayStr]?.toString())
 
             // ✅ FIX: weeklyDone se izračuna dinamično iz dailyHistory tekočega tedna (pon–danes).
             // S tem se števec samodejno ponastavi ob novem tednu — ni potrebe po ločenem reset polju.

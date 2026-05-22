@@ -4,13 +4,13 @@ package com.example.myapplication.domain.model
  * Čisti domenski model za streak stanje.
  * Brez Android in Firestore odvisnosti — primeren za KMP.
  *
- * todayStatus vrednosti: "WORKOUT_DONE" | "STRETCHING_DONE" | "FROZEN" | "MISSED" | null
+ * todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
  */
 data class Streak(
     val days: Int = 0,
     val freezes: Int = 0,
-    /** Kakšen status je danes vpisan v dailyHistory mapo */
-    val todayStatus: String? = null
+    /** Tipsko-varni status današnjega dne */
+    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING
 ) {
     /** Streak je aktiven, če je vsaj 1 dan */
     val isActive: Boolean get() = days > 0
@@ -19,13 +19,11 @@ data class Streak(
     val isFreezeAvailable: Boolean get() = freezes > 0
 
     /** Danes je cilj že opravljen (workout ali stretching) */
-    val isTodayCompleted: Boolean
-        get() = todayStatus == "WORKOUT_DONE" || todayStatus == "STRETCHING_DONE"
+    val isTodayCompleted: Boolean get() = todayStatus.isDoneToday
 
     /** Danes je bil porabljen freeze */
-    val isTodayFrozen: Boolean get() = todayStatus == "FROZEN"
+    val isTodayFrozen: Boolean get() = todayStatus == UserDayStatus.FROZEN
 
     /** Danes je bil zamrznjen streak (reset) */
-    val isTodayMissed: Boolean get() = todayStatus == "MISSED"
+    val isTodayMissed: Boolean get() = todayStatus == UserDayStatus.MISSED
 }
-
