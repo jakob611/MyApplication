@@ -61,23 +61,17 @@ fun BodyModuleHomeScreen(
     )
     val ui by vm.ui.collectAsState()
 
-    // Ob vstopu brez plana → takoj preusmeri na "No plans yet" (BodyOverview)
+    // Faza 23: En sam LaunchedEffect (currentPlan) za LoadMetrics.
+    // Prej sta bila DVA (Unit + currentPlan) ki sta ob vstopu na zaslon sprožila dve vzporedni
+    // Firestore branji → race condition. LaunchedEffect(currentPlan) pokrije:
+    //   (a) začetni load ob vstopu, (b) osvežitev ob spremembi plana, (c) navigacijo nazaj.
     LaunchedEffect(currentPlan) {
         if (currentPlan == null) {
             onStartPlan()
         } else {
-            // Faza 8: LoadMetrics z planom → GetBodyMetricsUseCase izračuna todayIsRest pravilno
             val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
             vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail, currentPlan))
         }
-    }
-
-    // Ob vsakem prikazu zaslona osveži stats (weekly_target, streak itd.)
-    // Faza 13.2: LaunchedEffect(Unit) se požene ob vsaki re-kompoziciji zaslona (po navigaciji nazaj).
-    // Faza 8: Skupaj z LaunchedEffect(currentPlan) zagotavlja osvežitev z aktualnim planDayIsRest
-    LaunchedEffect(Unit) {
-        val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-        vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail, currentPlan))
     }
 
     // Faza 4b: Toast + HapticFeedback ko se streak poveča (workout ali stretching)

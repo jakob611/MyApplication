@@ -9,6 +9,7 @@ import com.example.myapplication.domain.gamification.WorkoutCompletionResult
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -89,13 +90,22 @@ class BodyModuleHomeViewModel(
     private val _streakUpdatedEvent = MutableSharedFlow<StreakUpdateEvent>(extraBufferCapacity = 1)
     val streakUpdatedEvent: SharedFlow<StreakUpdateEvent> = _streakUpdatedEvent.asSharedFlow()
 
+    /**
+     * Faza 23: Job tracking za LoadMetrics — vsak klic cancela prejšnjega.
+     * Preprečuje race condition med vzporednimi Firestore branii.
+     */
+    private var loadMetricsJob: Job? = null
+
     fun handleIntent(intent: BodyHomeIntent) {
         when (intent) {
             is BodyHomeIntent.LoadMetrics -> {
-                viewModelScope.launch {
+                // Cancela morebitni prejšnji LoadMetrics — prepreči dvojno branje
+                loadMetricsJob?.cancel()
+                loadMetricsJob = viewModelScope.launch {
                     _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
                     try {
                         getBodyMetrics.invoke(intent.email).collect { metrics ->
+                            if (metrics.isLoading) return@collect
                             val todayIsRest = intent.plan?.weeks
                                 ?.flatMap { it.days }
                                 ?.firstOrNull { it.dayNumber == metrics.planDay }
@@ -112,7 +122,7 @@ class BodyModuleHomeViewModel(
                                 dailyKcal              = metrics.dailyKcal,
                                 todayIsRest            = todayIsRest,
                                 todayStatus            = metrics.todayStatus,
-                                isLoading              = metrics.isLoading,
+                                isLoading              = false,
                                 errorMessage           = metrics.errorMessage
                             )
                         }
@@ -160,64 +170,48 @@ class BodyModuleHomeViewModel(
             is BodyHomeIntent.CompleteWorkoutSession -> {
                 viewModelScope.launch {
                     _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
-                    val isRestDay = _ui.value.todayIsRest
+                    val isRestDay    = _ui.value.todayIsRest
+                    val isExtra      = intent.isExtraWorkout
+                    val oldPlanDay   = _ui.value.planDay
+                    val oldWeeklyDone = _ui.value.weeklyDone
+
                     val result = updateBodyMetrics.invoke(
-                        email          = intent.email,
-                        totalKcal      = intent.totalKcal,
-                        totalTimeMin   = intent.totalTimeMin,
-                        exercisesCount = intent.exerciseResults.size,
-                        planDay        = _ui.value.planDay,
-                        isExtra        = intent.isExtraWorkout,
+                        email           = intent.email,
+                        totalKcal       = intent.totalKcal,
+                        totalTimeMin    = intent.totalTimeMin,
+                        exercisesCount  = intent.exerciseResults.size,
+                        planDay         = oldPlanDay,
+                        isExtra         = isExtra,
                         exerciseResults = intent.exerciseResults,
-                        focusAreas     = intent.focusAreas,
-                        isRestDay      = isRestDay
+                        focusAreas      = intent.focusAreas,
+                        isRestDay       = isRestDay
                     )
 
                     result.onSuccess { completionResult ->
-                        if (intent.email.isNotBlank()) {
-                            try {
-                                getBodyMetrics.invoke(intent.email).collect { metrics ->
-                                    if (metrics.isLoading) return@collect
-                                    val newStreak = metrics.streakDays
-                                    _ui.value = _ui.value.copy(
-                                        streakDays             = metrics.streakDays,
-                                        streakFreezes          = metrics.streakFreezes,
-                                        weeklyDone             = metrics.weeklyDone,
-                                        weeklyTarget           = metrics.weeklyTarget,
-                                        planDay                = metrics.planDay,
-                                        totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
-                                        isWorkoutDoneToday     = true,
-                                        dailyKcal              = metrics.dailyKcal,
-                                        todayStatus            = metrics.todayStatus,
-                                        showCompletionAnimation = !intent.isExtraWorkout,
-                                        isLoading              = false
-                                    )
-                                    _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
-                                }
-                            } catch (_: Exception) {
-                                val optimisticStreak = _ui.value.streakDays + 1
-                                _ui.value = _ui.value.copy(
-                                    isLoading               = false,
-                                    isWorkoutDoneToday      = true,
-                                    showCompletionAnimation = !intent.isExtraWorkout,
-                                    planDay                 = _ui.value.planDay + if (!intent.isExtraWorkout) 1 else 0,
-                                    streakDays              = optimisticStreak,
-                                    weeklyDone              = (_ui.value.weeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget),
-                                    dailyKcal               = _ui.value.dailyKcal + intent.totalKcal,
-                                    todayStatus             = if (isRestDay) UserDayStatus.REST_WORKOUT_DONE
-                                                              else UserDayStatus.WORKOUT_DONE
-                                )
-                                _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = optimisticStreak))
-                            }
-                        } else {
-                            _ui.value = _ui.value.copy(
-                                isLoading               = false,
-                                isWorkoutDoneToday      = true,
-                                showCompletionAnimation = !intent.isExtraWorkout,
-                                weeklyDone              = (_ui.value.weeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget),
-                                dailyKcal               = _ui.value.dailyKcal + intent.totalKcal
-                            )
+                        // Faza 23: Optimistični update iz WorkoutCompletionResult — brez dodatnega Firestore read-a.
+                        // moveToNextDay() je atomarno že zapisal vse podatke; streak + planDay sta znana.
+                        val todayStatus = when {
+                            isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
+                            else                 -> UserDayStatus.WORKOUT_DONE
                         }
+                        val newStreak   = completionResult?.newStreakDays?.takeIf { it > 0 }
+                            ?: (_ui.value.streakDays + if (todayStatus.contributesToStreak) 1 else 0)
+                        val newPlanDay  = completionResult?.newPlanDay?.takeIf { it > 0 }
+                            ?: (oldPlanDay + if (!isExtra) 1 else 0)
+                        val newWeekly   = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
+                            (oldWeeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget)
+                        else oldWeeklyDone
+
+                        _ui.value = _ui.value.copy(
+                            streakDays              = newStreak,
+                            weeklyDone              = newWeekly,
+                            planDay                 = newPlanDay,
+                            isWorkoutDoneToday      = true,
+                            todayStatus             = todayStatus,
+                            showCompletionAnimation = !isExtra,
+                            isLoading               = false
+                        )
+                        _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
                         intent.onCompletion(completionResult)
                     }
                     result.onFailure { error ->

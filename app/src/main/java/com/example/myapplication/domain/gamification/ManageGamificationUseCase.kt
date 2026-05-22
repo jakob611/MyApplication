@@ -8,11 +8,18 @@ import kotlinx.coroutines.flow.flow
 /**
  * Rezultat zaključenega workout-a.
  * unlockedBadges: seznam badge ID-jev (ne Badge objektov — brez data layer odvisnosti).
+ *
+ * Faza 23: newStreakDays propagiran iz moveToNextDay() → ViewModel ne rabi dodatnega Firestore read-a.
+ * newPlanDay: novi plan_day po zaključku (ali enako staro, če extra/rest).
  */
 data class WorkoutCompletionResult(
     val unlockedBadges: List<String> = emptyList(),
     val xpAwarded: Int,
-    val isCritical: Boolean
+    val isCritical: Boolean,
+    /** Novi streak po transakciji (0 = transakcija spodleti ali de-dup). */
+    val newStreakDays: Int = 0,
+    /** Novi plan_day po zaključku (ali nespremenjen za extra/rest). */
+    val newPlanDay: Int = 0
 )
 
 data class GamificationState(
@@ -48,27 +55,36 @@ class ManageGamificationUseCase(
         caloriesBurned: Double,
         hour: Int,
         isRestDay: Boolean = false,
-        incrementPlanDay: Boolean = true
+        incrementPlanDay: Boolean = true,
+        currentPlanDay: Int = 0
     ): WorkoutCompletionResult {
 
-        val calorieXP   = (caloriesBurned / 8).toInt()
-        val baseXP      = 50
-        val isCritical  = kotlin.random.Random.nextFloat() < 0.1f
-        val finalBaseXP = if (isCritical) baseXP * 2 else baseXP
-        val totalXP     = finalBaseXP + calorieXP
+        val calorieXP      = (caloriesBurned / 8).toInt()
+        val baseXP         = 50
+        val isCritical     = kotlin.random.Random.nextFloat() < 0.1f
+        val finalBaseXP    = if (isCritical) baseXP * 2 else baseXP
+        val totalXP        = finalBaseXP + calorieXP
 
-        val newStatus = if (isRestDay) UserDayStatus.REST_WORKOUT_DONE else UserDayStatus.WORKOUT_DONE
-        val xpReason  = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE"
+        val newStatus      = if (isRestDay) UserDayStatus.REST_WORKOUT_DONE else UserDayStatus.WORKOUT_DONE
+        val xpReason       = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE"
+        val shouldIncrement = incrementPlanDay && !isRestDay
 
-        repository.moveToNextDay(
+        val newStreak = repository.moveToNextDay(
             newStatus        = newStatus,
             xpToBeAwarded    = totalXP,
             xpReason         = xpReason,
             caloriesBurned   = caloriesBurned,
-            incrementPlanDay = incrementPlanDay && !isRestDay
+            incrementPlanDay = shouldIncrement
         )
+        val newPlanDay = if (shouldIncrement && currentPlanDay > 0) currentPlanDay + 1 else currentPlanDay
 
-        return WorkoutCompletionResult(emptyList(), totalXP, isCritical)
+        return WorkoutCompletionResult(
+            unlockedBadges = emptyList(),
+            xpAwarded      = totalXP,
+            isCritical     = isCritical,
+            newStreakDays  = newStreak,
+            newPlanDay     = newPlanDay
+        )
     }
 
     suspend fun awardXP(amount: Int, reason: String) = repository.awardXP(amount, reason)

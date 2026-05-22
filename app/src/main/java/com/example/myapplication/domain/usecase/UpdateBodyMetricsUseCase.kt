@@ -26,7 +26,7 @@ class UpdateBodyMetricsUseCase(
         isRestDay: Boolean = false
     ): Result<WorkoutCompletionResult?> {
         return try {
-            val tz = TimeZone.Companion.currentSystemDefault()
+            val tz = TimeZone.currentSystemDefault()
             val now = Clock.System.now()
             val hour = now.toLocalDateTime(tz).hour
             val timestamp = now.toEpochMilliseconds()
@@ -35,10 +35,11 @@ class UpdateBodyMetricsUseCase(
             // isRestDay = isExtra && isRestDay → extra workout na rest dnevu = samo XP, brez streak
             // incrementPlanDay = !isExtra → extra workout ne napreduje plan_day
             val res = gamificationUseCase.recordWorkoutCompletion(
-                caloriesBurned = totalKcal.toDouble(),
-                hour = hour,
-                isRestDay = isRestDay && isExtra,
-                incrementPlanDay = !isExtra
+                caloriesBurned   = totalKcal.toDouble(),
+                hour             = hour,
+                isRestDay        = isRestDay && isExtra,
+                incrementPlanDay = !isExtra,
+                currentPlanDay   = planDay          // Faza 23: za optimistični newPlanDay izračun
             )
 
             // 2. Priprava podatkov (BREZ FIREBASE IMPORTA)

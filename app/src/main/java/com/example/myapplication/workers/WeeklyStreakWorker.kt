@@ -35,13 +35,15 @@ class WeeklyStreakWorker(
     companion object {
         private const val TAG = "DailyStreakWorker"
         private const val WORK_NAME = "daily_streak_check"
+        // ⚠️ DEAD CODE — scheduleTomorrowFlags() je bila stara SharedPrefs logika (pred Faza 21).
+        // Obdržana za backward-compatible kompilacijo; zbriši ob naslednjem refactoring prehodu.
+        @Suppress("UNUSED_PARAMETER", "unused")
         fun scheduleTomorrowFlags(
             context: Context,
             prefs: android.content.SharedPreferences,
             currentPlanDay: Int
-        ) {
-            // Keep this interface alive if called by other files for now
-        }
+        ) { /* no-op stub */ }
+
         fun scheduleNext(context: Context) {
             val now = LocalDateTime.now()
             val tomorrow = now.toLocalDate().plusDays(1)
@@ -60,10 +62,15 @@ class WeeklyStreakWorker(
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
             Log.d(TAG, "Scheduled next daily check in ${delayMinutes}min (at $targetDateTime)")
         }
+        // startOfWeek parameter obdržan za backward compatibility (MainAppContent.kt klic).
+        // Vrednost se ne uporablja — midnight check je epoch-based (neodvisen od dneva tedna).
+        @Suppress("UNUSED_PARAMETER")
         fun ensureScheduled(context: Context, startOfWeek: String = "Monday") {
             scheduleNext(context)
         }
         fun simulateDayPass(context: Context) {
+            // ⛔ Faza 23: Samo v debug buildu — prepreči naključni klic v produkciji
+            if (!com.example.myapplication.BuildConfig.DEBUG) return
             val request = OneTimeWorkRequestBuilder<WeeklyStreakWorker>()
                 .setInitialDelay(0, TimeUnit.SECONDS)
                 .build()
