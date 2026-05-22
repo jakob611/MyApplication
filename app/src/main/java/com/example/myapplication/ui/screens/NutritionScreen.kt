@@ -1,4 +1,5 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
+@file:Suppress("UNUSED_VALUE")  // Compose MutableState pri by remember{}: write je legitimen, IDE ne vidi recomposition
 
 package com.example.myapplication.ui.screens
 
@@ -25,7 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -161,7 +163,6 @@ fun NutritionScreen(
     val lastWaterClickState = remember { mutableStateOf(0L) }
 
     // Poraba (izračuni)
-    val consumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
     val consumedProtein = trackedFoods.sumOf { it.proteinG ?: 0.0 }
     val consumedCarbs = trackedFoods.sumOf { it.carbsG ?: 0.0 }
     val consumedFat = trackedFoods.sumOf { it.fatG ?: 0.0 }
@@ -304,11 +305,6 @@ fun NutritionScreen(
         }
     }
 
-    // ── Identifikacija uporabnika ──────────────────────────────────────────────
-    // POMEMBNO: uid mora biti v remember{} — getCurrentUserDocId() se ne sme klicati
-    // ob vsakem recomposition, ker bi to povzročalo nove Firestore kliche.
-    val uid = remember { FirestoreHelper.getCurrentUserDocId() }
-
     // Faza 14b: todayId NI VEČ remember{} — prihaja iz ViewModel.currentDate StateFlow.
     // Ob polnočnem prehodu ViewModel kliče onDayTransition(newDate) → currentDate se posodobi
     // → todayId se avtomatično posodobi → vsi LaunchedEffecti z todayId kot ključem se re-sprožijo.
@@ -388,7 +384,6 @@ fun NutritionScreen(
     val textPrimary = MaterialTheme.colorScheme.onBackground
 
     // Ugotovi ali je danes workout day ali rest day (glede na aktiven plan)
-    val todayDayOfWeek = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek.value } // 1=Mon, 7=Sun
     val isWorkoutDayToday = remember(plan) {
         if (plan == null) false
         else {
@@ -439,7 +434,7 @@ fun NutritionScreen(
     // Water tracking — prilagojen cilj
     // Faza 13.1: Prikaži lokalni override (optimistična voda) ali server vrednost
     val effectiveWaterMl = localWaterMl ?: uiState.water
-    val waterTarget = adjustedWaterTarget.toFloat()
+    val waterTarget = adjustedWaterTarget  // calculateDailyWaterMl vrača Float
     val waterProgress = (effectiveWaterMl.toFloat() / waterTarget).coerceIn(0f, 1f)
 
     // Calculate macro calories
@@ -909,7 +904,7 @@ fun NutritionScreen(
                                 confirmDelete = null
                                 // Refresh quick meal widget after deletion
                                 com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)
-                            } catch (e: Exception) {
+                            } catch (_: Exception) {
                                 // handle
                             }
                         }
@@ -1027,6 +1022,3 @@ fun NutritionScreen(
 
 } // End NutritionScreen
 
-fun startOfDayDiffDays(startDate: kotlinx.datetime.LocalDate, todayDate: kotlinx.datetime.LocalDate): Int {
-    return (todayDate.toEpochDays() - startDate.toEpochDays())
-}
