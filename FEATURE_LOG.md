@@ -397,3 +397,10 @@ no replicira staro SimpleDateFormat obliko.
 - ✅ WorkoutGenerator → AdvancedExerciseRepository: uvoz `data.repository.AdvancedExerciseRepository` pravilno deluje po refaktoringu
 **Zakaj:** Post-refactoring audit za zagotovitev, da premik paketov ni pokvaril poslovne logike. Odkrit 1 pravi bug (SwapDays lockedDay), 1 dead code (WeeklyStreakWorker imports).
 **Tveganje:** 🟢 nizko (bug fix je additive parameter, ničesar ne ruši; cleanup je samo import brisanje)
+
+## 2026-05-22 — Faza 19: OsmDroid RunTrackerScreen Dark Theme + AppDatabase_Impl Fix
+**Datoteke:** `ui/run/RunTrackerScreen.kt`, `data/local/AppDatabase_Impl.kt`, `build.gradle.kts`, `app/build.gradle.kts`
+**Kaj:** RunTrackerScreen temna tema uskladitev z UppColors SSOT — live kalorije, SummaryRow XP, karticam ozadja, activity picker chip tekst, Pause gumb. AppDatabase_Impl obnovljen z manjkajočo class deklaracijo in importi. KSP plugin zakomentirani (verzija 2.2.10-1.0.29 ni v Maven).
+**Zakaj:** Live kalorije so bile prikazane v LightGray (tertiary) namesto Orange. SummaryRow XP je bil LightGray namesto Orange. AppDatabase_Impl je imel korupcijo ki je blokirala build (class header izbrisan). KSP 2.2.10-1.0.29 ni bil dostopen v Maven repos.
+**Tveganje:** 🟢 nizko (samo barvne spremembe + compile fix)
+

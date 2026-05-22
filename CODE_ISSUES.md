@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-17 (Faza 18: Room crash fix, Rest Day Lock, Visual Glitch, Progress Bar)  
+**Zadnja posodobitev:** 2026-05-22 (Faza 19: RunTrackerScreen Dark Theme + AppDatabase_Impl Fix)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,32 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 
 ## DNEVNIK POPRAVKOV
 
-### 2026-05-17 — Faza 18: Room Crash Fix, Rest Day Lock, Visual Glitch, Live Progress Bar
+### 2026-05-22 — Faza 19: RunTrackerScreen Dark Theme (UppColors SSOT) + AppDatabase_Impl Fix
+
+**1. RunTrackerScreen.kt — Temna tema uskladitev z UppColors:**
+- ✅ Box ozadje: `MaterialTheme.colorScheme.background` → `UppColors.Background`
+- ✅ Stats kartica + Controls kartica: `MaterialTheme.colorScheme.surface.copy(alpha=0.95f)` → `UppColors.CardSurface.copy(alpha=0.95f)`
+- ✅ Summary kartica: `MaterialTheme.colorScheme.surface` → `UppColors.CardSurface`
+- ✅ Live kalorije `🔥 X kcal`: `tertiary` (LightGray #E0E2DB) → `UppColors.Orange` (#FF6411) — bolj vidno
+- ✅ "Paused" tekst: `tertiary` → `UppColors.LightGray` (eksplicitno SSOT)
+- ✅ Pause gumb (aktivno stanje): `MaterialTheme.colorScheme.tertiary` → `UppColors.LightGray.copy(alpha=0.25f)` — subtilno temno ozadje
+- ✅ "Done" gumb v summary: `MaterialTheme.colorScheme.primary` → `UppColors.Orange`
+- ✅ SummaryRow XP Earned vrednost: `MaterialTheme.colorScheme.tertiary` (LightGray) → `UppColors.Orange`
+- ✅ Activity picker izbrani chip tekst: `Color.White` → `UppColors.White`
+
+**2. AppDatabase_Impl.kt — Compile Fix:**
+- ✅ Root cause: razredni header `WorkoutSessionDao_Impl` je bil slučajno izbrisan.  
+  Koda telesa razreda je bila prisotna brez class deklaracije → Kotlin parser jo je bral kot top-level kodo → deseci napak.
+- ✅ Fix: Dodan manjkajoč `private class WorkoutSessionDao_Impl(private val db: AppDatabase) : WorkoutSessionDao {`
+- ✅ Dodani manjkajoči `import` stavki: `DatabaseConfiguration`, `entity.WorkoutSessionEntity`, `entity.GpsPointEntity`, `doo.WorkoutSessionDao`, `doo.GpsPointDao`
+- ✅ `createOpenHelper` signature: `androidx.room.DatabaseConfiguration` → pravilno resolvan prek `import`
+
+**3. Build config — KSP Cleanup:**
+- ✅ `build.gradle.kts` (root): `id("com.google.devtools.ksp") version "2.2.10-1.0.29"` → zakomentirano (verzija ni v Maven repos)
+- ✅ `app/build.gradle.kts`: `id("com.google.devtools.ksp")` in `ksp(room-compiler)` → zakomentirano
+- ✅ BUILD SUCCESSFUL ✅
+
+
 
 **1. AppDatabase_Impl.kt — Observer Leak + Threading Crash:**
 - ✅ **Root cause**: `getSessionsFlow()` je ob vsakem klicu doregistriral nov `InvalidationTracker.Observer` → po N klicih N vzporednih observerjev → redundantni DB queryi + potencialni crash
