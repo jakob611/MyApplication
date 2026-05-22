@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-22 (Faza 19: RunTrackerScreen Dark Theme + AppDatabase_Impl Fix)  
+**Zadnja posodobitev:** 2026-05-22 (Faza 20: Architecture & SSOT Audit — čiščenje tehničnega dolga)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -68,6 +68,29 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 ---
 
 ## DNEVNIK POPRAVKOV
+
+### 2026-05-22 — Faza 20: Architecture & SSOT Audit — Čiščenje tehničnega dolga
+
+**Rezultat globalne revizije (Architecture & SSOT Audit):**
+
+**1. NutritionCalculations SSOT — VERIFICIRANO ČISTO:**
+- ✅ **Samo ena** `NutritionCalculations.kt` obstaja: `domain/nutrition/NutritionCalculations.kt` — vsebuje vse funkcije (`calculateAdvancedBMR`, `calculateEnhancedTDEE`, `calculateSmartCalories`, `calculateOptimalMacros`, `calculateAdaptiveTDEE`, `calculateDailyWaterMl`, `calculateRestDayCalories`, `calculateEMA`).
+- ✅ `utils/NutritionCalculations.kt` — **NE OBSTAJA** (že odstranjeno v prejšnjih fazah).
+- ✅ Vsi uvozi so pravilni: `WorkoutPlanGenerator.kt`, `NutritionPlanStore.kt`, `BodyModule.kt`, `Progress.kt` uvažajo iz `domain.nutrition.*`.
+- ✅ `NutritionScreen.kt` uporablja polno kvalificirano ime `com.example.myapplication.domain.nutrition.calculateDailyWaterMl` in `calculateRestDayCalories` — **BREZ NAPAK**.
+
+**2. Dead Code — VERIFICIRANO:**
+- ✅ `network/ai_utils.kt` — Prazna stub datoteka (samo `package` + `TODO` komentar). `requestAIPlan()` se nikjer ne kliče. Datoteka ne povzroča build napak.
+- ✅ `ui/adapters/ChallengeAdapter.kt` — Prazna stub datoteka. Ne povzroča napak.
+- ✅ `UserProfileManager.updateUserProgressAfterWorkout()` — `@Deprecated` no-op stub. Ni klicana nikjer v produkcijski kodi (samo v komentarju `UpdateBodyMetricsUseCase.kt`).
+
+**3. Build status:**
+- ✅ **BUILD SUCCESSFUL** — Koda kompajlira brez napak.
+
+**4. Zaključek:**
+> Arhitekturni SSOT je bil že vzpostavljen v Fazi 13+. Ta revizija je to samo verificirala in dokumentirala. Ni bilo potrebnih korekcij — koda je bila že čista.
+
+---
 
 ### 2026-05-22 — Faza 19: RunTrackerScreen Dark Theme (UppColors SSOT) + AppDatabase_Impl Fix
 
