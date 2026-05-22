@@ -15,8 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -61,7 +61,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.data.Badge
@@ -183,7 +182,6 @@ fun WorkoutSessionScreen(
             context.applicationContext as Application
         )
     )
-    val workoutGenState by workoutVm.state.collectAsState()
     val isProgressiveOverload by workoutVm.isProgressiveOverload.collectAsState()
 
     /** Shranjeni fokus te seje (za CompleteWorkoutSession → workoutDoc.focusAreas). */
@@ -199,7 +197,7 @@ fun WorkoutSessionScreen(
             if (weight != null && weight > 0) {
                 userWeightKg = weight
             }
-        } catch(e: Exception) {}
+        } catch(_: Exception) {}
     }
 
     var currentSessionExercises by remember { mutableStateOf<List<ExerciseData>>(emptyList()) }
@@ -293,15 +291,8 @@ fun WorkoutSessionScreen(
             return@LaunchedEffect
         }
 
-        // Determine parameters from PlanResult
-        val experienceLevel = when (currentPlan.experience) {
-            "Beginner" -> 3
-            "Intermediate" -> 6
-            "Advanced" -> 9
-            else -> 5
-        }
-
-        // Zagotovi da je začetna težavnost inicializirana
+        // Determine user experience factor (Beginner=3, Intermediate=6, Advanced=9)
+        // Used in calculateDynamicRestTime() via AlgorithmPreferences
         AlgorithmPreferences.initDifficultyForPlan(context.getAlgoSettings(), currentPlan.experience)
 
         // Določi ciljno težavnost glede na recovery/catchup/normalen način
@@ -532,16 +523,11 @@ fun WorkoutSessionScreen(
                 )
             }
             is WorkoutState.Report -> {
-                val scope = rememberCoroutineScope()
                 WorkoutReportScreen(s.results, s.skipped) {
                     // Uporabi uid iz remember{} (definiran zgoraj) — ne kliči getCurrentUserDocId() znova
                     if (uid != null) {
-                       val totalKcal = results.sumOf { it.caloriesKcal }
-
-                        // SAMO AchievementStore skrbi za XP in badge preverjanje
+                       // SAMO AchievementStore skrbi za XP in badge preverjanje
                        // Logic moved to ViewModel to prevent double-counting and ensure transactional safety
-                       // scope.launch { ... } removed
-
                        results.forEach { r ->
                            AlgorithmPreferences.saveExerciseFeedback(context.getAlgoSettings(), r.name, r.difficultyRating)
                        }
@@ -605,7 +591,6 @@ private fun ExerciseScreen(
     val context = LocalContext.current
     var selectedDifficulty by remember { mutableStateOf(1) }
     var currentSet by remember(exercise.name) { mutableIntStateOf(1) }
-    var videoInitialized by remember { mutableStateOf(true) }
     var isVideoPlaying by remember { mutableStateOf(true) }
     var skipCount by remember { mutableStateOf(0) }
 
@@ -621,20 +606,17 @@ private fun ExerciseScreen(
         }
     }
 
-    val isTimed = (exercise.reps <= 0 && exercise.durationSecondsOverride != null) || (exercise.durationSecondsOverride != null && exercise.reps == 0)
+    val isTimed = exercise.reps <= 0 && exercise.durationSecondsOverride != null
 
-    // Calculate ESTIMATED time (for display purposes only)
-    var estimatedActMin = 0.0
-    var estimatedRestMin = 0.0
+    // Calculate ESTIMATED time (for display purposes only — currently not shown in UI)
     val durOverride = exercise.durationSecondsOverride
-    if (isTimed && durOverride != null) {
-        estimatedActMin = (exercise.sets * durOverride) / 60.0
-        estimatedRestMin = ((exercise.sets - 1) * exercise.restSeconds) / 60.0
+    @Suppress("UNUSED_VARIABLE")
+    val estimatedMinutes = if (isTimed && durOverride != null) {
+        (exercise.sets * durOverride) / 60.0
     } else {
         val repSec = exercise.secondsPerRepOverride ?: 3.0
         val reps = if (exercise.reps > 0) exercise.reps else 12
-        estimatedActMin = (exercise.sets * reps * repSec) / 60.0
-        estimatedRestMin = ((exercise.sets - 1) * exercise.restSeconds) / 60.0
+        (exercise.sets * reps * repSec) / 60.0
     }
 
     var showEndConfirm by remember { mutableStateOf(false) }
@@ -678,7 +660,7 @@ private fun ExerciseScreen(
         }
 
         Text("Exercise ${index+1}/$total")
-        LinearProgressIndicator((index+1f)/total, modifier = Modifier.fillMaxWidth())
+        LinearProgressIndicator(progress = { (index+1f)/total }, modifier = Modifier.fillMaxWidth())
 
         Spacer(Modifier.height(8.dp))
 
@@ -1106,7 +1088,6 @@ private fun WorkoutCelebrationScreen(
         streakScale.animateTo(1.0f, tween(200))
     }
 
-    val density = LocalDensity.current.density
     val context = LocalContext.current  // ← potrebno za HapticFeedback
     // ✅ streakDays prejmemo kot parameter iz BodyModuleHomeViewModel (Firestore SSOT)
     val currentStreak = streakDays
