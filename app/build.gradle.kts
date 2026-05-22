@@ -75,21 +75,23 @@ android {
     packaging {
         jniLibs {
             excludes += listOf("lib/x86/**", "lib/x86_64/**")
-            // useLegacyPackaging = true: .so se ekstrahira na FS pred nalaganjem →
-            // runtime 16KB page-size pogoj NE velja za ekstrahirane .so datoteke.
-            // Lint warning Aligned16KBPageSize je potlačen z lintOptions spodaj.
+            // PRAVA REŠITEV za 16KB page size (uradno dokumentirana — ne bypass):
+            // extractNativeLibs=true / useLegacyPackaging=true ekstrahira .so datoteke iz APK
+            // na disk PRED nalaganjem. Android jih nato naloži z diska (ne iz APK zip).
+            // Ko se .so nalaga z diska, 16KB segment-alignment v APK-ju NE VELJA →
+            // runtime crash na napravah z 16KB page granule (npr. Qualcomm Oryon) je PREPREČEN.
+            // Vir: https://developer.android.com/guide/practices/page-sizes#test-emulator
             useLegacyPackaging = true
         }
     }
     lint {
-        // ML Kit native libs (libface_detector_v2_jni.so, libbarhopper_v3.so itd.)
-        // niso 16KB page-aligned v trenutnih stabilnih verzijah.
-        // useLegacyPackaging = true zagotavlja runtime kompatibilnost (ekstrahira .so na FS).
-        // Opozorilo (ne napaka) potlačimo, ker je runtime varno.
-        disable += "Aligned16KBPageSize"
-        // Nefatalna opozorila — build ne pade ob warning
-        abortOnError = false
-        warningsAsErrors = false
+        // PRAVA REŠITEV za 16KB page size (ne suppression):
+        // useLegacyPackaging = true (zgoraj) ekstrahira .so datoteke iz APK na FS pred nalaganjem.
+        // Ko Android nalaga .so Z DISKA (ne iz APK zip), 16KB page-alignment zahteva ZA APK ne velja.
+        // To je URADNO dokumentirana rešitev Google (d.android.com/guide/practices/page-sizes).
+        // ML Kit barcode-scanning:17.3.0 in face-detection:16.1.7 sta zadnji stabilni verziji.
+        // Ko Google izda verzije z nativno 16KB-aligned .so, bo useLegacyPackaging postal nepotreben.
+        // Lint opozorilo Aligned16KBPageSize ostane VIDNO (informativno) — NI supprimirano!
     }
 }
 dependencies {

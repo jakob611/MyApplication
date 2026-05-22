@@ -1,5 +1,4 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-@file:Suppress("UNUSED_VALUE")  // Compose MutableState pri by remember{}: write je legitimen, IDE ne vidi recomposition
 
 package com.example.myapplication.ui.screens
 
@@ -173,7 +172,9 @@ fun NutritionScreen(
     val consumedCholesterol = trackedFoods.sumOf { it.cholesterolMg ?: 0.0 }
     val consumedSatFat = trackedFoods.sumOf { it.saturatedFatG ?: 0.0 }
 
-    var showOtherMacros by remember { mutableStateOf(false) }
+    // Eksplicitna MutableState (ne 'by' delegation) — odpravlja napačno opozorilo IDE
+    // "Assigned value is never read" v callback lambdah (Compose recomposition ni vidna statični analizi)
+    val showOtherMacros = remember { mutableStateOf(false) }
 
     // KRITIČNO: Preberi nutrition plan iz NutritionPlanStore (posodobljiv plan)
     var nutritionPlan by remember { mutableStateOf<com.example.myapplication.data.NutritionPlan?>(null) }
@@ -231,11 +232,14 @@ fun NutritionScreen(
     var sheetMeal by remember { mutableStateOf<MealType?>(null) }
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var showMakeCustom by remember { mutableStateOf(false) }
-    var pendingCustomMeal by remember { mutableStateOf<SavedCustomMeal?>(null) }
-    var askWhereToAdd by remember { mutableStateOf(false) }
-    var chooseMealForCustom by remember { mutableStateOf(MealType.Breakfast) }
-    var showFoodDetailDialog by remember { mutableStateOf<TrackedFood?>(null) }
+    // Dialog state kot eksplicitna MutableState — IDE ne more slediti Compose recomposition
+    // prek 'by' delegation, zato se vsak .value = X v lambdah napačno označi kot "never read".
+    // Z eksplicitnim .value dostopom ta lažna opozorila izginejo brez kakršne koli suppression.
+    val showMakeCustom = remember { mutableStateOf(false) }
+    val pendingCustomMeal = remember { mutableStateOf<SavedCustomMeal?>(null) }
+    val askWhereToAdd = remember { mutableStateOf(false) }
+    val chooseMealForCustom = remember { mutableStateOf(MealType.Breakfast) }
+    val showFoodDetailDialog = remember { mutableStateOf<TrackedFood?>(null) }
 
     // Avtomatsko odpri Add Food Sheet, ko je produkt skeniran
     LaunchedEffect(scannedProduct) {
@@ -277,7 +281,7 @@ fun NutritionScreen(
 
     // Real-time shranjeni custom meals (ÄŤipi)
     var savedMeals by remember { mutableStateOf<List<SavedCustomMeal>>(emptyList()) }
-    var confirmDelete by remember { mutableStateOf<SavedCustomMeal?>(null) }
+    val confirmDelete = remember { mutableStateOf<SavedCustomMeal?>(null) }
 
     // StateFlow collect zamenjuje direktni collect v UI
     val snaps by nutritionViewModel.customMealsState.collectAsState()
@@ -588,7 +592,7 @@ fun NutritionScreen(
                         context,
                         com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK
                     )
-                    showOtherMacros = true
+                    showOtherMacros.value = true
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
@@ -647,7 +651,7 @@ fun NutritionScreen(
             Button(
                 onClick = {
                     com.example.myapplication.utils.HapticFeedback.performHapticFeedback(context, com.example.myapplication.utils.HapticFeedback.FeedbackType.CLICK)
-                    showMakeCustom = true
+                    showMakeCustom.value = true
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
@@ -664,8 +668,8 @@ fun NutritionScreen(
                     meal = meal,
                     textPrimary = textPrimary,
                     surfaceVariantColor = surfaceVariantColor,
-                    onClick = { pendingCustomMeal = meal; askWhereToAdd = true },
-                    onDelete = { confirmDelete = meal }
+                    onClick = { pendingCustomMeal.value = meal; askWhereToAdd.value = true },
+                    onDelete = { confirmDelete.value = meal }
                 )
             }
 
@@ -693,7 +697,7 @@ fun NutritionScreen(
                             sheetMeal = mealType
                         }
                     },
-                    onFoodClick = { showFoodDetailDialog = it },
+                    onFoodClick = { showFoodDetailDialog.value = it },
                     onFoodDelete = { trackedFoods = trackedFoods.filterNot { t -> t.id == it.id } }
                 )
             }
@@ -772,51 +776,51 @@ fun NutritionScreen(
     }
 
     // Dialog: ustvarjanje custom meals
-    if (showMakeCustom) {
+    if (showMakeCustom.value) {
         MakeCustomMealsDialog(
-            onDismiss = { showMakeCustom = false },
+            onDismiss = { showMakeCustom.value = false },
             onSaved = { saved, mealType, isSaveOnly ->
                 if (isSaveOnly) {
                     // "Save Only" — zapri dialog, prikaži Toast, NE odpri ChooseMealDialog
-                    showMakeCustom = false
+                    showMakeCustom.value = false
                     android.widget.Toast.makeText(context, "Meal Saved", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     // "Save & Add" — vprašaj za destinacijo
-                    pendingCustomMeal = saved
-                    chooseMealForCustom = mealType
-                    showMakeCustom = false
-                    askWhereToAdd = true
+                    pendingCustomMeal.value = saved
+                    chooseMealForCustom.value = mealType
+                    showMakeCustom.value = false
+                    askWhereToAdd.value = true
                 }
             }
         )
     }
 
-    // Food Detail Dialog - prikaĹľe podrobnosti o tracked food item
-    showFoodDetailDialog?.let { trackedFood ->
+    // Food Detail Dialog - prikazuje podrobnosti o tracked food item
+    showFoodDetailDialog.value?.let { trackedFood ->
         TrackedFoodDetailDialog(
             trackedFood = trackedFood,
-            onDismiss = { showFoodDetailDialog = null },
+            onDismiss = { showFoodDetailDialog.value = null },
             userProfile = userProfile
         )
     }
 
     // Dialog: izberi obrok in dodaj custom meal
-    if (askWhereToAdd && pendingCustomMeal != null) {
+    if (askWhereToAdd.value && pendingCustomMeal.value != null) {
         ChooseMealDialog(
-            selected = chooseMealForCustom,
+            selected = chooseMealForCustom.value,
             onCancel = {
-                askWhereToAdd = false
-                pendingCustomMeal = null
+                askWhereToAdd.value = false
+                pendingCustomMeal.value = null
             },
             onConfirmAsync = { mealChosen ->
-                val cm = pendingCustomMeal!!
+                val cm = pendingCustomMeal.value!!
                 val currentUid = FirestoreHelper.getCurrentUserDocId()
 
                 if (currentUid == null) {
                     // Removed redundant qualifier
                     android.widget.Toast.makeText(context, "Not logged in", android.widget.Toast.LENGTH_SHORT).show()
-                    pendingCustomMeal = null
-                    askWhereToAdd = false
+                    pendingCustomMeal.value = null
+                    askWhereToAdd.value = false
                     return@ChooseMealDialog true
                 }
 
@@ -827,8 +831,8 @@ fun NutritionScreen(
 
                         if (items == null) {
                             android.widget.Toast.makeText(context, "Meal not found", android.widget.Toast.LENGTH_SHORT).show()
-                            pendingCustomMeal = null
-                            askWhereToAdd = false
+                            pendingCustomMeal.value = null
+                            askWhereToAdd.value = false
                             return@launch
                         }
 
@@ -875,12 +879,12 @@ fun NutritionScreen(
                         } else {
                             android.widget.Toast.makeText(context, "No items found in custom meal.", android.widget.Toast.LENGTH_LONG).show()
                         }
-                        pendingCustomMeal = null
-                        askWhereToAdd = false
+                        pendingCustomMeal.value = null
+                        askWhereToAdd.value = false
                     } catch (e: Exception) {
                         android.widget.Toast.makeText(context, "Failed to load meal: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                        pendingCustomMeal = null
-                        askWhereToAdd = false
+                        pendingCustomMeal.value = null
+                        askWhereToAdd.value = false
                     }
                 }
 
@@ -890,9 +894,9 @@ fun NutritionScreen(
     }
 
     // Dialog: potrdi brisanje custom meal
-    confirmDelete?.let { mealToDelete ->
+    confirmDelete.value?.let { mealToDelete ->
         AlertDialog(
-            onDismissRequest = { confirmDelete = null },
+            onDismissRequest = { confirmDelete.value = null },
             confirmButton = {
                 Button(onClick = {
                     val uidDel = FirestoreHelper.getCurrentUserDocId()
@@ -901,29 +905,29 @@ fun NutritionScreen(
                         scope.launch {
                             try {
                                 FoodRepositoryImpl.deleteCustomMeal(mealToDelete.id)
-                                confirmDelete = null
+                                confirmDelete.value = null
                                 // Refresh quick meal widget after deletion
                                 com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)
                             } catch (_: Exception) {
                                 // handle
                             }
                         }
-                    } else confirmDelete = null
+                    } else confirmDelete.value = null
                 }) { Text("Delete") }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDelete.value = null }) { Text("Cancel") } },
             title = { Text("Delete custom meal?") },
             text = { Text("This will remove '${mealToDelete.name}' from saved custom meals.") }
         )
     }
 
-    // Dialog: prikaĹľi druge makre
-    if (showOtherMacros) {
+    // Dialog: prikaži druge makre
+    if (showOtherMacros.value) {
         val textColor = MaterialTheme.colorScheme.onSurface // Define textColor here
         AlertDialog(
-            onDismissRequest = { showOtherMacros = false },
+            onDismissRequest = { showOtherMacros.value = false },
             confirmButton = {
-                TextButton(onClick = { showOtherMacros = false }) {
+                TextButton(onClick = { showOtherMacros.value = false }) {
                     Text("Close", color = MaterialTheme.colorScheme.tertiary)
                 }
             },
