@@ -6,12 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
     // ─── KSP SETUP (Room code generation) ────────────────────────────────────
-    // KSP stability za Kotlin 2.2.10: preverite https://github.com/google/ksp/releases
-    // Ko bo verzija potrjena (npr. 2.2.10-1.0.29), odkomentirajte:
+    // ⚠️ ZAKOMENTIRANO: KSP 2.2.10-1.0.29 ni v Maven repos — AppDatabase_Impl.kt ročno pisan
     // id("com.google.devtools.ksp")
-    // IN V root build.gradle.kts odkomentirajte:
-    // id("com.google.devtools.ksp") version "2.2.10-1.0.29" apply false
-    // NATO: ročno ZBRIŠITE AppDatabase_Impl.kt in zaženite ./gradlew clean assembleDebug
     // ─────────────────────────────────────────────────────────────────────────
 }
 val localProps = Properties().apply {
@@ -155,15 +151,10 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // Room — Offline-First baza podatkov (Faza 3)
-    // AppDatabase_Impl.kt je ročno napisan (KSP za Kotlin 2.2.10 še ni uradno na voljo).
-    // Ko bo KSP potrjen na https://github.com/google/ksp/releases:
-    //   1. Odkomentirajte: ksp("androidx.room:room-compiler:$roomVersion")
-    //   2. Odkomentirajte KSP plugin zgoraj in v root build.gradle.kts
-    //   3. ROČNO ZBRIŠITE AppDatabase_Impl.kt (Right-click → Delete v Android Studiu)
-    //   4. ./gradlew clean assembleDebug
+    // ⚠️ ksp() zakomentirano — KSP plugin ni na voljo za Kotlin 2.2.10, AppDatabase_Impl.kt ročno pisan
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    // ksp("androidx.room:room-compiler:$roomVersion")   // ← odkomentiraj ko bo KSP na voljo
+    // ksp("androidx.room:room-compiler:$roomVersion")   // odkomentiraj ko KSP 2.2.10-1.0.X izide
 }
 

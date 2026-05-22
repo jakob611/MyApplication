@@ -1,25 +1,10 @@
 @file:Suppress("RestrictedApi", "DEPRECATION")
 package com.example.myapplication.data.local
 
-// =====================================================================
-// AppDatabase_Impl.kt — ROČNO NAPISANA Room implementacija.
-//
-// ⚠️  Ta datoteka nadomešča auto-generirani AppDatabase_Impl ker KSP
-//     za Kotlin 2.2.x še ni uradno objavljen na Maven repozitoriju.
-//
-// ⛔  KO BO KSP NA VOLJO (preverite: https://github.com/google/ksp/releases):
-//     1. V app/build.gradle.kts: odkomentirajte blok "KSP SETUP"
-//     2. V build.gradle.kts (root): odkomentirajte KSP plugin
-//     3. ROČNO ZBRIŠI TA DATOTEKO iz Android Studia (Right-click → Delete)
-//     4. Zaženite: ./gradlew clean assembleDebug
-//
-// Paketi (po refaktoriranju):
-//   Entitete : com.example.myapplication.data.local.entity
-//   DAO-ji   : com.example.myapplication.data.local.doo
-// =====================================================================
-
 import android.content.ContentValues
 import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
+import android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
 import androidx.room.DatabaseConfiguration
 import androidx.room.InvalidationTracker
 import androidx.room.RoomOpenHelper
@@ -38,12 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// Konfliktne konstante (skladno z SQLiteDatabase)
-private const val CONFLICT_REPLACE = 5
-private const val CONFLICT_IGNORE  = 4
-
-// ── Implementacija WorkoutSessionDao ──────────────────────────────────────────
-
+// ── Implementacija WorkoutSessionDao ────────────────────────────────────────
 private class WorkoutSessionDao_Impl(private val db: AppDatabase) : WorkoutSessionDao {
 
     private val _sessionsFlow = MutableStateFlow<List<WorkoutSessionEntity>>(emptyList())

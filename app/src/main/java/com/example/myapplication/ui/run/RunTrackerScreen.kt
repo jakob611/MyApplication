@@ -318,7 +318,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(UppColors.Background)) {
         // Mapa
         AndroidView(
             factory = { ctx ->
@@ -408,7 +408,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
         // Stats card (levo zgoraj)
         Card(
             Modifier.align(Alignment.TopStart).padding(16.dp).fillMaxWidth(0.58f),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+            colors = CardDefaults.cardColors(containerColor = UppColors.CardSurface.copy(alpha = 0.95f)),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -462,11 +462,11 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                     Text("↑ ${"%.0f".format(elevationGain)} m  ↓ ${"%.0f".format(elevationLoss)} m", fontSize = 13.sp, color = UppColors.Blue)
                 }
                 if (isTracking) {
-                    Text("🔥 $liveCalories kcal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.tertiary)
+                    Text("🔥 $liveCalories kcal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = UppColors.Orange)
                     Text(
                         if (isPaused) "Paused" else "Tracking...",
                         fontSize = 12.sp,
-                        color = if (isPaused) MaterialTheme.colorScheme.tertiary else UppColors.Orange,
+                        color = if (isPaused) UppColors.LightGray else UppColors.Orange,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -476,7 +476,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
         // Controls card (spodaj)
         Card(
             Modifier.align(Alignment.BottomCenter).padding(16.dp).fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+            colors = CardDefaults.cardColors(containerColor = UppColors.CardSurface.copy(alpha = 0.95f)),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -523,7 +523,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                        color = if (isSelected) UppColors.White else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
@@ -570,7 +570,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                             Button(
                                 onClick = { context.startService(Intent(context, RunTrackingService::class.java).apply { action = if (isPaused) RunTrackingService.ACTION_RESUME else RunTrackingService.ACTION_PAUSE }) },
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) UppColors.Orange else MaterialTheme.colorScheme.tertiary),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (isPaused) UppColors.Orange else UppColors.LightGray.copy(alpha = 0.25f)),
                                 shape = RoundedCornerShape(12.dp)
                             ) { Icon(if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null); Spacer(Modifier.width(8.dp)); Text(if (isPaused) "Resume" else "Pause", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
 
@@ -621,11 +621,11 @@ fun RunTrackerScreen(onBack: () -> Unit) {
             val xpEarned = calculateXP(selectedActivity, finalDistance, finalTime)
 
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
-                Card(
-                    Modifier.align(Alignment.Center).fillMaxWidth(0.88f),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
+                    Card(
+                        Modifier.align(Alignment.Center).fillMaxWidth(0.88f),
+                        colors = CardDefaults.cardColors(containerColor = UppColors.CardSurface),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
                     Column(
                         Modifier.padding(24.dp).fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -827,7 +827,7 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                             },
                             modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
                             enabled = !isSavingActivity,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            colors = ButtonDefaults.buttonColors(containerColor = UppColors.Orange),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             if (isSavingActivity) {
@@ -888,7 +888,7 @@ private fun SummaryRow(label: String, value: String, highlight: Boolean = false)
             value,
             fontSize = if (highlight) 17.sp else 15.sp,
             fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium,
-            color = if (highlight) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
+            color = if (highlight) UppColors.Orange else MaterialTheme.colorScheme.onSurface
         )
     }
 }

@@ -6,7 +6,10 @@ import com.example.myapplication.domain.repository.WorkoutStatsRepository
 import com.example.myapplication.data.store.FirestoreHelper
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -30,17 +33,28 @@ class UserWorkoutStatsRepository(
             val doc = docRef.get().await()
             if (!doc.exists()) return null
 
-            val todayStr = Clock.System.now()
-                .toLocalDateTime(TimeZone.Companion.currentSystemDefault()).date.toString()
+            val today = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val todayStr = today.toString()
 
             @Suppress("UNCHECKED_CAST")
             val dailyHistory = (doc.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
             val todayStatus = dailyHistory[todayStr]?.toString() ?: ""
 
+            // ✅ FIX: weeklyDone se izračuna dinamično iz dailyHistory tekočega tedna (pon–danes).
+            // S tem se števec samodejno ponastavi ob novem tednu — ni potrebe po ločenem reset polju.
+            val daysFromMonday = today.dayOfWeek.value - 1 // Monday.value=1, Sunday.value=7 → pon=0
+            val monday = today.minus(daysFromMonday, DateTimeUnit.DAY)
+            val weeklyDoneCalc = dailyHistory.entries.count { (dateStr, status) ->
+                val s = status.toString()
+                if (s != "WORKOUT_DONE" && s != "REST_WORKOUT_DONE") return@count false
+                try { val d = LocalDate.parse(dateStr); d in monday..today } catch (_: Exception) { false }
+            }
+
             WorkoutStats(
                 streakDays = doc.getLong("streak_days")?.toInt() ?: 0,
                 streakFreezes = doc.getLong("streak_freezes")?.toInt() ?: 0,
-                weeklyDone = doc.getLong("weekly_done")?.toInt() ?: 0,
+                weeklyDone = weeklyDoneCalc,
                 weeklyTarget = doc.getLong("weekly_target")?.toInt() ?: 3,
                 planDay = doc.getLong("plan_day")?.toInt() ?: 1,
                 totalWorkoutsCompleted = doc.getLong("total_workouts_completed")?.toInt() ?: 0,
