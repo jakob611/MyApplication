@@ -414,3 +414,11 @@ no replicira staro SimpleDateFormat obliko.
 5. **Dead code**: `UpdateStreakUseCase` označen `@Deprecated`; `simulateDayPass()` dodan `BuildConfig.DEBUG` guard.
 **Zakaj:** Aplikacija je bila nestabilna — algoritmi so se podrli ker sta dve vzporedni Firestore branji pisali na UI stanje brez cancellationa. Po zaustavitvi workout-a se je UI mešal med starim in novim stanjem.
 **Tveganje:** 🟡 srednje (ViewModel logika + data flow sprememba)
+
+## 2026-05-22 — Faza 24: Unit Test Pokritost — Nutrition + XP/Level
+**Datoteke:** `app/src/test/.../NutritionCalculationsTest.kt` (NOVO), `app/src/test/.../GamificationXpLevelTest.kt` (NOVO)
+**Kaj:**
+1. **NutritionCalculationsTest.kt** — 30+ unit testov za vse funkcije v `domain/nutrition/NutritionCalculations.kt`: `calculateDailyWaterMl` (klampiranje 1500–5000ml, zaokroževanje na 100ml, gender faktor, workout bonus), `calculateSmartCalories` (vse cilje, minimumi 1500/1200 kcal, diabetes faktor), `calculateRestDayCalories` (prilagoditve po cilju, minimumi), `calculateAdvancedBMR` (Mifflin + Katch-McArdle, starostni faktorji), `calculateEnhancedTDEE` (delta logika, multiplierji), `calculateOptimalMacros` (keto meje 20–50g, zaščita negativnih vrednosti), `calculateAdaptiveTDEE` (confidence, minimum 800 kcal).
+2. **GamificationXpLevelTest.kt** — 20+ unit testov za `UserProfile.calculateLevel()`, `xpRequiredForLevel()`, `progressToNextLevel`: mejne vrednosti za vsak nivo, level-up scenarij z ohranitvijo presežka XP, konsistentnost med funkcijami, eksponentna rast zahtev, robni primeri (0 XP, 1M XP).
+**Zakaj:** Testna pokritost ključnih kalkulacij za preprečevanje prihodnjih hroščev brez Android odvisnosti (KMP-ready).
+**Tveganje:** 🟢 nizko (samo dodajanje testov, ni sprememb produkcijske kode)
