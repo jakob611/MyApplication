@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-22 (Faza 21: SSOT Konsolidacija — UserDayStatus + moveToNextDay() + 16KB)  
+**Zadnja posodobitev:** 2026-05-22 (Faza 22: Code Inspection Cleanup — Material3, Unit Testi)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -64,6 +64,30 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 - [2026-03-29] `RunTrackerScreen.kt`: Aplikacija med tekom/hoja ni omogočala prostega premikanja po zemljevidu in je vedno na silo vračala na trenuten položaj uporabnika. Dodano je bilo, da uporabnikov dotik ustavi samodejno sledenje, hkrati pa je dodan gumb "Re-center map".
 - [2026-03-28] `WorkoutSessionScreen.kt`: Uporabnik je lahko po nesreči zapustil trening brez opozorila, izgubil progress. Dodan BackHandler za potrditev.
 - [2026-04-02 (Activity Log Pagination)] — V `RunTrackerViewModel` smo dodali `limit(15)` in `startAfter()` za optimizacijo pri pridobivanju iz Firestore-a, v `ActivityLogScreen.kt` pa avtomatsko load-more paginacijo, ki po potrebi prenaša po 15 kartic, kar ublaži težave na napravah ob dolgi zgodovini.
+
+---
+
+## DNEVNIK POPRAVKOV — Faza 22 (2026-05-22)
+
+### Code Inspection Cleanup — Material3 + Unit Testi
+
+**1. WorkoutSessionScreen.kt — Material1 → Material3 (Mešanje odpravljeno):**
+- ✅ `import androidx.compose.material.CircularProgressIndicator` → `material3`
+- ✅ `import androidx.compose.material.LinearProgressIndicator` → `material3`
+- ✅ `LinearProgressIndicator(value, ...)` → `LinearProgressIndicator(progress = { value }, ...)` (Material3 API)
+- ✅ Neuporabljene spremenljivke odstranjene: `workoutGenState`, `experienceLevel`, `scope`, `totalKcal`, `videoInitialized`, `estimatedActMin`, `estimatedRestMin`, `density`
+- ✅ `LocalDensity` import odstranjen
+- ✅ `catch(e: Exception)` → `catch(_: Exception)` (neuporabljeni exception parametri)
+
+**2. UserDayStatusTest.kt (NOVO) — Lokalni unit testi:**
+- ✅ 18+ testov za `UserDayStatus` enum (`isDoneToday`, `contributesToStreak`, `shouldIncrementPlanDay`, `fromFirestore()`)
+- ✅ **Scenarij (a):** `WORKOUT_PENDING` → `recordWorkoutCompletion()` → streak++, plan_day++
+- ✅ **Scenarij (b):** `REST_DAY_PENDING` → `restDayInitiated()` → streak++, plan_day nespremenjen
+- ✅ **Scenarij (b2):** `WORKOUT_DONE` guard → `restDayInitiated()` je blokiran (0 klicev `moveToNextDay`)
+- ✅ **Scenarij (c):** Firestore transakcija vrže izjemo → streak/plan_day ostaneta nespremenjena (atomičnost)
+- ✅ `FakeGamificationRepository (open class)` za izolacijo domenskih testov brez Android odvisnosti
+
+**3. BUILD SUCCESSFUL ✅**
 
 ---
 
