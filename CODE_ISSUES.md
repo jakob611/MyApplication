@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-22 (Faza 20: Architecture & SSOT Audit — čiščenje tehničnega dolga)  
+**Zadnja posodobitev:** 2026-05-22 (Faza 21: SSOT Konsolidacija — UserDayStatus + moveToNextDay() + 16KB)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -64,6 +64,34 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 - [2026-03-29] `RunTrackerScreen.kt`: Aplikacija med tekom/hoja ni omogočala prostega premikanja po zemljevidu in je vedno na silo vračala na trenuten položaj uporabnika. Dodano je bilo, da uporabnikov dotik ustavi samodejno sledenje, hkrati pa je dodan gumb "Re-center map".
 - [2026-03-28] `WorkoutSessionScreen.kt`: Uporabnik je lahko po nesreči zapustil trening brez opozorila, izgubil progress. Dodan BackHandler za potrditev.
 - [2026-04-02 (Activity Log Pagination)] — V `RunTrackerViewModel` smo dodali `limit(15)` in `startAfter()` za optimizacijo pri pridobivanju iz Firestore-a, v `ActivityLogScreen.kt` pa avtomatsko load-more paginacijo, ki po potrebi prenaša po 15 kartic, kar ublaži težave na napravah ob dolgi zgodovini.
+
+---
+
+## DNEVNIK POPRAVKOV — Faza 21 (2026-05-22)
+
+### SSOT Konsolidacija: UserDayStatus + moveToNextDay()
+
+**Problem:** Stanje uporabnikovega plana je bilo raztreseno po raw String konstantah
+("WORKOUT_DONE", "STRETCHING_DONE", ...) brez centralnega SSOT. Logika premika dneva
+razdeljena med `processActivityCompletion()` in `updateStreak()`.
+
+**Rešitev — 3 korenite spremembe:**
+
+1. **`domain/model/UserDayStatus.kt` (NOVO)** — tipsko-varni enum:
+   - `WORKOUT_PENDING`, `WORKOUT_DONE`, `REST_DAY_PENDING`, `REST_DAY_DONE`,
+     `REST_WORKOUT_DONE`, `FROZEN`, `MISSED`
+   - Pomožne lastnosti: `isDoneToday`, `contributesToStreak`, `shouldIncrementPlanDay`
+   - `fromFirestore(String?)` companion — varna pretvorba iz Firestore
+
+2. **`moveToNextDay(newStatus, xp, reason, cals, incrementPlanDay)`** (SSOT):
+   - Nadomešča `processActivityCompletion()` + `updateStreak()` (oba zbrisana)
+   - ENA Firestore transakcija za: streak, plan_day, XP, dailyHistory, dailyLogs
+   - De-dup guard: WORKOUT_DONE = najvišja prioriteta, brez prepisa
+   - Če transakcija spodleti → Room ni posodobljena
+
+3. **16KB page size knjižnice za One UI 8.5 ELF fix:**
+   - camera: 1.3.1 → 1.4.1, media3: 1.2.1 → 1.4.1, face-detection: 16.1.6 → 16.1.7
+   - Compose BOM: 2024.06→2024.12, lifecycle: 2.7→2.8.7, Firebase BoM: 33.1→33.7
 
 ---
 
