@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-22 (Faza 22: Code Inspection Cleanup — Material3, Unit Testi)  
+**Zadnja posodobitev:** 2026-05-22 (Faza 23: Integracijski audit + race condition popravek)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -64,6 +64,38 @@ Vse 3 datoteke so označene z `// ⚠️ DEAD CODE — IZBRIŠI TO DATOTEKO ROČ
 - [2026-03-29] `RunTrackerScreen.kt`: Aplikacija med tekom/hoja ni omogočala prostega premikanja po zemljevidu in je vedno na silo vračala na trenuten položaj uporabnika. Dodano je bilo, da uporabnikov dotik ustavi samodejno sledenje, hkrati pa je dodan gumb "Re-center map".
 - [2026-03-28] `WorkoutSessionScreen.kt`: Uporabnik je lahko po nesreči zapustil trening brez opozorila, izgubil progress. Dodan BackHandler za potrditev.
 - [2026-04-02 (Activity Log Pagination)] — V `RunTrackerViewModel` smo dodali `limit(15)` in `startAfter()` za optimizacijo pri pridobivanju iz Firestore-a, v `ActivityLogScreen.kt` pa avtomatsko load-more paginacijo, ki po potrebi prenaša po 15 kartic, kar ublaži težave na napravah ob dolgi zgodovini.
+
+---
+
+## DNEVNIK POPRAVKOV — Faza 23 (2026-05-22)
+
+### Integracijski Audit + Race Condition Popravek + Gamification Optimizacija
+
+**KRITIČNI BUG — Race Condition v BodyModuleHomeViewModel:**
+- ❌ `BodyModuleHomeScreen.kt` je imel **dve** `LaunchedEffect` (Unit + currentPlan) — obe sta ob vstopugna zaslon sprožili `LoadMetrics` → dve vzporedni Firestore branji → nedeterministično pisanje v `_ui.value`.
+- ✅ Popravljeno: ostane samo `LaunchedEffect(currentPlan)`. Pokriva (a) začetni load, (b) spremembo plana, (c) navigacijo nazaj.
+
+**KRITIČNI BUG — BodyModuleHomeViewModel brez Job Cancellation:**
+- ❌ Vsak klic `LoadMetrics` je odprl novo coroutino brez prekinjanja prejšnje → race condition med Firestore branii.
+- ✅ Dodan `loadMetricsJob: Job?` — vsak `LoadMetrics` cancela prejšnji pred zagonom novega.
+
+**KRITIČNI BUG — Odvečni Firestore Read po workout-u:**
+- ❌ `CompleteWorkoutSession` je po uspešni `moveToNextDay()` transakciji klical `getBodyMetrics.invoke().collect{}` — dodatni Firestore read ki je (a) počasen, (b) v race-u z `LoadMetrics`, (c) ni bil garantiran svež.
+- ✅ `WorkoutCompletionResult` razširjen z `newStreakDays` + `newPlanDay` (propagirano iz `moveToNextDay()`).
+- ✅ `CompleteWorkoutSession` zdaj naredi čisti optimistični update iz `WorkoutCompletionResult` — brez dodatnega Firestore read-a.
+
+**NAPAČNA LOGIKA — todayStatus v CompleteWorkoutSession:**
+- ❌ Fallback: `if (isRestDay) REST_WORKOUT_DONE` — `isRestDay = _ui.value.todayIsRest` brez preverjanja `isExtra`.
+- ✅ Popravljeno: `if (isRestDay && isExtra) REST_WORKOUT_DONE` — ujema se z `UpdateBodyMetricsUseCase` logiko.
+
+**ČIŠČENJE ŠPAGETOV:**
+- ✅ `UpdateStreakUseCase`: označen `@Deprecated` + komentar (dead code — nikjer ni klican v produkciji).
+- ✅ `WeeklyStreakWorker.simulateDayPass()`: dodan `BuildConfig.DEBUG` guard.
+- ✅ `WeeklyStreakWorker.scheduleTomorrowFlags()`: označen dead code stub.
+- ✅ `ensureScheduled(startOfWeek)`: parameter obdržan za backward compat.
+- ✅ `TimeZone.Companion.currentSystemDefault()` → `TimeZone.currentSystemDefault()`.
+
+**4. BUILD SUCCESSFUL ✅**
 
 ---
 

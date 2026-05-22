@@ -404,3 +404,13 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** Live kalorije so bile prikazane v LightGray (tertiary) namesto Orange. SummaryRow XP je bil LightGray namesto Orange. AppDatabase_Impl je imel korupcijo ki je blokirala build (class header izbrisan). KSP 2.2.10-1.0.29 ni bil dostopen v Maven repos.
 **Tveganje:** 🟢 nizko (samo barvne spremembe + compile fix)
 
+## 2026-05-22 — Faza 23: Integracijski Audit + Race Condition Fix + Gamification Optimizacija
+**Datoteke:** `domain/gamification/ManageGamificationUseCase.kt`, `domain/usecase/UpdateBodyMetricsUseCase.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `ui/screens/BodyModuleHomeScreen.kt`, `workers/WeeklyStreakWorker.kt`, `domain/usecase/UpdateStreakUseCase.kt`
+**Kaj:**
+1. **Race condition odpravljen**: Dvojni `LaunchedEffect` (Unit + currentPlan) v `BodyModuleHomeScreen` → reduciran na en sam `LaunchedEffect(currentPlan)`; ob vstopu sta se prožili dve vzporedni Firestore branji ki sta pisali na `_ui.value` brez koordinacije.
+2. **Job cancellation**: `BodyModuleHomeViewModel.loadMetricsJob` — vsak `LoadMetrics` cancela prejšnji.
+3. **Brez odvečnega Firestore read-a**: `WorkoutCompletionResult` razširjen z `newStreakDays + newPlanDay`; `CompleteWorkoutSession` zdaj naredi čisti optimistični update (brez dodatnega `getBodyMetrics.invoke().collect{}`).
+4. **Popravljena todayStatus logika**: `if (isRestDay && isExtra)` (prej brez `isExtra` → napačni `REST_WORKOUT_DONE` za redne workout-e na rest dnevu).
+5. **Dead code**: `UpdateStreakUseCase` označen `@Deprecated`; `simulateDayPass()` dodan `BuildConfig.DEBUG` guard.
+**Zakaj:** Aplikacija je bila nestabilna — algoritmi so se podrli ker sta dve vzporedni Firestore branji pisali na UI stanje brez cancellationa. Po zaustavitvi workout-a se je UI mešal med starim in novim stanjem.
+**Tveganje:** 🟡 srednje (ViewModel logika + data flow sprememba)
