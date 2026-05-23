@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.R
 import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.BodyField
 import com.example.myapplication.domain.model.BodyGoldenRatioResult
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.model.UserDayStatus
@@ -18,6 +19,7 @@ import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.ValidationResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,6 +55,7 @@ sealed interface BodyUiEvent {
 
 /**
  * Faza 31.1 — Enoten UI state za Golden Ratio sekcijo.
+ * Faza 31.3 — inputErrorRes: Int? → invalidFields: Set<BodyField> za per-field natančnost.
  *
  * Nadomešča tri razpršene StateFlow-e:
  *   bodyProfile: StateFlow<UserProfile?>     → pokrit z Loading/Success
@@ -61,8 +64,8 @@ sealed interface BodyUiEvent {
  *
  * Prednosti:
  *   • Atomarni prehodi — UI nikoli ne vidi nedosledne kombinacije vrednosti
- *   • Error.messageRes je Int (R.string.*) → brez hardkodiranih nizov v VM
  *   • Loading stanje preprečuje vizualno utripanje ("flash of empty content")
+ *   • invalidFields: UI obarva SAMO polja, ki so dejansko zunaj meja
  */
 sealed interface GoldenRatioUiState {
     /** Profil se nalaga iz Firestore — pokaži CircularProgressIndicator. */
@@ -71,22 +74,21 @@ sealed interface GoldenRatioUiState {
     /**
      * Profil naložen — pokaži celotni vmesnik z vnosi.
      * @param profileHeight  Višina iz profila (za prikaz in izračun pas/višina razmerja)
-     * @param data           Rezultat izračuna; null dokler uporabnik ne vnese meritev
+     * @param data           Rezultat izračuna; null dokler vnos ni veljaven
      * @param isSaving       true med Firestore batch write — gumb onemogočen
-     * @param inputErrorRes  Faza 31.2 — R.string.* ID inline validacijske napake vnosa;
-     *                       null = vnos je veljaven ali prazen.
-     *                       Prikaže se pod vnosnimi polji, ne zamenja celotnega zaslona.
+     * @param invalidFields  Faza 31.3 — set polj, ki so zunaj bioloških meja (30–250 cm).
+     *                       Prazen = vsi vnosi veljavni. UI nastavi isError SAMO na teh poljih.
      */
     data class Success(
         val profileHeight: Double?,
         val data: BodyGoldenRatioResult?,
         val isSaving: Boolean = false,
-        val inputErrorRes: Int? = null
+        val invalidFields: Set<BodyField> = emptySet()
     ) : GoldenRatioUiState
 
     /**
      * Napaka pri inicializaciji zaslona (npr. izpad Firestore med nalaganjem profila).
-     * NI namenjen validacijskim napakam vnosa — za to se uporablja [Success.inputErrorRes].
+     * NI namenjen validacijskim napakam vnosa — za to se uporablja [Success.invalidFields].
      * @param messageRes  ID string resursa (R.string.*) — lokalizabilen, brez Context v VM
      */
     data class Error(val messageRes: Int) : GoldenRatioUiState
@@ -222,15 +224,15 @@ class BodyModuleHomeViewModel(
 
     /**
      * Faza 31.1 — ENOTEN UI STATE za Golden Ratio sekcijo.
-     * Faza 31.2 — IllegalArgumentException → Success(inputErrorRes=...) namesto Error stanja.
+     * Faza 31.3 — Zamenjava try-catch z ValidationResult mapiranjem.
      *
      * Kombinira 3 vire (bodyProfile + _bodyMeasurements + _isSaving) v en atomaren tok.
      * Stanje:
-     *   bodyProfile == null          → Loading  (Firestore še ni odgovoril)
-     *   bodyProfile != null          → Success  (pokaži vnose, opcijsko result)
-     *   IllegalArgumentException     → Success(inputErrorRes=R.string.*)
-     *                                  Vnosna polja ostanejo vidna in aktivna!
-     *   GoldenRatioUiState.Error     → rezervirano za prihodnje Firestore napake
+     *   bodyProfile == null               → Loading  (Firestore še ni odgovoril)
+     *   ValidationResult.Success          → Success(data=result, invalidFields=emptySet())
+     *   ValidationResult.Invalid(fields)  → Success(data=null, invalidFields=fields)
+     *                                       UI obarva SAMO napačna polja!
+     *   GoldenRatioUiState.Error          → rezervirano za prihodnje Firestore napake
      */
     val goldenRatioUiState: StateFlow<GoldenRatioUiState> = combine(
         bodyProfile,
@@ -240,42 +242,42 @@ class BodyModuleHomeViewModel(
         when {
             profile == null -> GoldenRatioUiState.Loading
             else -> {
-                // Poskusi izračun samo ko sta obe obvezni vrednosti vneseni
+                // Kliči UseCase samo ko sta obe obvezni vrednosti vneseni
                 if (measurements.shoulderCm > 0.0 && measurements.waistCm > 0.0) {
-                    try {
-                        val result = calculateBodyGoldenRatio(
-                            shoulderCm = measurements.shoulderCm,
-                            waistCm    = measurements.waistCm,
-                            hipCm      = measurements.hipCm,
-                            heightCm   = profile.height ?: measurements.heightCm,
-                            isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
-                        )
-                        // Uspešen izračun → Success z rezultatom, brez napake vnosa
-                        GoldenRatioUiState.Success(
+                    when (val validation = calculateBodyGoldenRatio(
+                        shoulderCm = measurements.shoulderCm,
+                        waistCm    = measurements.waistCm,
+                        hipCm      = measurements.hipCm,
+                        heightCm   = profile.height ?: measurements.heightCm,
+                        isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
+                    )) {
+                        is ValidationResult.Success -> GoldenRatioUiState.Success(
                             profileHeight = profile.height,
-                            data          = result,
+                            data          = validation.data,
                             isSaving      = saving,
-                            inputErrorRes = null
+                            invalidFields = emptySet()
                         )
-                    } catch (e: IllegalArgumentException) {
-                        // Faza 31.2: vrednosti zunaj bioloških meja (30–250 cm)
-                        // → OSTANEMO v Success, ne zamenjamo zaslona!
-                        // inputErrorRes prikaže inline napako pod vnosnimi polji.
-                        android.util.Log.w("BodyModuleHomeVM", "Inline input error: ${e.message}")
-                        GoldenRatioUiState.Success(
-                            profileHeight = profile.height,
-                            data          = null,
-                            isSaving      = saving,
-                            inputErrorRes = R.string.error_invalid_measurements
-                        )
+                        is ValidationResult.Invalid -> {
+                            android.util.Log.d(
+                                "BodyModuleHomeVM",
+                                "Per-field napaka: ${validation.invalidFields}"
+                            )
+                            GoldenRatioUiState.Success(
+                                profileHeight = profile.height,
+                                data          = null,
+                                isSaving      = saving,
+                                // Faza 31.3: samo napačna polja dobijo isError=true v UI
+                                invalidFields = validation.invalidFields
+                            )
+                        }
                     }
                 } else {
-                    // Polja prazna ali niso vneseni — čisto stanje brez napak
+                    // Prazna ali nepopolna polja — čisto stanje brez napak
                     GoldenRatioUiState.Success(
                         profileHeight = profile.height,
                         data          = null,
                         isSaving      = saving,
-                        inputErrorRes = null
+                        invalidFields = emptySet()
                     )
                 }
             }

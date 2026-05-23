@@ -51,8 +51,10 @@ import com.example.myapplication.domain.looksmaxing.CalculateGoldenRatioUseCase
 import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.example.myapplication.domain.model.BodyRatioStatus
+import com.example.myapplication.domain.model.BodyField
 import com.example.myapplication.viewmodels.BodyUiEvent
 import com.example.myapplication.viewmodels.GoldenRatioUiState
+import com.example.myapplication.domain.usecase.ValidationResult
 import com.example.myapplication.R
 
 /**
@@ -761,8 +763,8 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                         profileHeight      = state.profileHeight,
                         goldenRatioResults = state.data,
                         isSaving           = state.isSaving,
-                        // Faza 31.2: inline napaka vnosa (ne zamenja zaslona)
-                        inputErrorRes      = state.inputErrorRes,
+                        // Faza 31.3: per-field napake (nadomešča inputErrorRes: Int?)
+                        invalidFields      = state.invalidFields,
                         onMeasurementsChanged = { shoulder, waist, hip, height ->
                             bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
                         },
@@ -805,8 +807,12 @@ fun BodyGoldenRatioSection(
     profileHeight: Double?,
     goldenRatioResults: com.example.myapplication.domain.model.BodyGoldenRatioResult?,
     isSaving: Boolean = false,
-    /** Faza 31.2 — R.string.* ID inline validacijske napake; null = vnos je veljaven. */
-    inputErrorRes: Int? = null,
+    /**
+     * Faza 31.3 — Set polj, ki so zunaj bioloških meja (30–250 cm).
+     * UI nastavi isError = true SAMO na poljih znotraj tega seta.
+     * Prazen set = vsi vnosi veljavni.
+     */
+    invalidFields: Set<BodyField> = emptySet(),
     onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit,
     onSave: ((shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit)? = null
 ) {
@@ -847,15 +853,17 @@ fun BodyGoldenRatioSection(
             Spacer(Modifier.height(12.dp))
 
             // Vnos meritev
-            // Faza 30.5 — forEachIndexed: za vsak field poznamo indeks →
-            //   • `raw` za trenutno polje (optimistični odziv, brez zakasnitve)
-            //   • .replace(",", ".") za EU decimalni zapis (npr. "85,5" → 85.5)
-            //   • toDoubleOrNull() ?: 0.0 — nikoli ne crasha
-            data class FieldConfig(val label: String, val value: String, val onChange: (String) -> Unit)
+            // Faza 31.3 — FieldConfig nosi BodyField za per-field isError mapiranje
+            data class FieldConfig(
+                val bodyField: BodyField,
+                val label: String,
+                val value: String,
+                val onChange: (String) -> Unit
+            )
             val fields = listOf(
-                FieldConfig("Obseg ramen (cm)", shoulderInput, { shoulderInput = it }),
-                FieldConfig("Obseg pasu (cm)",  waistInput,    { waistInput    = it }),
-                FieldConfig("Obseg bokov (cm)", hipInput,      { hipInput      = it })
+                FieldConfig(BodyField.SHOULDER, "Obseg ramen (cm)", shoulderInput, { shoulderInput = it }),
+                FieldConfig(BodyField.WAIST,    "Obseg pasu (cm)",  waistInput,    { waistInput    = it }),
+                FieldConfig(BodyField.HIP,      "Obseg bokov (cm)", hipInput,      { hipInput      = it })
             )
             fields.forEachIndexed { idx, field ->
                 OutlinedTextField(
@@ -875,8 +883,8 @@ fun BodyGoldenRatioSection(
                     },
                     label = { Text(field.label, color = Color(0xFFB6C6E6)) },
                     suffix = { Text("cm", color = Color(0xFFB6C6E6)) },
-                    // Faza 31.2: isError = true obarva obrobo in napis v rdečo
-                    isError = inputErrorRes != null,
+                    // Faza 31.3: isError = true SAMO na poljih, ki so v invalidFields setu
+                    isError = invalidFields.contains(field.bodyField),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -885,7 +893,6 @@ fun BodyGoldenRatioSection(
                         unfocusedBorderColor = Color(0xFF6B7A99),
                         focusedTextColor     = Color.White,
                         unfocusedTextColor   = Color.White,
-                        // isError = true → override na rdeče (Material3 privzeto)
                         errorBorderColor     = MaterialTheme.colorScheme.error,
                         errorLabelColor      = MaterialTheme.colorScheme.error,
                         errorCursorColor     = MaterialTheme.colorScheme.error
@@ -895,9 +902,10 @@ fun BodyGoldenRatioSection(
                 )
             }
 
-            // Faza 31.2 — Inline validacijska napaka pod vnosnimi polji
-            // Vnosna polja OSTANEJO aktivna — uporabnik lahko takoj popravi vnos
-            if (inputErrorRes != null) {
+            // Faza 31.3 — Inline validacijska napaka pod vnosnimi polji
+            // Vidna SAMO ko vsaj eno polje presega biološke meje
+            // Vnosna polja OSTANEJO aktivna — uporabnik popravi samo napačno polje
+            if (invalidFields.isNotEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -912,7 +920,7 @@ fun BodyGoldenRatioSection(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text  = stringResource(inputErrorRes),
+                        text  = stringResource(R.string.error_invalid_measurements),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -922,8 +930,8 @@ fun BodyGoldenRatioSection(
             // Faza 30.8 — Gumb za shranjevanje z isSaving debouncing
             // Prikazan samo če je onSave callback registriran
             if (onSave != null) {
-                // Faza 31.2: inputErrorRes != null → gumb onemogočen (neveljavni vnosi)
-                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank() && inputErrorRes == null
+                // Faza 31.3: invalidFields.isEmpty() — ne shranimo neveljavnih vrednosti
+                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank() && invalidFields.isEmpty()
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {

@@ -1,14 +1,38 @@
 package com.example.myapplication.domain.usecase
 
+import com.example.myapplication.domain.model.BodyField
 import com.example.myapplication.domain.model.BodyGoldenRatioResult
 import com.example.myapplication.domain.model.BodyRatioStatus
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
+ * Faza 31.3 — Rezultat validacije in izračuna telesnega Zlatega Reza.
+ *
+ * Nadomešča metanje [IllegalArgumentException] za kontrolo toka.
+ * Klic chain: UseCase.invoke() → ValidationResult → ViewModel mapira v GoldenRatioUiState.
+ */
+sealed interface ValidationResult {
+    /**
+     * Vse vrednosti so znotraj bioloških meja — izračun uspel.
+     * @param data  Rezultat izračuna, pripravljen za prikaz v UI.
+     */
+    data class Success(val data: BodyGoldenRatioResult) : ValidationResult
+
+    /**
+     * Ena ali več vrednosti je zunaj bioloških meja (30–250 cm).
+     * @param invalidFields  Set polj, ki so neveljavna — UI obarva SAMO ta polja rdeče.
+     */
+    data class Invalid(val invalidFields: Set<BodyField>) : ValidationResult
+}
+
+/**
  * Faza 30.1 — Clean Architecture: Poslovna logika za telesni Zlati Rez.
  * Faza 30.7 — Odstranjeni emoji-ji in hardkodirani nizi; status vrača BodyRatioStatus enum.
- *             Dodane realne biološke meje (30–250 cm) za preprečevanje popačenih rezultatov.
+ *             Dodane realne biološke meje (30–250 cm).
+ * Faza 31.3 — Zamenjava require() z ValidationResult.Invalid(invalidFields):
+ *             • Brez izjem za kontrolo toka
+ *             • Per-field natančnost (UI vidi točno katera polja so napačna)
  *
  * KMP-ready: brez Android odvisnosti.
  */
@@ -17,7 +41,7 @@ class CalculateBodyGoldenRatioUseCase {
     private val phi = (1.0 + sqrt(5.0)) / 2.0  // ≈ 1.618
 
     companion object {
-        /** Faza 30.7 — Biološke meje za telesne obsege */
+        /** Biološke meje za telesne obsege */
         const val MIN_CIRCUMFERENCE_CM = 30.0
         const val MAX_CIRCUMFERENCE_CM = 250.0
     }
@@ -28,17 +52,29 @@ class CalculateBodyGoldenRatioUseCase {
         hipCm: Double = 0.0,
         heightCm: Double = 0.0,
         isMale: Boolean = true
-    ): BodyGoldenRatioResult {
+    ): ValidationResult {
 
-        // Faza 30.7 — Realne biološke meje (ne zgolj > 0)
-        require(shoulderCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
-            "Obseg ramen mora biti med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $shoulderCm)"
+        // Faza 31.3 — Per-field validacija: zgradi set neveljavnih polj
+        val invalidFields = mutableSetOf<BodyField>()
+
+        if (shoulderCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            invalidFields.add(BodyField.SHOULDER)
         }
-        require(waistCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
-            "Obseg pasu mora biti med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $waistCm)"
+        if (waistCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            invalidFields.add(BodyField.WAIST)
         }
-        require(hipCm == 0.0 || hipCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
-            "Obseg bokov mora biti 0 (ni vnosu) ali med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $hipCm)"
+        // hipCm = 0.0 pomeni ni vnosu → preskoči validacijo
+        if (hipCm != 0.0 && hipCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            invalidFields.add(BodyField.HIP)
+        }
+        // heightCm = 0.0 pomeni ni vnosu → preskoči validacijo
+        if (heightCm != 0.0 && heightCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            invalidFields.add(BodyField.HEIGHT)
+        }
+
+        // Katerokoli neveljavno polje → vrni Invalid z natančnim setom
+        if (invalidFields.isNotEmpty()) {
+            return ValidationResult.Invalid(invalidFields)
         }
 
         // ── 1. Razmerje ramen/pas (Adonis Index) ────────────────────────────
@@ -68,7 +104,7 @@ class CalculateBodyGoldenRatioUseCase {
         }
         val overallScore = (swrScore + whtrScore + hipScore).coerceIn(0.0, 1.0)
 
-        // ── 5. Status — Faza 30.7: enum, brez emoji/stringov v domain sloju ─
+        // ── 5. Status — enum, brez emoji/stringov v domain sloju ─────────────
         val status: BodyRatioStatus = when {
             deviationFromPhi <= 0.03 -> BodyRatioStatus.GOLDEN_RATIO
             deviationFromPhi <= 0.08 -> BodyRatioStatus.EXCELLENT
@@ -77,13 +113,16 @@ class CalculateBodyGoldenRatioUseCase {
             else                     -> BodyRatioStatus.NEEDS_WORK
         }
 
-        return BodyGoldenRatioResult(
-            shoulderToWaistRatio = shoulderToWaistRatio,
-            waistToHeightRatio   = if (waistToHeightRatio < 0) 0.0 else waistToHeightRatio,
-            shoulderToHipRatio   = if (shoulderToHipRatio < 0) 0.0 else shoulderToHipRatio,
-            overallScore         = overallScore,
-            status               = status,
-            deviationFromPhi     = deviationFromPhi
+        return ValidationResult.Success(
+            BodyGoldenRatioResult(
+                shoulderToWaistRatio = shoulderToWaistRatio,
+                waistToHeightRatio   = if (waistToHeightRatio < 0) 0.0 else waistToHeightRatio,
+                shoulderToHipRatio   = if (shoulderToHipRatio < 0) 0.0 else shoulderToHipRatio,
+                overallScore         = overallScore,
+                status               = status,
+                deviationFromPhi     = deviationFromPhi
+            )
         )
     }
 }
+
