@@ -5,6 +5,7 @@ import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.domain.model.BodyMeasurementEntry
 import com.example.myapplication.domain.repository.BodyMeasurementsRepository
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -24,6 +25,8 @@ import kotlinx.coroutines.tasks.await
  * Faza 30.8 — Document ID = datum (YYYY-MM-DD): upsert semantika, en vnos na dan.
  * Faza 30.9 — dateId prihaja iz domene (UseCase), ne iz sistemske ure naprave.
  *   → Repozitorij je popolnoma determinističen in testabilen.
+ * Faza 31.0 — batch.set z SetOptions.merge(): drugi moduli (teža, body fat) varno
+ *   pišejo v isti dnevni dokument brez tveganja brisanja obstoječih polj.
  *   → Batch write zagotavlja atomarnost (profil + history sta vedno sinhronizirana).
  */
 class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
@@ -74,7 +77,9 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
                 "heightCm"   to heightCm,
                 "timestamp"  to timestamp
             )
-            batch.set(historyRef, historyDoc)
+            // Faza 31.0 — SetOptions.merge(): ne izbriše polj, ki jih ta klic ne pozna
+            // (npr. "weightKg", "bodyFatPct" ki bi jih dodali drugi moduli v prihodnosti)
+            batch.set(historyRef, historyDoc, SetOptions.merge())
 
             batch.commit().await()
 
@@ -125,6 +130,9 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
         awaitClose { listener?.remove() }
     }
 }
+
+
+
 
 
 

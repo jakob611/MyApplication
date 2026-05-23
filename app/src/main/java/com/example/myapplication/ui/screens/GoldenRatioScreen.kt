@@ -21,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.flowWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -684,25 +686,31 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
     // Faza 30.9 — SnackbarHostState za prikaz enkratnih napak
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Faza 30.9 — Posluša Channel<BodyUiEvent>; LaunchedEffect se zaustavi ob zapustitvi zaslona
-    LaunchedEffect(Unit) {
-        bodyVm.uiEvents.collect { event ->
-            when (event) {
-                is BodyUiEvent.SaveSuccess -> {
-                    snackbarHostState.showSnackbar(
-                        message  = "✅ Meritve uspešno shranjene!",
-                        duration = SnackbarDuration.Short
-                    )
-                }
-                is BodyUiEvent.Error -> {
-                    snackbarHostState.showSnackbar(
-                        message      = "❌ ${event.message}",
-                        actionLabel  = "Zapri",
-                        duration     = SnackbarDuration.Long
-                    )
+    // Faza 31.0 — flowWithLifecycle: zbiranje se samodejno ustavi ko zaslon ni odprt
+    // (npr. ob rotaciji ali navigaciji stran). Ko se zaslon vrne v STARTED stanje,
+    // Channel medtem hrani sporočila (BUFFERED) → nobeno opozorilo ne izgine.
+    // LaunchedEffect(lifecycleOwner) se znova zažene, če se referenca spremeni.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        bodyVm.uiEvents
+            .flowWithLifecycle(lifecycleOwner.lifecycle)
+            .collect { event ->
+                when (event) {
+                    is BodyUiEvent.SaveSuccess -> {
+                        snackbarHostState.showSnackbar(
+                            message  = "✅ Meritve uspešno shranjene!",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                    is BodyUiEvent.Error -> {
+                        snackbarHostState.showSnackbar(
+                            message     = "❌ ${event.message}",
+                            actionLabel = "Zapri",
+                            duration    = SnackbarDuration.Long
+                        )
+                    }
                 }
             }
-        }
     }
 
     Scaffold(
