@@ -16,7 +16,18 @@
 
 ## DNEVNIK
 
-## 2026-05-23 — Faza 27: KSP + Room avtomatska generacija, usklajevanje verzij
+## 2026-05-23 — Faza 28: Sanity Check — deprecated uvozi, serialization verzija
+**Datoteke:** `app/build.gradle.kts`, `ui/screens/BarcodeScannerScreen.kt`, `ui/run/RunTrackerScreen.kt`
+**Kaj:**
+1. `kotlinx-serialization-json:1.6.3` → `1.7.3` (usklajena z Kotlin 2.1.0; 1.6.3 je bila za Kotlin 1.9.x)
+2. `LocalLifecycleOwner` popravit v dveh datotekah: `androidx.compose.ui.platform.LocalLifecycleOwner` → `androidx.lifecycle.compose.LocalLifecycleOwner` (NutritionScreen.kt je bil že pravilen)
+3. Potrjeno: Compose plugin 2.1.0, serialization plugin 2.1.0, KSP 2.1.0-1.0.29 — vse usklajeno z Kotlin 2.1.0
+4. Potrjeno: `com.google.mlkit.*` uvozi v `AndroidMLKitFaceDetector.kt` in `AndroidMLKitBarcodeScanner.kt` so PRAVILNI — `play-services-mlkit-*` eksportira identičen `com.google.mlkit.*` javni API, ni potrebno ničesar menjati
+5. Potrjeno: Nobene mrtve uvozne reference na izbrisane/stubificirane datoteke (ai_utils.kt, ChallengeAdapter.kt, UpdateStreakUseCase.kt)
+**Zakaj:** Pre-vizualna prenova sanity check — zagotoviti 100% čisto izhodišče brez deprecated deprecations
+**Tveganje:** 🟢 nizko (serialization 1.7.3 je backward-compatible; LocalLifecycleOwner je drop-in zamenjava)
+
+
 **Datoteke:** `build.gradle.kts`, `app/build.gradle.kts`, `data/local/AppDatabase_Impl.kt`
 **Kaj:**
 1. Kotlin 2.2.10 → 2.1.0 (stabilna verzija z uradno KSP 2.1.0-1.0.29 podporo)

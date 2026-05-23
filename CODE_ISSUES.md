@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-23 (Faza 27: KSP + Room avtomatska generacija, usklajevanje verzij)  
+**Zadnja posodobitev:** 2026-05-23 (Faza 28: Sanity Check — deprecated uvozi, serialization verzija)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -40,9 +40,9 @@
 #### Dead Code — treba ročno zbrisati (AI ne more brisati datotek):
 | Datoteka | Razlog brisanja | Stanje |
 |---|---|---|
-| `network/ai_utils.kt` | `requestAIPlan()` ni klicana nikjer; PlanDataStore ima lastno kopijo | ⚠️ Stub-only (11 vrstic komentarjev) |
-| `ui/adapters/ChallengeAdapter.kt` | RecyclerView stari View sistem; cela app je Compose; `item_challenge_card.xml` ne obstaja | ⚠️ Stub-only (9 vrstic komentarjev) |
-| `domain/usecase/UpdateStreakUseCase.kt` | Označen @Deprecated Faza 23; ManageGamificationUseCase je SSOT | ⚠️ Deprecated stub |
+| `network/ai_utils.kt` | `requestAIPlan()` ni klicana nikjer; PlanDataStore ima lastno kopijo | ⚠️ Stub-only — fizično na disku, nič ne definira |
+| `ui/adapters/ChallengeAdapter.kt` | RecyclerView stari View sistem; cela app je Compose; `item_challenge_card.xml` ne obstaja | ⚠️ Stub-only — fizično na disku, nič ne definira |
+| `domain/usecase/UpdateStreakUseCase.kt` | Označen @Deprecated Faza 23; ManageGamificationUseCase je SSOT | ⚠️ Deprecated stub — fizično na disku, nič ne definira |
 
 > ⚠️ **OPOMBA:** `domain/nutrition/NutritionCalculations.kt` je **AKTIVNA datoteka** (339 vrstic), NI dead code.
 > Klicana v: `NutritionScreen.kt` (calculateDailyWaterMl, calculateRestDayCalories) + `NutritionCalculationsTest.kt`.
