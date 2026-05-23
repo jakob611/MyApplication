@@ -8,12 +8,12 @@ import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
+import com.example.myapplication.domain.auth.AuthStateRepository
 import com.example.myapplication.domain.profile.UserProfileRepository
 import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -97,34 +98,39 @@ sealed class BodyHomeIntent {
 
 data class StreakUpdateEvent(val newStreak: Int, val isRestDay: Boolean = false)
 
+/**
+ * Faza 30.2 — BodyModuleHomeViewModel brez kakršnih koli Firebase SDK klicev.
+ *
+ * Auth stanje pride reaktivno prek [AuthStateRepository] vmesnika.
+ * Profil se avtomatično osvežuje ob spremembi prijave (flatMapLatest).
+ */
 class BodyModuleHomeViewModel(
     private val getBodyMetrics: GetBodyMetricsUseCase,
     private val updateBodyMetrics: UpdateBodyMetricsUseCase,
     private val swapPlanDays: SwapPlanDaysUseCase,
     private val gamificationUseCase: ManageGamificationUseCase? = null,
-    // Faza 30.1: DI vmesnik — reaktivni profil (NE kličemo impl direktno)
-    private val userProfileRepository: UserProfileRepository? = null
+    // Faza 30.2: non-nullable — ViewModel ga nujno potrebuje
+    private val userProfileRepository: UserProfileRepository,
+    // Faza 30.2: reaktivni auth — NI več FirebaseAuth.getInstance() v VM
+    private val authStateRepository: AuthStateRepository
 ) : ViewModel() {
 
     // ── Faza 30.1 — Domain Use Case za telesni Zlati Rez ──────────────────────
     private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
 
-    // ── Faza 30.1 — Reaktivni profil iz Firestorea ────────────────────────────
+    // ── Faza 30.2 — Reaktivni profil brez Firebase v VM ──────────────────────
     /**
-     * Reaktivni profil iz UserProfileRepository vmesnika.
-     * null dokler email ni znan ali repository ni injektiran.
+     * flatMapLatest: ob vsaki spremembi stanja prijave (login/logout) se
+     * avtomatično zamenja na pravi profil ali flowOf(null).
      * Preživi rotacijo zaslona — ViewModel ostane živ med config change.
      */
-    val bodyProfile: StateFlow<UserProfile?> = run {
-        val email = FirebaseAuth.getInstance().currentUser?.email
-        if (userProfileRepository != null && email != null) {
-            userProfileRepository.observeUserProfile(email)
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-        } else {
-            flowOf<UserProfile?>(null)
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-        }
-    }
+    val bodyProfile: StateFlow<UserProfile?> =
+        authStateRepository.observeCurrentUserEmail()
+            .flatMapLatest { email ->
+                if (email != null) userProfileRepository.observeUserProfile(email)
+                else flowOf(null)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // ── Faza 30.1 — Vhodni podatki za Golden Ratio (iz UI vnosa) ─────────────
     /** UI kliče [updateBodyMeasurements] ko uporabnik vnese obsege. */
