@@ -9,19 +9,23 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
 
 /**
  * Faza 30.6 — Edina Firestore implementacija BodyMeasurementsRepository.
  *
  * Subcollection schema:
- *   users/{userId}/measurements_history/{epochMs}
+ *   users/{userId}/measurements_history/{YYYY-MM-DD}
  *     shoulderCm: Double
  *     waistCm:    Double
  *     hipCm:      Double
  *     heightCm:   Double
- *     timestamp:  Long   ← epoch ms, enak kot ID dokumenta
+ *     timestamp:  Long   ← epoch ms ob zadnjem shranjevanju tega dne
  *
- * Batch write zagotavlja, da bodisi oba zapisa uspeta ali oba spodletita (atomarno).
+ * Faza 30.8 — Document ID = datum (YYYY-MM-DD):
+ *   • Isti dan → overwrite (upsert) namesto podvajanja
+ *   • Preprečuje akumulacijo dupliciranih vnosov ob večkratnih shranitvah
+ *   • Batch write zagotavlja atomarnost (profil + history sta vedno sinhronizirana)
  */
 class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
 
@@ -46,6 +50,10 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
             val userRef = FirestoreHelper.getCurrentUserDocRef()
             val timestamp = System.currentTimeMillis()
 
+            // Faza 30.8: Document ID = "YYYY-MM-DD" → isti dan vedno overwritea obstoječ vnos
+            // Rešitev: preprečuje podvajanje podatkov ob večkratnih shranitvah istega dne.
+            val dateId = LocalDate.now().toString()  // npr. "2026-05-23"
+
             val batch = db.batch()
 
             // a) Posodobi trenutne vrednosti v profilu (merge — ne prepiše ostalih polj)
@@ -56,10 +64,10 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
             )
             batch.update(userRef, profileUpdate)
 
-            // b) Novi dokument v subcollection — ID = timestamp za naravno sortiranje
+            // b) Novi/posodobljeni dokument v subcollection — ID = datum (upsert semantika)
             val historyRef = userRef
                 .collection(HISTORY_COLLECTION)
-                .document(timestamp.toString())
+                .document(dateId)
 
             val historyDoc = mapOf(
                 "shoulderCm" to shoulderCm,
@@ -72,7 +80,7 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
 
             batch.commit().await()
 
-            Log.d(TAG, "✅ Batch write uspel: meritve + history (ts=$timestamp)")
+            Log.d(TAG, "✅ Batch write uspel: meritve + history (dateId=$dateId, ts=$timestamp)")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Batch write spodletel: ${e.message}")
@@ -119,4 +127,8 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
         awaitClose { listener?.remove() }
     }
 }
+
+
+
+
 

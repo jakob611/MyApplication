@@ -193,10 +193,20 @@ class BodyModuleHomeViewModel(
         _bodyMeasurements.value = BodyMeasurementsInput(shoulderCm, waistCm, hipCm, heightCm)
     }
 
+    // ── Faza 30.8 — Stanje shranjevanja: preprečuje dvojne klike ────────────
+    /**
+     * true = shranjevanje v teku → gumb v UI mora biti onemogočen.
+     * Atomarno: takoj na true ob klicu, nazaj na false šele po odgovoru repozitorija.
+     */
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
     /**
      * Faza 30.6 — Shrani meritve v Firestore (batch write):
      *   a) Posodobi profil z aktualnimi vrednostmi
      *   b) Doda vnos v measurements_history (za grafe)
+     *
+     * Faza 30.8 — isSaving guard: klik na gumb med shranjevanjem se v celoti ignorira.
      *
      * Klic chain: UI → VM → SaveBodyMeasurementsUseCase → BodyMeasurementsRepository → Firestore
      */
@@ -206,14 +216,22 @@ class BodyModuleHomeViewModel(
         hipCm: Double = 0.0,
         heightCm: Double = 0.0
     ) {
+        // Dvojni klik → prezri, če shranjevanje že teče
+        if (_isSaving.value) return
         viewModelScope.launch {
-            val result = saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
-            result.onSuccess {
-                android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
-            }
-            result.onFailure { e ->
-                android.util.Log.e("BodyModuleHomeVM", "❌ Napaka pri shranjevanju meritev: ${e.message}")
-                _ui.value = _ui.value.copy(errorMessage = e.message)
+            _isSaving.value = true
+            try {
+                val result = saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
+                result.onSuccess {
+                    android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
+                }
+                result.onFailure { e ->
+                    android.util.Log.e("BodyModuleHomeVM", "❌ Napaka pri shranjevanju meritev: ${e.message}")
+                    _ui.value = _ui.value.copy(errorMessage = e.message)
+                }
+            } finally {
+                // Vedno osvobodi, tudi ob nenapovedani izjemi
+                _isSaving.value = false
             }
         }
     }

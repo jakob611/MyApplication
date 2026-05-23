@@ -677,6 +677,8 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
     // Faza 30.5: collectAsStateWithLifecycle — ne drži Firestore listenerja v ozadju
     val profile by bodyVm.bodyProfile.collectAsStateWithLifecycle()
     val goldenRatioResults by bodyVm.goldenRatioResults.collectAsStateWithLifecycle()
+    // Faza 30.8: isSaving za onemogočanje gumba med shranjevanjem
+    val isSaving by bodyVm.isSaving.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -708,8 +710,12 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
             BodyGoldenRatioSection(
                 profileHeight = profile?.height,
                 goldenRatioResults = goldenRatioResults,
+                isSaving = isSaving,
                 onMeasurementsChanged = { shoulder, waist, hip, height ->
                     bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
+                },
+                onSave = { shoulder, waist, hip, height ->
+                    bodyVm.saveBodyMeasurements(shoulder, waist, hip, height)
                 }
             )
         }
@@ -729,7 +735,9 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
 fun BodyGoldenRatioSection(
     profileHeight: Double?,
     goldenRatioResults: com.example.myapplication.domain.model.BodyGoldenRatioResult?,
-    onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit
+    isSaving: Boolean = false,
+    onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit,
+    onSave: ((shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit)? = null
 ) {
     // rememberSaveable → preživi config change
     var shoulderInput by rememberSaveable { mutableStateOf("") }
@@ -808,6 +816,51 @@ fun BodyGoldenRatioSection(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
+            }
+
+            // Faza 30.8 — Gumb za shranjevanje z isSaving debouncing
+            // Prikazan samo če je onSave callback registriran
+            if (onSave != null) {
+                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank()
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        if (!isSaving && canSave) {
+                            onSave(
+                                shoulderInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                waistInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                hipInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                profileHeight ?: 0.0
+                            )
+                        }
+                    },
+                    // Faza 30.8: strogo onemogočen med shranjevanjem → fizično preprečuje dvojne klike
+                    enabled = canSave && !isSaving,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isSaving) {
+                        // Zamenjaj tekst z indikatorjem napredka
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Color(0xFF2A1810),
+                            strokeWidth = 2.5.dp
+                        )
+                    } else {
+                        Text(
+                            "💾 Shrani meritve",
+                            color = Color(0xFF2A1810),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             // Pasivni prikaz rezultatov iz ViewModela
