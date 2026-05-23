@@ -456,10 +456,12 @@ object PlanDataStore {
                     throw Exception("Day not found in plan: dayA=$dayA, dayB=$dayB")
                 }
 
-                // Vsebina brez dayNumber (pozicijski indeks ostane vezan na slot)
-                // → exercises, focusLabel, isRestDay, isFrozen, isSwapped — VSE zamenjano
-                val contentOfA = fullDayMapA!!.toMutableMap().apply { remove("dayNumber") }
-                val contentOfB = fullDayMapB!!.toMutableMap().apply { remove("dayNumber") }
+                // Faza 30.5 — Varno razpakiranje brez !! operatorja
+                // Elvis ?: throw zagotavlja, da transakcija nikoli ne crasha nepričakovano
+                val contentOfA = (fullDayMapA ?: throw Exception("Day $dayA not found — swap aborted."))
+                    .toMutableMap().apply { remove("dayNumber") }
+                val contentOfB = (fullDayMapB ?: throw Exception("Day $dayB not found — swap aborted."))
+                    .toMutableMap().apply { remove("dayNumber") }
 
                 // Polna zamenjava: dayA slot ← vsebina B, dayB slot ← vsebina A
                 val updatedWeeks = weeks.map { weekMap ->

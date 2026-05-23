@@ -15,10 +15,10 @@ import androidx.compose.material3.*
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +59,8 @@ fun BodyModuleHomeScreen(
     val vm: BodyModuleHomeViewModel = viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
     )
-    val ui by vm.ui.collectAsState()
+    // Faza 30.5: collectAsStateWithLifecycle — prihrani Firestore kvoto in baterijo v ozadju
+    val ui by vm.ui.collectAsStateWithLifecycle()
 
     // Faza 23: En sam LaunchedEffect (currentPlan) za LoadMetrics.
     // Prej sta bila DVA (Unit + currentPlan) ki sta ob vstopu na zaslon sprožila dve vzporedni

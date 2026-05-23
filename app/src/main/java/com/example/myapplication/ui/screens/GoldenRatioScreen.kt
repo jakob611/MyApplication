@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -660,8 +661,9 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
     val bodyVm: BodyModuleHomeViewModel = viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
     )
-    val profile by bodyVm.bodyProfile.collectAsState()
-    val goldenRatioResults by bodyVm.goldenRatioResults.collectAsState()
+    // Faza 30.5: collectAsStateWithLifecycle — ne drži Firestore listenerja v ozadju
+    val profile by bodyVm.bodyProfile.collectAsStateWithLifecycle()
+    val goldenRatioResults by bodyVm.goldenRatioResults.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -753,24 +755,33 @@ fun BodyGoldenRatioSection(
             Spacer(Modifier.height(12.dp))
 
             // Vnos meritev
-            listOf(
-                Triple("Obseg ramen (cm)", shoulderInput, { v: String -> shoulderInput = v }),
-                Triple("Obseg pasu (cm)",  waistInput,    { v: String -> waistInput    = v }),
-                Triple("Obseg bokov (cm)", hipInput,      { v: String -> hipInput      = v })
-            ).forEach { (label, value, onChange) ->
+            // Faza 30.5 — forEachIndexed: za vsak field poznamo indeks →
+            //   • `raw` za trenutno polje (optimistični odziv, brez zakasnitve)
+            //   • .replace(",", ".") za EU decimalni zapis (npr. "85,5" → 85.5)
+            //   • toDoubleOrNull() ?: 0.0 — nikoli ne crasha
+            data class FieldConfig(val label: String, val value: String, val onChange: (String) -> Unit)
+            val fields = listOf(
+                FieldConfig("Obseg ramen (cm)", shoulderInput, { shoulderInput = it }),
+                FieldConfig("Obseg pasu (cm)",  waistInput,    { waistInput    = it }),
+                FieldConfig("Obseg bokov (cm)", hipInput,      { hipInput      = it })
+            )
+            fields.forEachIndexed { idx, field ->
                 OutlinedTextField(
-                    value = value,
+                    value = field.value,
                     onValueChange = { raw ->
-                        onChange(raw)
-                        // Takoj pošljemo v ViewModel — UI NE računa
+                        field.onChange(raw)
+                        // Uporabi `raw` za trenutno polje — ne čaka na rekomposicijo
+                        val s = if (idx == 0) raw else shoulderInput
+                        val w = if (idx == 1) raw else waistInput
+                        val h = if (idx == 2) raw else hipInput
                         onMeasurementsChanged(
-                            shoulderInput.toDoubleOrNull() ?: 0.0,
-                            waistInput.toDoubleOrNull()    ?: 0.0,
-                            hipInput.toDoubleOrNull()      ?: 0.0,
+                            s.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            w.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            h.replace(",", ".").toDoubleOrNull() ?: 0.0,
                             profileHeight ?: 0.0
                         )
                     },
-                    label = { Text(label, color = Color(0xFFB6C6E6)) },
+                    label = { Text(field.label, color = Color(0xFFB6C6E6)) },
                     suffix = { Text("cm", color = Color(0xFFB6C6E6)) },
                     modifier = Modifier
                         .fillMaxWidth()
