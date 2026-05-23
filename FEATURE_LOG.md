@@ -36,6 +36,12 @@
 **Zakaj:** Race condition (posamezno pisanje @Volatile polj iz Dispatchers.Default), statičen Firestore enkraten klic (spremembe z druge naprave nevidne), UI posrednik navigacijskih argumentov.
 **Tveganje:** 🟡 srednje (ViewModel logika + data flow sprememba) — BUILD ✅ SUCCESSFUL
 
+## 2026-05-23 — Faza 29.4: Konsolidacija combine() — odprava race conditiona
+**Datoteke:** `ui/nutrition/NutritionViewModel.kt`
+**Kaj:** Dva ločena `viewModelScope.launch {}` bloka v `init {}` (2-source combine + hybridTDEEFlow.collect) združena v en sam 3-source `combine(_internalProfile, _nutritionPlanPair, WeightPredictorStore.hybridTDEEFlow)`. Posodobljeni signaturi `recomputeCalorieTarget(profile, plan, hybridTDEE)` in `setUserMetrics(..., hybridTDEE: Int = 0)`.
+**Zakaj:** Race condition — ločeni hybridTDEE collector je imel pogoj `_baseTdee.value > 0.0`, ki je bil `false` dokler 2-source combine še ni izvedel prvega klica `setUserMetrics()`. Zgodnje emisije `hybridTDEEFlow` so tiho izginile. Centralni combine zagotavlja atomarno dostavo vseh 3 vrednosti hkrati brez vmesnih pogojev.
+**Tveganje:** 🟢 nizko (samo refaktoring init{} bloka, logika nespremenjena) — BUILD ✅ SUCCESSFUL
+
 ## 2026-05-23 — Faza 28: Sanity Check — deprecated uvozi, serialization verzija
 **Datoteke:** `app/build.gradle.kts`, `ui/screens/BarcodeScannerScreen.kt`, `ui/run/RunTrackerScreen.kt`
 **Kaj:**
