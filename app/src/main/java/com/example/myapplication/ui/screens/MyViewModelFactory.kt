@@ -20,6 +20,7 @@ import com.example.myapplication.data.repository.OfflineFirstWorkoutRepository
 import com.example.myapplication.data.profile.FirestoreUserProfileRepository
 import com.example.myapplication.data.repository.UserWorkoutStatsRepository
 import com.example.myapplication.data.auth.FirebaseAuthStateRepository
+import com.example.myapplication.data.repository.PlanRepositoryImpl
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -65,10 +66,10 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(statsRepo),
                 UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
-                SwapPlanDaysUseCase(),
+                SwapPlanDaysUseCase(PlanRepositoryImpl()), // Faza 30.4: DI chain VM→UC→Repo→DataStore
                 gamificationUseCase,
-                FirestoreUserProfileRepository(), // non-nullable: Faza 30.2
-                FirebaseAuthStateRepository()     // Faza 30.2: auth prek vmesnika, NE FirebaseAuth v VM
+                FirestoreUserProfileRepository(),
+                FirebaseAuthStateRepository()
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
