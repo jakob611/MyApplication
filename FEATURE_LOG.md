@@ -25,6 +25,17 @@
 **Zakaj:** SideEffect piše v globalen singleton ob VSAKI rekomposiciji → race condition. LaunchedEffect z business logiko v UI = kršenje Clean Architecture. UI mora biti pasiven sprejemnik stanj.
 **Tveganje:** 🟡 srednje (Firestore listener za profil duplicira AppViewModel, toda za MVP arhitekturna čistost prevlada)
 
+## 2026-05-23 — Faza 29.3: Trije arhitekturni anti-pattern popravki
+**Datoteke:** `debug/WeightPredictorStore.kt`, `data/store/NutritionPlanStore.kt`, `ui/nutrition/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `ui/progress/ProgressViewModel.kt`
+**Kaj:**
+1. **WeightPredictorStore → Reaktiven repozitorij**: `@Volatile var` → `MutableStateFlow` (thread-safe) + read-only `StateFlow` izpostavitve. `hybridTDEEFlow: StateFlow<Int>` za reaktivno poslušanje. Atomarni `update()` zamenja 11 posameznih dodelitev. Property setters ohranjeni za backward compat.
+2. **NutritionPlanStore → Real-time Flow**: Dodan `observeNutritionPlan(uid): Flow<NutritionPlan?>` z `callbackFlow { addSnapshotListener }`. Parsing logika ekstrahirana v `parseNutritionPlanSnapshot()` helper (DRY). Obstoječi `loadNutritionPlan()` ga interno kliče.
+3. **NutritionViewModel — Odstranitev UI poštarja**: `_planResultFlow` in `updatePlanResult()` IZBRISANI. `combine()` zmanjšan 3→2 vira. `WeightPredictorStore.hybridTDEEFlow.collect{}` v `init{}` reaktivno posodablja `_baseTdee`. `applyHybridTDEE()` odstranjeno (nadomešča ga reaktivni Flow).
+4. **NutritionScreen**: `LaunchedEffect(plan) { vm.updatePlanResult(plan) }` ODSTRANIL — UI je 100% pasiven.
+5. **ProgressViewModel**: `storePrediction()` → `WeightPredictorStore.update()` (atomarno, brez `Dispatchers.Default`).
+**Zakaj:** Race condition (posamezno pisanje @Volatile polj iz Dispatchers.Default), statičen Firestore enkraten klic (spremembe z druge naprave nevidne), UI posrednik navigacijskih argumentov.
+**Tveganje:** 🟡 srednje (ViewModel logika + data flow sprememba) — BUILD ✅ SUCCESSFUL
+
 ## 2026-05-23 — Faza 28: Sanity Check — deprecated uvozi, serialization verzija
 **Datoteke:** `app/build.gradle.kts`, `ui/screens/BarcodeScannerScreen.kt`, `ui/run/RunTrackerScreen.kt`
 **Kaj:**

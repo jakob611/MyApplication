@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-23 (Faza 29.2: Popoln izgon poslovne logike iz UI sloja)  
+**Zadnja posodobitev:** 2026-05-23 (Faza 29.3: WeightPredictorStore reaktiven, NutritionPlanStore real-time, UI posrednik odstranjen)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
