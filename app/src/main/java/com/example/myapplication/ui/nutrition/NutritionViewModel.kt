@@ -174,27 +174,69 @@ class NutritionViewModel(
     /** Izpostavljen aktivni datum za polnočni nadzor v NutritionScreen. */
     val currentDate: StateFlow<String> = _activeDateFlow.asStateFlow()
 
-    // ── Optimistična voda (Faza 13.1) ─────────────────────────────────────────
-    /** Lokalna override vrednost za vodo — UI se posodobi TAKOJ, Firestore sync je debounced. */
+    // ── Faza 29.7 — Water Sync Glitch Fix ────────────────────────────────────
+    /**
+     * Lokalna optimistična vrednost za vodo.
+     * Nastavi se takoj ob kliku (brez omrežnega zakasnitve), počisti ko vsi zapisi zaključijo.
+     */
     private val _localWaterMl = MutableStateFlow<Int?>(null)
-    val localWaterMl: StateFlow<Int?> = _localWaterMl.asStateFlow()
+
+    /**
+     * Števec aktivnih Firestore pisanj za vodo.
+     * > 0 → UI prikazuje lokalno vrednost (blokiramo Firestore override).
+     * = 0 → UI prikazuje server vrednost (vse pisanje je zaključeno).
+     *
+     * Inkrement PRED cancelom prejšnjega joba → preprečuje ničelni blisk med jobi.
+     */
+    private val pendingWaterWrites = MutableStateFlow(0)
 
     private var waterSyncJob: Job? = null
 
-    /** Optimistično posodobi vodo lokalno, nato debounce-aj Firestore zapis (800ms). */
+    /**
+     * Enotni reaktivni vir resnice za prikaz vode v UI-ju.
+     *
+     * Faza 29.7 — logika:
+     *   pendingWaterWrites > 0 → lokalDa vrednost (pisanje v teku, blokira Firestore override)
+     *   pendingWaterWrites = 0 → server vrednost (vse pisanje zaključeno, UI se sinhronizira)
+     *
+     * PRED: `effectiveWaterMl = localWaterMl ?: uiState.water` v UI (NutritionScreen)
+     *       → Firestore listener je po uspešnem zapisu takoj povozil lokalno stanje → flip-flop
+     * PO:   en sam StateFlow v ViewModelu z atomarno logiko → UI nikoli ne utripa
+     */
+    val waterDisplayMl: StateFlow<Int> = combine(
+        _localWaterMl,
+        _uiState,
+        pendingWaterWrites
+    ) { localMl, totals, pending ->
+        if (pending > 0) localMl ?: totals.water
+        else totals.water
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * Optimistično posodobi vodo:
+     * 1. Takoj nastavi lokalno vrednost (instantni UI odziv).
+     * 2. Inkrement pendingWaterWrites PRED cancelom → ni ničelnega bliska med jobi.
+     * 3. Cancel prejšnjega joba (debounce 800ms za batching hitrih klikov).
+     * 4. try-finally zagotavlja decrement tudi ob omrežni napaki ali cancellationu.
+     */
     fun updateWaterOptimistic(newValue: Int, todayId: String) {
-        _localWaterMl.value = newValue.coerceAtLeast(0)
-        waterSyncJob?.cancel()
+        val safe = newValue.coerceAtLeast(0)
+        _localWaterMl.value = safe
+        pendingWaterWrites.value += 1      // ← inkrement PRED cancelom
+        waterSyncJob?.cancel()             // ← cancel prejšnjega (njegov finally dekrementira)
         waterSyncJob = viewModelScope.launch {
-            delay(800L)
             try {
-                FoodRepositoryImpl.logWater(newValue.coerceAtLeast(0), todayId)
-                Log.d("NutritionVM", " Water synced to Firestore: ${newValue}ml")
+                delay(800L)                // debounce: batching hitrih klikov
+                FoodRepositoryImpl.logWater(safe, todayId)
+                Log.d("NutritionVM", "✅ Water synced: ${safe}ml (pending=${pendingWaterWrites.value})")
             } catch (e: Exception) {
-                Log.e("NutritionVM", "Failed to sync water to Firestore", e)
-                _localWaterMl.value = null // rollback na server vrednost
+                Log.e("NutritionVM", "❌ Water sync failed: ${e.message}")
+            } finally {
+                pendingWaterWrites.value = (pendingWaterWrites.value - 1).coerceAtLeast(0)
+                if (pendingWaterWrites.value == 0) {
+                    _localWaterMl.value = null  // odpri pot Firestore vrednosti
+                }
             }
-            _localWaterMl.value = null // počisti override po uspešnem syncu
         }
     }
 
@@ -267,6 +309,7 @@ class NutritionViewModel(
     fun clearUser() {
         waterSyncJob?.cancel()
         waterSyncJob = null
+        pendingWaterWrites.value = 0
         uidFlow.value = null
         _firestoreFoods.value = emptyList()
         _localWaterMl.value = null
@@ -629,6 +672,9 @@ class NutritionViewModel(
      * @param newDate Nov datum v obliki "YYYY-MM-DD"
      */
     fun onDayTransition(newDate: String) {
+        waterSyncJob?.cancel()
+        waterSyncJob = null
+        pendingWaterWrites.value = 0        // Počisti čakajoče pisanje — nov dan, nov začetek
         _frozenTargets.value = null         // Počisti zamrznjene cilje starega dne
         _firestoreFoods.value = emptyList() // Počisti jedilnik starega dne
         _uiState.value = DailyTotals()      // Reset kalorije, voda, burned

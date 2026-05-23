@@ -119,8 +119,9 @@ fun NutritionScreen(
     val uiState by nutritionViewModel.uiState.collectAsState()
     // Dinamični TDEE — real-time vrednost iz ViewModel (0 = profil še ni naložen)
     val dynamicTargetCalories by nutritionViewModel.dynamicTargetCalories.collectAsState()
-    // Faza 13.1: optimistična voda (instant UI feedback, debounced Firestore sync)
-    val localWaterMl by nutritionViewModel.localWaterMl.collectAsState()
+    // Faza 29.7: waterDisplayMl — atomarni SSOT za vodo (brez flip-flop glitcha)
+    // combine(_localWaterMl, _uiState, pendingWaterWrites) v ViewModelu
+    val effectiveWaterMl by nutritionViewModel.waterDisplayMl.collectAsState()
     // Faza 13.1: loading stanje za food operacije
     val isLoading by nutritionViewModel.isLoading.collectAsState()
     // Faza 16.1: navigating stanje za takojšen odziv ob kliku na +
@@ -399,8 +400,7 @@ fun NutritionScreen(
     val activityBoostKcal = if (dynamicTargetCalories > 0 && uiState.burned > 0) uiState.burned else 0
 
     // Water tracking — prilagojen cilj
-    // Faza 13.1: Prikaži lokalni override (optimistična voda) ali server vrednost
-    val effectiveWaterMl = localWaterMl ?: uiState.water
+    // Faza 29.7: effectiveWaterMl prihaja direktno iz waterDisplayMl StateFlow (ni lokalnega izračuna)
     val waterTarget = adjustedWaterTarget  // calculateDailyWaterMl vrača Float
     val waterProgress = (effectiveWaterMl.toFloat() / waterTarget).coerceIn(0f, 1f)
 
