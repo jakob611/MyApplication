@@ -48,6 +48,7 @@ import com.example.myapplication.domain.looksmaxing.CalculateGoldenRatioUseCase
 import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.example.myapplication.domain.model.BodyRatioStatus
+import com.example.myapplication.viewmodels.BodyUiEvent
 
 /**
  * Faza 30.7 — UI mapper: Pretvori domain enum v prikaz za uporabnika.
@@ -680,6 +681,30 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
     // Faza 30.8: isSaving za onemogočanje gumba med shranjevanjem
     val isSaving by bodyVm.isSaving.collectAsStateWithLifecycle()
 
+    // Faza 30.9 — SnackbarHostState za prikaz enkratnih napak
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Faza 30.9 — Posluša Channel<BodyUiEvent>; LaunchedEffect se zaustavi ob zapustitvi zaslona
+    LaunchedEffect(Unit) {
+        bodyVm.uiEvents.collect { event ->
+            when (event) {
+                is BodyUiEvent.SaveSuccess -> {
+                    snackbarHostState.showSnackbar(
+                        message  = "✅ Meritve uspešno shranjene!",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+                is BodyUiEvent.Error -> {
+                    snackbarHostState.showSnackbar(
+                        message      = "❌ ${event.message}",
+                        actionLabel  = "Zapri",
+                        duration     = SnackbarDuration.Long
+                    )
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -690,7 +715,9 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                     }
                 }
             )
-        }
+        },
+        // Faza 30.9 — Snackbar za prikaz napak in potrditev ob shranjevanju
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier

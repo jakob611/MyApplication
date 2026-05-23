@@ -18,6 +18,7 @@ import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,8 +29,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/**
+ * Faza 30.9 — Enkratni UI dogodki za BodyModul.
+ *
+ * Razlika od StateFlow:
+ *   StateFlow  = trajno stanje (kateri zaslon je odprt, ali nalagamo…)
+ *   Channel    = enkratni dogodek (prikaži Snackbar, navigiraj, zapri dialog)
+ *
+ * Ne smeš shranjevati teh vrednosti v StateFlow — Snackbar bi se ob rotaciji zaslona
+ * prikazal znova. Channel zagotavlja natanko en sprejem.
+ */
+sealed interface BodyUiEvent {
+    /** Meritve so bile uspešno shranjene v Firestore. */
+    data object SaveSuccess : BodyUiEvent
+    /** Napaka med shranjevanjem — prikaži Snackbar z [message]. */
+    data class Error(val message: String) : BodyUiEvent
+}
 
 /**
  * Faza 30.1 — Vhodni podatki za telesni Zlati Rez.
@@ -201,12 +220,25 @@ class BodyModuleHomeViewModel(
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
+    // ── Faza 30.9 — Enkratni UI dogodki (Channel = natanko en sprejem) ────────
+    /**
+     * Channel<BodyUiEvent>: pošiljamo enkratne dogodke (Snackbar, navigacija…).
+     * receiveAsFlow() v UI posluša z LaunchedEffect.
+     *
+     * Zakaj Channel in ne SharedFlow:
+     *   SharedFlow (replay=0) bi izgubil dogodek, če UI ni še naročen.
+     *   Channel.BUFFERED ohrani sporočilo dokler ga UI ne prebere.
+     */
+    private val _uiEvent = Channel<BodyUiEvent>(Channel.BUFFERED)
+    val uiEvents = _uiEvent.receiveAsFlow()
+
     /**
      * Faza 30.6 — Shrani meritve v Firestore (batch write):
      *   a) Posodobi profil z aktualnimi vrednostmi
      *   b) Doda vnos v measurements_history (za grafe)
      *
      * Faza 30.8 — isSaving guard: klik na gumb med shranjevanjem se v celoti ignorira.
+     * Faza 30.9 — napake se pošljejo kot BodyUiEvent.Error na Channel (→ Snackbar v UI).
      *
      * Klic chain: UI → VM → SaveBodyMeasurementsUseCase → BodyMeasurementsRepository → Firestore
      */
@@ -224,10 +256,11 @@ class BodyModuleHomeViewModel(
                 val result = saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
                 result.onSuccess {
                     android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
+                    _uiEvent.send(BodyUiEvent.SaveSuccess)
                 }
                 result.onFailure { e ->
                     android.util.Log.e("BodyModuleHomeVM", "❌ Napaka pri shranjevanju meritev: ${e.message}")
-                    _ui.value = _ui.value.copy(errorMessage = e.message)
+                    _uiEvent.send(BodyUiEvent.Error("Shranjevanje ni uspelo. Preverite povezavo."))
                 }
             } finally {
                 // Vedno osvobodi, tudi ob nenapovedani izjemi

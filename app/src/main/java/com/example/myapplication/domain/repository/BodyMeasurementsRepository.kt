@@ -18,11 +18,17 @@ interface BodyMeasurementsRepository {
     /**
      * Dvojni zapis (batch):
      *   a) Posodobi polja v profilu (shoulderCm, waistCm, hipCm) — za takojšen Golden Ratio izračun
-     *   b) Doda nov dokument v subcollection measurements_history — za grafe napredka
+     *   b) Doda nov/posodobi dokument v subcollection measurements_history — za grafe napredka
      *
+     * Faza 30.9 — [dateId] je vnaprej pripravljen niz (npr. "2026-05-23"), ki ga generira
+     * UseCase oz. ViewModel. Repozitorij je tako popolnoma determinističen in testabilen
+     * brez odvisnosti od sistemske ure naprave.
+     *
+     * @param dateId  ID Firestore dokumenta v obliki "YYYY-MM-DD" — isti dan → upsert
      * @return Result.success(Unit) ob uspešnem zapisu, Result.failure sicer
      */
     suspend fun saveMeasurements(
+        dateId: String,
         shoulderCm: Double,
         waistCm: Double,
         hipCm: Double,
@@ -35,4 +41,5 @@ interface BodyMeasurementsRepository {
      */
     fun observeMeasurementsHistory(): Flow<List<BodyMeasurementEntry>>
 }
+
 

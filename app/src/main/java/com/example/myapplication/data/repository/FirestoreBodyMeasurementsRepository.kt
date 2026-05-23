@@ -9,7 +9,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import java.time.LocalDate
 
 /**
  * Faza 30.6 — Edina Firestore implementacija BodyMeasurementsRepository.
@@ -22,10 +21,10 @@ import java.time.LocalDate
  *     heightCm:   Double
  *     timestamp:  Long   ← epoch ms ob zadnjem shranjevanju tega dne
  *
- * Faza 30.8 — Document ID = datum (YYYY-MM-DD):
- *   • Isti dan → overwrite (upsert) namesto podvajanja
- *   • Preprečuje akumulacijo dupliciranih vnosov ob večkratnih shranitvah
- *   • Batch write zagotavlja atomarnost (profil + history sta vedno sinhronizirana)
+ * Faza 30.8 — Document ID = datum (YYYY-MM-DD): upsert semantika, en vnos na dan.
+ * Faza 30.9 — dateId prihaja iz domene (UseCase), ne iz sistemske ure naprave.
+ *   → Repozitorij je popolnoma determinističen in testabilen.
+ *   → Batch write zagotavlja atomarnost (profil + history sta vedno sinhronizirana).
  */
 class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
 
@@ -37,9 +36,12 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
     /**
      * Batch write (atomarno):
      *   a) Posodobi shoulderCm / waistCm / hipCm v root user dokumentu — za GoldenRatio izračun
-     *   b) Doda nov dokument v measurements_history — za grafe napredka
+     *   b) Doda/posodobi dokument v measurements_history z ID = [dateId] (upsert)
+     *
+     * Faza 30.9 — [dateId] generira UseCase, ne ta razred. Repozitorij je determinističen.
      */
     override suspend fun saveMeasurements(
+        dateId: String,
         shoulderCm: Double,
         waistCm: Double,
         hipCm: Double,
@@ -49,10 +51,6 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
             val db = FirestoreHelper.getDb()
             val userRef = FirestoreHelper.getCurrentUserDocRef()
             val timestamp = System.currentTimeMillis()
-
-            // Faza 30.8: Document ID = "YYYY-MM-DD" → isti dan vedno overwritea obstoječ vnos
-            // Rešitev: preprečuje podvajanje podatkov ob večkratnih shranitvah istega dne.
-            val dateId = LocalDate.now().toString()  // npr. "2026-05-23"
 
             val batch = db.batch()
 
@@ -127,6 +125,9 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
         awaitClose { listener?.remove() }
     }
 }
+
+
+
 
 
 
