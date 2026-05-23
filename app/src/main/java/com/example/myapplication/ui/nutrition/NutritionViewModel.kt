@@ -338,6 +338,71 @@ class NutritionViewModel(
         dynamic.coerceAtLeast(1200.0).roundToInt()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // ── Faza 29.5 — SSOT za statične kalorične in makro cilje ─────────────────
+    // UI ne sme ugibati vrednosti. Vse fallback odločitve so tukaj, ne v Composable.
+
+    /**
+     * Ciljne kalorije [kcal], zaokrožene navzdol na 100.
+     * Stroga prioritetna hierarhija:
+     *   1. frozenTargets (zamrznjeni Firestore snapshot tega dne)
+     *   2. hybridTDEE > 800 (izmerjeni TDEE iz ProgressViewModel)
+     *   3. nutritionPlan.calories > 0 (real-time plan iz Firestore)
+     *   4. 2000 kcal (varni fallback)
+     */
+    val targetCalories: StateFlow<Int> = combine(
+        _frozenTargets,
+        _nutritionPlanPair,
+        WeightPredictorStore.hybridTDEEFlow
+    ) { frozen, planPair, hybridTDEE ->
+        val plan = planPair.first
+        val raw = when {
+            frozen != null                          -> frozen.calories
+            hybridTDEE > 800                        -> hybridTDEE
+            (plan?.calories ?: 0) > 0               -> plan!!.calories
+            else                                    -> 2000
+        }
+        (raw / 100) * 100  // zaokroženo navzdol na 100 kcal — samo za prikaz
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000)
+
+    /** Ciljni proteini [g]: frozen → plan → fallback 100 g */
+    val targetProtein: StateFlow<Int> = combine(
+        _frozenTargets,
+        _nutritionPlanPair
+    ) { frozen, planPair ->
+        val plan = planPair.first
+        when {
+            (frozen?.protein ?: 0) > 0  -> frozen!!.protein!!
+            (plan?.protein   ?: 0) > 0  -> plan!!.protein
+            else                        -> 100
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 100)
+
+    /** Ciljni ogljikovi hidrati [g]: frozen → plan → fallback 200 g */
+    val targetCarbs: StateFlow<Int> = combine(
+        _frozenTargets,
+        _nutritionPlanPair
+    ) { frozen, planPair ->
+        val plan = planPair.first
+        when {
+            (frozen?.carbs ?: 0) > 0  -> frozen!!.carbs!!
+            (plan?.carbs   ?: 0) > 0  -> plan!!.carbs
+            else                      -> 200
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 200)
+
+    /** Ciljne maščobe [g]: frozen → plan → fallback 60 g */
+    val targetFat: StateFlow<Int> = combine(
+        _frozenTargets,
+        _nutritionPlanPair
+    ) { frozen, planPair ->
+        val plan = planPair.first
+        when {
+            (frozen?.fat ?: 0) > 0  -> frozen!!.fat!!
+            (plan?.fat   ?: 0) > 0  -> plan!!.fat
+            else                    -> 60
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
+
     /**
      * Nastavi BMR in cilj, ko je plan/profil naložen.
      * Kliče se iz NutritionScreen z LaunchedEffect ob spremembi plana ali nutritionPlan.

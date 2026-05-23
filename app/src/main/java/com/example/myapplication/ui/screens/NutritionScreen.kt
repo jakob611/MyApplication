@@ -125,9 +125,11 @@ fun NutritionScreen(
     val isLoading by nutritionViewModel.isLoading.collectAsState()
     // Faza 16.1: navigating stanje za takojšen odziv ob kliku na +
     val isNavigating by nutritionViewModel.isNavigating.collectAsState()
-    // Faza 14: Zamrznjeni kalorični in makro cilji tega dne (Zgodovinski Snapshoti)
-    // null = nov dan brez snapshota ali stari dan → fallback na nutritionPlan
-    val frozenTargets by nutritionViewModel.frozenTargets.collectAsState()
+    // Faza 29.5: Kalorični in makro cilji — SSOT iz NutritionViewModel (ni ugibanja v UI)
+    val targetCalories by nutritionViewModel.targetCalories.collectAsState()
+    val targetProtein  by nutritionViewModel.targetProtein.collectAsState()
+    val targetCarbs    by nutritionViewModel.targetCarbs.collectAsState()
+    val targetFat      by nutritionViewModel.targetFat.collectAsState()
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -178,27 +180,13 @@ fun NutritionScreen(
     // "Assigned value is never read" v callback lambdah (Compose recomposition ni vidna statični analizi)
     val showOtherMacros = remember { mutableStateOf(false) }
 
-    // KRITIČNO: Preberi nutrition plan iz ViewModel (Faza 29.2: ViewModel naloži sam, ne UI)
+    // Faza 29.2: nutritionPlan — ViewModel ga naloži sam, UI samo bere.
     val nutritionPlan by nutritionViewModel.nutritionPlan.collectAsState()
-    // Faza 14b — varovalka: true šele ko loadNutritionPlan() NI VEČ pending
     val nutritionPlanLoadComplete by nutritionViewModel.nutritionPlanLoadComplete.collectAsState()
 
     // Faza 29.3: LaunchedEffect(plan) { vm.updatePlanResult(plan) } ODSTRANJEN.
     // NutritionViewModel samostojno naloži NutritionPlan iz Firestorea prek observeNutritionPlan().
-    // UI je popolnoma pasiven — samo posreduje display podatke za fallback cilje (plan?.calories itd.).
-
-    // Tarče
-    val parsed = remember(plan?.algorithmData?.macroBreakdown) { parseMacroBreakdown(plan?.algorithmData?.macroBreakdown) }
-    // Round target calories down to nearest 100
-    // Faza 14 — Zgodovinski Snapshoti: za DANAŠNJI dan uporabi zamrznjene cilje iz Firestore.
-    // Za stare dneve ali nov dan brez snapshota: fallback na nutritionPlan (kot prej).
-    val rawTargetCalories = frozenTargets?.calories
-        ?: nutritionPlan?.calories ?: parsed.calories ?: plan?.calories ?: 2000
-    val targetCalories = (rawTargetCalories / 100) * 100
-
-    val targetProtein  = frozenTargets?.protein  ?: nutritionPlan?.protein ?: parsed.proteinG ?: plan?.protein ?: 100
-    val targetCarbs    = frozenTargets?.carbs    ?: nutritionPlan?.carbs   ?: parsed.carbsG   ?: plan?.carbs   ?: 200
-    val targetFat      = frozenTargets?.fat      ?: nutritionPlan?.fat     ?: parsed.fatG     ?: plan?.fat     ?: 60
+    // UI je popolnoma pasiven — targets prihajajo iz NutritionViewModel.target* StateFlows.
 
     // Modali/sheets
     var sheetMeal by remember { mutableStateOf<MealType?>(null) }
@@ -304,12 +292,13 @@ fun NutritionScreen(
 
     // Faza 14 — Zgodovinski Snapshoti: Zagotovi zamrznitev ciljnih vrednosti za današnji dan.
     // Faza 14b — Varovalka: nutritionPlanLoadComplete kot ključ zagotovi re-trigger po nalaganju plana.
+    // Faza 29.5 — targetCalories/Protein/Carbs/Fat prihajajo iz ViewModel SSOT (ni ugibanja).
     // DailyLogRepository ignorira initTarget* parametre, če dokument za ta dan že obstaja.
-    LaunchedEffect(rawTargetCalories, targetProtein, targetCarbs, targetFat, nutritionPlanLoadComplete) {
-        if (rawTargetCalories > 0) {
+    LaunchedEffect(targetCalories, targetProtein, targetCarbs, targetFat, nutritionPlanLoadComplete) {
+        if (targetCalories > 0) {
             nutritionViewModel.ensureDayInitialized(
                 date           = todayId,
-                targetCalories = rawTargetCalories,
+                targetCalories = targetCalories,
                 targetProtein  = targetProtein,
                 targetCarbs    = targetCarbs,
                 targetFat      = targetFat,
