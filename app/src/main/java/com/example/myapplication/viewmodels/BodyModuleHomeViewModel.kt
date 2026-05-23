@@ -10,8 +10,11 @@ import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
 import com.example.myapplication.domain.auth.AuthStateRepository
 import com.example.myapplication.domain.profile.UserProfileRepository
+import com.example.myapplication.domain.model.BodyMeasurementEntry
+import com.example.myapplication.domain.repository.BodyMeasurementsRepository
 import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
+import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import kotlinx.coroutines.Job
@@ -100,6 +103,7 @@ data class StreakUpdateEvent(val newStreak: Int, val isRestDay: Boolean = false)
 
 /**
  * Faza 30.2 — BodyModuleHomeViewModel brez kakršnih koli Firebase SDK klicev.
+ * Faza 30.6 — Dodan BodyMeasurementsRepository za zgodovino meritev.
  *
  * Auth stanje pride reaktivno prek [AuthStateRepository] vmesnika.
  * Profil se avtomatično osvežuje ob spremembi prijave (flatMapLatest).
@@ -109,14 +113,17 @@ class BodyModuleHomeViewModel(
     private val updateBodyMetrics: UpdateBodyMetricsUseCase,
     private val swapPlanDays: SwapPlanDaysUseCase,
     private val gamificationUseCase: ManageGamificationUseCase? = null,
-    // Faza 30.2: non-nullable — ViewModel ga nujno potrebuje
     private val userProfileRepository: UserProfileRepository,
-    // Faza 30.2: reaktivni auth — NI več FirebaseAuth.getInstance() v VM
-    private val authStateRepository: AuthStateRepository
+    private val authStateRepository: AuthStateRepository,
+    // Faza 30.6: Repozitorij za shranjevanje in opazovanje zgodovine meritev
+    private val bodyMeasurementsRepository: BodyMeasurementsRepository
 ) : ViewModel() {
 
     // ── Faza 30.1 — Domain Use Case za telesni Zlati Rez ──────────────────────
     private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
+
+    // ── Faza 30.6 — Use Case za shranjevanje meritev (DI prek konstruktorja) ──
+    private val saveMeasurementsUseCase = SaveBodyMeasurementsUseCase(bodyMeasurementsRepository)
 
     // ── Faza 30.2 — Reaktivni profil brez Firebase v VM ──────────────────────
     /**
@@ -131,6 +138,19 @@ class BodyModuleHomeViewModel(
                 else flowOf(null)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // ── Faza 30.6 — Reaktivni tok zgodovine meritev (za grafe napredka) ──────
+    /**
+     * Urejeno ASC po timestamp — pripravljeno za risanje grafov.
+     * Samodejno se ugasne ob odjavi (flatMapLatest + flowOf(emptyList())).
+     */
+    val measurementsHistory: StateFlow<List<BodyMeasurementEntry>> =
+        authStateRepository.observeCurrentUserEmail()
+            .flatMapLatest { email ->
+                if (email != null) bodyMeasurementsRepository.observeMeasurementsHistory()
+                else flowOf(emptyList())
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── Faza 30.1 — Vhodni podatki za Golden Ratio (iz UI vnosa) ─────────────
     /** UI kliče [updateBodyMeasurements] ko uporabnik vnese obsege. */
@@ -171,6 +191,31 @@ class BodyModuleHomeViewModel(
         heightCm: Double = 0.0
     ) {
         _bodyMeasurements.value = BodyMeasurementsInput(shoulderCm, waistCm, hipCm, heightCm)
+    }
+
+    /**
+     * Faza 30.6 — Shrani meritve v Firestore (batch write):
+     *   a) Posodobi profil z aktualnimi vrednostmi
+     *   b) Doda vnos v measurements_history (za grafe)
+     *
+     * Klic chain: UI → VM → SaveBodyMeasurementsUseCase → BodyMeasurementsRepository → Firestore
+     */
+    fun saveBodyMeasurements(
+        shoulderCm: Double,
+        waistCm: Double,
+        hipCm: Double = 0.0,
+        heightCm: Double = 0.0
+    ) {
+        viewModelScope.launch {
+            val result = saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
+            result.onSuccess {
+                android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
+            }
+            result.onFailure { e ->
+                android.util.Log.e("BodyModuleHomeVM", "❌ Napaka pri shranjevanju meritev: ${e.message}")
+                _ui.value = _ui.value.copy(errorMessage = e.message)
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
