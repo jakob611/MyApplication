@@ -1,5 +1,7 @@
 package com.example.myapplication.domain.usecase
 
+import com.example.myapplication.domain.nutrition.calculateEnhancedTDEE
+import com.example.myapplication.domain.nutrition.calculateSmartCalories
 import kotlin.math.roundToInt
 
 /**
@@ -61,6 +63,10 @@ class CalculateDailyCalorieTargetUseCase {
     /**
      * Izračuna dnevni kalorični cilj iz popolnih biometričnih vhodnih podatkov.
      * Kliče se iz BodyModule.kt (kviz) pri ustvarjanju novega plana.
+     *
+     * P4 SSOT (Faza 29.1): uporablja ENAKO verigo kot WorkoutPlanGenerator:
+     *   calculateBmr() → calculateEnhancedTDEE() → calculateSmartCalories()
+     * Zagotavlja, da sta cilj na NutritionScreen in cilj v generiranem planu identična.
      */
     fun invoke(input: Input): Result {
         val bmr = calculateBmr(
@@ -70,16 +76,35 @@ class CalculateDailyCalorieTargetUseCase {
             isMale            = input.isMale,
             bodyFatPercentage = input.bodyFatPercentage
         )
-        val factor = activityFactor(input.activityLevel)
-        val tdee = bmr * factor
-        val goalAdj = goalAdjustment(input.goal)
-        val target = (tdee + goalAdj).coerceAtLeast(1200.0).roundToInt()
+        // P4: calculateEnhancedTDEE namesto bmr × activityFactor (experience + sleep + limitations)
+        val tdee = calculateEnhancedTDEE(
+            bmr         = bmr,
+            frequency   = input.activityLevel,
+            experience  = input.experience,
+            age         = input.ageYears,
+            limitations = input.limitations,
+            sleep       = input.sleep
+        )
+        val bmi = input.weightKg / ((input.heightCm / 100.0) * (input.heightCm / 100.0))
+        // P4: calculateSmartCalories namesto konzervativnega goalAdjustment() (poenotena formula)
+        val targetDouble = calculateSmartCalories(
+            tdee        = tdee,
+            goal        = input.goal,
+            experience  = input.experience,
+            bmi         = bmi,
+            age         = input.ageYears,
+            isMale      = input.isMale,
+            bodyFat     = input.bodyFatPercentage,
+            limitations = input.limitations
+        )
+        val target = targetDouble.coerceAtLeast(1200.0).roundToInt()
+        val goalAdj = (targetDouble - tdee).roundToInt()
 
         return Result(
-            bmr               = bmr,
-            tdee              = tdee,
+            bmr                = bmr,
+            tdee               = tdee,
             dailyCalorieTarget = target,
-            goalAdjustment    = goalAdj
+            goalAdjustment     = goalAdj
         )
     }
 
@@ -87,27 +112,59 @@ class CalculateDailyCalorieTargetUseCase {
      * Prikladen vstop ko je BMR že izračunan (npr. shranjen v Firestore planu).
      * Kliče se iz NutritionViewModel.setUserMetrics().
      *
-     * @param bmr              Predhodno izračunana bazalna presnova (kcal/dan)
-     * @param goal             Cilj (besedilo)
-     * @param activityLevel    Frekvenca treningov ("2x"–"6x") ali null
-     * @param bodyFatPercentage Opcijsko BF% za beleženje/debug (BMR ni preračunan)
+     * P4 SSOT (Faza 29.1): Ko so na voljo [bmi], [ageYears] in [isMale], se kalorični cilj
+     * izračuna prek [calculateSmartCalories] — enako kot v [invoke] in WorkoutPlanGenerator.
+     * Brez teh parametrov (backward-compat): konzervativni ±500/±300 fallback.
+     *
+     * @param bmr               Predhodno izračunana bazalna presnova (kcal/dan)
+     * @param goal              Cilj (besedilo)
+     * @param activityLevel     Frekvenca treningov ("2x"–"6x") ali null
+     * @param bodyFatPercentage Opcijsko BF% za debug/Katch-McArdle
+     * @param bmi               Indeks telesne mase (kg/m²) — sproži SmartCalories pot
+     * @param ageYears          Starost v letih — sproži SmartCalories pot
+     * @param isMale            Spol — sproži SmartCalories pot
+     * @param experience        Izkušnje ("Beginner", "Intermediate", "Advanced")
+     * @param limitations       Seznam zdravstvenih omejitev
      */
     fun fromBmr(
         bmr: Double,
         goal: String,
         activityLevel: String? = null,
-        bodyFatPercentage: Double? = null
+        bodyFatPercentage: Double? = null,
+        bmi: Double? = null,
+        ageYears: Int? = null,
+        isMale: Boolean? = null,
+        experience: String? = null,
+        limitations: List<String> = emptyList()
     ): Result {
         val factor = activityFactor(activityLevel)
         val tdee = bmr * factor
-        val goalAdj = goalAdjustment(goal)
-        val target = (tdee + goalAdj).coerceAtLeast(1200.0).roundToInt()
+
+        val targetDouble: Double = if (bmi != null && ageYears != null && isMale != null) {
+            // P4 SSOT: poenotena SmartCalories formula — enaka rezultatom WorkoutPlanGenerator
+            calculateSmartCalories(
+                tdee        = tdee,
+                goal        = goal,
+                experience  = experience,
+                bmi         = bmi,
+                age         = ageYears,
+                isMale      = isMale,
+                bodyFat     = bodyFatPercentage,
+                limitations = limitations
+            )
+        } else {
+            // Konzervativni fallback ko nimamo BMI/starosti/spola (backward-compat)
+            tdee + goalAdjustment(goal)
+        }
+
+        val finalTarget = targetDouble.coerceAtLeast(1200.0).roundToInt()
+        val goalAdj = (targetDouble - tdee).roundToInt()
 
         return Result(
-            bmr               = bmr,
-            tdee              = tdee,
-            dailyCalorieTarget = target,
-            goalAdjustment    = goalAdj
+            bmr                = bmr,
+            tdee               = tdee,
+            dailyCalorieTarget = finalTarget,
+            goalAdjustment     = goalAdj
         )
     }
 

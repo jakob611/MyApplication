@@ -42,5 +42,24 @@ object WeightPredictorStore {
      *   0.0 = < 3 dni, 0.5 = 3–5 dni, 1.0 = 6+ dni
      */
     @Volatile var lastConfidenceFactor: Double = 0.0
+
+    /**
+     * Ponastavi vse shranjene vrednosti na privzete.
+     * Kliče se ob odjavi uporabnika (NutritionViewModel.clearUser()),
+     * da se prepreči uhajanje podatkov med različnimi računi.
+     */
+    fun reset() {
+        lastEmaWeightKg         = 0.0
+        lastAvgDailyBalanceKcal = 0.0
+        last30DayPredictionKg   = 0.0
+        lastGoalDateStr         = null
+        lastGoalWeightKg        = null
+        lastDaysToGoal          = null
+        lastActiveDaysCount     = 0
+        lastHybridTDEE          = 0
+        lastAdaptiveTDEE        = 0
+        lastConfidenceFactor    = 0.0
+        isReady                 = false
+    }
 }
 

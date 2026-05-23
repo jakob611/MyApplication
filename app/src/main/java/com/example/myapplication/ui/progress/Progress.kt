@@ -185,8 +185,29 @@ fun ProgressScreen(
 
     // ── Faza 7: Weight Predictor ──────────────────────────────────────────────────────────────────
     // Podatki: weightLogs (EMA) + dailyLogs zadnjih 7 dni (avg balance)
-    val weightPrediction: WeightPredictionDisplay? = remember(weightLogs, dailyLogs, burnedByDay, userProfile) {
+    //
+    // P1 POPRAVEK (Faza 29.1): computeWeightPrediction() je zdaj čista funkcija brez stranskih učinkov.
+    // WeightPredictorStore mutacije so prestavljene v SideEffect {} — edini korekten Compose API za
+    // propagacijo podatkov v eksterne singletone po uspešni rekomposiciji.
+    val weightPredictionFull: WeightPredictionFull? = remember(weightLogs, dailyLogs, burnedByDay, userProfile) {
         computeWeightPrediction(weightLogs, dailyLogs, burnedByDay, userProfile)
+    }
+    val weightPrediction: WeightPredictionDisplay? = weightPredictionFull?.display
+    // SideEffect: zagotavlja, da se WeightPredictorStore posodobi enkrat po vsaki uspešni rekomposiciji
+    SideEffect {
+        weightPredictionFull?.let { full ->
+            WeightPredictorStore.lastEmaWeightKg         = full.emaWeightKg
+            WeightPredictorStore.lastAvgDailyBalanceKcal = full.avgDailyBalanceKcal
+            WeightPredictorStore.last30DayPredictionKg   = full.predictedWeightIn30Days
+            WeightPredictorStore.lastGoalWeightKg        = full.goalWeightKg
+            WeightPredictorStore.lastGoalDateStr         = full.goalDateStr
+            WeightPredictorStore.lastDaysToGoal          = full.daysToGoal
+            WeightPredictorStore.lastActiveDaysCount     = full.activeDaysCount
+            WeightPredictorStore.lastHybridTDEE          = full.hybridTDEE
+            WeightPredictorStore.lastAdaptiveTDEE        = full.adaptiveTDEE
+            WeightPredictorStore.lastConfidenceFactor    = full.confidenceFactor
+            WeightPredictorStore.isReady                 = true
+        }
     }
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1139,7 +1160,26 @@ private data class WeightPredictionDisplay(
 )
 
 /**
- * Izračuna napoved teže iz obstoječe podatkovne baze stranke.
+ * Vrednosti za propagacijo v WeightPredictorStore po rekomposiciji.
+ * Ločene od [WeightPredictionDisplay] — ne vsebuje Compose stanja, samo surove podatke.
+ */
+private data class WeightPredictionFull(
+    val display               : WeightPredictionDisplay,
+    val emaWeightKg           : Double,
+    val avgDailyBalanceKcal   : Double,
+    val predictedWeightIn30Days: Double,
+    val goalWeightKg          : Double?,
+    val goalDateStr           : String?,
+    val daysToGoal            : Int?,
+    val activeDaysCount       : Int,
+    val hybridTDEE            : Int,
+    val adaptiveTDEE          : Int,
+    val confidenceFactor      : Double
+)
+
+/**
+ * Čista funkcija — izračuna napoved teže brez stranskih učinkov.
+ * Ne piše v WeightPredictorStore (to naredi [SideEffect] v ProgressScreen).
  * Pokliče se v remember() bloku — samo ob spremembi podatkov.
  */
 private fun computeWeightPrediction(
@@ -1147,7 +1187,7 @@ private fun computeWeightPrediction(
     dailyLogs: List<DailyLogSummary>,
     burnedByDay: List<Pair<LocalDate, Double>>,
     userProfile: UserProfile
-): WeightPredictionDisplay? {
+): WeightPredictionFull? {
     if (weightLogs.isEmpty()) return null
 
     // ── EMA teže (7-dnevno okno) —
@@ -1219,19 +1259,14 @@ private fun computeWeightPrediction(
         emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg,
         theoreticalTDEE = theoreticalTDEE
     )
-    WeightPredictorStore.lastEmaWeightKg = emaWeightKg
-    WeightPredictorStore.lastAvgDailyBalanceKcal = avgDailyBalance
-    WeightPredictorStore.last30DayPredictionKg = predictedWeightIn30Days
-    WeightPredictorStore.lastGoalWeightKg = goalWeightKg
-    WeightPredictorStore.lastGoalDateStr = goalDateStr
-    WeightPredictorStore.lastDaysToGoal = daysToGoal
-    WeightPredictorStore.lastActiveDaysCount = activeDaysWithData.size
-    WeightPredictorStore.lastHybridTDEE = tdeeResult.hybridTDEE
-    WeightPredictorStore.lastAdaptiveTDEE = tdeeResult.adaptiveTDEE
-    WeightPredictorStore.lastConfidenceFactor = tdeeResult.confidenceFactor
-    WeightPredictorStore.isReady = true
-
-    return WeightPredictionDisplay(
+    // P1 POPRAVEK: NE pišemo v WeightPredictorStore tukaj!
+    // Vrednosti vrnemo v WeightPredictionFull — SideEffect v ProgressScreen jih propagira.
+    val confidenceValue = when {
+        activeDaysWithData.size < 3 -> 0.0
+        activeDaysWithData.size <= 5 -> 0.5
+        else -> 1.0
+    }
+    val display = WeightPredictionDisplay(
         emaWeightKg = emaWeightKg,
         avgDailyBalanceKcal = avgDailyBalance,
         predictedWeightIn30Days = predictedWeightIn30Days,
@@ -1239,11 +1274,20 @@ private fun computeWeightPrediction(
         daysToGoal = daysToGoal,
         goalDateStr = goalDateStr,
         activeDaysInLastWeek = activeDaysWithData.size,
-        confidenceFactor = when {
-            activeDaysWithData.size < 3 -> 0.0
-            activeDaysWithData.size <= 5 -> 0.5
-            else -> 1.0
-        }
+        confidenceFactor = confidenceValue
+    )
+    return WeightPredictionFull(
+        display                = display,
+        emaWeightKg            = emaWeightKg,
+        avgDailyBalanceKcal    = avgDailyBalance,
+        predictedWeightIn30Days = predictedWeightIn30Days,
+        goalWeightKg           = goalWeightKg,
+        goalDateStr            = goalDateStr,
+        daysToGoal             = daysToGoal,
+        activeDaysCount        = activeDaysWithData.size,
+        hybridTDEE             = tdeeResult.hybridTDEE,
+        adaptiveTDEE           = tdeeResult.adaptiveTDEE,
+        confidenceFactor       = confidenceValue
     )
 }
 

@@ -161,16 +161,19 @@ fun NutritionScreen(
     // UI debounce za vode gumbe (preprečuje double-tap)
     val lastWaterClickState = remember { mutableStateOf(0L) }
 
-    // Poraba (izračuni)
-    val consumedProtein = trackedFoods.sumOf { it.proteinG ?: 0.0 }
-    val consumedCarbs = trackedFoods.sumOf { it.carbsG ?: 0.0 }
-    val consumedFat = trackedFoods.sumOf { it.fatG ?: 0.0 }
-    val consumedFiber = trackedFoods.sumOf { it.fiberG ?: 0.0 }
-    val consumedSugar = trackedFoods.sumOf { it.sugarG ?: 0.0 }
-    val consumedSodium = trackedFoods.sumOf { it.sodiumMg ?: 0.0 }
-    val consumedPotassium = trackedFoods.sumOf { it.potassiumMg ?: 0.0 }
-    val consumedCholesterol = trackedFoods.sumOf { it.cholesterolMg ?: 0.0 }
-    val consumedSatFat = trackedFoods.sumOf { it.saturatedFatG ?: 0.0 }
+    // P2 POPRAVEK (Faza 29.1): sumOf izračuni preseljeni v NutritionViewModel.macroTotals StateFlow.
+    // UI ne sme klicati .sumOf{} v telesu Composable — povzroča rekompozicijo ob vsakem zunanjev triggeru.
+    val macroTotals by nutritionViewModel.macroTotals.collectAsState()
+    // Lokalni aliasi — ohranjajo obstoječe reference v UI kodi brez potrebe po preimenovanju
+    val consumedProtein     = macroTotals.protein
+    val consumedCarbs       = macroTotals.carbs
+    val consumedFat         = macroTotals.fat
+    val consumedFiber       = macroTotals.fiber
+    val consumedSugar       = macroTotals.sugar
+    val consumedSodium      = macroTotals.sodium
+    val consumedPotassium   = macroTotals.potassium
+    val consumedCholesterol = macroTotals.cholesterol
+    val consumedSatFat      = macroTotals.satFat
 
     // Eksplicitna MutableState (ne 'by' delegation) — odpravlja napačno opozorilo IDE
     // "Assigned value is never read" v callback lambdah (Compose recomposition ni vidna statični analizi)
@@ -193,17 +196,15 @@ fun NutritionScreen(
 
     // Nastavi dinamični TDEE: preberi BMR iz shranjenih algoritmičnih podatkov
     // Prioriteta: nutritionPlan.algorithmData.bmr > plan.algorithmData.bmr
-    // Faza 9: posredujemo activityLevel iz userProfile → UseCase bo pravilno izračunal TDEE faktor
-    LaunchedEffect(nutritionPlan, plan) {
+    // P4 SSOT (Faza 29.1): posredujemo BMI + age + isMale + experience + limitations →
+    //   UseCase bo uporabil calculateSmartCalories() enako kot WorkoutPlanGenerator (poenotena formula).
+    LaunchedEffect(nutritionPlan, plan, userProfile) {
         val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
             ?: plan?.algorithmData?.bmr?.takeIf { it > 0.0 }
         val goal = nutritionPlan?.let {
-            // goal ni shranjen v NutritionPlan — vzamemo iz userProfile ali plan
             userProfile.workoutGoal.ifBlank { null }
         } ?: plan?.goal ?: userProfile.workoutGoal
         if (bmr != null && bmr > 0) {
-            // Faza 9/10 — SSOT: konzervativni FAO/WHO faktorji + opcijski Katch-McArdle (BF%)
-            // userProfile.bodyFat je npr. "15", "20.5" ali "15-20" → vzamemo prvo število
             val bfPercentage = userProfile.bodyFat
                 ?.replace("%", "")
                 ?.trim()
@@ -211,7 +212,21 @@ fun NutritionScreen(
                 ?.firstOrNull()
                 ?.trim()
                 ?.toDoubleOrNull()
-            nutritionViewModel.setUserMetrics(bmr, goal, userProfile.activityLevel, bfPercentage)
+            // P4: dodatni parametri za poenoteno SmartCalories formulo
+            val bmi = nutritionPlan?.algorithmData?.bmi ?: plan?.algorithmData?.bmi
+            val ageYears = userProfile.age
+            val isMale = userProfile.gender?.equals("Male", ignoreCase = true) ?: true
+            nutritionViewModel.setUserMetrics(
+                bmr               = bmr,
+                goal              = goal,
+                activityLevel     = userProfile.activityLevel,
+                bodyFatPercentage = bfPercentage,
+                bmi               = bmi,
+                ageYears          = ageYears,
+                isMale            = isMale,
+                experience        = userProfile.experience,
+                limitations       = userProfile.limitations
+            )
         }
     }
 

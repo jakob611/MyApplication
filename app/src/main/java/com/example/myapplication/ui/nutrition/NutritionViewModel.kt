@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -52,6 +53,23 @@ data class FrozenDayTargets(
     val protein: Int?,
     val carbs: Int?,
     val fat: Int?
+)
+
+/**
+ * Seštevki makrohranil za vse sledene živilske vnose tega dne.
+ * Izračunano enkrat v ViewModel-u iz [_firestoreFoods], nato izpostavljeno
+ * kot reaktiven [StateFlow] — UI ne sme klicat .sumOf{} v telesu Composable funkcije.
+ */
+data class MacroTotals(
+    val protein     : Double = 0.0,
+    val carbs       : Double = 0.0,
+    val fat         : Double = 0.0,
+    val fiber       : Double = 0.0,
+    val sugar       : Double = 0.0,
+    val sodium      : Double = 0.0,
+    val potassium   : Double = 0.0,
+    val cholesterol : Double = 0.0,
+    val satFat      : Double = 0.0
 )
 
 class NutritionViewModel(
@@ -184,7 +202,12 @@ class NutritionViewModel(
         _firestoreFoods.value = emptyList()
         _localWaterMl.value = null
         _uiState.value = DailyTotals()
-        Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje počiščeno")
+        _baseTdee.value = 0.0
+        _goalAdjustment.value = 0
+        _frozenTargets.value = null
+        // P1 SSOT: počisti hibridni TDEE singleton — prepreči uhajanje podatkov med računi
+        WeightPredictorStore.reset()
+        Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje + WeightPredictorStore počiščeni")
     }
 
     val customMealsState: StateFlow<QuerySnapshot?> = uidFlow.flatMapLatest { uid ->
@@ -204,6 +227,24 @@ class NutritionViewModel(
      */
     private val _firestoreFoods = MutableStateFlow<List<TrackedFood>>(emptyList())
     internal val firestoreFoods: StateFlow<List<TrackedFood>> = _firestoreFoods.asStateFlow()
+
+    /**
+     * Seštevki makrohranil — izračunani enkrat v ViewModel-u, reaktivni na spremembe v [_firestoreFoods].
+     * UI bere samo ta StateFlow, brez ponavljajočih .sumOf{} v telesu Composable-a.
+     */
+    val macroTotals: StateFlow<MacroTotals> = _firestoreFoods.map { foods ->
+        MacroTotals(
+            protein     = foods.sumOf { it.proteinG        ?: 0.0 },
+            carbs       = foods.sumOf { it.carbsG          ?: 0.0 },
+            fat         = foods.sumOf { it.fatG            ?: 0.0 },
+            fiber       = foods.sumOf { it.fiberG          ?: 0.0 },
+            sugar       = foods.sumOf { it.sugarG          ?: 0.0 },
+            sodium      = foods.sumOf { it.sodiumMg        ?: 0.0 },
+            potassium   = foods.sumOf { it.potassiumMg     ?: 0.0 },
+            cholesterol = foods.sumOf { it.cholesterolMg   ?: 0.0 },
+            satFat      = foods.sumOf { it.saturatedFatG   ?: 0.0 }
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MacroTotals())
 
     // ── Dinamični TDEE ─────────────────────────────────────────────────────────
 
@@ -259,10 +300,27 @@ class NutritionViewModel(
         bmr: Double,
         goal: String,
         activityLevel: String? = null,
-        bodyFatPercentage: Double? = null
+        bodyFatPercentage: Double? = null,
+        // P4 — SSOT SmartCalories: opcijski dodatni parametri za poenoteno kalorično formulo
+        bmi: Double? = null,
+        ageYears: Int? = null,
+        isMale: Boolean? = null,
+        experience: String? = null,
+        limitations: List<String> = emptyList()
     ) {
-        // Faza 9/10: CalculateDailyCalorieTargetUseCase je SSOT — konzervativni FAO/WHO faktorji
-        val calorieResult = calorieTargetUseCase.fromBmr(bmr, goal, activityLevel, bodyFatPercentage)
+        // Faza 9/10 → P4 SSOT: delegiramo izračun UseCase-u
+        // Ko imamo bmi + ageYears + isMale, UseCase uporabi calculateSmartCalories() (enako kot plan)
+        val calorieResult = calorieTargetUseCase.fromBmr(
+            bmr               = bmr,
+            goal              = goal,
+            activityLevel     = activityLevel,
+            bodyFatPercentage = bodyFatPercentage,
+            bmi               = bmi,
+            ageYears          = ageYears,
+            isMale            = isMale,
+            experience        = experience,
+            limitations       = limitations
+        )
 
         // Če je hibridni TDEE že izračunan iz ProgressScreen (WeightPredictorStore),
         // ga uporabimo namesto statičnega TDEE iz plana.
@@ -274,7 +332,7 @@ class NutritionViewModel(
         NutritionDebugStore.lastBmr = bmr
         NutritionDebugStore.lastGoal = goal
         NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics [SSOT UseCase Faza10]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
+        Log.d("NutritionVM", "✅ setUserMetrics [P4-SSOT]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} bmi=${bmi?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
     }
 
     /**
