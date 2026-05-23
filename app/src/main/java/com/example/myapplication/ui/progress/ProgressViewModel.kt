@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.debug.WeightPredictorStore
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -93,18 +92,22 @@ class ProgressViewModel(
         activeDaysCount: Int,
         confidenceFactor: Double
     ) {
-        viewModelScope.launch(Dispatchers.Default) {
-            WeightPredictorStore.lastEmaWeightKg         = emaWeightKg
-            WeightPredictorStore.lastAvgDailyBalanceKcal = avgDailyBalance
-            WeightPredictorStore.last30DayPredictionKg   = predicted30
-            WeightPredictorStore.lastGoalWeightKg        = goalWeightKg
-            WeightPredictorStore.lastGoalDateStr         = goalDateStr
-            WeightPredictorStore.lastDaysToGoal          = daysToGoal
-            WeightPredictorStore.lastActiveDaysCount     = activeDaysCount
-            WeightPredictorStore.lastHybridTDEE          = hybridTDEE
-            WeightPredictorStore.lastAdaptiveTDEE        = adaptiveTDEE
-            WeightPredictorStore.lastConfidenceFactor    = confidenceFactor
-            WeightPredictorStore.isReady                 = true
+        // Faza 29.3: WeightPredictorStore.update() — atomarno posodabljanje vseh polj.
+        // MutableStateFlow.value je thread-safe, ni potreben Dispatchers.Default.
+        // hybridTDEEFlow reaktivno opozori NutritionViewModel (brez Pull-dostopa).
+        viewModelScope.launch {
+            WeightPredictorStore.update(
+                hybridTDEE      = hybridTDEE,
+                adaptiveTDEE    = adaptiveTDEE,
+                emaWeightKg     = emaWeightKg,
+                avgDailyBalance = avgDailyBalance,
+                predicted30     = predicted30,
+                goalWeightKg    = goalWeightKg,
+                goalDateStr     = goalDateStr,
+                daysToGoal      = daysToGoal,
+                activeDaysCount = activeDaysCount,
+                confidenceFactor = confidenceFactor
+            )
         }
     }
 }

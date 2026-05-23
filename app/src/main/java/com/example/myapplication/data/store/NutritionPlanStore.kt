@@ -6,8 +6,12 @@ import com.example.myapplication.domain.nutrition.calculateAdvancedBMR
 import com.example.myapplication.domain.nutrition.calculateEnhancedTDEE
 import com.example.myapplication.domain.nutrition.calculateOptimalMacros
 import com.example.myapplication.domain.nutrition.calculateSmartCalories
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlin.collections.get
 
@@ -60,43 +64,75 @@ object NutritionPlanStore {
     }
 
     /**
-     * Naloži nutrition plan iz Firestore
+     * Faza 29.3 — Interna pomočnica: parsira Firestore DocumentSnapshot v NutritionPlan.
+     * Uporablja jo tako [loadNutritionPlan] (enkraten get) kot [observeNutritionPlan] (snapshot listener).
+     */
+    private fun parseNutritionPlanSnapshot(doc: DocumentSnapshot): NutritionPlan? {
+        if (!doc.exists()) return null
+        val algoMap = doc.get("algorithmData") as? Map<*, *>
+        val algorithmData = algoMap?.let {
+            AlgorithmData(
+                bmi = (it["bmi"] as? Number)?.toDouble(),
+                bmr = (it["bmr"] as? Number)?.toDouble(),
+                tdee = (it["tdee"] as? Number)?.toDouble(),
+                proteinPerKg = (it["proteinPerKg"] as? Number)?.toDouble(),
+                caloriesPerKg = (it["caloriesPerKg"] as? Number)?.toDouble(),
+                caloricStrategy = it["caloricStrategy"] as? String,
+                detailedTips = (it["detailedTips"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                macroBreakdown = it["macroBreakdown"] as? String,
+                trainingStrategy = it["trainingStrategy"] as? String
+            )
+        }
+        return NutritionPlan(
+            calories = (doc.get("calories") as? Number)?.toInt() ?: 0,
+            protein = (doc.get("protein") as? Number)?.toInt() ?: 0,
+            carbs = (doc.get("carbs") as? Number)?.toInt() ?: 0,
+            fat = (doc.get("fat") as? Number)?.toInt() ?: 0,
+            lastUpdated = (doc.get("lastUpdated") as? Number)?.toLong()
+                ?: System.currentTimeMillis(),
+            algorithmData = algorithmData
+        )
+    }
+
+    /**
+     * Faza 29.3 — P5 popravek: Real-time Firestore Flow za nutrition plan.
+     *
+     * PRED: [loadNutritionPlan] je enkraten suspend .get().await() — spremembe z druge naprave niso vidne.
+     * PO:   callbackFlow z addSnapshotListener — ob vsaki Firestore spremembi emitira svež NutritionPlan?.
+     *
+     * NutritionViewModel klici prek _nutritionPlanPair flatMapLatest.
+     * Listener se samodejno prekine ob awaitClose() (ko uidFlow postane null ob odjavi).
+     *
+     * @param uid UID trenutnega uporabnika (iz uidFlow v NutritionViewModel)
+     * @return Flow<NutritionPlan?> — null = plan ne obstaja ali je bil izbrisan
+     */
+    fun observeNutritionPlan(uid: String): Flow<NutritionPlan?> = callbackFlow {
+        val docRef = FirestoreHelper.getUserRef(uid)
+            .collection("nutritionPlan")
+            .document("current")
+        val listener = docRef.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("NutritionPlanStore", "observeNutritionPlan error: ${err.message}")
+                return@addSnapshotListener
+            }
+            val plan = if (snap != null && snap.exists()) parseNutritionPlanSnapshot(snap) else null
+            trySend(plan)
+            Log.d("NutritionPlanStore", "📡 observeNutritionPlan → ${plan?.calories ?: "null"} kcal")
+        }
+        awaitClose { listener.remove() }
+    }
+
+    /**
+     * Naloži nutrition plan iz Firestore (enkraten klic — za backwards compatibility)
      */
     suspend fun loadNutritionPlan(userId: String): NutritionPlan? {
         return try {
             val userRef = FirestoreHelper.getCurrentUserDocRef()
-
             val doc = userRef.collection("nutritionPlan")
                 .document("current")
                 .get()
                 .await()
-
-            if (!doc.exists()) return null
-            // ...existing code...
-            val algoMap = doc.get("algorithmData") as? Map<*, *>
-            val algorithmData = algoMap?.let {
-                AlgorithmData(
-                    bmi = (it["bmi"] as? Number)?.toDouble(),
-                    bmr = (it["bmr"] as? Number)?.toDouble(),
-                    tdee = (it["tdee"] as? Number)?.toDouble(),
-                    proteinPerKg = (it["proteinPerKg"] as? Number)?.toDouble(),
-                    caloriesPerKg = (it["caloriesPerKg"] as? Number)?.toDouble(),
-                    caloricStrategy = it["caloricStrategy"] as? String,
-                    detailedTips = (it["detailedTips"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-                    macroBreakdown = it["macroBreakdown"] as? String,
-                    trainingStrategy = it["trainingStrategy"] as? String
-                )
-            }
-
-            NutritionPlan(
-                calories = (doc.get("calories") as? Number)?.toInt() ?: 0,
-                protein = (doc.get("protein") as? Number)?.toInt() ?: 0,
-                carbs = (doc.get("carbs") as? Number)?.toInt() ?: 0,
-                fat = (doc.get("fat") as? Number)?.toInt() ?: 0,
-                lastUpdated = (doc.get("lastUpdated") as? Number)?.toLong()
-                    ?: System.currentTimeMillis(),
-                algorithmData = algorithmData
-            )
+            parseNutritionPlanSnapshot(doc)
         } catch (e: Exception) {
             Log.e("NutritionPlanStore", "Error loading nutrition plan: ${e.message}")
             null

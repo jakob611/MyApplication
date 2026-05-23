@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
-import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.Job
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
@@ -115,17 +113,19 @@ class NutritionViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
-     * NutritionPlan — naložen reaktivno enkrat ob spremembi uid.
-     * Pár (plan, isLoaded): plan=null + isLoaded=false → nalaganje; plan=null + isLoaded=true → ni plana.
+     * NutritionPlan — reaktiven real-time tok iz Firestorea (Faza 29.3 — P5 popravek).
+     *
+     * PRED: enkraten suspend NutritionPlanStore.loadNutritionPlan() v flow { emit(loading); emit(loaded) }
+     * PO:   NutritionPlanStore.observeNutritionPlan() z addSnapshotListener → real-time spremembe
+     *
+     * stateIn initialValue = Pair(null, false) → loadComplete=false med nalaganjem.
+     * Po prvi Firestore emisiji → Pair(plan?, true) → loadComplete=true v nutritionPlanLoadComplete.
      */
     private val _nutritionPlanPair: StateFlow<Pair<NutritionPlan?, Boolean>> =
         uidFlow.flatMapLatest { uid ->
             if (uid == null) flowOf<Pair<NutritionPlan?, Boolean>>(Pair(null, false))
-            else flow {
-                emit(Pair<NutritionPlan?, Boolean>(null, false))
-                val loaded = NutritionPlanStore.loadNutritionPlan(uid)
-                emit(Pair(loaded, true))
-            }
+            else NutritionPlanStore.observeNutritionPlan(uid)
+                .map { plan -> Pair(plan, true) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Pair(null, false))
 
     /** Izpostavljen NutritionPlan za UI (targets, frozen snapshots) */
@@ -138,16 +138,6 @@ class NutritionViewModel(
         .map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    /**
-     * PlanResult (workout plan) — posreduje se iz zunaj enkrat prek [updatePlanResult].
-     * VM ga kombinira z internim profilom in NutritionPlanom za avtomatski preračun.
-     */
-    private val _planResultFlow = MutableStateFlow<PlanResult?>(null)
-
-    /** Iz NutritionScreen: `LaunchedEffect(plan) { vm.updatePlanResult(plan) }` */
-    fun updatePlanResult(plan: PlanResult?) {
-        _planResultFlow.value = plan
-    }
 
     private val _healthConnectSyncTrigger = MutableStateFlow(0)
     val healthConnectSyncTrigger: StateFlow<Int> = _healthConnectSyncTrigger.asStateFlow()
@@ -273,7 +263,6 @@ class NutritionViewModel(
         _baseTdee.value = 0.0
         _goalAdjustment.value = 0
         _frozenTargets.value = null
-        _planResultFlow.value = null
         // P1 SSOT: počisti hibridni TDEE singleton — prepreči uhajanje podatkov med računi
         WeightPredictorStore.reset()
         Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje + WeightPredictorStore počiščeni")
@@ -391,76 +380,71 @@ class NutritionViewModel(
             limitations       = limitations
         )
 
-        // Če je hibridni TDEE že izračunan iz ProgressScreen (WeightPredictorStore),
-        // ga uporabimo namesto statičnega TDEE iz plana.
-        val hybridTDEE = WeightPredictorStore.lastHybridTDEE
-        _baseTdee.value = if (hybridTDEE > 800) hybridTDEE.toDouble() else calorieResult.tdee
+        // Faza 29.3: hybridTDEEFlow reaktivno posodobi _baseTdee; tukaj postavi začetni TDEE.
+        // Ko WeightPredictorStore.hybridTDEEFlow emitira > 800 kcal, init{} collector ga prepiše.
+        _baseTdee.value = calorieResult.tdee
         _goalAdjustment.value = calorieResult.goalAdjustment
 
         // Debug store — za DebugDashboard
         NutritionDebugStore.lastBmr = bmr
         NutritionDebugStore.lastGoal = goal
         NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics [P4-SSOT]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} bmi=${bmi?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
-    }
-
-    /**
-     * Posodobi bazni TDEE iz hibridnega izračuna (adaptive × C + theoretical × (1−C)).
-     * Kliče se iz ProgressScreen po vsakem preračunu napovedi.
-     * Vrednosti > 800 kcal se sprejmejo kot veljavne.
-     */
-    fun applyHybridTDEE(hybridTDEE: Int) {
-        if (hybridTDEE > 800 && _baseTdee.value > 0.0) {
-            _baseTdee.value = hybridTDEE.toDouble()
-            Log.d("NutritionVM", " applyHybridTDEE: $hybridTDEE kcal → baseTdee updated")
-        }
+        Log.d("NutritionVM", "✅ setUserMetrics [P4-SSOT]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} bmi=${bmi?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value} [hybridTDEE z reaktivnim Flow-om]")
     }
 
     // ── Obstoječa logika ───────────────────────────────────────────────────────
 
     init {
         observeDailyTotals()
-        // Faza 29.2: avtomatski preračun kalorij — combine sproži recomputeCalorieTarget
-        // kadarkoli se profil, NutritionPlan ali workout plan spremenijo.
-        // NutritionScreen NE sme posredovati teh podatkov prek LaunchedEffect z logiko.
+        // Faza 29.2/29.3: 2-source combine — profil + NutritionPlan (real-time).
+        // PlanResult je ODSTRANJEN iz verige — NutritionPlan že vsebuje BMR/BMI/goal.
+        // UI (NutritionScreen) ne posreduje ničesar prek LaunchedEffect.
         viewModelScope.launch {
-            combine(_internalProfile, _nutritionPlanPair, _planResultFlow) { profile, planPair, planResult ->
-                Triple(profile, planPair, planResult)
-            }.collectLatest { (profile, planPair, planResult) ->
+            combine(_internalProfile, _nutritionPlanPair) { profile, planPair ->
+                profile to planPair
+            }.collectLatest { (profile, planPair) ->
                 val (nutritionPlan, planLoaded) = planPair
                 if (profile != null && planLoaded) {
-                    recomputeCalorieTarget(profile, nutritionPlan, planResult)
+                    recomputeCalorieTarget(profile, nutritionPlan)
+                }
+            }
+        }
+        // Faza 29.3: reaktivni hybridTDEE — WeightPredictorStore.hybridTDEEFlow emitira takoj
+        // ko ProgressViewModel.storePrediction() zapiše vrednost. Ni potreb po Pull-dostopu.
+        viewModelScope.launch {
+            WeightPredictorStore.hybridTDEEFlow.collect { hybridTDEE ->
+                if (hybridTDEE > 800 && _baseTdee.value > 0.0) {
+                    _baseTdee.value = hybridTDEE.toDouble()
+                    Log.d("NutritionVM", "🔄 hybridTDEEFlow → baseTdee=$hybridTDEE kcal")
                 }
             }
         }
     }
 
     /**
-     * Faza 29.2 — SSOT za preračun kalorij: VSA business logika (BMI, BF% parsanje,
-     * SmartCalories formula) je TUKAJ v ViewModel-u, NE v LaunchedEffect v UI-ju.
+     * Faza 29.2/29.3 — SSOT za preračun kalorij.
      *
-     * Kliče se reaktivno ob vsaki spremembi profila, nutritionPlan-a ali planResult-a.
-     * UI (NutritionScreen) je popolnoma pasiven — samo prikazuje stanje iz StateFlow-ev.
+     * Faza 29.3: PlanResult je ODSTRANJEN iz parametrov. NutritionPlan (iz Firestorea, real-time)
+     * že vsebuje vse potrebne podatke (BMR, BMI, goal). Ni posrednika iz UI-ja.
+     * hybridTDEE prihaja reaktivno prek WeightPredictorStore.hybridTDEEFlow (init{} collector).
      */
     private fun recomputeCalorieTarget(
         userProfile: UserProfile,
-        nutritionPlan: NutritionPlan?,
-        planResult: PlanResult?
+        nutritionPlan: NutritionPlan?
     ) {
         val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
-            ?: planResult?.algorithmData?.bmr?.takeIf { it > 0.0 }
             ?: return  // Brez BMR-ja ne moremo izračunati — počakaj na nalaganje plana
 
-        val goal = nutritionPlan?.let {
-            userProfile.workoutGoal.ifBlank { null }
-        } ?: planResult?.goal ?: userProfile.workoutGoal
+        val goal = userProfile.workoutGoal.ifBlank { null }
+            ?: nutritionPlan.algorithmData?.trainingStrategy
+            ?: "General health"
 
         val bfPercentage = userProfile.bodyFat
             ?.replace("%", "")?.trim()
             ?.split("-", "–")?.firstOrNull()?.trim()
             ?.toDoubleOrNull()
 
-        val bmi = nutritionPlan?.algorithmData?.bmi ?: planResult?.algorithmData?.bmi
+        val bmi = nutritionPlan.algorithmData?.bmi
         val isMale = userProfile.gender?.equals("Male", ignoreCase = true) ?: true
 
         setUserMetrics(

@@ -183,12 +183,11 @@ fun NutritionScreen(
     // Faza 14b — varovalka: true šele ko loadNutritionPlan() NI VEČ pending
     val nutritionPlanLoadComplete by nutritionViewModel.nutritionPlanLoadComplete.collectAsState()
 
-    // Faza 29.2: posreduj workout plan brez business logike — VM ga kombinira s profilom sam
-    LaunchedEffect(plan) {
-        nutritionViewModel.updatePlanResult(plan)
-    }
+    // Faza 29.3: LaunchedEffect(plan) { vm.updatePlanResult(plan) } ODSTRANJEN.
+    // NutritionViewModel samostojno naloži NutritionPlan iz Firestorea prek observeNutritionPlan().
+    // UI je popolnoma pasiven — samo posreduje display podatke za fallback cilje (plan?.calories itd.).
 
-    // TarÄŤe
+    // Tarče
     val parsed = remember(plan?.algorithmData?.macroBreakdown) { parseMacroBreakdown(plan?.algorithmData?.macroBreakdown) }
     // Round target calories down to nearest 100
     // Faza 14 — Zgodovinski Snapshoti: za DANAŠNJI dan uporabi zamrznjene cilje iz Firestore.
