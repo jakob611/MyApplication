@@ -47,6 +47,19 @@ import com.example.myapplication.domain.looksmaxing.models.*
 import com.example.myapplication.domain.looksmaxing.CalculateGoldenRatioUseCase
 import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
+import com.example.myapplication.domain.model.BodyRatioStatus
+
+/**
+ * Faza 30.7 — UI mapper: Pretvori domain enum v prikaz za uporabnika.
+ * Emojiji in lokaliziran tekst so IZKLJUČNO v presentation sloju.
+ */
+fun BodyRatioStatus.toDisplayText(): String = when (this) {
+    BodyRatioStatus.GOLDEN_RATIO -> "💛 Zlato razmerje"
+    BodyRatioStatus.EXCELLENT    -> "✅ Odlično"
+    BodyRatioStatus.GOOD         -> "👌 Dobro"
+    BodyRatioStatus.AVERAGE      -> "📈 Povprečno"
+    BodyRatioStatus.NEEDS_WORK   -> "⚠️ Potrebuje delo"
+}
 
 @Composable
 fun AutoAnalysisSection() {
@@ -809,7 +822,7 @@ fun BodyGoldenRatioSection(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            r.status,
+                            r.status.toDisplayText(),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary

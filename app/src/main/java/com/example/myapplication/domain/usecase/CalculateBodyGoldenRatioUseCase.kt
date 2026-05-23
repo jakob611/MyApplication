@@ -1,30 +1,26 @@
 package com.example.myapplication.domain.usecase
 
 import com.example.myapplication.domain.model.BodyGoldenRatioResult
+import com.example.myapplication.domain.model.BodyRatioStatus
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
  * Faza 30.1 — Clean Architecture: Poslovna logika za telesni Zlati Rez.
+ * Faza 30.7 — Odstranjeni emoji-ji in hardkodirani nizi; status vrača BodyRatioStatus enum.
+ *             Dodane realne biološke meje (30–250 cm) za preprečevanje popačenih rezultatov.
  *
- * Preseljeno iz UI/ViewModel → Domain sloj. KMP-ready: brez Android odvisnosti.
- *
- * MATEMATIČNI MODEL:
- *   φ (phi) ≈ 1.618 — Zlatorezo razmerje
- *   Idealno razmerje ramen/pas (Adonis Index):
- *     - Moški: ≈ 1.618 φ (športna postava)
- *     - Ženska: ≈ 1.45 (peščena ura)
- *   Razmerje pas/višina (WHtR): zdravstveno tveganje < 0.50
- *
- * @param shoulderCm   Obseg ramen v cm (merjeno od vrha ene roke prek hrbta do vrha druge)
- * @param waistCm      Obseg pasu v cm (najožji del)
- * @param hipCm        Obseg bokov v cm (0.0 = ni podan)
- * @param heightCm     Višina v cm (0.0 = ni podan; pas/višina razmerje se preskoči)
- * @param isMale       true = moški ideali (φ ≈ 1.618), false = ženski ideali (≈ 1.45)
+ * KMP-ready: brez Android odvisnosti.
  */
 class CalculateBodyGoldenRatioUseCase {
 
     private val phi = (1.0 + sqrt(5.0)) / 2.0  // ≈ 1.618
+
+    companion object {
+        /** Faza 30.7 — Biološke meje za telesne obsege */
+        const val MIN_CIRCUMFERENCE_CM = 30.0
+        const val MAX_CIRCUMFERENCE_CM = 250.0
+    }
 
     operator fun invoke(
         shoulderCm: Double,
@@ -34,8 +30,15 @@ class CalculateBodyGoldenRatioUseCase {
         isMale: Boolean = true
     ): BodyGoldenRatioResult {
 
-        require(shoulderCm > 0 && waistCm > 0) {
-            "shoulderCm in waistCm morata biti večja od 0"
+        // Faza 30.7 — Realne biološke meje (ne zgolj > 0)
+        require(shoulderCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            "Obseg ramen mora biti med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $shoulderCm)"
+        }
+        require(waistCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            "Obseg pasu mora biti med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $waistCm)"
+        }
+        require(hipCm == 0.0 || hipCm in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+            "Obseg bokov mora biti 0 (ni vnosu) ali med $MIN_CIRCUMFERENCE_CM in $MAX_CIRCUMFERENCE_CM cm (dobil: $hipCm)"
         }
 
         // ── 1. Razmerje ramen/pas (Adonis Index) ────────────────────────────
@@ -47,37 +50,31 @@ class CalculateBodyGoldenRatioUseCase {
         val waistToHeightRatio = if (heightCm > 0) waistCm / heightCm else -1.0
 
         // ── 3. Razmerje ramen/boki ───────────────────────────────────────────
-        val shoulderToHipRatio  = if (hipCm > 0) shoulderCm / hipCm else -1.0
+        val shoulderToHipRatio = if (hipCm > 0) shoulderCm / hipCm else -1.0
 
         // ── 4. Skupni rezultat (0..1) ────────────────────────────────────────
-        // Osnova: odmik od idealnega SWR (tehtanje 60%)
         val swrScore = (1.0 - deviationFromPhi.coerceIn(0.0, 1.0)) * 0.60
-
-        // Bonus: WHtR < 0.50 (zdravstveno optimalno) — tehtanje 25%
         val whtrScore = when {
-            waistToHeightRatio < 0    -> 0.25 * 0.5  // ni podatka → nevtralno
+            waistToHeightRatio < 0     -> 0.25 * 0.5
             waistToHeightRatio <= 0.50 -> 0.25
             waistToHeightRatio <= 0.60 -> 0.25 * (1.0 - (waistToHeightRatio - 0.50) * 5.0)
             else                       -> 0.0
         }
-
-        // Bonus: boki/ramena balance — tehtanje 15%
         val hipScore = when {
-            shoulderToHipRatio < 0   -> 0.15 * 0.5
-            isMale && shoulderToHipRatio in 1.05..1.20  -> 0.15
-            !isMale && shoulderToHipRatio in 0.90..1.10 -> 0.15
-            else -> 0.15 * 0.5
+            shoulderToHipRatio < 0                              -> 0.15 * 0.5
+            isMale  && shoulderToHipRatio in 1.05..1.20         -> 0.15
+            !isMale && shoulderToHipRatio in 0.90..1.10         -> 0.15
+            else                                                -> 0.15 * 0.5
         }
-
         val overallScore = (swrScore + whtrScore + hipScore).coerceIn(0.0, 1.0)
 
-        // ── 5. Status ────────────────────────────────────────────────────────
-        val status = when {
-            deviationFromPhi <= 0.03  -> "💛 Golden Ratio"
-            deviationFromPhi <= 0.08  -> "✅ Excellent"
-            deviationFromPhi <= 0.15  -> "👌 Good"
-            deviationFromPhi <= 0.25  -> "📈 Average"
-            else                      -> "⚠️ Needs Work"
+        // ── 5. Status — Faza 30.7: enum, brez emoji/stringov v domain sloju ─
+        val status: BodyRatioStatus = when {
+            deviationFromPhi <= 0.03 -> BodyRatioStatus.GOLDEN_RATIO
+            deviationFromPhi <= 0.08 -> BodyRatioStatus.EXCELLENT
+            deviationFromPhi <= 0.15 -> BodyRatioStatus.GOOD
+            deviationFromPhi <= 0.25 -> BodyRatioStatus.AVERAGE
+            else                     -> BodyRatioStatus.NEEDS_WORK
         }
 
         return BodyGoldenRatioResult(
@@ -90,4 +87,3 @@ class CalculateBodyGoldenRatioUseCase {
         )
     }
 }
-
