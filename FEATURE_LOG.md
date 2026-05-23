@@ -16,6 +16,15 @@
 
 ## DNEVNIK
 
+## 2026-05-23 — Faza 29.2: Popoln izgon poslovne logike iz UI sloja
+**Datoteke:** `ui/nutrition/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `ui/progress/ProgressViewModel.kt`, `ui/progress/Progress.kt`
+**Kaj:**
+1. `SideEffect {}` v Progress.kt zamenjan z `LaunchedEffect(weightPredictionFull)` → `ProgressViewModel.storePrediction()`. Pisanje v WeightPredictorStore se zdaj dogaja v viewModelScope (ne na Main thread med rekomposicijo).
+2. Kompleksni `LaunchedEffect(nutritionPlan, plan, userProfile)` z BMI/BF% parsanjem in `LaunchedEffect(Unit)` za NutritionPlan nalaganje — oba ODSTRANJENA iz NutritionScreen.kt.  
+3. NutritionViewModel zdaj sam naloži `UserProfile` (Firestore callbackFlow) in `NutritionPlan` (NutritionPlanStore). Oba toka sta vezana na `uidFlow` → clearUser() jih oba ugasne. `combine()` v `init{}` sproži `recomputeCalorieTarget()` ob vsaki spremembi.
+**Zakaj:** SideEffect piše v globalen singleton ob VSAKI rekomposiciji → race condition. LaunchedEffect z business logiko v UI = kršenje Clean Architecture. UI mora biti pasiven sprejemnik stanj.
+**Tveganje:** 🟡 srednje (Firestore listener za profil duplicira AppViewModel, toda za MVP arhitekturna čistost prevlada)
+
 ## 2026-05-23 — Faza 28: Sanity Check — deprecated uvozi, serialization verzija
 **Datoteke:** `app/build.gradle.kts`, `ui/screens/BarcodeScannerScreen.kt`, `ui/run/RunTrackerScreen.kt`
 **Kaj:**
