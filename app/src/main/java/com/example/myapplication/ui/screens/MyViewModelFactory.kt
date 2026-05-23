@@ -12,6 +12,7 @@ import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.data.repository.FirestoreWorkoutRepository
+import com.example.myapplication.data.repository.FoodRepositoryImpl
 import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.data.local.AppDatabase
@@ -36,7 +37,8 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             requireNotNull(context) { "Context required for NutritionViewModel" }
             val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
-            return NutritionViewModel(gamificationUseCase) as T
+            // Faza 29.8: FoodRepositoryImpl kot NutritionRepository vmesnik (DI)
+            return NutritionViewModel(gamificationUseCase, FoodRepositoryImpl) as T
         }
         if (modelClass.isAssignableFrom(ProgressViewModel::class.java)) {
             requireNotNull(context) { "Context required for ProgressViewModel" }

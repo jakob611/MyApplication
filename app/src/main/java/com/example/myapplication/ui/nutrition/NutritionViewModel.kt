@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
+import com.example.myapplication.domain.usecase.GetNutritionTargetsUseCase
+import com.example.myapplication.domain.model.NutritionTargets
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.Job
@@ -30,7 +32,7 @@ import android.util.Log
 import com.example.myapplication.data.NutritionPlan
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.daily.DailyLogRepository
-import com.example.myapplication.data.repository.FoodRepositoryImpl
+import com.example.myapplication.data.repository.NutritionRepository
 import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.debug.NutritionDebugStore
@@ -63,16 +65,6 @@ data class FrozenDayTargets(
     val fat: Int?
 )
 
-/**
- * Faza 29.6 — Atomarni kalorični in makro cilji.
- * En sam StateFlow namesto štirih ločenih combine blokov — brez UI tearing, brez !! operatorja.
- */
-data class NutritionTargets(
-    val calories: Int = 2000,
-    val protein: Int = 100,
-    val carbs: Int = 200,
-    val fat: Int = 60
-)
 
 /**
  * Seštevki makrohranil za vse sledene živilske vnose tega dne.
@@ -93,11 +85,16 @@ data class MacroTotals(
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class NutritionViewModel(
-    private val gamificationUseCase: ManageGamificationUseCase
+    private val gamificationUseCase: ManageGamificationUseCase,
+    // Faza 29.8: DI vmesnik — NE referiramo FoodRepositoryImpl direktno
+    private val nutritionRepo: NutritionRepository
 ) : ViewModel() {
 
     /** Faza 9 — SSOT za kalorični izračun */
     private val calorieTargetUseCase = CalculateDailyCalorieTargetUseCase()
+
+    /** Faza 29.8 — Domain Use Case za izračun prehranskih ciljev */
+    private val getNutritionTargetsUseCase = GetNutritionTargetsUseCase()
 
     // ── uidFlow — SSOT za trenutnega uporabnika (mora biti PRVA deklaracija) ───
     // clearUser() nastavi na null → vse flatMapLatest niti se samodejno prekinejo.
@@ -227,7 +224,7 @@ class NutritionViewModel(
         waterSyncJob = viewModelScope.launch {
             try {
                 delay(800L)                // debounce: batching hitrih klikov
-                FoodRepositoryImpl.logWater(safe, todayId)
+                nutritionRepo.logWater(safe, todayId)
                 Log.d("NutritionVM", "✅ Water synced: ${safe}ml (pending=${pendingWaterWrites.value})")
             } catch (e: Exception) {
                 Log.e("NutritionVM", "❌ Water sync failed: ${e.message}")
@@ -275,7 +272,7 @@ class NutritionViewModel(
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                FoodRepositoryImpl
+                nutritionRepo
                     .removeFoodItem(foodId, todayId, caloriesKcal)
                 Log.d("NutritionVM", "✅ Food removed: id=$foodId (−${caloriesKcal.toInt()} kcal)")
             } catch (e: Exception) {
@@ -291,7 +288,7 @@ class NutritionViewModel(
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                FoodRepositoryImpl.logFood(foodMap, todayId)
+                nutritionRepo.logFood(foodMap, todayId)
                 Log.d("NutritionVM", "✅ Food logged: ${foodMap["name"]}")
             } catch (e: Exception) {
                 Log.e("NutritionVM", "Failed to log food", e)
@@ -324,7 +321,7 @@ class NutritionViewModel(
 
     val customMealsState: StateFlow<QuerySnapshot?> = uidFlow.flatMapLatest { uid ->
         if (uid == null) flowOf(null)
-        else FoodRepositoryImpl.observeCustomMeals(uid)
+        else nutritionRepo.observeCustomMeals(uid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // ── Data Budgeting: Skupni Firestore listener za hrano ─────────────────────
@@ -392,50 +389,28 @@ class NutritionViewModel(
         dynamic.coerceAtLeast(1200.0).roundToInt()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    // ── Faza 29.6 — SSOT: en atomarni NutritionTargets StateFlow ─────────────
-    // Faza 29.5: 4 ločeni combine bloki → overhead + UI tearing tveganje + !! operatorji
-    // Faza 29.6: en sam 3-source combine → atomarna dostava vseh 4 ciljev hkrati, 0x !!
-    //
-    // Prioritetna hierarhija (kalorije):
-    //   1. frozenTargets (zamrznjeni Firestore snapshot tega dne)
-    //   2. hybridTDEE > 800 (izmerjeni TDEE iz ProgressViewModel)
-    //   3. nutritionPlan.calories > 0 (real-time plan iz Firestore)
-    //   4. 2000 kcal (varni fallback)
-    // Makri: frozen → plan → fallback
+    // ── Faza 29.8 — SSOT: nutritionTargets delegira na GetNutritionTargetsUseCase ──
+    // Faza 29.6: poslovna logika ZA ZIDOM v combine lambdi (ViewModel sloj)
+    // Faza 29.8: poslovna logika PRESELI v Domain sloj (GetNutritionTargetsUseCase)
+    //            ViewModel je zdaj samo koordinator — kliče use case in izpostavi rezultat.
     val nutritionTargets: StateFlow<NutritionTargets> = combine(
         _frozenTargets,
         _nutritionPlanPair,
         WeightPredictorStore.hybridTDEEFlow
     ) { frozen, planPair, hybridTDEE ->
         val plan = planPair.first
-
-        // Kalorije — stroga prioriteta + zaokrožitev navzdol na 100
-        val rawCalories = when {
-            frozen != null             -> frozen.calories
-            hybridTDEE > 800           -> hybridTDEE
-            (plan?.calories ?: 0) > 0  -> plan?.calories ?: 2000
-            else                       -> 2000
-        }
-        val calories = (rawCalories / 100) * 100
-
-        // Makri — frozen → plan → fallback (brez !! operatorja)
-        val protein = when {
-            (frozen?.protein ?: 0) > 0  -> frozen?.protein ?: 100
-            (plan?.protein   ?: 0) > 0  -> plan?.protein   ?: 100
-            else                        -> 100
-        }
-        val carbs = when {
-            (frozen?.carbs ?: 0) > 0  -> frozen?.carbs ?: 200
-            (plan?.carbs   ?: 0) > 0  -> plan?.carbs   ?: 200
-            else                      -> 200
-        }
-        val fat = when {
-            (frozen?.fat ?: 0) > 0  -> frozen?.fat ?: 60
-            (plan?.fat   ?: 0) > 0  -> plan?.fat   ?: 60
-            else                    -> 60
-        }
-
-        NutritionTargets(calories = calories, protein = protein, carbs = carbs, fat = fat)
+        // Faza 29.8: vsa logika je v Domain sloju — ViewModel samo posreduje parametre
+        getNutritionTargetsUseCase(
+            frozenCalories = frozen?.calories,
+            frozenProtein  = frozen?.protein,
+            frozenCarbs    = frozen?.carbs,
+            frozenFat      = frozen?.fat,
+            planCalories   = plan?.calories  ?: 0,
+            planProtein    = plan?.protein   ?: 0,
+            planCarbs      = plan?.carbs     ?: 0,
+            planFat        = plan?.fat       ?: 0,
+            hybridTDEE     = hybridTDEE
+        )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -575,7 +550,7 @@ class NutritionViewModel(
                     // Faza 14b: collectLatest na _activeDateFlow — ob spremembi datuma (onDayTransition)
                     // coroutine za stari dan se samodejno prekine, zažene se nov listener za novi dan.
                     _activeDateFlow.collectLatest { todayId ->
-                        FoodRepositoryImpl.observeDailyLog(uid, todayId).collect { doc ->
+                        nutritionRepo.observeDailyLog(uid, todayId).collect { doc ->
                             Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
 
                             val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
@@ -734,21 +709,7 @@ class NutritionViewModel(
         }
     }
 
-    suspend fun getCustomMealItems(currentUid: String, mealId: String): List<Map<String, Any>>? {
-        return try {
-            val db = FirestoreHelper.getDb()
-            val doc = db.collection("users").document(currentUid)
-                .collection("customMeals").document(mealId)
-                .get()
-                .await()
-
-            if (doc.exists()) {
-                doc.get("items") as? List<Map<String, Any>>
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
+    /** Faza 29.8: delegira na NutritionRepository — brez direktnih Firestore klicev v VM */
+    suspend fun getCustomMealItems(currentUid: String, mealId: String): List<Map<String, Any>>? =
+        nutritionRepo.getCustomMealItems(currentUid, mealId)
 }

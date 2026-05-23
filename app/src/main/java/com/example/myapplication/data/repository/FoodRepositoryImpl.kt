@@ -20,8 +20,11 @@ import kotlinx.coroutines.tasks.await
  * Singleton implementacija repozitorija,
  * ki skrbi tako za FatSecret API Iskanje kot za Firestore logiranje.
  * UI ne sme več sam logirati v bazo.
+ *
+ * Faza 29.8: implementira [NutritionRepository] vmesnik → NutritionViewModel
+ * ga prejme prek Dependency Injection (konstruktor) in ne kliče tega objekta direktno.
  */
-object FoodRepositoryImpl {
+object FoodRepositoryImpl : NutritionRepository {
 
     suspend fun searchFoodByName(query: String, maxResults: Int = 20): List<FoodSummary> {
         return FatSecretApi.searchFoods(query, 1, maxResults)
@@ -43,7 +46,7 @@ object FoodRepositoryImpl {
         return FatSecretApi.getRecipeDetail(id)
     }
 
-    fun observeCustomMeals(uid: String): Flow<QuerySnapshot> = callbackFlow {
+    override fun observeCustomMeals(uid: String): Flow<QuerySnapshot> = callbackFlow {
         val listener = FirestoreHelper.getUserRef(uid)
             .collection("customMeals")
             .addSnapshotListener { snaps, error ->
@@ -58,7 +61,7 @@ object FoodRepositoryImpl {
         awaitClose { listener.remove() }
     }
 
-    fun observeDailyLog(uid: String, todayId: String): Flow<DocumentSnapshot> = callbackFlow {
+    override fun observeDailyLog(uid: String, todayId: String): Flow<DocumentSnapshot> = callbackFlow {
         val docRef = FirestoreHelper.getUserRef(uid).collection("dailyLogs").document(todayId)
         val listener = docRef.addSnapshotListener { doc, error ->
             Log.d("DEBUG_DATA", "Poslušam dokument: ${docRef.path}")
@@ -99,7 +102,7 @@ object FoodRepositoryImpl {
         }.await()
     }
 
-    suspend fun logWater(amountMl: Int, dateStr: String) {
+    override suspend fun logWater(amountMl: Int, dateStr: String) {
         val docRef = FirestoreHelper.getCurrentUserDocRef()
         val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
         val data = mapOf(
@@ -125,7 +128,7 @@ object FoodRepositoryImpl {
      * @param dateStr     Datum v obliki "YYYY-MM-DD"
      * @param caloriesKcal Kalorije tega vnosa za odštevanje
      */
-    suspend fun removeFoodItem(foodId: String, dateStr: String, caloriesKcal: Double) {
+    override suspend fun removeFoodItem(foodId: String, dateStr: String, caloriesKcal: Double) {
         val docRef      = FirestoreHelper.getCurrentUserDocRef()
         val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
 
@@ -154,7 +157,7 @@ object FoodRepositoryImpl {
         }.await()
     }
 
-    suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) {
+    override suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) {
         val docRef = FirestoreHelper.getCurrentUserDocRef()
         val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
         val calories = (foodItem["caloriesKcal"] as? Number)?.toDouble() ?: 0.0
@@ -177,5 +180,19 @@ object FoodRepositoryImpl {
             transaction.set(dailyLogRef, data, SetOptions.merge())
             null
         }.await()
+    }
+
+    /** Faza 29.8: preseljeno iz NutritionViewModel.getCustomMealItems() */
+    override suspend fun getCustomMealItems(uid: String, mealId: String): List<Map<String, Any>>? {
+        return try {
+            val doc = FirestoreHelper.getDb()
+                .collection("users").document(uid)
+                .collection("customMeals").document(mealId)
+                .get().await()
+            if (doc.exists()) doc.get("items") as? List<Map<String, Any>>
+            else null
+        } catch (e: Exception) {
+            null
+        }
     }
 }
