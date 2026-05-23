@@ -92,7 +92,7 @@ android {
 dependencies {
      implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
     implementation("com.russhwolf:multiplatform-settings:1.1.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Compose BOM — 2024.12 vsebuje 16KB-kompatibilne native libs
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
