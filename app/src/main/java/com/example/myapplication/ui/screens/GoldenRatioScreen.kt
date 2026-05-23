@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.flowWithLifecycle
@@ -51,17 +52,21 @@ import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.example.myapplication.domain.model.BodyRatioStatus
 import com.example.myapplication.viewmodels.BodyUiEvent
+import com.example.myapplication.viewmodels.GoldenRatioUiState
+import com.example.myapplication.R
 
 /**
- * Faza 30.7 — UI mapper: Pretvori domain enum v prikaz za uporabnika.
- * Emojiji in lokaliziran tekst so IZKLJUČNO v presentation sloju.
+ * Faza 30.7 — UI mapper: Pretvori domain enum v ID string resursa.
+ * Faza 31.1 — Vrača Int (R.string.*) namesto hardkodiranega niza.
+ *   UI kliče stringResource(r.status.toDisplayStringRes()) → lokalizabilen prikaz.
+ *   Emojiji so del string resursa v strings.xml (univerzalni, ne lokalizirajo se).
  */
-fun BodyRatioStatus.toDisplayText(): String = when (this) {
-    BodyRatioStatus.GOLDEN_RATIO -> "💛 Zlato razmerje"
-    BodyRatioStatus.EXCELLENT    -> "✅ Odlično"
-    BodyRatioStatus.GOOD         -> "👌 Dobro"
-    BodyRatioStatus.AVERAGE      -> "📈 Povprečno"
-    BodyRatioStatus.NEEDS_WORK   -> "⚠️ Potrebuje delo"
+fun BodyRatioStatus.toDisplayStringRes(): Int = when (this) {
+    BodyRatioStatus.GOLDEN_RATIO -> R.string.status_golden_ratio
+    BodyRatioStatus.EXCELLENT    -> R.string.status_excellent
+    BodyRatioStatus.GOOD         -> R.string.status_good
+    BodyRatioStatus.AVERAGE      -> R.string.status_average
+    BodyRatioStatus.NEEDS_WORK   -> R.string.status_needs_work
 }
 
 @Composable
@@ -673,23 +678,16 @@ fun MLKitScanningOverlay(
 @Composable
 fun GoldenRatioScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
-    // Pasivno opazovanje iz ViewModela — brez lokalnih surovih podatkov profila
+    // Faza 31.1: enoten UI state — nadomešča bodyProfile + goldenRatioResults + isSaving
     val bodyVm: BodyModuleHomeViewModel = viewModel(
         factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
     )
-    // Faza 30.5: collectAsStateWithLifecycle — ne drži Firestore listenerja v ozadju
-    val profile by bodyVm.bodyProfile.collectAsStateWithLifecycle()
-    val goldenRatioResults by bodyVm.goldenRatioResults.collectAsStateWithLifecycle()
-    // Faza 30.8: isSaving za onemogočanje gumba med shranjevanjem
-    val isSaving by bodyVm.isSaving.collectAsStateWithLifecycle()
+    val uiState by bodyVm.goldenRatioUiState.collectAsStateWithLifecycle()
 
     // Faza 30.9 — SnackbarHostState za prikaz enkratnih napak
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Faza 31.0 — flowWithLifecycle: zbiranje se samodejno ustavi ko zaslon ni odprt
-    // (npr. ob rotaciji ali navigaciji stran). Ko se zaslon vrne v STARTED stanje,
-    // Channel medtem hrani sporočila (BUFFERED) → nobeno opozorilo ne izgine.
-    // LaunchedEffect(lifecycleOwner) se znova zažene, če se referenca spremeni.
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
         bodyVm.uiEvents
@@ -735,24 +733,58 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // ── Sekcija 1: Obrazna analiza (kamera / galerija) ─────────────────
+            // Neodvisna od profila — vedno prikazana
             AutoAnalysisSection()
 
             Spacer(Modifier.height(24.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(16.dp))
 
-            // ── Sekcija 2: Telesni Zlati Rez (Faza 30.1 — pasiven UI) ──────────
-            BodyGoldenRatioSection(
-                profileHeight = profile?.height,
-                goldenRatioResults = goldenRatioResults,
-                isSaving = isSaving,
-                onMeasurementsChanged = { shoulder, waist, hip, height ->
-                    bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
-                },
-                onSave = { shoulder, waist, hip, height ->
-                    bodyVm.saveBodyMeasurements(shoulder, waist, hip, height)
+            // ── Sekcija 2: Telesni Zlati Rez — Faza 31.1: when (uiState) ───────
+            // Loading → spinner (profil se nalaga iz Firestore)
+            // Success → celotni vmesnik z vnosi in opcijskim rezultatom
+            // Error   → sporočilo o napaki (vrednosti zunaj bioloških meja)
+            when (val state = uiState) {
+                is GoldenRatioUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
+                    }
                 }
-            )
+
+                is GoldenRatioUiState.Success -> {
+                    BodyGoldenRatioSection(
+                        profileHeight      = state.profileHeight,
+                        goldenRatioResults = state.data,
+                        isSaving           = state.isSaving,
+                        onMeasurementsChanged = { shoulder, waist, hip, height ->
+                            bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
+                        },
+                        onSave = { shoulder, waist, hip, height ->
+                            bodyVm.saveBodyMeasurements(shoulder, waist, hip, height)
+                        }
+                    )
+                }
+
+                is GoldenRatioUiState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text  = stringResource(state.messageRes),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -910,7 +942,8 @@ fun BodyGoldenRatioSection(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            r.status.toDisplayText(),
+                            // Faza 31.1: stringResource() → lokalizabilen niz iz strings.xml
+                            stringResource(r.status.toDisplayStringRes()),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary

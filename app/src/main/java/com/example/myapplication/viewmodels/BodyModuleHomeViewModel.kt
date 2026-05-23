@@ -2,6 +2,7 @@ package com.example.myapplication.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.R
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.model.BodyGoldenRatioResult
 import com.example.myapplication.domain.model.PlanResult
@@ -48,6 +49,42 @@ sealed interface BodyUiEvent {
     data object SaveSuccess : BodyUiEvent
     /** Napaka med shranjevanjem — prikaži Snackbar z [message]. */
     data class Error(val message: String) : BodyUiEvent
+}
+
+/**
+ * Faza 31.1 — Enoten UI state za Golden Ratio sekcijo.
+ *
+ * Nadomešča tri razpršene StateFlow-e:
+ *   bodyProfile: StateFlow<UserProfile?>     → pokrit z Loading/Success
+ *   goldenRatioResults: StateFlow<Result?>   → Success.data
+ *   isSaving: StateFlow<Boolean>             → Success.isSaving
+ *
+ * Prednosti:
+ *   • Atomarni prehodi — UI nikoli ne vidi nedosledne kombinacije vrednosti
+ *   • Error.messageRes je Int (R.string.*) → brez hardkodiranih nizov v VM
+ *   • Loading stanje preprečuje vizualno utripanje ("flash of empty content")
+ */
+sealed interface GoldenRatioUiState {
+    /** Profil se nalaga iz Firestore — pokaži CircularProgressIndicator. */
+    data object Loading : GoldenRatioUiState
+
+    /**
+     * Profil naložen — pokaži celotni vmesnik z vnosi.
+     * @param profileHeight  Višina iz profila (za prikaz in izračun pas/višina razmerja)
+     * @param data           Rezultat izračuna; null dokler uporabnik ne vnese meritev
+     * @param isSaving       true med Firestore batch write — gumb onemogočen
+     */
+    data class Success(
+        val profileHeight: Double?,
+        val data: BodyGoldenRatioResult?,
+        val isSaving: Boolean = false
+    ) : GoldenRatioUiState
+
+    /**
+     * Napaka pri izračunu (neveljavne vrednosti).
+     * @param messageRes  ID string resursa (R.string.*) — lokalizabilen, brez Context v VM
+     */
+    data class Error(val messageRes: Int) : GoldenRatioUiState
 }
 
 /**
@@ -175,32 +212,48 @@ class BodyModuleHomeViewModel(
     /** UI kliče [updateBodyMeasurements] ko uporabnik vnese obsege. */
     private val _bodyMeasurements = MutableStateFlow(BodyMeasurementsInput())
 
+    // ── Faza 30.8 — Stanje shranjevanja (interno — javno prek goldenRatioUiState) ─
+    private val _isSaving = MutableStateFlow(false)
+
     /**
-     * Reaktivni rezultati telesnega Zlatega Reza.
-     * Kombinira profil (višina, spol) z ročno vnesenimi meritvami.
-     * null kadar obseg ramen ali pasu ni vnesen.
+     * Faza 31.1 — ENOTEN UI STATE za Golden Ratio sekcijo.
      *
-     * Faza 30.1 — Pasiven UI:
-     *   UI NE računa — samo bere ta StateFlow in izriše vrednosti.
+     * Kombinira 3 vire (bodyProfile + _bodyMeasurements + _isSaving) v en atomaren tok.
+     * Stanje:
+     *   bodyProfile == null          → Loading  (Firestore še ni odgovoril)
+     *   bodyProfile != null          → Success  (pokaži vnose, opcijsko result)
+     *   IllegalArgumentException     → Error    (vrednosti zunaj 30–250 cm)
      */
-    val goldenRatioResults: StateFlow<BodyGoldenRatioResult?> = combine(
+    val goldenRatioUiState: StateFlow<GoldenRatioUiState> = combine(
         bodyProfile,
-        _bodyMeasurements
-    ) { profile, measurements ->
-        if (measurements.shoulderCm <= 0.0 || measurements.waistCm <= 0.0) return@combine null
-        try {
-            calculateBodyGoldenRatio(
-                shoulderCm = measurements.shoulderCm,
-                waistCm    = measurements.waistCm,
-                hipCm      = measurements.hipCm,
-                heightCm   = profile?.height ?: measurements.heightCm,
-                isMale     = profile?.gender?.equals("Male", ignoreCase = true) ?: true
-            )
-        } catch (e: IllegalArgumentException) {
-            android.util.Log.e("BodyModuleHomeVM", "Golden ratio calc error: ${e.message}")
-            null
+        _bodyMeasurements,
+        _isSaving
+    ) { profile, measurements, saving ->
+        when {
+            profile == null -> GoldenRatioUiState.Loading
+            else -> {
+                val result = if (measurements.shoulderCm > 0.0 && measurements.waistCm > 0.0) {
+                    try {
+                        calculateBodyGoldenRatio(
+                            shoulderCm = measurements.shoulderCm,
+                            waistCm    = measurements.waistCm,
+                            hipCm      = measurements.hipCm,
+                            heightCm   = profile.height ?: measurements.heightCm,
+                            isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        android.util.Log.e("BodyModuleHomeVM", "Golden ratio calc error: ${e.message}")
+                        return@combine GoldenRatioUiState.Error(R.string.error_invalid_measurements)
+                    }
+                } else null
+                GoldenRatioUiState.Success(
+                    profileHeight = profile.height,
+                    data          = result,
+                    isSaving      = saving
+                )
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GoldenRatioUiState.Loading)
 
     /** Kliče UI ko vnese meritve (obseg ramen, pas, boki). */
     fun updateBodyMeasurements(
@@ -211,14 +264,6 @@ class BodyModuleHomeViewModel(
     ) {
         _bodyMeasurements.value = BodyMeasurementsInput(shoulderCm, waistCm, hipCm, heightCm)
     }
-
-    // ── Faza 30.8 — Stanje shranjevanja: preprečuje dvojne klike ────────────
-    /**
-     * true = shranjevanje v teku → gumb v UI mora biti onemogočen.
-     * Atomarno: takoj na true ob klicu, nazaj na false šele po odgovoru repozitorija.
-     */
-    private val _isSaving = MutableStateFlow(false)
-    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
     // ── Faza 30.9 — Enkratni UI dogodki (Channel = natanko en sprejem) ────────
     /**
