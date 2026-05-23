@@ -16,6 +16,19 @@
 
 ## DNEVNIK
 
+## 2026-05-23 — Faza 27: KSP + Room avtomatska generacija, usklajevanje verzij
+**Datoteke:** `build.gradle.kts`, `app/build.gradle.kts`, `data/local/AppDatabase_Impl.kt`
+**Kaj:**
+1. Kotlin 2.2.10 → 2.1.0 (stabilna verzija z uradno KSP 2.1.0-1.0.29 podporo)
+2. KSP plugin odkomentirano v obeh `build.gradle.kts` — Room sedaj samodejno generira `AppDatabase_Impl` prek KSP
+3. Room 2.6.1 → 2.7.1: popravlja "unexpected jvm signature V" bug pri `suspend fun` z Unit povratno vrednostjo
+4. `AppDatabase_Impl.kt` izpraznjena — samo package declaration, brez ročne implementacije
+5. `kotlinx-coroutines-play-services` 1.7.3 → 1.8.1 (usklajena z android verzijo)
+6. `navigation-compose` 2.7.7 → 2.8.9 (Type-Safe Navigation, stable 2.8.x serija)
+7. `lint {}` blok počiščen — odstranjeni zastareli komentarji o ML Kit 16.1.7/17.3.0 (zamenjani s play-services v Fazi 27)
+**Zakaj:** Ročno pisanje AppDatabase_Impl.kt je nevzdržno; KSP 2.1.0-1.0.29 je zdaj uradno dostopen
+**Tveganje:** 🟢 nizko (KSP generira enako logiko kot ročna implementacija; Room 2.7.1 je stable)
+
 ## 2026-05-03 — Faza 6: Golden Ratio routing, Rest Day, Room, iOS Code Polish
 **Datoteke:** `ui/MainAppContent.kt`, `domain/gamification/GamificationRepository.kt`, `data/gamification/FirestoreGamificationRepository.kt`, `domain/usecase/UpdateStreakUseCase.kt`, `domain/gamification/ManageGamificationUseCase.kt`, `data/local/AppDatabase_Impl.kt`, `build.gradle.kts`, `app/build.gradle.kts`
 **Kaj:**

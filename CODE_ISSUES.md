@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-22 (Faza 25: Code Inspection cleanup + 16KB page size)  
+**Zadnja posodobitev:** 2026-05-23 (Faza 27: KSP + Room avtomatska generacija, usklajevanje verzij)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
