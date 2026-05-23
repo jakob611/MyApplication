@@ -14,6 +14,7 @@ import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
+import com.example.myapplication.data.store.PlanDataStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -254,7 +255,23 @@ class BodyModuleHomeViewModel(
             is BodyHomeIntent.SwapDays -> {
                 val lockedDay = if (_ui.value.isWorkoutDoneToday) _ui.value.planDay else null
                 val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                res.onSuccess { intent.onResult(it) }
+                res.onSuccess { updatedPlan ->
+                    // Optimistični UI update — lokalni model posodobimo takoj
+                    intent.onResult(updatedPlan)
+                    // Faza 30.3: Atomarna Firestore transakcija — zamenjava se zgodi v Data sloju,
+                    // NE v UI sloju. Preprečuje race condition in slepo prepisovanje z .set()/.update().
+                    viewModelScope.launch {
+                        val txResult = PlanDataStore.swapDaysAtomically(
+                            planId = updatedPlan.id,
+                            dayA = intent.dayA,
+                            dayB = intent.dayB
+                        )
+                        txResult.onFailure { e ->
+                            android.util.Log.e("BodyModuleHomeVM", "Atomarni swap spodletel: ${e.message}")
+                            _ui.value = _ui.value.copy(errorMessage = "Swap sync napaka: ${e.message}")
+                        }
+                    }
+                }
                 res.onFailure { _ui.value = _ui.value.copy(errorMessage = it.message) }
             }
 

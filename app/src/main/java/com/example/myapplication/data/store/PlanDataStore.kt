@@ -388,6 +388,115 @@ object PlanDataStore {
         }
     }
 
+    /**
+     * Faza 30.3 — Atomarna zamenjava dni z Firestore transakcijo.
+     *
+     * Preprečuje:
+     *   - slepo prepisovanje celotnega array-a z .set() / .update()
+     *   - race condition, kjer vzporedni zapis prepiše zaključen trening
+     *
+     * Potek transakcije (atomarno):
+     *   1. Prebere SVEŽO stanje načrta neposredno s strežnika
+     *   2. Preveri isFrozen na dayA in dayB (zadnja linija obrambe)
+     *   3. Zamenja isRestDay + focusLabel (ne dayNumber — ta ostane na mestu)
+     *   4. Zapiše posodobljene tedne z transaction.update()
+     *
+     * Ne potrebuje Context — samo Firestore.
+     */
+    suspend fun swapDaysAtomically(planId: String, dayA: Int, dayB: Int): Result<Unit> {
+        if (planId.isBlank()) {
+            return Result.failure(Exception("Plan ID is empty — cannot execute atomic swap."))
+        }
+        val userId = getResolvedUserId()
+            ?: return Result.failure(Exception("User not logged in — cannot swap."))
+
+        return try {
+            firestore.runTransaction { transaction ->
+                val docRef = firestore.collection(PLANS_COLLECTION).document(userId)
+                val snapshot = transaction.get(docRef)
+
+                @Suppress("UNCHECKED_CAST")
+                val plansData = snapshot.get("plans") as? List<Map<String, Any>>
+                    ?: throw Exception("No plans found in Firestore document.")
+
+                // Najdi pravi plan po planId
+                val planIndex = plansData.indexOfFirst { it["id"] == planId }
+                if (planIndex < 0) {
+                    throw Exception("Plan $planId not found in Firestore.")
+                }
+
+                val planMap = plansData[planIndex]
+                @Suppress("UNCHECKED_CAST")
+                val weeks = planMap["weeks"] as? List<Map<String, Any>>
+                    ?: throw Exception("No weeks data in plan $planId.")
+
+                // 🔒 Faza 30.3 — Preveri isFrozen NEPOSREDNO iz Firestorea (svež read)
+                weeks.forEach { weekMap ->
+                    @Suppress("UNCHECKED_CAST")
+                    val days = weekMap["days"] as? List<Map<String, Any>> ?: emptyList()
+                    days.forEach { dayMap ->
+                        val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
+                        val frozen = dayMap["isFrozen"] as? Boolean ?: false
+                        if (frozen && (dayNum == dayA || dayNum == dayB)) {
+                            throw Exception("Day $dayNum je zamrznjen v Firestore — swap blokiran.")
+                        }
+                    }
+                }
+
+                // Zberi vrednosti za zamenjavo (pred modifikacijo)
+                var rA = false; var fA = ""; var rB = false; var fB = ""
+                weeks.forEach { weekMap ->
+                    @Suppress("UNCHECKED_CAST")
+                    val days = weekMap["days"] as? List<Map<String, Any>> ?: emptyList()
+                    days.forEach { dayMap ->
+                        val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
+                        if (dayNum == dayA) {
+                            rA = dayMap["isRestDay"] as? Boolean ?: false
+                            fA = dayMap["focusLabel"] as? String ?: ""
+                        }
+                        if (dayNum == dayB) {
+                            rB = dayMap["isRestDay"] as? Boolean ?: false
+                            fB = dayMap["focusLabel"] as? String ?: ""
+                        }
+                    }
+                }
+
+                // Zamenjaj in rekonstruiraj strukturo tednov
+                val updatedWeeks = weeks.map { weekMap ->
+                    @Suppress("UNCHECKED_CAST")
+                    val updatedDays = (weekMap["days"] as? List<Map<String, Any>> ?: emptyList())
+                        .map { dayMap ->
+                            val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
+                            when (dayNum) {
+                                dayA -> dayMap.toMutableMap().apply {
+                                    put("isRestDay", rB); put("focusLabel", fB)
+                                }
+                                dayB -> dayMap.toMutableMap().apply {
+                                    put("isRestDay", rA); put("focusLabel", fA)
+                                }
+                                else -> dayMap
+                            }
+                        }
+                    weekMap.toMutableMap().apply { put("days", updatedDays) }
+                }
+
+                // Zapiši posodobljen plan — samo `plans` polje, ne celoten dokument
+                val updatedPlansData = plansData.toMutableList()
+                updatedPlansData[planIndex] = planMap.toMutableMap().apply {
+                    put("weeks", updatedWeeks)
+                }
+                transaction.update(docRef, "plans", updatedPlansData)
+
+            }.await()
+
+            Log.d("PlanDataStore", "✅ Atomarni swap uspel: dan $dayA ↔ dan $dayB (plan=$planId)")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("PlanDataStore", "❌ Atomarni swap spodletel: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     // KLJUČNO: klic na Cloud Run z Authorization headerjem
     fun requestAIPlan(
         quizData: Map<String, Any>,

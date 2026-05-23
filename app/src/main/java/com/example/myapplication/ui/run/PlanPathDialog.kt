@@ -1,7 +1,6 @@
 package com.example.myapplication.ui.run
 
 import android.content.Context
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,14 +22,11 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.store.AlgorithmPreferences
 import com.example.myapplication.domain.model.DayPlan
 import com.example.myapplication.domain.model.PlanResult
-import com.example.myapplication.data.store.PlanDataStore
 import com.example.myapplication.utils.AppToast
 import com.example.myapplication.utils.HapticFeedback
 import com.example.myapplication.viewmodels.BodyHomeIntent
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.russhwolf.settings.SharedPreferencesSettings
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
 
 @Composable
 fun PlanPathDialog(
@@ -119,16 +115,23 @@ fun PlanPathDialog(
                         selectedDayNumber = clickedGlobalDay
                     },
                     onDragSwap = { fromDay, toDay ->
-                        // 🔒 Faza 9: Day Locking — danas že opravljen dan se ne sme premikati.
-                        // isTodayDone = true ko je dailyHistory[today] == WORKOUT_DONE ali STRETCHING_DONE.
-                        if (isTodayDone && (fromDay == currentDay || toDay == currentDay)) {
-                            AppToast.showWarning(
-                                context,
-                                "Today's completed day is locked and cannot be moved! 🔒"
-                            )
-                        } else {
-                            val plan = localPlan
-                            if (plan != null && vm != null) {
+                        val plan = localPlan
+                        when {
+                            // 🔒 Faza 30.3: prazen plan ID → pot ni naložena, interakcija onemogočena
+                            plan?.id.isNullOrBlank() -> {
+                                AppToast.showWarning(
+                                    context,
+                                    "Plan path is not loaded yet. Please wait."
+                                )
+                            }
+                            // 🔒 Faza 9: danes opravljen dan je zaklenjen
+                            isTodayDone && (fromDay == currentDay || toDay == currentDay) -> {
+                                AppToast.showWarning(
+                                    context,
+                                    "Today's completed day is locked and cannot be moved! 🔒"
+                                )
+                            }
+                            plan != null && vm != null -> {
                                 HapticFeedback.performHapticFeedback(
                                     context,
                                     HapticFeedback.FeedbackType.SUCCESS
@@ -180,19 +183,10 @@ fun PlanPathDialog(
                                     dayA = fromDay,
                                     dayB = toDay,
                                     onResult = { updated ->
+                                        // Optimistični UI update — ViewModel skrbi za Firestore transakcijo
                                         localPlan = updated
                                         onPlanUpdated?.invoke(updated)
-                                        // ✅ Fix Faza 5: Persisti swap v Firestore/DataStore
-                                        val scope = MainScope()
-                                        scope.launch {
-                                            try {
-                                                PlanDataStore.updatePlan(context, updated)
-                                                Log.d("PlanPathDialog", "✅ Swap persistan v Firestore: dan $fromDay ↔ dan $toDay")
-                                            } catch (e: Exception) {
-                                                Log.e("PlanPathDialog", "❌ Swap persistenca spodletela: ${e.message}")
-                                            }
-                                        }
-                                        AppToast.showSuccess(context, "Swapped!")
+                                        AppToast.showSuccess(context, "Swapped! ✅")
                                     }
                                 ))
                             }
