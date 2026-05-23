@@ -2,12 +2,12 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
     // ─── KSP SETUP (Room code generation) ────────────────────────────────────
-    // ⚠️ ZAKOMENTIRANO: KSP 2.2.10-1.0.29 ni v Maven repos — AppDatabase_Impl.kt ročno pisan
-    // id("com.google.devtools.ksp")
+    // KSP 2.1.0-1.0.29 je uradno dostopen za Kotlin 2.1.0 — Room generira kodo samodejno
+    id("com.google.devtools.ksp")
     // ─────────────────────────────────────────────────────────────────────────
 }
 val localProps = Properties().apply {
@@ -75,23 +75,18 @@ android {
     packaging {
         jniLibs {
             excludes += listOf("lib/x86/**", "lib/x86_64/**")
-            // PRAVA REŠITEV za 16KB page size (uradno dokumentirana — ne bypass):
-            // extractNativeLibs=true / useLegacyPackaging=true ekstrahira .so datoteke iz APK
-            // na disk PRED nalaganjem. Android jih nato naloži z diska (ne iz APK zip).
-            // Ko se .so nalaga z diska, 16KB segment-alignment v APK-ju NE VELJA →
-            // runtime crash na napravah z 16KB page granule (npr. Qualcomm Oryon) je PREPREČEN.
-            // Vir: https://developer.android.com/guide/practices/page-sizes#test-emulator
+            // useLegacyPackaging = true: sekundarna varovalka za morebitne druge .so datoteke
+            // v tranzitivnih odvisnostih, ki bi imele 4KB ELF alignment.
+            // PRIMARNA rešitev za 16KB (Faza 27): ML Kit face-detection in barcode-scanning
+            // sta zamenjana z play-services-mlkit-* variantami, ki NE bundlajo .so v APK
+            // (native koda prihaja iz Play Services, ki je 16KB poravnan).
             useLegacyPackaging = true
         }
     }
     lint {
-        // PRAVA REŠITEV za 16KB page size (ne suppression):
-        // useLegacyPackaging = true (zgoraj) ekstrahira .so datoteke iz APK na FS pred nalaganjem.
-        // Ko Android nalaga .so Z DISKA (ne iz APK zip), 16KB page-alignment zahteva ZA APK ne velja.
-        // To je URADNO dokumentirana rešitev Google (d.android.com/guide/practices/page-sizes).
-        // ML Kit barcode-scanning:17.3.0 in face-detection:16.1.7 sta zadnji stabilni verziji.
-        // Ko Google izda verzije z nativno 16KB-aligned .so, bo useLegacyPackaging postal nepotreben.
-        // Lint opozorilo Aligned16KBPageSize ostane VIDNO (informativno) — NI supprimirano!
+        // Opozorilo Aligned16KBPageSize je vidno (informativno) — NI suprimirano.
+        // Prava rešitev: play-services-mlkit-* (Faza 27) ne bundla .so v APK.
+        // useLegacyPackaging = true (spodaj) je sekundarna varovalka za tranzitivne odvisnosti.
     }
 }
 dependencies {
@@ -121,8 +116,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
-    // Navigation (samo Compose)
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // Navigation (samo Compose) — 2.8.x: Type-Safe Navigation (stable)
+    implementation("androidx.navigation:navigation-compose:2.8.9")
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     // Firebase prek BoM — 33.7+ vsebuje 16KB-kompatibilne native libs (Crashlytics, Perf)
@@ -139,16 +134,26 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     // CameraX — 1.4.1 = 16KB page size aligned (arm64 .so)
     implementation("androidx.camera:camera-camera2:1.4.1")
     implementation("androidx.camera:camera-lifecycle:1.4.1")
     implementation("androidx.camera:camera-view:1.4.1")
-    // ML Kit Barcode Scanning — 17.3.0 stabilna (16KB page-aligned .so od 17.3.0+)
-    implementation("com.google.mlkit:barcode-scanning:17.3.0")
-    // ML Kit Face Detection — 16.1.7 → najnovejša stabilna z 16KB-aligned native libs
-    // libface_detector_v2_jni.so in libimage_processing_util_jni.so sta 16KB-usklajena od 16.1.6+
-    implementation("com.google.mlkit:face-detection:16.1.7")
+    // ── ML Kit via Play Services — FAZA 27: PRAVA rešitev za 16KB ELF LOAD alignment ──────────
+    // com.google.mlkit:face-detection:16.1.7 in barcode-scanning:17.3.0 sta vsebovala
+    // libface_detector_v2_jni.so in libbarhopper_v3.so z ELF p_align=0x1000 (4KB).
+    // Na Android napravah z 16KB page granularity (Qualcomm Oryon, Pixel 9 Pro itd.) kernel
+    // zavrne mmap teh .so datoteke — TUDI ko so izvlečene na disk z useLegacyPackaging=true.
+    //
+    // Play Services varianta NE bundla nobene .so datoteke v APK. Native kodo naloži iz
+    // Google Play Services ob prvi uporabi. Play Services na Android 16 napravah je
+    // VEDNO 16KB-ELF-poravnan (Google vzdržuje Play Services neodvisno od APK).
+    // API vmesnik je popolnoma enak → nobenih sprememb v AndroidMLKitFaceDetector.kt
+    // oz. AndroidMLKitBarcodeScanner.kt.
+    //
+    // Vir: https://developers.google.com/ml-kit/migration/android
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
+    implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
     // Location services
     implementation("com.google.android.gms:play-services-location:21.3.0")
     // OpenStreetMap za RunTracker
@@ -166,10 +171,11 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // Room — Offline-First baza podatkov (Faza 3)
-    // ⚠️ ksp() zakomentirano — KSP plugin ni na voljo za Kotlin 2.2.10, AppDatabase_Impl.kt ročno pisan
-    val roomVersion = "2.6.1"
+    // KSP 2.1.0-1.0.29 samodejno generira AppDatabase_Impl — ročna implementacija je bila izbrisana
+    // Room 2.7.1: popravljeno "unexpected jvm signature V" za suspend fun z Unit povratno vrednostjo
+    val roomVersion = "2.7.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    // ksp("androidx.room:room-compiler:$roomVersion")   // odkomentiraj ko KSP 2.2.10-1.0.X izide
+    ksp("androidx.room:room-compiler:$roomVersion")
 }
 
