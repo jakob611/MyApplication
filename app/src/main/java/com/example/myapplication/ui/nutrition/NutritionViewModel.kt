@@ -64,6 +64,17 @@ data class FrozenDayTargets(
 )
 
 /**
+ * Faza 29.6 — Atomarni kalorični in makro cilji.
+ * En sam StateFlow namesto štirih ločenih combine blokov — brez UI tearing, brez !! operatorja.
+ */
+data class NutritionTargets(
+    val calories: Int = 2000,
+    val protein: Int = 100,
+    val carbs: Int = 200,
+    val fat: Int = 60
+)
+
+/**
  * Seštevki makrohranil za vse sledene živilske vnose tega dne.
  * Izračunano enkrat v ViewModel-u iz [_firestoreFoods], nato izpostavljeno
  * kot reaktiven [StateFlow] — UI ne sme klicat .sumOf{} v telesu Composable funkcije.
@@ -338,70 +349,55 @@ class NutritionViewModel(
         dynamic.coerceAtLeast(1200.0).roundToInt()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    // ── Faza 29.5 — SSOT za statične kalorične in makro cilje ─────────────────
-    // UI ne sme ugibati vrednosti. Vse fallback odločitve so tukaj, ne v Composable.
-
-    /**
-     * Ciljne kalorije [kcal], zaokrožene navzdol na 100.
-     * Stroga prioritetna hierarhija:
-     *   1. frozenTargets (zamrznjeni Firestore snapshot tega dne)
-     *   2. hybridTDEE > 800 (izmerjeni TDEE iz ProgressViewModel)
-     *   3. nutritionPlan.calories > 0 (real-time plan iz Firestore)
-     *   4. 2000 kcal (varni fallback)
-     */
-    val targetCalories: StateFlow<Int> = combine(
+    // ── Faza 29.6 — SSOT: en atomarni NutritionTargets StateFlow ─────────────
+    // Faza 29.5: 4 ločeni combine bloki → overhead + UI tearing tveganje + !! operatorji
+    // Faza 29.6: en sam 3-source combine → atomarna dostava vseh 4 ciljev hkrati, 0x !!
+    //
+    // Prioritetna hierarhija (kalorije):
+    //   1. frozenTargets (zamrznjeni Firestore snapshot tega dne)
+    //   2. hybridTDEE > 800 (izmerjeni TDEE iz ProgressViewModel)
+    //   3. nutritionPlan.calories > 0 (real-time plan iz Firestore)
+    //   4. 2000 kcal (varni fallback)
+    // Makri: frozen → plan → fallback
+    val nutritionTargets: StateFlow<NutritionTargets> = combine(
         _frozenTargets,
         _nutritionPlanPair,
         WeightPredictorStore.hybridTDEEFlow
     ) { frozen, planPair, hybridTDEE ->
         val plan = planPair.first
-        val raw = when {
-            frozen != null                          -> frozen.calories
-            hybridTDEE > 800                        -> hybridTDEE
-            (plan?.calories ?: 0) > 0               -> plan!!.calories
-            else                                    -> 2000
-        }
-        (raw / 100) * 100  // zaokroženo navzdol na 100 kcal — samo za prikaz
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2000)
 
-    /** Ciljni proteini [g]: frozen → plan → fallback 100 g */
-    val targetProtein: StateFlow<Int> = combine(
-        _frozenTargets,
-        _nutritionPlanPair
-    ) { frozen, planPair ->
-        val plan = planPair.first
-        when {
-            (frozen?.protein ?: 0) > 0  -> frozen!!.protein!!
-            (plan?.protein   ?: 0) > 0  -> plan!!.protein
+        // Kalorije — stroga prioriteta + zaokrožitev navzdol na 100
+        val rawCalories = when {
+            frozen != null             -> frozen.calories
+            hybridTDEE > 800           -> hybridTDEE
+            (plan?.calories ?: 0) > 0  -> plan?.calories ?: 2000
+            else                       -> 2000
+        }
+        val calories = (rawCalories / 100) * 100
+
+        // Makri — frozen → plan → fallback (brez !! operatorja)
+        val protein = when {
+            (frozen?.protein ?: 0) > 0  -> frozen?.protein ?: 100
+            (plan?.protein   ?: 0) > 0  -> plan?.protein   ?: 100
             else                        -> 100
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 100)
-
-    /** Ciljni ogljikovi hidrati [g]: frozen → plan → fallback 200 g */
-    val targetCarbs: StateFlow<Int> = combine(
-        _frozenTargets,
-        _nutritionPlanPair
-    ) { frozen, planPair ->
-        val plan = planPair.first
-        when {
-            (frozen?.carbs ?: 0) > 0  -> frozen!!.carbs!!
-            (plan?.carbs   ?: 0) > 0  -> plan!!.carbs
+        val carbs = when {
+            (frozen?.carbs ?: 0) > 0  -> frozen?.carbs ?: 200
+            (plan?.carbs   ?: 0) > 0  -> plan?.carbs   ?: 200
             else                      -> 200
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 200)
-
-    /** Ciljne maščobe [g]: frozen → plan → fallback 60 g */
-    val targetFat: StateFlow<Int> = combine(
-        _frozenTargets,
-        _nutritionPlanPair
-    ) { frozen, planPair ->
-        val plan = planPair.first
-        when {
-            (frozen?.fat ?: 0) > 0  -> frozen!!.fat!!
-            (plan?.fat   ?: 0) > 0  -> plan!!.fat
+        val fat = when {
+            (frozen?.fat ?: 0) > 0  -> frozen?.fat ?: 60
+            (plan?.fat   ?: 0) > 0  -> plan?.fat   ?: 60
             else                    -> 60
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
+
+        NutritionTargets(calories = calories, protein = protein, carbs = carbs, fat = fat)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        NutritionTargets()
+    )
 
     /**
      * Nastavi BMR in cilj, ko je plan/profil naložen.

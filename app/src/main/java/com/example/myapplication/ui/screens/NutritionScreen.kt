@@ -125,11 +125,13 @@ fun NutritionScreen(
     val isLoading by nutritionViewModel.isLoading.collectAsState()
     // Faza 16.1: navigating stanje za takojšen odziv ob kliku na +
     val isNavigating by nutritionViewModel.isNavigating.collectAsState()
-    // Faza 29.5: Kalorični in makro cilji — SSOT iz NutritionViewModel (ni ugibanja v UI)
-    val targetCalories by nutritionViewModel.targetCalories.collectAsState()
-    val targetProtein  by nutritionViewModel.targetProtein.collectAsState()
-    val targetCarbs    by nutritionViewModel.targetCarbs.collectAsState()
-    val targetFat      by nutritionViewModel.targetFat.collectAsState()
+    // Faza 29.6: En atomarni NutritionTargets StateFlow — brez UI tearing, brez !! operatorja.
+    // UI prejema vse 4 cilje hkrati iz enega combine bloka v ViewModelu.
+    val targets by nutritionViewModel.nutritionTargets.collectAsState()
+    val targetCalories = targets.calories
+    val targetProtein  = targets.protein
+    val targetCarbs    = targets.carbs
+    val targetFat      = targets.fat
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
