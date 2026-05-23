@@ -761,6 +761,8 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                         profileHeight      = state.profileHeight,
                         goldenRatioResults = state.data,
                         isSaving           = state.isSaving,
+                        // Faza 31.2: inline napaka vnosa (ne zamenja zaslona)
+                        inputErrorRes      = state.inputErrorRes,
                         onMeasurementsChanged = { shoulder, waist, hip, height ->
                             bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
                         },
@@ -803,6 +805,8 @@ fun BodyGoldenRatioSection(
     profileHeight: Double?,
     goldenRatioResults: com.example.myapplication.domain.model.BodyGoldenRatioResult?,
     isSaving: Boolean = false,
+    /** Faza 31.2 — R.string.* ID inline validacijske napake; null = vnos je veljaven. */
+    inputErrorRes: Int? = null,
     onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit,
     onSave: ((shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit)? = null
 ) {
@@ -871,6 +875,8 @@ fun BodyGoldenRatioSection(
                     },
                     label = { Text(field.label, color = Color(0xFFB6C6E6)) },
                     suffix = { Text("cm", color = Color(0xFFB6C6E6)) },
+                    // Faza 31.2: isError = true obarva obrobo in napis v rdečo
+                    isError = inputErrorRes != null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -878,17 +884,46 @@ fun BodyGoldenRatioSection(
                         focusedBorderColor   = MaterialTheme.colorScheme.secondary,
                         unfocusedBorderColor = Color(0xFF6B7A99),
                         focusedTextColor     = Color.White,
-                        unfocusedTextColor   = Color.White
+                        unfocusedTextColor   = Color.White,
+                        // isError = true → override na rdeče (Material3 privzeto)
+                        errorBorderColor     = MaterialTheme.colorScheme.error,
+                        errorLabelColor      = MaterialTheme.colorScheme.error,
+                        errorCursorColor     = MaterialTheme.colorScheme.error
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
             }
 
+            // Faza 31.2 — Inline validacijska napaka pod vnosnimi polji
+            // Vnosna polja OSTANEJO aktivna — uporabnik lahko takoj popravi vnos
+            if (inputErrorRes != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, top = 2.dp, bottom = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text  = stringResource(inputErrorRes),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
             // Faza 30.8 — Gumb za shranjevanje z isSaving debouncing
             // Prikazan samo če je onSave callback registriran
             if (onSave != null) {
-                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank()
+                // Faza 31.2: inputErrorRes != null → gumb onemogočen (neveljavni vnosi)
+                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank() && inputErrorRes == null
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {

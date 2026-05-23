@@ -73,15 +73,20 @@ sealed interface GoldenRatioUiState {
      * @param profileHeight  Višina iz profila (za prikaz in izračun pas/višina razmerja)
      * @param data           Rezultat izračuna; null dokler uporabnik ne vnese meritev
      * @param isSaving       true med Firestore batch write — gumb onemogočen
+     * @param inputErrorRes  Faza 31.2 — R.string.* ID inline validacijske napake vnosa;
+     *                       null = vnos je veljaven ali prazen.
+     *                       Prikaže se pod vnosnimi polji, ne zamenja celotnega zaslona.
      */
     data class Success(
         val profileHeight: Double?,
         val data: BodyGoldenRatioResult?,
-        val isSaving: Boolean = false
+        val isSaving: Boolean = false,
+        val inputErrorRes: Int? = null
     ) : GoldenRatioUiState
 
     /**
-     * Napaka pri izračunu (neveljavne vrednosti).
+     * Napaka pri inicializaciji zaslona (npr. izpad Firestore med nalaganjem profila).
+     * NI namenjen validacijskim napakam vnosa — za to se uporablja [Success.inputErrorRes].
      * @param messageRes  ID string resursa (R.string.*) — lokalizabilen, brez Context v VM
      */
     data class Error(val messageRes: Int) : GoldenRatioUiState
@@ -217,12 +222,15 @@ class BodyModuleHomeViewModel(
 
     /**
      * Faza 31.1 — ENOTEN UI STATE za Golden Ratio sekcijo.
+     * Faza 31.2 — IllegalArgumentException → Success(inputErrorRes=...) namesto Error stanja.
      *
      * Kombinira 3 vire (bodyProfile + _bodyMeasurements + _isSaving) v en atomaren tok.
      * Stanje:
      *   bodyProfile == null          → Loading  (Firestore še ni odgovoril)
      *   bodyProfile != null          → Success  (pokaži vnose, opcijsko result)
-     *   IllegalArgumentException     → Error    (vrednosti zunaj 30–250 cm)
+     *   IllegalArgumentException     → Success(inputErrorRes=R.string.*)
+     *                                  Vnosna polja ostanejo vidna in aktivna!
+     *   GoldenRatioUiState.Error     → rezervirano za prihodnje Firestore napake
      */
     val goldenRatioUiState: StateFlow<GoldenRatioUiState> = combine(
         bodyProfile,
@@ -232,25 +240,44 @@ class BodyModuleHomeViewModel(
         when {
             profile == null -> GoldenRatioUiState.Loading
             else -> {
-                val result = if (measurements.shoulderCm > 0.0 && measurements.waistCm > 0.0) {
+                // Poskusi izračun samo ko sta obe obvezni vrednosti vneseni
+                if (measurements.shoulderCm > 0.0 && measurements.waistCm > 0.0) {
                     try {
-                        calculateBodyGoldenRatio(
+                        val result = calculateBodyGoldenRatio(
                             shoulderCm = measurements.shoulderCm,
                             waistCm    = measurements.waistCm,
                             hipCm      = measurements.hipCm,
                             heightCm   = profile.height ?: measurements.heightCm,
                             isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
                         )
+                        // Uspešen izračun → Success z rezultatom, brez napake vnosa
+                        GoldenRatioUiState.Success(
+                            profileHeight = profile.height,
+                            data          = result,
+                            isSaving      = saving,
+                            inputErrorRes = null
+                        )
                     } catch (e: IllegalArgumentException) {
-                        android.util.Log.e("BodyModuleHomeVM", "Golden ratio calc error: ${e.message}")
-                        return@combine GoldenRatioUiState.Error(R.string.error_invalid_measurements)
+                        // Faza 31.2: vrednosti zunaj bioloških meja (30–250 cm)
+                        // → OSTANEMO v Success, ne zamenjamo zaslona!
+                        // inputErrorRes prikaže inline napako pod vnosnimi polji.
+                        android.util.Log.w("BodyModuleHomeVM", "Inline input error: ${e.message}")
+                        GoldenRatioUiState.Success(
+                            profileHeight = profile.height,
+                            data          = null,
+                            isSaving      = saving,
+                            inputErrorRes = R.string.error_invalid_measurements
+                        )
                     }
-                } else null
-                GoldenRatioUiState.Success(
-                    profileHeight = profile.height,
-                    data          = result,
-                    isSaving      = saving
-                )
+                } else {
+                    // Polja prazna ali niso vneseni — čisto stanje brez napak
+                    GoldenRatioUiState.Success(
+                        profileHeight = profile.height,
+                        data          = null,
+                        isSaving      = saving,
+                        inputErrorRes = null
+                    )
+                }
             }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GoldenRatioUiState.Loading)
