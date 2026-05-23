@@ -74,13 +74,19 @@ sealed interface GoldenRatioUiState {
     /**
      * Profil naložen — pokaži celotni vmesnik z vnosi.
      * @param profileHeight  Višina iz profila (za prikaz in izračun pas/višina razmerja)
+     * @param shoulderInput  Faza 31.4 — surovi vnos za ramena (String, ne Double)
+     * @param waistInput     Faza 31.4 — surovi vnos za pas
+     * @param hipInput       Faza 31.4 — surovi vnos za boke (prazno = ni vnosu)
      * @param data           Rezultat izračuna; null dokler vnos ni veljaven
      * @param isSaving       true med Firestore batch write — gumb onemogočen
-     * @param invalidFields  Faza 31.3 — set polj, ki so zunaj bioloških meja (30–250 cm).
-     *                       Prazen = vsi vnosi veljavni. UI nastavi isError SAMO na teh poljih.
+     * @param invalidFields  Set polj, ki so zunaj bioloških meja (30–250 cm).
+     *                       Prazen set = vsi vnosi veljavni. UI nastavi isError SAMO na teh poljih.
      */
     data class Success(
         val profileHeight: Double?,
+        val shoulderInput: String = "",
+        val waistInput: String = "",
+        val hipInput: String = "",
         val data: BodyGoldenRatioResult?,
         val isSaving: Boolean = false,
         val invalidFields: Set<BodyField> = emptySet()
@@ -103,6 +109,17 @@ data class BodyMeasurementsInput(
     val waistCm: Double    = 0.0,
     val hipCm: Double      = 0.0,
     val heightCm: Double   = 0.0  // fallback, če profil nima višine
+)
+
+/**
+ * Faza 31.4 — Surovi tekstovni vnosi za telesne mere.
+ * Nahajajo se v ViewModel StateFlow (ne v lokalni Compose state!) →
+ * preživijo UI state tranzicije (Loading → Success itd.) brez izgube.
+ */
+data class BodyMeasurementsInputText(
+    val shoulder: String = "",
+    val waist: String    = "",
+    val hip: String      = ""
 )
 
 data class Challenge(
@@ -215,44 +232,50 @@ class BodyModuleHomeViewModel(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // ── Faza 30.1 — Vhodni podatki za Golden Ratio (iz UI vnosa) ─────────────
-    /** UI kliče [updateBodyMeasurements] ko uporabnik vnese obsege. */
-    private val _bodyMeasurements = MutableStateFlow(BodyMeasurementsInput())
+    // ── Faza 30.1 → Faza 31.4 — Vhodni teksti (String, ne Double) v ViewModel ─
+    /**
+     * Faza 31.4 — Surovi vnosi so StateFlow v ViewModel (ne lokalni rememberSaveable).
+     * Preživijo vsak UI state transition (Loading ↔ Success) brez izgube vrednosti.
+     */
+    private val _inputText = MutableStateFlow(BodyMeasurementsInputText())
 
     // ── Faza 30.8 — Stanje shranjevanja (interno — javno prek goldenRatioUiState) ─
     private val _isSaving = MutableStateFlow(false)
 
     /**
      * Faza 31.1 — ENOTEN UI STATE za Golden Ratio sekcijo.
-     * Faza 31.3 — Zamenjava try-catch z ValidationResult mapiranjem.
+     * Faza 31.4 — Input strings so del Success stanja → UI vidi točno kar je vtipkal.
      *
-     * Kombinira 3 vire (bodyProfile + _bodyMeasurements + _isSaving) v en atomaren tok.
-     * Stanje:
-     *   bodyProfile == null               → Loading  (Firestore še ni odgovoril)
-     *   ValidationResult.Success          → Success(data=result, invalidFields=emptySet())
-     *   ValidationResult.Invalid(fields)  → Success(data=null, invalidFields=fields)
-     *                                       UI obarva SAMO napačna polja!
-     *   GoldenRatioUiState.Error          → rezervirano za prihodnje Firestore napake
+     * Kombinira 3 vire (bodyProfile + _inputText + _isSaving) v en atomaren tok.
+     * Parsing string→Double se dogaja TUKAJ — UI ostane čist (ne operira s float-i).
      */
     val goldenRatioUiState: StateFlow<GoldenRatioUiState> = combine(
         bodyProfile,
-        _bodyMeasurements,
+        _inputText,
         _isSaving
-    ) { profile, measurements, saving ->
+    ) { profile, texts, saving ->
+        // Parsiraj enkrat v combine (EU format: "85,5" → 85.5)
+        val shoulderCm = texts.shoulder.replace(",", ".").toDoubleOrNull() ?: 0.0
+        val waistCm    = texts.waist.replace(",", ".").toDoubleOrNull() ?: 0.0
+        val hipCm      = texts.hip.replace(",", ".").toDoubleOrNull() ?: 0.0
+
         when {
             profile == null -> GoldenRatioUiState.Loading
             else -> {
                 // Kliči UseCase samo ko sta obe obvezni vrednosti vneseni
-                if (measurements.shoulderCm > 0.0 && measurements.waistCm > 0.0) {
+                if (shoulderCm > 0.0 && waistCm > 0.0) {
                     when (val validation = calculateBodyGoldenRatio(
-                        shoulderCm = measurements.shoulderCm,
-                        waistCm    = measurements.waistCm,
-                        hipCm      = measurements.hipCm,
-                        heightCm   = profile.height ?: measurements.heightCm,
+                        shoulderCm = shoulderCm,
+                        waistCm    = waistCm,
+                        hipCm      = hipCm,
+                        heightCm   = profile.height ?: 0.0,
                         isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
                     )) {
                         is ValidationResult.Success -> GoldenRatioUiState.Success(
                             profileHeight = profile.height,
+                            shoulderInput = texts.shoulder,
+                            waistInput    = texts.waist,
+                            hipInput      = texts.hip,
                             data          = validation.data,
                             isSaving      = saving,
                             invalidFields = emptySet()
@@ -264,17 +287,23 @@ class BodyModuleHomeViewModel(
                             )
                             GoldenRatioUiState.Success(
                                 profileHeight = profile.height,
+                                // Faza 31.4: vnosni teksti OHRANJENI — ni izpraznjenja
+                                shoulderInput = texts.shoulder,
+                                waistInput    = texts.waist,
+                                hipInput      = texts.hip,
                                 data          = null,
                                 isSaving      = saving,
-                                // Faza 31.3: samo napačna polja dobijo isError=true v UI
                                 invalidFields = validation.invalidFields
                             )
                         }
                     }
                 } else {
-                    // Prazna ali nepopolna polja — čisto stanje brez napak
+                    // Polja prazna ali nepopolna — čisto stanje
                     GoldenRatioUiState.Success(
                         profileHeight = profile.height,
+                        shoulderInput = texts.shoulder,
+                        waistInput    = texts.waist,
+                        hipInput      = texts.hip,
                         data          = null,
                         isSaving      = saving,
                         invalidFields = emptySet()
@@ -284,14 +313,27 @@ class BodyModuleHomeViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GoldenRatioUiState.Loading)
 
-    /** Kliče UI ko vnese meritve (obseg ramen, pas, boki). */
+    /**
+     * Faza 31.4 — Posodobi surove vnosne tekste (iz UI TextField).
+     * Parsing string→Double se izvaja v combine, ne tukaj.
+     */
+    fun updateInputText(shoulder: String, waist: String, hip: String) {
+        _inputText.value = BodyMeasurementsInputText(shoulder, waist, hip)
+    }
+
+    /** Faza 30.1 kliče UI ko vnese meritve — obdržano za morebitne klice od drugod. */
     fun updateBodyMeasurements(
         shoulderCm: Double,
         waistCm: Double,
         hipCm: Double = 0.0,
         heightCm: Double = 0.0
     ) {
-        _bodyMeasurements.value = BodyMeasurementsInput(shoulderCm, waistCm, hipCm, heightCm)
+        // Delegiraj na updateInputText — pretvori nazaj v string za konsistentnost
+        _inputText.value = BodyMeasurementsInputText(
+            shoulder = if (shoulderCm > 0) shoulderCm.toString() else "",
+            waist    = if (waistCm    > 0) waistCm.toString()    else "",
+            hip      = if (hipCm      > 0) hipCm.toString()      else ""
+        )
     }
 
     // ── Faza 30.9 — Enkratni UI dogodki (Channel = natanko en sprejem) ────────

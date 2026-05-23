@@ -54,13 +54,15 @@ class CalculateBodyGoldenRatioUseCase {
         isMale: Boolean = true
     ): ValidationResult {
 
-        // Faza 31.3 — Per-field validacija: zgradi set neveljavnih polj
+        // Faza 31.4 — Simetrična logika za vsa polja:
+        //   0.0 = polje ni izpolnjeno → preskoči validacijo (enako kot HIP in HEIGHT)
+        //   Faza 31.3: zgradi set neveljavnih polj
         val invalidFields = mutableSetOf<BodyField>()
 
-        if (shoulderCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+        if (shoulderCm != 0.0 && shoulderCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
             invalidFields.add(BodyField.SHOULDER)
         }
-        if (waistCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
+        if (waistCm != 0.0 && waistCm !in MIN_CIRCUMFERENCE_CM..MAX_CIRCUMFERENCE_CM) {
             invalidFields.add(BodyField.WAIST)
         }
         // hipCm = 0.0 pomeni ni vnosu → preskoči validacijo
@@ -125,4 +127,5 @@ class CalculateBodyGoldenRatioUseCase {
         )
     }
 }
+
 

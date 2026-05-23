@@ -761,14 +761,15 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                 is GoldenRatioUiState.Success -> {
                     BodyGoldenRatioSection(
                         profileHeight      = state.profileHeight,
+                        // Faza 31.4: strings iz VM stanja (ne lokalnih vars)
+                        shoulderInput      = state.shoulderInput,
+                        waistInput         = state.waistInput,
+                        hipInput           = state.hipInput,
                         goldenRatioResults = state.data,
                         isSaving           = state.isSaving,
-                        // Faza 31.3: per-field napake (nadomešča inputErrorRes: Int?)
                         invalidFields      = state.invalidFields,
-                        onMeasurementsChanged = { shoulder, waist, hip, height ->
-                            bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
-                        },
-                        onSave = { shoulder, waist, hip, height ->
+                        onInputChanged     = { s, w, h -> bodyVm.updateInputText(s, w, h) },
+                        onSave             = { shoulder, waist, hip, height ->
                             bodyVm.saveBodyMeasurements(shoulder, waist, hip, height)
                         }
                     )
@@ -795,31 +796,27 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
 
 /**
  * Faza 30.1 — Pasivni UI za telesni Zlati Rez.
- *
- * ARHITEKTURA:
- *   ✅ Ne drži surovih computed rezultatov — samo izrisuje [goldenRatioResults] iz VM.
- *   ✅ Stanje preživi rotacijo zaslona (ViewModel ostane živ).
- *   ✅ Profil se bere reaktivno (Firestore snapshot listener).
- *   ✅ Višina se avtomatsko napolni iz profila.
+ * Faza 31.4 — Input strings prihajajo iz VM stanja (ne lokalnega rememberSaveable).
+ *   Preživijo vsak UI state transition in config change brez izgube vrednosti.
  */
 @Composable
 fun BodyGoldenRatioSection(
     profileHeight: Double?,
+    /** Faza 31.4 — surovi vnosni teksti iz GoldenRatioUiState.Success */
+    shoulderInput: String,
+    waistInput: String,
+    hipInput: String,
     goldenRatioResults: com.example.myapplication.domain.model.BodyGoldenRatioResult?,
     isSaving: Boolean = false,
     /**
      * Faza 31.3 — Set polj, ki so zunaj bioloških meja (30–250 cm).
      * UI nastavi isError = true SAMO na poljih znotraj tega seta.
-     * Prazen set = vsi vnosi veljavni.
      */
     invalidFields: Set<BodyField> = emptySet(),
-    onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit,
+    /** Faza 31.4 — Callback z surovimi string vrednostmi (parsing je v VM) */
+    onInputChanged: (shoulder: String, waist: String, hip: String) -> Unit,
     onSave: ((shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit)? = null
 ) {
-    // rememberSaveable → preživi config change
-    var shoulderInput by rememberSaveable { mutableStateOf("") }
-    var waistInput    by rememberSaveable { mutableStateOf("") }
-    var hipInput      by rememberSaveable { mutableStateOf("") }
     // Višina iz profila — samo kot prikazna vrednost
     val heightDisplay = profileHeight?.let { "${"%.0f".format(it)} cm" } ?: "—"
 
@@ -853,34 +850,26 @@ fun BodyGoldenRatioSection(
             Spacer(Modifier.height(12.dp))
 
             // Vnos meritev
-            // Faza 31.3 — FieldConfig nosi BodyField za per-field isError mapiranje
+            // Faza 31.4 — FieldConfig: value iz VM stanja, onChange pošlje vse 3 stringe nazaj
+            // Ne potrebujemo forEachIndexed z idx — vsak field ima lastni lambda z ustreznimi refs
             data class FieldConfig(
                 val bodyField: BodyField,
                 val label: String,
                 val value: String,
-                val onChange: (String) -> Unit
+                val onValueChange: (String) -> Unit
             )
             val fields = listOf(
-                FieldConfig(BodyField.SHOULDER, "Obseg ramen (cm)", shoulderInput, { shoulderInput = it }),
-                FieldConfig(BodyField.WAIST,    "Obseg pasu (cm)",  waistInput,    { waistInput    = it }),
-                FieldConfig(BodyField.HIP,      "Obseg bokov (cm)", hipInput,      { hipInput      = it })
+                FieldConfig(BodyField.SHOULDER, "Obseg ramen (cm)", shoulderInput,
+                    { newVal -> onInputChanged(newVal, waistInput, hipInput) }),
+                FieldConfig(BodyField.WAIST,    "Obseg pasu (cm)",  waistInput,
+                    { newVal -> onInputChanged(shoulderInput, newVal, hipInput) }),
+                FieldConfig(BodyField.HIP,      "Obseg bokov (cm)", hipInput,
+                    { newVal -> onInputChanged(shoulderInput, waistInput, newVal) })
             )
-            fields.forEachIndexed { idx, field ->
+            fields.forEach { field ->
                 OutlinedTextField(
                     value = field.value,
-                    onValueChange = { raw ->
-                        field.onChange(raw)
-                        // Uporabi `raw` za trenutno polje — ne čaka na rekomposicijo
-                        val s = if (idx == 0) raw else shoulderInput
-                        val w = if (idx == 1) raw else waistInput
-                        val h = if (idx == 2) raw else hipInput
-                        onMeasurementsChanged(
-                            s.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                            w.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                            h.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                            profileHeight ?: 0.0
-                        )
-                    },
+                    onValueChange = field.onValueChange,
                     label = { Text(field.label, color = Color(0xFFB6C6E6)) },
                     suffix = { Text("cm", color = Color(0xFFB6C6E6)) },
                     // Faza 31.3: isError = true SAMO na poljih, ki so v invalidFields setu
@@ -902,9 +891,7 @@ fun BodyGoldenRatioSection(
                 )
             }
 
-            // Faza 31.3 — Inline validacijska napaka pod vnosnimi polji
-            // Vidna SAMO ko vsaj eno polje presega biološke meje
-            // Vnosna polja OSTANEJO aktivna — uporabnik popravi samo napačno polje
+            // Inline validacijska napaka pod polji (vidna samo ko je vsaj eno polje neveljavno)
             if (invalidFields.isNotEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -927,15 +914,15 @@ fun BodyGoldenRatioSection(
                 }
             }
 
-            // Faza 30.8 — Gumb za shranjevanje z isSaving debouncing
-            // Prikazan samo če je onSave callback registriran
+            // Gumb za shranjevanje
             if (onSave != null) {
-                // Faza 31.3: invalidFields.isEmpty() — ne shranimo neveljavnih vrednosti
+                // Faza 31.4: canSave bere iz string parametrov (ne lokalnih vars)
                 val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank() && invalidFields.isEmpty()
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
                         if (!isSaving && canSave) {
+                            // Parsiraj v Double za onSave callback (backward compat)
                             onSave(
                                 shoulderInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
                                 waistInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
@@ -944,7 +931,6 @@ fun BodyGoldenRatioSection(
                             )
                         }
                     },
-                    // Faza 30.8: strogo onemogočen med shranjevanjem → fizično preprečuje dvojne klike
                     enabled = canSave && !isSaving,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -956,7 +942,6 @@ fun BodyGoldenRatioSection(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     if (isSaving) {
-                        // Zamenjaj tekst z indikatorjem napredka
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             color = Color(0xFF2A1810),
