@@ -17,6 +17,7 @@ import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.data.repository.OfflineFirstWorkoutRepository
+import com.example.myapplication.data.profile.FirestoreUserProfileRepository
 import com.example.myapplication.data.repository.UserWorkoutStatsRepository
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
@@ -64,7 +65,8 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
                 GetBodyMetricsUseCase(statsRepo),
                 UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
                 SwapPlanDaysUseCase(),
-                gamificationUseCase  // Faza 4b: za CompleteRestDay stretching logiko
+                gamificationUseCase,          // Faza 4b: za CompleteRestDay stretching logiko
+                FirestoreUserProfileRepository() // Faza 30.1: reaktivni profil prek vmesnika
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

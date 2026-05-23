@@ -2,21 +2,41 @@ package com.example.myapplication.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.BodyGoldenRatioResult
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
+import com.example.myapplication.domain.profile.UserProfileRepository
+import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/**
+ * Faza 30.1 — Vhodni podatki za telesni Zlati Rez.
+ * shoulderCm/waistCm = 0.0 pomeni: ni vnosa → goldenRatioResults = null.
+ */
+data class BodyMeasurementsInput(
+    val shoulderCm: Double = 0.0,
+    val waistCm: Double    = 0.0,
+    val hipCm: Double      = 0.0,
+    val heightCm: Double   = 0.0  // fallback, če profil nima višine
+)
 
 data class Challenge(
     val id: String,
@@ -81,8 +101,73 @@ class BodyModuleHomeViewModel(
     private val getBodyMetrics: GetBodyMetricsUseCase,
     private val updateBodyMetrics: UpdateBodyMetricsUseCase,
     private val swapPlanDays: SwapPlanDaysUseCase,
-    private val gamificationUseCase: ManageGamificationUseCase? = null
+    private val gamificationUseCase: ManageGamificationUseCase? = null,
+    // Faza 30.1: DI vmesnik — reaktivni profil (NE kličemo impl direktno)
+    private val userProfileRepository: UserProfileRepository? = null
 ) : ViewModel() {
+
+    // ── Faza 30.1 — Domain Use Case za telesni Zlati Rez ──────────────────────
+    private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
+
+    // ── Faza 30.1 — Reaktivni profil iz Firestorea ────────────────────────────
+    /**
+     * Reaktivni profil iz UserProfileRepository vmesnika.
+     * null dokler email ni znan ali repository ni injektiran.
+     * Preživi rotacijo zaslona — ViewModel ostane živ med config change.
+     */
+    val bodyProfile: StateFlow<UserProfile?> = run {
+        val email = FirebaseAuth.getInstance().currentUser?.email
+        if (userProfileRepository != null && email != null) {
+            userProfileRepository.observeUserProfile(email)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        } else {
+            flowOf<UserProfile?>(null)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        }
+    }
+
+    // ── Faza 30.1 — Vhodni podatki za Golden Ratio (iz UI vnosa) ─────────────
+    /** UI kliče [updateBodyMeasurements] ko uporabnik vnese obsege. */
+    private val _bodyMeasurements = MutableStateFlow(BodyMeasurementsInput())
+
+    /**
+     * Reaktivni rezultati telesnega Zlatega Reza.
+     * Kombinira profil (višina, spol) z ročno vnesenimi meritvami.
+     * null kadar obseg ramen ali pasu ni vnesen.
+     *
+     * Faza 30.1 — Pasiven UI:
+     *   UI NE računa — samo bere ta StateFlow in izriše vrednosti.
+     */
+    val goldenRatioResults: StateFlow<BodyGoldenRatioResult?> = combine(
+        bodyProfile,
+        _bodyMeasurements
+    ) { profile, measurements ->
+        if (measurements.shoulderCm <= 0.0 || measurements.waistCm <= 0.0) return@combine null
+        try {
+            calculateBodyGoldenRatio(
+                shoulderCm = measurements.shoulderCm,
+                waistCm    = measurements.waistCm,
+                hipCm      = measurements.hipCm,
+                heightCm   = profile?.height ?: measurements.heightCm,
+                isMale     = profile?.gender?.equals("Male", ignoreCase = true) ?: true
+            )
+        } catch (e: IllegalArgumentException) {
+            android.util.Log.e("BodyModuleHomeVM", "Golden ratio calc error: ${e.message}")
+            null
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Kliče UI ko vnese meritve (obseg ramen, pas, boki). */
+    fun updateBodyMeasurements(
+        shoulderCm: Double,
+        waistCm: Double,
+        hipCm: Double = 0.0,
+        heightCm: Double = 0.0
+    ) {
+        _bodyMeasurements.value = BodyMeasurementsInput(shoulderCm, waistCm, hipCm, heightCm)
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
 
     private val _ui = MutableStateFlow(BodyHomeUiState())
     val ui: StateFlow<BodyHomeUiState> = _ui.asStateFlow()

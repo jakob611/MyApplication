@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -43,6 +45,7 @@ import kotlin.math.*
 import com.example.myapplication.domain.looksmaxing.models.*
 import com.example.myapplication.domain.looksmaxing.CalculateGoldenRatioUseCase
 import com.example.myapplication.domain.looksmaxing.FaceDetectorProvider
+import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 
 @Composable
 fun AutoAnalysisSection() {
@@ -648,11 +651,18 @@ fun MLKitScanningOverlay(
 }
 
 // ── Navigacijski wrapper ─────────────────────────────────────────────────────
-// Ovije obstoječo AutoAnalysisSection() v Scaffold z nazaj gumbom.
-// Nova logika: NE. Samo navigacijski okvir.
+// Faza 30.1: UI je PASIVEN — bere stanje iz ViewModela, ne drži surovih podatkov.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoldenRatioScreen(onBack: () -> Unit = {}) {
+    val context = LocalContext.current
+    // Pasivno opazovanje iz ViewModela — brez lokalnih surovih podatkov profila
+    val bodyVm: BodyModuleHomeViewModel = viewModel(
+        factory = com.example.myapplication.ui.screens.MyViewModelFactory(context.applicationContext)
+    )
+    val profile by bodyVm.bodyProfile.collectAsState()
+    val goldenRatioResults by bodyVm.goldenRatioResults.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -672,7 +682,171 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // ── Sekcija 1: Obrazna analiza (kamera / galerija) ─────────────────
             AutoAnalysisSection()
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(16.dp))
+
+            // ── Sekcija 2: Telesni Zlati Rez (Faza 30.1 — pasiven UI) ──────────
+            BodyGoldenRatioSection(
+                profileHeight = profile?.height,
+                goldenRatioResults = goldenRatioResults,
+                onMeasurementsChanged = { shoulder, waist, hip, height ->
+                    bodyVm.updateBodyMeasurements(shoulder, waist, hip, height)
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Faza 30.1 — Pasivni UI za telesni Zlati Rez.
+ *
+ * ARHITEKTURA:
+ *   ✅ Ne drži surovih computed rezultatov — samo izrisuje [goldenRatioResults] iz VM.
+ *   ✅ Stanje preživi rotacijo zaslona (ViewModel ostane živ).
+ *   ✅ Profil se bere reaktivno (Firestore snapshot listener).
+ *   ✅ Višina se avtomatsko napolni iz profila.
+ */
+@Composable
+fun BodyGoldenRatioSection(
+    profileHeight: Double?,
+    goldenRatioResults: com.example.myapplication.domain.model.BodyGoldenRatioResult?,
+    onMeasurementsChanged: (shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit
+) {
+    // rememberSaveable → preživi config change
+    var shoulderInput by rememberSaveable { mutableStateOf("") }
+    var waistInput    by rememberSaveable { mutableStateOf("") }
+    var hipInput      by rememberSaveable { mutableStateOf("") }
+    // Višina iz profila — samo kot prikazna vrednost
+    val heightDisplay = profileHeight?.let { "${"%.0f".format(it)} cm" } ?: "—"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(6.dp, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2340)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "🏆 Telesni Zlati Rez (Adonis Index)",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                "Idealno razmerje ramen/pas ≈ 1.618 (φ)",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF8899BB)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // Višina iz profila (samo-prikazna)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Višina (iz profila): ", color = Color(0xFFB6C6E6), style = MaterialTheme.typography.bodyMedium)
+                Text(heightDisplay, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(12.dp))
+
+            // Vnos meritev
+            listOf(
+                Triple("Obseg ramen (cm)", shoulderInput, { v: String -> shoulderInput = v }),
+                Triple("Obseg pasu (cm)",  waistInput,    { v: String -> waistInput    = v }),
+                Triple("Obseg bokov (cm)", hipInput,      { v: String -> hipInput      = v })
+            ).forEach { (label, value, onChange) ->
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { raw ->
+                        onChange(raw)
+                        // Takoj pošljemo v ViewModel — UI NE računa
+                        onMeasurementsChanged(
+                            shoulderInput.toDoubleOrNull() ?: 0.0,
+                            waistInput.toDoubleOrNull()    ?: 0.0,
+                            hipInput.toDoubleOrNull()      ?: 0.0,
+                            profileHeight ?: 0.0
+                        )
+                    },
+                    label = { Text(label, color = Color(0xFFB6C6E6)) },
+                    suffix = { Text("cm", color = Color(0xFFB6C6E6)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = MaterialTheme.colorScheme.secondary,
+                        unfocusedBorderColor = Color(0xFF6B7A99),
+                        focusedTextColor     = Color.White,
+                        unfocusedTextColor   = Color.White
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+            }
+
+            // Pasivni prikaz rezultatov iz ViewModela
+            goldenRatioResults?.let { r ->
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1810))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            r.status,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Razmerje ramen/pas: ${"%.3f".format(r.shoulderToWaistRatio)} (φ ≈ 1.618)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                        if (r.waistToHeightRatio > 0.0) {
+                            Text(
+                                "Razmerje pas/višina: ${"%.3f".format(r.waistToHeightRatio)} (ideal < 0.50)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFB6C6E6)
+                            )
+                        }
+                        if (r.shoulderToHipRatio > 0.0) {
+                            Text(
+                                "Razmerje ramen/boki: ${"%.3f".format(r.shoulderToHipRatio)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFB6C6E6)
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Skupni rezultat: ${"%.0f".format(r.overallScore * 100)}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Odmik od φ: ${"%.1f".format(r.deviationFromPhi * 100)}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF8899BB)
+                        )
+                    }
+                }
+            } ?: run {
+                if (shoulderInput.isNotBlank() || waistInput.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Vnesi obseg ramen in pasu za izračun.",
+                        color = Color(0xFF8899BB),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
 }
