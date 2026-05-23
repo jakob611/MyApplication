@@ -56,7 +56,6 @@ import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.ui.components.XPPopup
 import com.example.myapplication.ui.screens.MyViewModelFactory
-import com.example.myapplication.ui.progress.ProgressViewModel
 import com.example.myapplication.ui.theme.UppColors
 
 // Data holders
@@ -108,6 +107,8 @@ fun ProgressScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope() // DODANO: Proper coroutine scope namesto GlobalScope
+    // Faza 29.2: ProgressViewModel prevzame pisanje v WeightPredictorStore — ni več SideEffect iz UI
+    val progressViewModel: ProgressViewModel = viewModel(factory = MyViewModelFactory(context))
     val uid = remember { FirestoreHelper.getCurrentUserDocId() }
     var dailyLogs by remember { mutableStateOf<List<DailyLogSummary>>(emptyList()) }
     var weightLogs by remember { mutableStateOf<List<WeightLog>>(emptyList()) }
@@ -186,27 +187,30 @@ fun ProgressScreen(
     // ── Faza 7: Weight Predictor ──────────────────────────────────────────────────────────────────
     // Podatki: weightLogs (EMA) + dailyLogs zadnjih 7 dni (avg balance)
     //
-    // P1 POPRAVEK (Faza 29.1): computeWeightPrediction() je zdaj čista funkcija brez stranskih učinkov.
-    // WeightPredictorStore mutacije so prestavljene v SideEffect {} — edini korekten Compose API za
-    // propagacijo podatkov v eksterne singletone po uspešni rekomposiciji.
+    // Faza 29.2: computeWeightPrediction() ostane čista funkcija v remember() bloku.
+    // Pisanje v WeightPredictorStore je prestavljeno iz SideEffect v LaunchedEffect(key) → ProgressViewModel.
+    // LaunchedEffect se sproži SAMO ob spremembi weightPredictionFull (ne ob vsaki rekomposiciji kot SideEffect).
     val weightPredictionFull: WeightPredictionFull? = remember(weightLogs, dailyLogs, burnedByDay, userProfile) {
         computeWeightPrediction(weightLogs, dailyLogs, burnedByDay, userProfile)
     }
     val weightPrediction: WeightPredictionDisplay? = weightPredictionFull?.display
-    // SideEffect: zagotavlja, da se WeightPredictorStore posodobi enkrat po vsaki uspešni rekomposiciji
-    SideEffect {
+
+    // Faza 29.2: LaunchedEffect(key) namesto SideEffect — sproži se le ob spremembi podatkov,
+    // ne ob vsaki rekomposiciji. ProgressViewModel piše v WeightPredictorStore v ozadju (viewModelScope).
+    LaunchedEffect(weightPredictionFull) {
         weightPredictionFull?.let { full ->
-            WeightPredictorStore.lastEmaWeightKg         = full.emaWeightKg
-            WeightPredictorStore.lastAvgDailyBalanceKcal = full.avgDailyBalanceKcal
-            WeightPredictorStore.last30DayPredictionKg   = full.predictedWeightIn30Days
-            WeightPredictorStore.lastGoalWeightKg        = full.goalWeightKg
-            WeightPredictorStore.lastGoalDateStr         = full.goalDateStr
-            WeightPredictorStore.lastDaysToGoal          = full.daysToGoal
-            WeightPredictorStore.lastActiveDaysCount     = full.activeDaysCount
-            WeightPredictorStore.lastHybridTDEE          = full.hybridTDEE
-            WeightPredictorStore.lastAdaptiveTDEE        = full.adaptiveTDEE
-            WeightPredictorStore.lastConfidenceFactor    = full.confidenceFactor
-            WeightPredictorStore.isReady                 = true
+            progressViewModel.storePrediction(
+                hybridTDEE      = full.hybridTDEE,
+                adaptiveTDEE    = full.adaptiveTDEE,
+                emaWeightKg     = full.emaWeightKg,
+                avgDailyBalance = full.avgDailyBalanceKcal,
+                predicted30     = full.predictedWeightIn30Days,
+                goalWeightKg    = full.goalWeightKg,
+                goalDateStr     = full.goalDateStr,
+                daysToGoal      = full.daysToGoal,
+                activeDaysCount = full.activeDaysCount,
+                confidenceFactor = full.confidenceFactor
+            )
         }
     }
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1179,7 +1183,7 @@ private data class WeightPredictionFull(
 
 /**
  * Čista funkcija — izračuna napoved teže brez stranskih učinkov.
- * Ne piše v WeightPredictorStore (to naredi [SideEffect] v ProgressScreen).
+ * Ne piše v WeightPredictorStore (to naredi [ProgressViewModel.storePrediction] prek LaunchedEffect).
  * Pokliče se v remember() bloku — samo ob spremembi podatkov.
  */
 private fun computeWeightPrediction(
@@ -1259,8 +1263,8 @@ private fun computeWeightPrediction(
         emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg,
         theoreticalTDEE = theoreticalTDEE
     )
-    // P1 POPRAVEK: NE pišemo v WeightPredictorStore tukaj!
-    // Vrednosti vrnemo v WeightPredictionFull — SideEffect v ProgressScreen jih propagira.
+    // P1/29.2 POPRAVEK: NE pišemo v WeightPredictorStore tukaj!
+    // Vrednosti vrnemo v WeightPredictionFull — LaunchedEffect v ProgressScreen jih posreduje v ProgressViewModel.
     val confidenceValue = when {
         activeDaysWithData.size < 3 -> 0.0
         activeDaysWithData.size <= 5 -> 0.5

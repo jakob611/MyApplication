@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
+import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.Job
@@ -19,18 +20,27 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import android.content.Context
 import android.util.Log
+import com.example.myapplication.data.NutritionPlan
+import com.example.myapplication.data.UserProfile
 import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.repository.FoodRepositoryImpl
+import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.debug.NutritionDebugStore
 import com.example.myapplication.debug.WeightPredictorStore
 import com.example.myapplication.domain.usecase.SyncHealthConnectUseCase
 import com.example.myapplication.data.store.FirestoreHelper
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.Dispatchers
 import java.util.UUID
@@ -72,12 +82,72 @@ data class MacroTotals(
     val satFat      : Double = 0.0
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase
 ) : ViewModel() {
 
     /** Faza 9 — SSOT za kalorični izračun */
     private val calorieTargetUseCase = CalculateDailyCalorieTargetUseCase()
+
+    // ── uidFlow — SSOT za trenutnega uporabnika (mora biti PRVA deklaracija) ───
+    // clearUser() nastavi na null → vse flatMapLatest niti se samodejno prekinejo.
+    private val uidFlow = MutableStateFlow<String?>(FirestoreHelper.getCurrentUserDocId())
+
+    // ── Faza 29.2: Reaktivni profil in plan — ViewModel jih naloži sam, brez LaunchedEffect ──────
+
+    /**
+     * UserProfile — naložen reaktivno iz Firestorea prek Firestore snapshot listener.
+     * Reagira na uidFlow: ko clearUser() nastavi uid=null, se listener avtomatično prekine.
+     * NutritionScreen ne posreduje profila prek LaunchedEffect z logiko — VM je SSOT.
+     */
+    private val _internalProfile: StateFlow<UserProfile?> = uidFlow.flatMapLatest { uid ->
+        if (uid == null) flowOf<UserProfile?>(null)
+        else callbackFlow {
+            val email = Firebase.auth.currentUser?.email ?: ""
+            val docRef = FirestoreHelper.getUserRef(uid)
+            val listener = docRef.addSnapshotListener { snap, err ->
+                if (err != null || snap == null || !snap.exists()) return@addSnapshotListener
+                trySend(UserProfileManager.documentToUserProfile(snap, email))
+            }
+            awaitClose { listener.remove() }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * NutritionPlan — naložen reaktivno enkrat ob spremembi uid.
+     * Pár (plan, isLoaded): plan=null + isLoaded=false → nalaganje; plan=null + isLoaded=true → ni plana.
+     */
+    private val _nutritionPlanPair: StateFlow<Pair<NutritionPlan?, Boolean>> =
+        uidFlow.flatMapLatest { uid ->
+            if (uid == null) flowOf<Pair<NutritionPlan?, Boolean>>(Pair(null, false))
+            else flow {
+                emit(Pair<NutritionPlan?, Boolean>(null, false))
+                val loaded = NutritionPlanStore.loadNutritionPlan(uid)
+                emit(Pair(loaded, true))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Pair(null, false))
+
+    /** Izpostavljen NutritionPlan za UI (targets, frozen snapshots) */
+    val nutritionPlan: StateFlow<NutritionPlan?> = _nutritionPlanPair
+        .map { it.first }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** true ko je NutritionPlanStore.loadNutritionPlan() zaključil (plan = null ali dejanski plan) */
+    val nutritionPlanLoadComplete: StateFlow<Boolean> = _nutritionPlanPair
+        .map { it.second }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * PlanResult (workout plan) — posreduje se iz zunaj enkrat prek [updatePlanResult].
+     * VM ga kombinira z internim profilom in NutritionPlanom za avtomatski preračun.
+     */
+    private val _planResultFlow = MutableStateFlow<PlanResult?>(null)
+
+    /** Iz NutritionScreen: `LaunchedEffect(plan) { vm.updatePlanResult(plan) }` */
+    fun updatePlanResult(plan: PlanResult?) {
+        _planResultFlow.value = plan
+    }
 
     private val _healthConnectSyncTrigger = MutableStateFlow(0)
     val healthConnectSyncTrigger: StateFlow<Int> = _healthConnectSyncTrigger.asStateFlow()
@@ -189,8 +259,6 @@ class NutritionViewModel(
         }
     }
 
-    private val uidFlow = MutableStateFlow<String?>(FirestoreHelper.getCurrentUserDocId())
-
     /**
      * clearUser() — pokliči ob odjavi, da se prekine Firestore listener in počistijo lokalni podatki.
      * Nastavi uidFlow = null → flatMapLatest emitira flowOf(null) → listener se samodejno prekliče.
@@ -205,6 +273,7 @@ class NutritionViewModel(
         _baseTdee.value = 0.0
         _goalAdjustment.value = 0
         _frozenTargets.value = null
+        _planResultFlow.value = null
         // P1 SSOT: počisti hibridni TDEE singleton — prepreči uhajanje podatkov med računi
         WeightPredictorStore.reset()
         Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje + WeightPredictorStore počiščeni")
@@ -351,6 +420,60 @@ class NutritionViewModel(
 
     init {
         observeDailyTotals()
+        // Faza 29.2: avtomatski preračun kalorij — combine sproži recomputeCalorieTarget
+        // kadarkoli se profil, NutritionPlan ali workout plan spremenijo.
+        // NutritionScreen NE sme posredovati teh podatkov prek LaunchedEffect z logiko.
+        viewModelScope.launch {
+            combine(_internalProfile, _nutritionPlanPair, _planResultFlow) { profile, planPair, planResult ->
+                Triple(profile, planPair, planResult)
+            }.collectLatest { (profile, planPair, planResult) ->
+                val (nutritionPlan, planLoaded) = planPair
+                if (profile != null && planLoaded) {
+                    recomputeCalorieTarget(profile, nutritionPlan, planResult)
+                }
+            }
+        }
+    }
+
+    /**
+     * Faza 29.2 — SSOT za preračun kalorij: VSA business logika (BMI, BF% parsanje,
+     * SmartCalories formula) je TUKAJ v ViewModel-u, NE v LaunchedEffect v UI-ju.
+     *
+     * Kliče se reaktivno ob vsaki spremembi profila, nutritionPlan-a ali planResult-a.
+     * UI (NutritionScreen) je popolnoma pasiven — samo prikazuje stanje iz StateFlow-ev.
+     */
+    private fun recomputeCalorieTarget(
+        userProfile: UserProfile,
+        nutritionPlan: NutritionPlan?,
+        planResult: PlanResult?
+    ) {
+        val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
+            ?: planResult?.algorithmData?.bmr?.takeIf { it > 0.0 }
+            ?: return  // Brez BMR-ja ne moremo izračunati — počakaj na nalaganje plana
+
+        val goal = nutritionPlan?.let {
+            userProfile.workoutGoal.ifBlank { null }
+        } ?: planResult?.goal ?: userProfile.workoutGoal
+
+        val bfPercentage = userProfile.bodyFat
+            ?.replace("%", "")?.trim()
+            ?.split("-", "–")?.firstOrNull()?.trim()
+            ?.toDoubleOrNull()
+
+        val bmi = nutritionPlan?.algorithmData?.bmi ?: planResult?.algorithmData?.bmi
+        val isMale = userProfile.gender?.equals("Male", ignoreCase = true) ?: true
+
+        setUserMetrics(
+            bmr               = bmr,
+            goal              = goal,
+            activityLevel     = userProfile.activityLevel,
+            bodyFatPercentage = bfPercentage,
+            bmi               = bmi,
+            ageYears          = userProfile.age,
+            isMale            = isMale,
+            experience        = userProfile.experience,
+            limitations       = userProfile.limitations
+        )
     }
 
     private fun observeDailyTotals() {

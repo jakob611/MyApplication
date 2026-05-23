@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.myapplication.data.repository.FoodRepositoryImpl
 import com.example.myapplication.data.store.FirestoreHelper
-import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.ui.nutrition.NutritionViewModel
 import kotlinx.datetime.Clock
@@ -179,55 +178,14 @@ fun NutritionScreen(
     // "Assigned value is never read" v callback lambdah (Compose recomposition ni vidna statični analizi)
     val showOtherMacros = remember { mutableStateOf(false) }
 
-    // KRITIČNO: Preberi nutrition plan iz NutritionPlanStore (posodobljiv plan)
-    var nutritionPlan by remember { mutableStateOf<com.example.myapplication.data.NutritionPlan?>(null) }
+    // KRITIČNO: Preberi nutrition plan iz ViewModel (Faza 29.2: ViewModel naloži sam, ne UI)
+    val nutritionPlan by nutritionViewModel.nutritionPlan.collectAsState()
     // Faza 14b — varovalka: true šele ko loadNutritionPlan() NI VEČ pending
-    // (plan je null = uporabnik nima plana, kar je DRUGAČNO od "plan se še nalaga")
-    var nutritionPlanLoadComplete by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        val uid = FirestoreHelper.getCurrentUserDocId()
-        if (uid != null) {
-            nutritionPlan = NutritionPlanStore.loadNutritionPlan(uid)
-        }
-        // Nastavi flag VEDNO na koncu — ne glede na to, ali je plan null ali ne.
-        // null = dokazano ni plana → fallback vrednosti so legitimne za zamrznitev.
-        nutritionPlanLoadComplete = true
-    }
+    val nutritionPlanLoadComplete by nutritionViewModel.nutritionPlanLoadComplete.collectAsState()
 
-    // Nastavi dinamični TDEE: preberi BMR iz shranjenih algoritmičnih podatkov
-    // Prioriteta: nutritionPlan.algorithmData.bmr > plan.algorithmData.bmr
-    // P4 SSOT (Faza 29.1): posredujemo BMI + age + isMale + experience + limitations →
-    //   UseCase bo uporabil calculateSmartCalories() enako kot WorkoutPlanGenerator (poenotena formula).
-    LaunchedEffect(nutritionPlan, plan, userProfile) {
-        val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
-            ?: plan?.algorithmData?.bmr?.takeIf { it > 0.0 }
-        val goal = nutritionPlan?.let {
-            userProfile.workoutGoal.ifBlank { null }
-        } ?: plan?.goal ?: userProfile.workoutGoal
-        if (bmr != null && bmr > 0) {
-            val bfPercentage = userProfile.bodyFat
-                ?.replace("%", "")
-                ?.trim()
-                ?.split("-", "–")
-                ?.firstOrNull()
-                ?.trim()
-                ?.toDoubleOrNull()
-            // P4: dodatni parametri za poenoteno SmartCalories formulo
-            val bmi = nutritionPlan?.algorithmData?.bmi ?: plan?.algorithmData?.bmi
-            val ageYears = userProfile.age
-            val isMale = userProfile.gender?.equals("Male", ignoreCase = true) ?: true
-            nutritionViewModel.setUserMetrics(
-                bmr               = bmr,
-                goal              = goal,
-                activityLevel     = userProfile.activityLevel,
-                bodyFatPercentage = bfPercentage,
-                bmi               = bmi,
-                ageYears          = ageYears,
-                isMale            = isMale,
-                experience        = userProfile.experience,
-                limitations       = userProfile.limitations
-            )
-        }
+    // Faza 29.2: posreduj workout plan brez business logike — VM ga kombinira s profilom sam
+    LaunchedEffect(plan) {
+        nutritionViewModel.updatePlanResult(plan)
     }
 
     // TarÄŤe

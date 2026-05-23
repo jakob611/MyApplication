@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-23 (Faza 28: Sanity Check — deprecated uvozi, serialization verzija)  
+**Zadnja posodobitev:** 2026-05-23 (Faza 29.2: Popoln izgon poslovne logike iz UI sloja)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,38 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 23 (2026-05-22)
+## DNEVNIK POPRAVKOV — Faza 29.2 (2026-05-23)
+
+### Popoln izgon poslovne logike iz UI sloja
+
+**PROBLEM 1 — SideEffect pisanje v globalni singleton (anti-pattern):**
+- ❌ `Progress.kt` je imel `SideEffect {}` blok ki je po VSAKI rekomposiciji pisal v `WeightPredictorStore.*` — enako kot pisanje v globalen state iz UI-ja. Tveganje: race condition, grdo utripanje UI-ja.
+- ✅ **Rešeno**: `SideEffect {}` zamenjan z `LaunchedEffect(weightPredictionFull)` — sproži se SAMO ob spremembi podatkov, ne ob vsaki rekomposiciji.
+- ✅ `ProgressViewModel.storePrediction(hybridTDEE, ...)` — nova funkcija; piše v `WeightPredictorStore` v `viewModelScope.launch(Dispatchers.Default)` (ozadje, ne Main thread).
+- ✅ `ProgressViewModel` instanciran v `ProgressScreen` (ne samo v `WeightEntryDialog`).
+
+**PROBLEM 2 — LaunchedEffect z business logiko v NutritionScreen (anti-pattern):**
+- ❌ `NutritionScreen.kt` je imel `LaunchedEffect(nutritionPlan, plan, userProfile)` ki je v UI-ju izvajal parsanje BF%, BMI, izračun ciljev in klical `vm.setUserMetrics(...)`. Business logika v UI = anti-pattern.
+- ❌ `NutritionScreen.kt` je imel `LaunchedEffect(Unit)` ki je nalagal `NutritionPlan` neposredno iz Firestorea — prezrto načelo "ViewModel je SSOT za podatke".
+- ✅ **Rešeno**: `NutritionViewModel` zdaj naloži oba vira SAM brez posredovanja UI-ja:
+  - `_internalProfile: StateFlow<UserProfile?>` — Firestore `callbackFlow` snapshot listener, reaktiven prek `uidFlow`
+  - `_nutritionPlanPair: StateFlow<Pair<NutritionPlan?, Boolean>>` — `NutritionPlanStore.loadNutritionPlan()`, reaktiven prek `uidFlow`
+- ✅ `NutritionViewModel.init {}` vsebuje `combine(_internalProfile, _nutritionPlanPair, _planResultFlow)` → `collectLatest` → kliče `recomputeCalorieTarget()` ko se katerakoli vrednost spremeni.
+- ✅ `recomputeCalorieTarget()` — NOVA zasebna funkcija: vsa business logika (BF% parsanje, BMI, SmartCalories formula) JE TUKAJ, ne v LaunchedEffect v UI-ju.
+- ✅ `NutritionViewModel.nutritionPlan: StateFlow<NutritionPlan?>` — izpostavljen za UI
+- ✅ `NutritionViewModel.nutritionPlanLoadComplete: StateFlow<Boolean>` — izpostavljen za UI
+- ✅ `NutritionViewModel.updatePlanResult(plan)` — UI posreduje samo surov `PlanResult?` brez logike
+- ✅ `NutritionScreen.kt` — odstranjen kompleksen `LaunchedEffect(nutritionPlan, plan, userProfile)` in `LaunchedEffect(Unit)` za nalaganje plana. UI je zdaj popolnoma pasiven sprejemnik stanj.
+
+**UIDFLOW ARHITEKTURA (SSOT za odjavo):**
+- ✅ `uidFlow` je PRVA deklaracija v razredu — vse `flatMapLatest` verige se nanjo vežejo.
+- ✅ `clearUser()` nastavi `uidFlow.value = null` → `_internalProfile` + `_nutritionPlanPair` + `customMealsState` + `firestoreFoods` se samodejno prekinejo (en klice = vsi listenerji ugasnjeni).
+
+**4. BUILD SUCCESSFUL ✅** (čakanje na potrditev)
+
+---
+
+## DNEVNIK POPRAVKOV — Faza 28 (2026-05-23)
 
 ### Integracijski Audit + Race Condition Popravek + Gamification Optimizacija
 
