@@ -364,10 +364,10 @@ class NutritionViewModel(
         ageYears: Int? = null,
         isMale: Boolean? = null,
         experience: String? = null,
-        limitations: List<String> = emptyList()
+        limitations: List<String> = emptyList(),
+        // Faza 29.4: hybridTDEE iz centralnega combine() — 0 = ProgressScreen še ni bil obiskan
+        hybridTDEE: Int = 0
     ) {
-        // Faza 9/10 → P4 SSOT: delegiramo izračun UseCase-u
-        // Ko imamo bmi + ageYears + isMale, UseCase uporabi calculateSmartCalories() (enako kot plan)
         val calorieResult = calorieTargetUseCase.fromBmr(
             bmr               = bmr,
             goal              = goal,
@@ -380,57 +380,58 @@ class NutritionViewModel(
             limitations       = limitations
         )
 
-        // Faza 29.3: hybridTDEEFlow reaktivno posodobi _baseTdee; tukaj postavi začetni TDEE.
-        // Ko WeightPredictorStore.hybridTDEEFlow emitira > 800 kcal, init{} collector ga prepiše.
-        _baseTdee.value = calorieResult.tdee
+        // Faza 29.4: hybridTDEE prihaja direktno iz combine() — ni več ločenega collectorja.
+        // hybridTDEE > 800 → verodostojna vrednost iz ProgressViewModel.storePrediction()
+        // hybridTDEE == 0 → ProgressScreen še ni bil obiskan → fallback na teoretični TDEE
+        _baseTdee.value = if (hybridTDEE > 800) hybridTDEE.toDouble() else calorieResult.tdee
         _goalAdjustment.value = calorieResult.goalAdjustment
 
         // Debug store — za DebugDashboard
         NutritionDebugStore.lastBmr = bmr
         NutritionDebugStore.lastGoal = goal
         NutritionDebugStore.lastGoalAdjustment = _goalAdjustment.value
-        Log.d("NutritionVM", "✅ setUserMetrics [P4-SSOT]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} bmi=${bmi?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value} [hybridTDEE z reaktivnim Flow-om]")
+        Log.d("NutritionVM", "✅ setUserMetrics [29.4]: BMR=${"%.0f".format(bmr)} BF%=${bodyFatPercentage?.let { "%.1f".format(it) } ?: "n/a"} bmi=${bmi?.let { "%.1f".format(it) } ?: "n/a"} tdee=${"%.0f".format(calorieResult.tdee)} hybrid=$hybridTDEE → baseTdee=${"%.0f".format(_baseTdee.value)}, goalAdj=${_goalAdjustment.value}")
     }
 
     // ── Obstoječa logika ───────────────────────────────────────────────────────
 
     init {
         observeDailyTotals()
-        // Faza 29.2/29.3: 2-source combine — profil + NutritionPlan (real-time).
-        // PlanResult je ODSTRANJEN iz verige — NutritionPlan že vsebuje BMR/BMI/goal.
-        // UI (NutritionScreen) ne posreduje ničesar prek LaunchedEffect.
+        // Faza 29.4: EN centralni 3-source combine odpravlja race condition.
+        // PRED: ločeni coroutini — combine(profil, plan) in hybridTDEEFlow.collect{}
+        //       → race condition: hybridTDEE collector je imel pogoj `_baseTdee.value > 0.0`
+        //         (ki je bil false dokler combine še ni nastavil baseTdee), kar je pomenilo,
+        //         da so zgodnje emisije hybridTDEE tiho izginile.
+        // PO:   en sam combine s 3 viri → atomarna dostava vseh treh vrednosti hkrati.
+        //       Ko katerikoli vir emitira, se recomputeCalorieTarget() pokliče s svežimi vrednostmi.
         viewModelScope.launch {
-            combine(_internalProfile, _nutritionPlanPair) { profile, planPair ->
-                profile to planPair
-            }.collectLatest { (profile, planPair) ->
+            combine(
+                _internalProfile,
+                _nutritionPlanPair,
+                WeightPredictorStore.hybridTDEEFlow
+            ) { profile, planPair, hybridTDEE ->
+                Triple(profile, planPair, hybridTDEE)
+            }.collectLatest { (profile, planPair, hybridTDEE) ->
                 val (nutritionPlan, planLoaded) = planPair
                 if (profile != null && planLoaded) {
-                    recomputeCalorieTarget(profile, nutritionPlan)
-                }
-            }
-        }
-        // Faza 29.3: reaktivni hybridTDEE — WeightPredictorStore.hybridTDEEFlow emitira takoj
-        // ko ProgressViewModel.storePrediction() zapiše vrednost. Ni potreb po Pull-dostopu.
-        viewModelScope.launch {
-            WeightPredictorStore.hybridTDEEFlow.collect { hybridTDEE ->
-                if (hybridTDEE > 800 && _baseTdee.value > 0.0) {
-                    _baseTdee.value = hybridTDEE.toDouble()
-                    Log.d("NutritionVM", "🔄 hybridTDEEFlow → baseTdee=$hybridTDEE kcal")
+                    recomputeCalorieTarget(profile, nutritionPlan, hybridTDEE)
                 }
             }
         }
     }
 
     /**
-     * Faza 29.2/29.3 — SSOT za preračun kalorij.
+     * Faza 29.4 — SSOT za preračun kalorij: EN centralni 3-source combine kliče to funkcijo.
      *
-     * Faza 29.3: PlanResult je ODSTRANJEN iz parametrov. NutritionPlan (iz Firestorea, real-time)
-     * že vsebuje vse potrebne podatke (BMR, BMI, goal). Ni posrednika iz UI-ja.
-     * hybridTDEE prihaja reaktivno prek WeightPredictorStore.hybridTDEEFlow (init{} collector).
+     * @param userProfile  Reaktivni profil iz Firestore snapshot listenerja
+     * @param nutritionPlan Real-time plan iz NutritionPlanStore.observeNutritionPlan()
+     * @param hybridTDEE   Hibridni TDEE iz WeightPredictorStore.hybridTDEEFlow (0 = ProgressScreen
+     *                     še ni bil obiskan → fallback na calorieTargetUseCase.fromBmr())
      */
     private fun recomputeCalorieTarget(
         userProfile: UserProfile,
-        nutritionPlan: NutritionPlan?
+        nutritionPlan: NutritionPlan?,
+        hybridTDEE: Int
     ) {
         val bmr = nutritionPlan?.algorithmData?.bmr?.takeIf { it > 0 }
             ?: return  // Brez BMR-ja ne moremo izračunati — počakaj na nalaganje plana
@@ -447,6 +448,8 @@ class NutritionViewModel(
         val bmi = nutritionPlan.algorithmData?.bmi
         val isMale = userProfile.gender?.equals("Male", ignoreCase = true) ?: true
 
+        // Posreduj hybridTDEE v setUserMetrics — ta ga aplicira neposredno na _baseTdee
+        // brez ločenega Flow collectorja ali pogoja `_baseTdee.value > 0.0`.
         setUserMetrics(
             bmr               = bmr,
             goal              = goal,
@@ -456,7 +459,8 @@ class NutritionViewModel(
             ageYears          = userProfile.age,
             isMale            = isMale,
             experience        = userProfile.experience,
-            limitations       = userProfile.limitations
+            limitations       = userProfile.limitations,
+            hybridTDEE        = hybridTDEE
         )
     }
 
