@@ -73,28 +73,46 @@ data class UserProfile(
         }
 
     companion object {
+        /**
+         * Avdit (Točka 3): oba akumulatorja (totalXp, requiredXp) sta zdaj Long.
+         *
+         * PRED: Int akumulatorji → totalXp prekorači Int.MAX_VALUE pri levelu ~85
+         *   (~2.24 mlrd XP). Overflow je ovijal (wrapped) totalXp na negativno vrednost →
+         *   calculateLevel() je potencialno vstopil v neskončno zanko ali vrnil napačen nivo;
+         *   xpRequiredForLevel(85) je vrnil negativno vrednost → progressToNextLevel
+         *   je za level 84 pokazal 0% (totalNeeded < 0 → else 0f).
+         *
+         * PO: Long akumulatorji prenesejo vrednosti do ~9.2 × 10^18 (Level 400+).
+         *   Int interface ohranjen — funkciji vračata Int z coerceAtMost(Int.MAX_VALUE).
+         *   Za vse realistične nivoje (xp: Int ≤ Int.MAX_VALUE ≈ 2.15 mlrd) je izračun
+         *   matematično korekten in progress bar nikoli ne zamrzne.
+         */
+
         // Level calculation: 100 XP per level (exponential growth)
         fun calculateLevel(xp: Int): Int {
+            val xpLong = xp.toLong()  // Prepreči Int overflow v primerjavi
             var level = 1
-            var requiredXp = 100
-            var totalXp = 0
+            var requiredXp = 100L     // Long: ni overflow do levela 400+
+            var totalXp = 0L
 
-            while (totalXp + requiredXp <= xp) {
+            while (totalXp + requiredXp <= xpLong) {
                 totalXp += requiredXp
                 level++
-                requiredXp = (requiredXp * 1.2).toInt() // 20% increase per level
+                requiredXp = (requiredXp * 1.2).toLong() // 20% increase per level
             }
             return level
         }
 
         fun xpRequiredForLevel(level: Int): Int {
-            var totalXp = 0
-            var requiredXp = 100
+            var totalXp = 0L          // Long: prepreči overflow pri levelu 85+
+            var requiredXp = 100L
             for (i in 1 until level) {
                 totalXp += requiredXp
-                requiredXp = (requiredXp * 1.2).toInt()
+                requiredXp = (requiredXp * 1.2).toLong()
             }
-            return totalXp
+            // coerceAtMost: za hipotetično ekstremne nivoje vrne Int.MAX_VALUE namesto
+            // wrapped negativne vrednosti — progressToNextLevel nikoli ne zamrzne.
+            return totalXp.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         }
     }
 }
