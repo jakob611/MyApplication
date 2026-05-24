@@ -12,4 +12,3 @@ interface AuthStateRepository {
     /** Reaktivni tok e-poštnega naslova prijavljenega uporabnika. null = odjavljen. */
     fun observeCurrentUserEmail(): Flow<String?>
 }
-

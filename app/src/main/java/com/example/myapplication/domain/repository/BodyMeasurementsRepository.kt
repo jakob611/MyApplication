@@ -42,4 +42,3 @@ interface BodyMeasurementsRepository {
     fun observeMeasurementsHistory(): Flow<List<BodyMeasurementEntry>>
 }
 
-

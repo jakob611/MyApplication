@@ -19,4 +19,3 @@ interface PlanRepository {
      */
     suspend fun swapDays(planId: String, dayA: Int, dayB: Int): Result<Unit>
 }
-

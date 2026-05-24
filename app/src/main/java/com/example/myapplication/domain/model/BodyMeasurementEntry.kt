@@ -22,4 +22,3 @@ data class BodyMeasurementEntry(
     val shoulderToWaistRatio: Double
         get() = if (waistCm > 0.0) shoulderCm / waistCm else 0.0
 }
-

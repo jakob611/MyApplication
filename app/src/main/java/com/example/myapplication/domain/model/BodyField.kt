@@ -19,4 +19,3 @@ enum class BodyField {
     /** Višina (iz profila) — mora biti v 30–250 cm če je podana */
     HEIGHT
 }
-

@@ -83,7 +83,7 @@ fun BodyModuleHomeScreen(
                 context,
                 com.example.myapplication.utils.HapticFeedback.FeedbackType.SUCCESS
             )
-            val msg = "Daily Goal Met! Streak: ${event.newStreak} days 🔥"
+            val msg = "Daily Goal Met! Streak: ${event.newStreak} days "
             android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -213,7 +213,7 @@ fun BodyModuleHomeScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🧘", fontSize = 28.sp)
+                            Text("", fontSize = 28.sp)
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text("Rest Day: Mobility & Stretching", color = MaterialTheme.colorScheme.onSecondary, fontWeight = FontWeight.Bold)
@@ -404,7 +404,7 @@ fun BodyModuleHomeScreen(
                     modifier = Modifier.weight(1f)
                 ) { Text("Start run", color = MaterialTheme.colorScheme.onTertiary, fontSize = 16.sp) }
 
-                // 🗺️ Gumb za Activity Log
+                // ️ Gumb za Activity Log
                 IconButton(
                     onClick = {
                         com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
@@ -418,7 +418,7 @@ fun BodyModuleHomeScreen(
                         .clip(MaterialTheme.shapes.large)
                         .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f))
                 ) {
-                    Text("🗺️", fontSize = 22.sp)
+                    Text("️", fontSize = 22.sp)
                 }
             }
 
@@ -636,7 +636,7 @@ fun ChallengeDetailDialog(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = "🏆", fontSize = 48.sp)
+                Text(text = "", fontSize = 48.sp)
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = challenge.title,
@@ -758,7 +758,7 @@ fun StreakCounter(
     }
 
     Text(
-        text = "${count.value.toInt()} 🔥",
+        text = "${count.value.toInt()} ",
         color = color,
         fontSize = fontSize,
         fontWeight = fontWeight,

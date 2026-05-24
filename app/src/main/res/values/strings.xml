@@ -26,10 +26,10 @@
     <string name="error_password_reset_failed">Failed to send reset email. Make sure the address is correct.</string>
 
     <!-- BodyRatioStatus — Golden Ratio zaslon (Faza 31.1: lokalizabilni nizi) -->
-    <string name="status_golden_ratio">💛 Zlato razmerje</string>
+    <string name="status_golden_ratio"> Zlato razmerje</string>
     <string name="status_excellent">✅ Odlično</string>
-    <string name="status_good">👌 Dobro</string>
-    <string name="status_average">📈 Povprečno</string>
+    <string name="status_good"> Dobro</string>
+    <string name="status_average"> Povprečno</string>
     <string name="status_needs_work">⚠️ Potrebuje delo</string>
 
     <!-- Napake v BodyModulu (Faza 31.1) -->

@@ -961,6 +961,27 @@ fun BodyGoldenRatioSection(
                 }
             }
 
+            // Faza 31.6 — HEIGHT opozorilo je VEDNO vidno, neodvisno od tega ali je izračun izveden.
+            // Ker UseCase preskoči HEIGHT validacijo ko heightCm == 0.0, vrne ValidationResult.Success
+            // in prikažejo se rezultati BREZ waistToHeightRatio — uporabnik pa ne ve zakaj.
+            // Popravek: opozorilo je zunaj goldenRatioResults?.let bloka.
+            val heightMissing = profileHeight == null || profileHeight == 0.0
+            if (heightMissing && invalidFields.isEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                ) {
+                    Text(
+                        "⚠️ V nastavitvah profila morate najprej nastaviti svojo višino, da lahko izračunamo razmerja.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
             // Pasivni prikaz rezultatov iz ViewModela
             goldenRatioResults?.let { r ->
                 Spacer(Modifier.height(16.dp))
@@ -1014,39 +1035,20 @@ fun BodyGoldenRatioSection(
                     }
                 }
             } ?: run {
-                // Faza 31.6 — Razlikujemo dva scenarija brez rezultata in brez napak:
-                //   1) Višina manjka v profilu → specifično opozorilo (ne splošni napotek)
-                //   2) Vnos nepopoln, višina OK → nevtralni napotek za vnos
-                if (invalidFields.isEmpty()) {
+                // Faza 31.5/31.6 — Ko ni rezultata in ni napak in višina je OK → nevtralni napotek
+                if (invalidFields.isEmpty() && !heightMissing && !isInputComplete) {
                     Spacer(Modifier.height(16.dp))
-                    val heightMissing = profileHeight == null || profileHeight == 0.0
-                    if (heightMissing) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            Text(
-                                "⚠️ V nastavitvah profila morate najprej nastaviti svojo višino, da lahko izračunamo razmerja.",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    } else if (!isInputComplete) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            Text(
-                                // Faza 31.5 — Nevtralen siv napotek (ne napaka, ne rezultat)
-                                "💡 Vnesite vse mere za izračun vašega Zlatega reza.",
-                                color = Color(0xFF8899BB),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            "💡 Vnesite vse mere za izračun vašega Zlatega reza.",
+                            color = Color(0xFF8899BB),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }

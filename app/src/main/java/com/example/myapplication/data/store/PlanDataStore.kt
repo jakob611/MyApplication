@@ -429,7 +429,7 @@ object PlanDataStore {
                 val weeks = planMap["weeks"] as? List<Map<String, Any>>
                     ?: throw Exception("No weeks data in plan $planId.")
 
-                // 🔒 Faza 30.3/30.4 — Preveri isFrozen NEPOSREDNO iz Firestorea (svež read s strežnika)
+                //  Faza 30.3/30.4 — Preveri isFrozen NEPOSREDNO iz Firestorea (svež read s strežnika)
                 weeks.forEach { weekMap ->
                     @Suppress("UNCHECKED_CAST")
                     (weekMap["days"] as? List<Map<String, Any>> ?: emptyList()).forEach { dayMap ->

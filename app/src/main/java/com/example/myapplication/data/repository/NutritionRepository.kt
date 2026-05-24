@@ -33,4 +33,3 @@ interface NutritionRepository {
     /** Naloži seznam živil iz custom obroka. null = ne obstaja. */
     suspend fun getCustomMealItems(uid: String, mealId: String): List<Map<String, Any>>?
 }
-

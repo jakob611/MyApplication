@@ -17,4 +17,3 @@ class PlanRepositoryImpl : PlanRepository {
         return PlanDataStore.swapDaysAtomically(planId, dayA, dayB)
     }
 }
-

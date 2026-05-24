@@ -117,18 +117,18 @@ fun PlanPathDialog(
                     onDragSwap = { fromDay, toDay ->
                         val plan = localPlan
                         when {
-                            // 🔒 Faza 30.3: prazen plan ID → pot ni naložena, interakcija onemogočena
+                            //  Faza 30.3: prazen plan ID → pot ni naložena, interakcija onemogočena
                             plan?.id.isNullOrBlank() -> {
                                 AppToast.showWarning(
                                     context,
                                     "Plan path is not loaded yet. Please wait."
                                 )
                             }
-                            // 🔒 Faza 9: danes opravljen dan je zaklenjen
+                            //  Faza 9: danes opravljen dan je zaklenjen
                             isTodayDone && (fromDay == currentDay || toDay == currentDay) -> {
                                 AppToast.showWarning(
                                     context,
-                                    "Today's completed day is locked and cannot be moved! 🔒"
+                                    "Today's completed day is locked and cannot be moved! "
                                 )
                             }
                             plan != null && vm != null -> {
@@ -243,7 +243,7 @@ fun PlanPathDialog(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("😴", fontSize = 24.sp)
+                            Text("", fontSize = 24.sp)
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "REST DAY",
@@ -334,11 +334,11 @@ private fun DayInfoDialog(
     }
 
     val statusLabel = when {
-        dayPlan.isRestDay -> "💤 Rest Day"
+        dayPlan.isRestDay -> " Rest Day"
         isPast -> "✅ Completed"
         isToday && isTodayDone -> "✅ Done Today"
         isToday -> "▶️ Today"
-        isFuture -> "🔒 Upcoming"
+        isFuture -> " Upcoming"
         else -> ""
     }
 
@@ -386,7 +386,7 @@ private fun DayInfoDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Text("💤", fontSize = 32.sp)
+                        Text("", fontSize = 32.sp)
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("Rest Day", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -399,14 +399,14 @@ private fun DayInfoDialog(
                     )
                 } else {
                     if (dayPlan.focusLabel.isNotBlank() && dayPlan.focusLabel != "Rest") {
-                        DayInfoRow(icon = "🎯", label = "Focus Area", value = dayPlan.focusLabel)
+                        DayInfoRow(icon = "", label = "Focus Area", value = dayPlan.focusLabel)
                     }
                     if (estimatedTime != null) {
                         DayInfoRow(icon = "⏱️", label = "Estimated Time", value = "$estimatedTime min")
                     }
-                    DayInfoRow(icon = "💪", label = "Workout Difficulty", value = difficultyDisplay, valueColor = difficultyColor)
+                    DayInfoRow(icon = "", label = "Workout Difficulty", value = difficultyDisplay, valueColor = difficultyColor)
                     if (!plan?.goal.isNullOrBlank()) {
-                        DayInfoRow(icon = "🏆", label = "Goal", value = plan!!.goal!!)
+                        DayInfoRow(icon = "", label = "Goal", value = plan!!.goal!!)
                     }
                 }
             }

@@ -32,14 +32,14 @@ class SwapPlanDaysUseCase(
     ): Result<PlanResult> {
         // ── Domenska validacija (triple lock) ──────────────────────────────────
 
-        // 🔒 Zapora 1: prazen plan ID — pot do načrta ni naložena
+        //  Zapora 1: prazen plan ID — pot do načrta ni naložena
         if (currentPlan.id.isBlank()) {
             return Result.failure(
                 SwapValidationException("Plan path is empty — cannot swap without a valid plan ID.")
             )
         }
 
-        // 🔒 Zapora 2: danes opravljen dan (WORKOUT_DONE / STRETCHING_DONE)
+        //  Zapora 2: danes opravljen dan (WORKOUT_DONE / STRETCHING_DONE)
         if (lockedDay != null && (lockedDay == dayA || lockedDay == dayB)) {
             return Result.failure(
                 SwapValidationException("Day $lockedDay is locked (completed today). Cannot swap.")
@@ -67,7 +67,7 @@ class SwapPlanDaysUseCase(
             )
         }
 
-        // 🔒 Zapora 3: isFrozen — UI preverjanje ni dovolj, domain mora blokirati
+        //  Zapora 3: isFrozen — UI preverjanje ni dovolj, domain mora blokirati
         if (allDays[iA].isFrozen) {
             return Result.failure(
                 SwapValidationException("Day $dayA is frozen (completed). Cannot swap locked days.")

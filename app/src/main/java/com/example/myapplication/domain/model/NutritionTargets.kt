@@ -11,4 +11,3 @@ data class NutritionTargets(
     val carbs: Int = 200,
     val fat: Int = 60
 )
-
