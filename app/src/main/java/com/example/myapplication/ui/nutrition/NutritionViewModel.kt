@@ -544,51 +544,60 @@ class NutritionViewModel(
     }
 
     private fun observeDailyTotals() {
+        // Avdit napaka (Točka 1): prejšnja implementacija je uporabljala gnezdeni sekvencialni
+        // uidFlow.collect { _activeDateFlow.collectLatest { ... } } — sekvencialen collect ni
+        // mogel obdelati null emisije iz uidFlow (clearUser), ker je bil lambda blokiran v
+        // neskončnem collectLatest. Posledica: Firestore listener je uhajal po odjavi in se
+        // ni zagnal za novega uporabnika po prijavi.
+        //
+        // Popravek: flatMapLatest(uidFlow) + flatMapLatest(_activeDateFlow) → ista semantika
+        // kot _internalProfile in customMealsState. Ko uidFlow emitira null (clearUser()),
+        // flatMapLatest TAKOJ prekine Firestore listener prek awaitClose { listener.remove() }.
         viewModelScope.launch {
-            uidFlow.collect { uid ->
-                if (uid != null) {
-                    // Faza 14b: collectLatest na _activeDateFlow — ob spremembi datuma (onDayTransition)
-                    // coroutine za stari dan se samodejno prekine, zažene se nov listener za novi dan.
-                    _activeDateFlow.collectLatest { todayId ->
-                        nutritionRepo.observeDailyLog(uid, todayId).collect { doc ->
-                            Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
+            combine(uidFlow, _activeDateFlow) { uid, date -> uid to date }
+                .flatMapLatest { (uid, date) ->
+                    // Faza 14b: ob spremembi uid ali date (onDayTransition), flatMapLatest
+                    // samodejno prekine stari listener in zažene novega.
+                    // uid == null (clearUser) → flowOf() → listener se prekine brez uhajanja.
+                    if (uid == null) flowOf()
+                    else nutritionRepo.observeDailyLog(uid, date)
+                }
+                .collect { doc ->
+                    Log.d("DEBUG_DATA", "Raw burnedCalories value from DB: ${doc.get("burnedCalories")}")
 
-                            val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
-                            val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
-                            val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+                    val serverWater    = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+                    val serverBurned   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
+                    val serverConsumed = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
 
-                            updateDailyTotals(
-                                consumed = serverConsumed,
-                                burned   = serverBurned,
-                                water    = serverWater
-                            )
+                    updateDailyTotals(
+                        consumed = serverConsumed,
+                        burned   = serverBurned,
+                        water    = serverWater
+                    )
 
-                            // Faza 14 — Zgodovinski Snapshoti: preberi zamrznjene cilje tega dne
-                            val frozenCal = (doc.get("targetCalories") as? Number)?.toInt()
-                            if (frozenCal != null) {
-                                _frozenTargets.value = FrozenDayTargets(
-                                    calories = frozenCal,
-                                    protein  = (doc.get("targetProtein") as? Number)?.toInt(),
-                                    carbs    = (doc.get("targetCarbs")   as? Number)?.toInt(),
-                                    fat      = (doc.get("targetFat")     as? Number)?.toInt()
-                                )
-                            }
+                    // Faza 14 — Zgodovinski Snapshoti: preberi zamrznjene cilje tega dne
+                    val frozenCal = (doc.get("targetCalories") as? Number)?.toInt()
+                    if (frozenCal != null) {
+                        _frozenTargets.value = FrozenDayTargets(
+                            calories = frozenCal,
+                            protein  = (doc.get("targetProtein") as? Number)?.toInt(),
+                            carbs    = (doc.get("targetCarbs")   as? Number)?.toInt(),
+                            fat      = (doc.get("targetFat")     as? Number)?.toInt()
+                        )
+                    }
 
-                            // Debug store — posodobi surove vrednosti za DebugDashboard
-                            NutritionDebugStore.lastBurnedCalories = serverBurned
-                            NutritionDebugStore.lastConsumedCalories = serverConsumed
-                            NutritionDebugStore.lastWaterMl = serverWater
+                    // Debug store — posodobi surove vrednosti za DebugDashboard
+                    NutritionDebugStore.lastBurnedCalories = serverBurned
+                    NutritionDebugStore.lastConsumedCalories = serverConsumed
+                    NutritionDebugStore.lastWaterMl = serverWater
 
-                            // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
-                            val rawItems = doc.get("items") as? List<*>
-                            if (rawItems != null) {
-                                val foods = parseRawItemsToTrackedFoods(rawItems)
-                                if (foods.isNotEmpty()) _firestoreFoods.value = foods
-                            }
-                        }
+                    // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
+                    val rawItems = doc.get("items") as? List<*>
+                    if (rawItems != null) {
+                        val foods = parseRawItemsToTrackedFoods(rawItems)
+                        if (foods.isNotEmpty()) _firestoreFoods.value = foods
                     }
                 }
-            }
         }
     }
 
