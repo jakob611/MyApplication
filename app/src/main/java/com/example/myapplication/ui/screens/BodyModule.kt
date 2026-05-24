@@ -714,7 +714,13 @@ private fun PlanResultStep(
         val weightInt = weight.toIntOrNull()
         val ageInt = age.toIntOrNull()
 
-        if (heightInt != null && weightInt != null && ageInt != null && gender != null) {
+        // Faza 31.7 — Division-by-zero guard: heightInt in weightInt morata biti > 0,
+        // sicer heightM = 0.0 → bmi = weightKg / 0.0 = Infinity → Firestore shrani null.
+        // ageInt mora biti > 0, sicer BMR formula dobi neveljavno vrednost.
+        if (heightInt != null && heightInt > 0 &&
+            weightInt != null && weightInt > 0 &&
+            ageInt != null && ageInt > 0 &&
+            gender != null) {
             val weightKg = weightInt.toDouble()
             val heightCm = heightInt.toDouble()
             val heightM = heightCm / 100.0

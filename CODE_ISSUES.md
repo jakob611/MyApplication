@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-23 (Faza 29.4: Konsolidacija combine() — odprava race conditiona v NutritionViewModel)  
+**Zadnja posodobitev:** 2026-05-24 (Faza 31.7: Varnostni in arhitekturni avdit — 4 kritične napake odpravljene)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,44 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 29.2 (2026-05-23)
+## DNEVNIK POPRAVKOV — Faza 31.7 (2026-05-24)
+
+### Varnostni in arhitekturni avdit — 4 kritične napake odpravljene
+
+**KRITIČNI BUG #1 — FirestoreUserProfileRepository.kt — Memory Leak (launch v callbackFlow):**
+- ❌ `launch {}` znotraj `callbackFlow {}` je tekel vzporedno z `awaitClose {}`.
+  Ob prekinitvi flow-a preden je `launch` dosegel `addSnapshotListener()` → `awaitClose { listener?.remove() }` = no-op → listener nikoli ni bil odstranjen → trajno uhajanje Firestore listenerja.
+- ✅ **Rešeno**: Odstranjeno `launch {}` in `var listener`. Klic `FirestoreHelper.getCurrentUserDocRef()` (suspend) neposredno v `callbackFlow` telesu. `awaitClose { listener.remove() }` znotraj `try` bloka — zagotovljeno čiščenje.
+- ✅ Odstranjeno neuporabljeno `import kotlinx.coroutines.launch`
+
+**KRITIČNI BUG #2 — BodyModule.kt vrstici 717-747 — Division by Zero → Infinity v Firestore:**
+- ❌ Guard `if (heightInt != null && weightInt != null ...)` ni preverjal vrednosti `> 0`.
+  Vnos "0" za višino → `heightM = 0.0` → `bmi = weightKg / 0.0 = Infinity`.
+  Vnos "0" za težo → `proteinPerKg = macros / 0.0 = Infinity`, `caloriesPerKg = target / 0.0 = Infinity`.
+  Kotlin Double deljenje z 0.0 ne vrže izjeme — vrne `Infinity` → Firestore shrani `null` → tiha napaka.
+- ✅ **Rešeno**: Guard razširjen na `heightInt > 0 && weightInt > 0 && ageInt > 0`.
+
+**KRITIČNI BUG #3 — Progress.kt vrstica 1043 — Lokalizacijska ranljivost (vejica/pika):**
+- ❌ `it.filter { c -> c.isDigit() || c == '.' }` brez zamenjave vejice → evropski uporabniki
+  vnesejo "74,2", filter ohrani "742" → shrani 742 kg namesto 74.2 kg (tiha napaka podatkov).
+- ✅ **Rešeno**: Dodan `it.replace(',', '.')` pred filtrom → "74,2" → "74.2" → pravilno parsano.
+
+**ARHITEKTURNA KRŠITEV #4 — FoodRepositoryImpl.kt vrstica 188 — Obhod FirestoreHelper migracije:**
+- ❌ `FirestoreHelper.getDb().collection("users").document(uid)` brez routing logike →
+  starni uporabniki z UID-based dokumenti dobijo napačen dokument → `null` za custom meals.
+- ✅ **Rešeno**: Zamenjano z `FirestoreHelper.getUserRef(uid)` — centraliziran dostop.
+
+**AVDIT REZULTATI (vse kategorije):**
+- Kategorija 1 (Flows): 1 kritična napaka odpravljena ✅; vse ostale `callbackFlow` instance VARNE ✅
+- Kategorija 2 (SideEffects): POVSEM VARNO — ni anti-patternov ✅
+- Kategorija 3 (Matematika): 2 napaki odpravljeni ✅; ostali Guard-i (coerceAtLeast, targetCal > 0, span.coerceAtLeast) VARNI ✅
+- Kategorija 4 (Transakcije): 1 arhitekturna napaka odpravljena ✅; optimistični update pattern VAREN ✅
+
+**5. BUILD SUCCESSFUL ✅**
+
+---
+
+## DNEVNIK POPRAVKOV — Faza 29.4
 
 ### Popoln izgon poslovne logike iz UI sloja
 

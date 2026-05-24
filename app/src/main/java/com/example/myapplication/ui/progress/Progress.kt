@@ -1040,7 +1040,11 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                 OutlinedTextField(
                     value = weightInput,
                     onValueChange = {
-                        val filtered = it.filter { c -> c.isDigit() || c == '.' }.take(6)
+                        // Faza 31.7 — Lokalizacijska varnost: zamenjaj vejico s piko PRED filtrom.
+                        // Evropske lokalizacije (SL, DE, FR) uporabljajo vejico kot decimalno ločilo.
+                        // Brez tega bi "74,2" postal "742" (filter bi vejico odstranil) → 742 kg v Firestore.
+                        val normalized = it.replace(',', '.')
+                        val filtered = normalized.filter { c -> c.isDigit() || c == '.' }.take(6)
                         if (filtered != weightInput && filtered.isNotEmpty()) {
                             HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.LIGHT_CLICK)
                         }

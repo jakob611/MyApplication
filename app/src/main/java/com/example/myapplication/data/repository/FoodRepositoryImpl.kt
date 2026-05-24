@@ -182,11 +182,12 @@ object FoodRepositoryImpl : NutritionRepository {
         }.await()
     }
 
-    /** Faza 29.8: preseljeno iz NutritionViewModel.getCustomMealItems() */
+    /** Faza 29.8: preseljeno iz NutritionViewModel.getCustomMealItems()
+     *  Faza 31.7: FirestoreHelper.getUserRef(uid) namesto direktnega db.collection("users")...
+     *  → FirestoreHelper centralizira email/UID routing logiko (migracija). */
     override suspend fun getCustomMealItems(uid: String, mealId: String): List<Map<String, Any>>? {
         return try {
-            val doc = FirestoreHelper.getDb()
-                .collection("users").document(uid)
+            val doc = FirestoreHelper.getUserRef(uid)
                 .collection("customMeals").document(mealId)
                 .get().await()
             if (doc.exists()) doc.get("items") as? List<Map<String, Any>>
