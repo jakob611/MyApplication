@@ -32,6 +32,13 @@ class SwapPlanDaysUseCase(
     ): Result<PlanResult> {
         // ── Domenska validacija (triple lock) ──────────────────────────────────
 
+        //  Zapora 0: dayA == dayB — nič za zamenjati, ne sproži Firestore transakcije
+        if (dayA == dayB) {
+            return Result.failure(
+                SwapValidationException("dayA ($dayA) == dayB — nič za zamenjati.")
+            )
+        }
+
         //  Zapora 1: prazen plan ID — pot do načrta ni naložena
         if (currentPlan.id.isBlank()) {
             return Result.failure(

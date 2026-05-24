@@ -268,7 +268,10 @@ class FirestoreGamificationRepository : GamificationRepository {
             resultStreak
         } catch (e: Exception) {
             Log.e("GamificationRepo", "❌ moveToNextDay spodletel: ${e.message}", e)
-            0
+            // Faza 31.6 avdit: vrnemo -1 (ne 0) kot ekspliciten signal napake.
+            // 0 je legitimna vrednost de-dup preskakovanj; -1 nedvoumno pomeni "Firestore je spodletel".
+            // VM preverja `takeIf { it > 0 }` → -1 bo pravilno filtiran kot napaka.
+            -1
         }
     }
 

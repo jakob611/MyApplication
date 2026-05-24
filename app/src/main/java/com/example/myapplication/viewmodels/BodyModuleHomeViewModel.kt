@@ -512,8 +512,13 @@ class BodyModuleHomeViewModel(
                             isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
                             else                 -> UserDayStatus.WORKOUT_DONE
                         }
+                        // Faza 31.6 avdit: moveToNextDay() vrne -1 ob Firestore napaki in 0 ob
+                        // de-dup preskohu. Oba primera filtered z takeIf { it > 0 }.
+                        // Fallback OHRANI STAR STREAK (ne poveča) — UI ne sme prikazovati lažnih vrednosti
+                        // medtem ko baza ni pisala. Ob vzpostavitvi omrežja getBodyMetrics stream
+                        // samodejno prinese pravo vrednost iz Firestorea.
                         val newStreak   = completionResult?.newStreakDays?.takeIf { it > 0 }
-                            ?: (_ui.value.streakDays + if (todayStatus.contributesToStreak) 1 else 0)
+                            ?: _ui.value.streakDays
                         val newPlanDay  = completionResult?.newPlanDay?.takeIf { it > 0 }
                             ?: (oldPlanDay + if (!isExtra) 1 else 0)
                         val newWeekly   = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
