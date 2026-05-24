@@ -69,7 +69,55 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 31.8 (2026-05-24)
+## DNEVNIK POPRAVKOV — Faza 31.9 (2026-05-24)
+
+### BodyModuleHomeViewModel.kt — Arhitekturna sanacija 6 ne-atomarnih anomalij
+
+**ANOMALIJA 1 — CancellationException Leak (vrstica 443–446):**
+- ❌ `catch (e: Exception)` je ujemal CancellationException (podrazred Exception).
+  Stari preklicani job je nastavil `isLoading=false` potem ko je novi job že nastavil `isLoading=true`.
+  UI kratkomalo ni pokazal loading spinnerja med dvema hiterima LoadMetrics klicema.
+- ✅ Dodan `catch (e: CancellationException) { throw e }` pred `catch (e: Exception)`.
+  Preklicani jobj ne muta stanja novega joba.
+- ✅ Dodan `import kotlinx.coroutines.CancellationException`.
+
+**ANOMALIJA 2 — Ne-atomarni SwapDays zapis (vrstici 477+483 → zdaj 493):**
+- ❌ Dva ločena `.copy()` klica: `isLoading=false` (L477) in nato `errorMessage=e.message` (L483).
+  UI je med njima videl vmesno stanje `{isLoading=false, errorMessage=null}` ko je dejansko prišlo do napake.
+- ✅ Zamenjano z enim `_ui.update { it.copy(isLoading=false, errorMessage=res.exceptionOrNull()?.message) }`.
+  Atomarno — UI vidi samo kon- čno stanje.
+- ✅ Dodan `import kotlinx.coroutines.flow.update`.
+
+**ANOMALIJA 3 — Branje živega `_ui.value` po pisanju in po suspend točkah:**
+- ❌ `SwapDays`: `lockedDay = _ui.value.isWorkoutDoneToday` bran po `_ui.value = _ui.value.copy(isLoading=true)`.
+  `CompleteWorkoutSession`: `oldPlanDay = _ui.value.planDay` bran po pisanju, pred `suspend` klicem.
+- ✅ Oba bloka zdaj zajameta `val snapshot = _ui.value` / `val currentStateSnapshot = _ui.value`
+  KOT PRVO DEJANJE pred kakršnim koli pisanjem ali suspend klicem.
+
+**ANOMALIJA 4 — Fallback iz živega `_ui.value` po suspend točki (vrstica 548/552):**
+- ❌ `?: _ui.value.streakDays` in `.coerceAtMost(_ui.value.weeklyTarget)` sta se nanašala na
+  *trenutni* `_ui.value` po `updateBodyMetrics.invoke()` suspend — vrednosti je medtem morda
+  spremenil vzporedni `CompleteRestDay`.
+- ✅ Zamenjano z `currentStateSnapshot.streakDays` in `currentStateSnapshot.weeklyTarget`.
+
+**ANOMALIJA 5 — Privzeti `planDay=1` posredovan v Firestore transakcijo:**
+- ❌ Brez guard-a: če `LoadMetrics` ni nikoli uspel (Firestore izpad), `_ui.value.planDay=1` (default)
+  je bil posredovan v `updateBodyMetrics.invoke(planDay=1)` → napačna vrednost v Firestore transakciji.
+- ✅ Dodan `isDataLoaded: Boolean = false` v `BodyHomeUiState`.
+  `LoadMetrics` uspešni handler nastavi `isDataLoaded = true`.
+  `CompleteWorkoutSession` na začetku: `if (!currentStateSnapshot.isDataLoaded) { ... return@launch }`.
+
+**ANOMALIJA 6 — Kumuliran vizualni drift planDay v offline scenariju:**
+- ❌ `?: (oldPlanDay + 1)` fallback pri offline scenariju s privzetim `oldPlanDay=1` je produciral
+  1→2→3→4... v UI stanju pri zaporednih offline workout‐ih.
+- ✅ Odpravljen preventivno z isDataLoaded guard (Anomalija 5) — CompleteWorkoutSession se ne izvede
+  dokler LoadMetrics ni uspešno zaključil vsaj enkrat.
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+
 
 ### Room Schema + State Lifecycle Avdit — 4 anomalije odkrite, 2 kritični odpravljeni
 

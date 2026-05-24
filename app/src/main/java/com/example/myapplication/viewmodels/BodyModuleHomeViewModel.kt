@@ -20,6 +20,7 @@ import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.ValidationResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -157,6 +159,10 @@ data class BodyHomeUiState(
     val outdoorSuggestion: String? = null,
     val errorMessage: String? = null,
     val isLoading: Boolean = false,
+    /** Faza 31.8 — true šele ko LoadMetrics uspešno konča (Firestore vrne podatke).
+     *  false = privzete vrednosti (planDay=1 itd.) so ŠE VEDNO nezanesljive.
+     *  Guard v CompleteWorkoutSession prepreči Firestore transakcijo z napačnim planDay. */
+    val isDataLoaded: Boolean = false,
     /** Tipsko-varni status današnjega dne — nadomešča String "WORKOUT_DONE" itd. */
     val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
     val challenges: List<Challenge> = listOf(
@@ -430,9 +436,14 @@ class BodyModuleHomeViewModel(
                                 todayIsRest            = todayIsRest,
                                 todayStatus            = metrics.todayStatus,
                                 isLoading              = false,
+                                isDataLoaded           = true,
                                 errorMessage           = metrics.errorMessage
                             )
                         }
+                    } catch (e: CancellationException) {
+                        // Faza 31.8 — Anomalija 1: Preklicani stari job ne sme mutirati stanja novega joba.
+                        // Re-throwamo, da isLoading = true (ki ga je postavil novi job) ostane nespremenjen.
+                        throw e
                     } catch (e: Exception) {
                         _ui.value = _ui.value.copy(errorMessage = e.message, isLoading = false)
                     }
@@ -471,27 +482,43 @@ class BodyModuleHomeViewModel(
                 // Faza 30.4: ViewModel kliče SAMO SwapPlanDaysUseCase — ne PlanDataStore.
                 // Klic chain: VM → UseCase (validacija + lokalni model) → Repository → DataStore
                 viewModelScope.launch {
-                    _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
-                    val lockedDay = if (_ui.value.isWorkoutDoneToday) _ui.value.planDay else null
+                    // Faza 31.8 — Anomalija 3: Snapshot pred pisanjem in pred suspend klicem.
+                    // lockedDay preberemo iz nespremenljivega snapshot-a, ne iz živega _ui.value.
+                    val swapSnapshot = _ui.value
+                    _ui.value = swapSnapshot.copy(isLoading = true, errorMessage = null)
+                    val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
                     val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                    _ui.value = _ui.value.copy(isLoading = false)
+                    // Faza 31.8 — Anomalija 2: Atomarni zapis — isLoading in errorMessage v enem klicu.
+                    // UI ne vidi vmesnega stanja {isLoading=false, errorMessage=null} ko dejansko obstaja napaka.
+                    _ui.update { it.copy(isLoading = false, errorMessage = res.exceptionOrNull()?.message) }
                     res.onSuccess { updatedPlan ->
                         // Use case vrne posodobljeni model šele po uspešni Firestore transakciji
                         intent.onResult(updatedPlan)
-                    }
-                    res.onFailure { e ->
-                        _ui.value = _ui.value.copy(errorMessage = e.message)
                     }
                 }
             }
 
             is BodyHomeIntent.CompleteWorkoutSession -> {
                 viewModelScope.launch {
-                    _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
-                    val isRestDay    = _ui.value.todayIsRest
-                    val isExtra      = intent.isExtraWorkout
-                    val oldPlanDay   = _ui.value.planDay
-                    val oldWeeklyDone = _ui.value.weeklyDone
+                    // Faza 31.8 — Anomalija 3: Nespremenljiv snapshot PRED vsemi pisanji in suspend klici.
+                    // Vsi nadaljnji izračuni (oldPlanDay, newStreak, newWeekly) temeljijo izključno
+                    // na tem snapshot-u, ne na živem _ui.value, ki ga medtem dapat spremeniti druga korutina.
+                    val currentStateSnapshot = _ui.value
+                    _ui.value = currentStateSnapshot.copy(isLoading = true, errorMessage = null)
+
+                    // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
+                    // Prepreči pošiljanje privzetega planDay=1 v updateBodyMetrics, če LoadMetrics
+                    // še ni uspešno zaključil (Firestore napaka, offline, hiter tap ob zagonu).
+                    if (!currentStateSnapshot.isDataLoaded) {
+                        _ui.update { it.copy(isLoading = false, errorMessage = "Metrics not yet loaded — please wait.") }
+                        intent.onCompletion(null)
+                        return@launch
+                    }
+
+                    val isRestDay     = currentStateSnapshot.todayIsRest
+                    val isExtra       = intent.isExtraWorkout
+                    val oldPlanDay    = currentStateSnapshot.planDay
+                    val oldWeeklyDone = currentStateSnapshot.weeklyDone
 
                     val result = updateBodyMetrics.invoke(
                         email           = intent.email,
@@ -512,17 +539,17 @@ class BodyModuleHomeViewModel(
                             isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
                             else                 -> UserDayStatus.WORKOUT_DONE
                         }
+                        // Faza 31.8 — Anomalija 4: Fallback vrednosti beremo iz currentStateSnapshot,
+                        // ne iz živega _ui.value — _ui.value se je med suspend klicem (updateBodyMetrics)
+                        // morda spremenil (npr. vzporedni CompleteRestDay).
                         // Faza 31.6 avdit: moveToNextDay() vrne -1 ob Firestore napaki in 0 ob
-                        // de-dup preskohu. Oba primera filtered z takeIf { it > 0 }.
-                        // Fallback OHRANI STAR STREAK (ne poveča) — UI ne sme prikazovati lažnih vrednosti
-                        // medtem ko baza ni pisala. Ob vzpostavitvi omrežja getBodyMetrics stream
-                        // samodejno prinese pravo vrednost iz Firestorea.
-                        val newStreak   = completionResult?.newStreakDays?.takeIf { it > 0 }
-                            ?: _ui.value.streakDays
-                        val newPlanDay  = completionResult?.newPlanDay?.takeIf { it > 0 }
+                        // de-dup preskoku. Oba primera zafiltrirana z takeIf { it > 0 }.
+                        val newStreak  = completionResult?.newStreakDays?.takeIf { it > 0 }
+                            ?: currentStateSnapshot.streakDays
+                        val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
                             ?: (oldPlanDay + if (!isExtra) 1 else 0)
-                        val newWeekly   = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
-                            (oldWeeklyDone + 1).coerceAtMost(_ui.value.weeklyTarget)
+                        val newWeekly  = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
+                            (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
                         else oldWeeklyDone
 
                         _ui.value = _ui.value.copy(
