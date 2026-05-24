@@ -416,23 +416,39 @@ object PlanDataStore {
                 val docRef = firestore.collection(PLANS_COLLECTION).document(userId)
                 val snapshot = transaction.get(docRef)
 
+                // Faza 31.9 — Popravek #1: Firestore vrne notranji AbstractList (nespremenljiv).
+                // Eksplicitna pretvorba v MutableList<MutableMap> prepreči UnsupportedOperationException
+                // ob vsakem indexOf / set / put klicu znotraj transakcije.
                 @Suppress("UNCHECKED_CAST")
-                val plansData = snapshot.get("plans") as? List<Map<String, Any>>
-                    ?: throw Exception("No plans found in Firestore document.")
+                val plansData: MutableList<MutableMap<String, Any>> =
+                    (snapshot.get("plans") as? List<*>)
+                        ?.filterIsInstance<Map<String, Any>>()
+                        ?.map { it.toMutableMap() }
+                        ?.toMutableList()
+                        ?: throw Exception("No plans found in Firestore document.")
 
                 // Najdi pravi plan po planId
                 val planIndex = plansData.indexOfFirst { it["id"] == planId }
                 if (planIndex < 0) throw Exception("Plan $planId not found in Firestore.")
 
-                val planMap = plansData[planIndex]
+                val planMap: MutableMap<String, Any> = plansData[planIndex]
+
+                // Faza 31.9 — weeks je morda Firestore-ov nespremenljivi seznam → explicitni toMutableList()
                 @Suppress("UNCHECKED_CAST")
-                val weeks = planMap["weeks"] as? List<Map<String, Any>>
-                    ?: throw Exception("No weeks data in plan $planId.")
+                val weeks: MutableList<MutableMap<String, Any>> =
+                    (planMap["weeks"] as? List<*>)
+                        ?.filterIsInstance<Map<String, Any>>()
+                        ?.map { it.toMutableMap() }
+                        ?.toMutableList()
+                        ?: throw Exception("No weeks data in plan $planId.")
 
                 //  Faza 30.3/30.4 — Preveri isFrozen NEPOSREDNO iz Firestorea (svež read s strežnika)
                 weeks.forEach { weekMap ->
                     @Suppress("UNCHECKED_CAST")
-                    (weekMap["days"] as? List<Map<String, Any>> ?: emptyList()).forEach { dayMap ->
+                    val days = (weekMap["days"] as? List<*>)
+                        ?.filterIsInstance<Map<String, Any>>()
+                        ?: emptyList()
+                    days.forEach { dayMap ->
                         val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
                         val frozen = dayMap["isFrozen"] as? Boolean ?: false
                         if (frozen && (dayNum == dayA || dayNum == dayB)) {
@@ -446,7 +462,10 @@ object PlanDataStore {
                 var fullDayMapB: Map<String, Any>? = null
                 weeks.forEach { weekMap ->
                     @Suppress("UNCHECKED_CAST")
-                    (weekMap["days"] as? List<Map<String, Any>> ?: emptyList()).forEach { dayMap ->
+                    val days = (weekMap["days"] as? List<*>)
+                        ?.filterIsInstance<Map<String, Any>>()
+                        ?: emptyList()
+                    days.forEach { dayMap ->
                         val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
                         if (dayNum == dayA) fullDayMapA = dayMap
                         if (dayNum == dayB) fullDayMapB = dayMap
@@ -457,33 +476,41 @@ object PlanDataStore {
                 }
 
                 // Faza 30.5 — Varno razpakiranje brez !! operatorja
-                // Elvis ?: throw zagotavlja, da transakcija nikoli ne crasha nepričakovano
-                val contentOfA = (fullDayMapA ?: throw Exception("Day $dayA not found — swap aborted."))
-                    .toMutableMap().apply { remove("dayNumber") }
-                val contentOfB = (fullDayMapB ?: throw Exception("Day $dayB not found — swap aborted."))
-                    .toMutableMap().apply { remove("dayNumber") }
+                // Faza 31.9 — Globoka kopija: remove("dayNumber") deluje samo na KOPIJI, ne na originalnem
+                // Firestore map objektu (ki je morda dodeljen samo po referenci).
+                val contentOfA: MutableMap<String, Any> =
+                    (fullDayMapA ?: throw Exception("Day $dayA not found — swap aborted."))
+                        .toMutableMap().apply { remove("dayNumber") }
+                val contentOfB: MutableMap<String, Any> =
+                    (fullDayMapB ?: throw Exception("Day $dayB not found — swap aborted."))
+                        .toMutableMap().apply { remove("dayNumber") }
 
                 // Polna zamenjava: dayA slot ← vsebina B, dayB slot ← vsebina A
-                val updatedWeeks = weeks.map { weekMap ->
+                val updatedWeeks: List<MutableMap<String, Any>> = weeks.map { weekMap ->
                     @Suppress("UNCHECKED_CAST")
-                    val updatedDays = (weekMap["days"] as? List<Map<String, Any>> ?: emptyList())
-                        .map { dayMap ->
-                            val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
-                            when (dayNum) {
-                                dayA -> contentOfB.toMutableMap().apply { put("dayNumber", dayA) }
-                                dayB -> contentOfA.toMutableMap().apply { put("dayNumber", dayB) }
-                                else -> dayMap
+                    // Faza 31.9: Eksplicitni toMutableList() na dneh — Firestore List je nespremenljiv
+                    val updatedDays: MutableList<MutableMap<String, Any>> =
+                        (weekMap["days"] as? List<*>)
+                            ?.filterIsInstance<Map<String, Any>>()
+                            ?.map { dayMap ->
+                                val dayNum = (dayMap["dayNumber"] as? Number)?.toInt()
+                                when (dayNum) {
+                                    dayA -> (contentOfB.toMutableMap()).apply { put("dayNumber", dayA) }
+                                    dayB -> (contentOfA.toMutableMap()).apply { put("dayNumber", dayB) }
+                                    // Faza 31.9: else veja — tudi originalni dayMap pretvori v MutableMap,
+                                    // da celoten seznam ostane homogeno mutabilen
+                                    else -> dayMap.toMutableMap()
+                                }
                             }
-                        }
+                            ?.toMutableList()
+                            ?: mutableListOf()
                     weekMap.toMutableMap().apply { put("days", updatedDays) }
                 }
 
                 // transaction.update() — samo `plans` polje, ne prepiše celotnega dokumenta
-                val updatedPlansData = plansData.toMutableList()
-                updatedPlansData[planIndex] = planMap.toMutableMap().apply {
-                    put("weeks", updatedWeeks)
-                }
-                transaction.update(docRef, "plans", updatedPlansData)
+                planMap["weeks"] = updatedWeeks
+                plansData[planIndex] = planMap
+                transaction.update(docRef, "plans", plansData)
 
             }.await()
 

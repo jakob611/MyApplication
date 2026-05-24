@@ -69,7 +69,69 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 31.9 (2026-05-24)
+## DNEVNIK POPRAVKOV — Faza 32.0 (2026-05-24)
+
+### BodyModule — 4 napredne asinhrone in arhitekturne ranljivosti odpravljene
+
+**POPRAVEK #1 — TRANSAKCIJSKI CRASH (Firestore Immutable Collections) — PlanDataStore.kt:**
+- ❌ `snapshot.get("plans") as? List<Map<String, Any>>` je vrnil Firestore-ov notranji `AbstractList`
+  ali `Collections.unmodifiableList()`. Vsak `.add()`, `.set()`, `.remove()` na tej listi je sprožil
+  `UnsupportedOperationException` med transakcijo. Vplivalo je na `swapDaysAtomically`.
+- ✅ Celotna hierarhija (plans → weeks → days) je zdaj eksplicitno pretvorjena v mutabilno obliko:
+  - `snapshot.get("plans")` → `.filterIsInstance<Map<String,Any>>().map { it.toMutableMap() }.toMutableList()`
+  - `planMap["weeks"]` → `.filterIsInstance<Map<String,Any>>().map { it.toMutableMap() }.toMutableList()`
+  - Dnevi v `updatedDays` → `.filterIsInstance<Map<String,Any>>().map { ... .toMutableMap() }.toMutableList()`
+  - `else -> dayMap` branch → `else -> dayMap.toMutableMap()` (homogena mutabilnost celotnega seznama)
+- ✅ `planMap["weeks"] = updatedWeeks` + `plansData[planIndex] = planMap` — neposredni vpis v mutableMap/mutableList
+  (brez odvečnega ustvarjanja novih vmesnih kopij).
+
+**POPRAVEK #2 — IZGUBA ZAPISA (viewModelScope Lifecycle Cutoff) — BodyModuleHomeViewModel.kt:**
+- ❌ `saveBodyMeasurements()` je tekel v `viewModelScope.launch {}`. Ob pritisku Nazaj (navigacija
+  proč od GoldenRatioScreen) se viewModelScope prekine → Firestore transakcija se je prekinila
+  sredi vpisa → meritve izgubljene brez napake in brez povratne informacije.
+- ✅ Dejanski Firestore vpis zavit v `withContext(NonCancellable)`:
+  ```kotlin
+  val result = withContext(NonCancellable) {
+      saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
+  }
+  ```
+  `NonCancellable` zagotovi, da se transakcija dokonča tudi ob preklicu starševske korutine.
+  `_isSaving = false` v `finally` bloku se vedno izvede.
+- ✅ Dodana importa `kotlinx.coroutines.NonCancellable` in `kotlinx.coroutines.withContext`.
+
+**POPRAVEK #3 — CURSOR JUMPING (Async State Loop v TextField) — GoldenRatioScreen.kt:**
+- ❌ `TextField.value = state.shoulderInput` je bral neposredno iz VM `goldenRatioUiState` StateFlow.
+  Tipkanje → `onValueChange` → `bodyVm.updateInputText()` → `_inputText` StateFlow → `combine()`
+  → rekomposicija → TextField dobi vrednost iz StateFlow ASYNC → kazalec skoči na konec niza.
+  Posebej opazno pri IME predlogih (npr. slovenski slovar) in v Gboard.
+- ✅ Lokalni `rememberSaveable` za vsak TextField v `BodyGoldenRatioSection`:
+  ```kotlin
+  var localShoulder by rememberSaveable { mutableStateOf(shoulderInput) }
+  var localWaist    by rememberSaveable { mutableStateOf(waistInput) }
+  var localHip      by rememberSaveable { mutableStateOf(hipInput) }
+  ```
+  TextField.value = `localXxx` (sync) — kazalec nikoli ne skoči.
+  `onValueChange { newVal -> localXxx = newVal; onInputChanged(...) }` — VM še vedno prejema vsak vnos za izračun.
+- ✅ `LaunchedEffect(shoulderInput/waistInput/hipInput)` za sync samo ob zunanji (ne-tipkalni) spremembi VM vrednosti.
+- ✅ `canSave` in `onSave` brez spremembe ← berejo iz `localXxx`.
+- ✅ `rememberSaveable` zagotavlja preživetje rotacije zaslona (enaka garancija kot prej v VM StateFlow).
+
+**POPRAVEK #4 — ZOMBI VPIS (Cooperative Cancellation Guard) — BodyModuleHomeViewModel.kt:**
+- ❌ V `LoadMetrics` smo z `loadMetricsJob?.cancel()` prekinili prejšnji job. Toda preklicana korutina,
+  ki je ravno zaključila mrežni klic (Firestore emit) in dosegla `_ui.value = ...` v isti milisekundi,
+  je PREPISALA `isLoading = true` ki ga je postavil NOVI job. UI je kratkomalo prikazoval vsebino
+  brez loading spinnerja med prehodom.
+- ✅ `if (!currentCoroutineContext().isActive) return@collect` neposredno pred vsakim `_ui.value =` vpisom:
+  - `currentCoroutineContext().isActive` je edini korekten način za preverjanje znotraj `collect {}` lambde
+    (kjer `isActive` iz `CoroutineScope` ni neposredno dostopen — rabi `currentCoroutineContext()`).
+  - Preklicana korutina tiho zapusti `collect` blok brez mutacije stanja novega joba.
+- ✅ Dodana importa `kotlinx.coroutines.currentCoroutineContext` in `kotlinx.coroutines.isActive`.
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+
 
 ### BodyModuleHomeViewModel.kt — Arhitekturna sanacija 6 ne-atomarnih anomalij
 

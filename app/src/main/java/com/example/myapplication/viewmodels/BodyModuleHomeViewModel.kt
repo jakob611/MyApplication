@@ -22,7 +22,11 @@ import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.ValidationResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -379,7 +383,12 @@ class BodyModuleHomeViewModel(
         viewModelScope.launch {
             _isSaving.value = true
             try {
-                val result = saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
+                // Faza 31.9 — Popravek #2: viewModelScope se prekine ob uničenju zaslona (navigacija nazaj).
+                // withContext(NonCancellable) zagotovi, da Firestore transakcija (dejanski vpis) dokonča,
+                // tudi če uporabnik pritisne Nazaj med nalaganjem — prepreči izgubo podatkov.
+                val result = withContext(NonCancellable) {
+                    saveMeasurementsUseCase(shoulderCm, waistCm, hipCm, heightCm)
+                }
                 result.onSuccess {
                     android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
                     _uiEvent.send(BodyUiEvent.SaveSuccess)
@@ -419,6 +428,15 @@ class BodyModuleHomeViewModel(
                     try {
                         getBodyMetrics.invoke(intent.email).collect { metrics ->
                             if (metrics.isLoading) return@collect
+                            // Faza 31.9 — Popravek #4: Cooperative Cancellation Guard.
+                            // Stari, pravkar preklicani job (loadMetricsJob?.cancel()) je morda
+                            // ravno zaključil mrežni klic in prišel do te točke v milisekundi
+                            // POTEM ko novi job že nastavil isLoading = true.
+                            // Brez tega guard-a bi stari job prebrisal isLoading = true novega joba.
+                            // currentCoroutineContext().isActive = false → ta korutina je preklicana → tiho zapustimo.
+                            // (isActive ni dostopen neposredno v collect {} lambdi — rabi currentCoroutineContext())
+                            if (!currentCoroutineContext().isActive) return@collect
+
                             val todayIsRest = intent.plan?.weeks
                                 ?.flatMap { it.days }
                                 ?.firstOrNull { it.dayNumber == metrics.planDay }

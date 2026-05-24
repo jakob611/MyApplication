@@ -823,6 +823,31 @@ fun BodyGoldenRatioSection(
     // Višina iz profila — samo kot prikazna vrednost
     val heightDisplay = profileHeight?.let { "${"%.0f".format(it)} cm" } ?: "—"
 
+    // Faza 31.9 — Popravek #3: Lokalni rememberSaveable za TextField vrednosti.
+    //
+    // Prejšnje stanje: TextField.value = state.shoulderInput (iz VM StateFlow).
+    // Ko je uporabnik vtipkal znak → onValueChange → VM StateFlow posodobitev → rekomposicija →
+    // TextField dobi novo vrednost iz StateFlow → ASYNC zanka → kazalec je skočil na konec.
+    //
+    // Popravek: TextField.value = lokalni var (sync, brez async round-tripa).
+    // ViewModel še vedno prejema vsako spremembo za izračun Golden Ratio.
+    // rememberSaveable (ne remember) zagotavlja preživetje rotacije zaslona.
+    //
+    // Inicializacija iz VM parametrov: enkrat ob prvem kompozicija, ko imamo obstoječe vrednosti
+    // (npr. pri navigaciji nazaj z obstoječimi podatki). LaunchedEffect zagotovi, da se sync
+    // izvede samo ko se VM vrednosti spremenijo EXTERNALLY (ne med tipkanjem, ker tipkanje
+    // posodablja VM ki sproži ta LaunchedEffect, toda lokalni var je že enak → brez efekta).
+    var localShoulder by rememberSaveable { mutableStateOf(shoulderInput) }
+    var localWaist    by rememberSaveable { mutableStateOf(waistInput) }
+    var localHip      by rememberSaveable { mutableStateOf(hipInput) }
+
+    // Sync samo ob ZUNANJI spremembi VM vrednosti (ne med tipkanjem).
+    // Tipkanje: local → VM (posybodobitev) → VM emitira isto vrednost → lokalni == VM → NoOp.
+    // Zunanja sprememba (npr. resetiranje obrazca): VM se spremeni → lokalni != VM → sync.
+    LaunchedEffect(shoulderInput) { if (localShoulder != shoulderInput) localShoulder = shoulderInput }
+    LaunchedEffect(waistInput)    { if (localWaist    != waistInput)    localWaist    = waistInput    }
+    LaunchedEffect(hipInput)      { if (localHip      != hipInput)      localHip      = hipInput      }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -853,8 +878,9 @@ fun BodyGoldenRatioSection(
             Spacer(Modifier.height(12.dp))
 
             // Vnos meritev
-            // Faza 31.4 — FieldConfig: value iz VM stanja, onChange pošlje vse 3 stringe nazaj
-            // Ne potrebujemo forEachIndexed z idx — vsak field ima lastni lambda z ustreznimi refs
+            // Faza 31.9 — FieldConfig: value iz LOKALNEGA stanja (ne VM StateFlow) → brez cursor jumping.
+            // onValueChange: (1) posodobi lokalni var (sync, takojšen prikaz) in
+            //                (2) obvesti VM za izračun Golden Ratio (VM ne vrne vrednosti nazaj v TextField).
             data class FieldConfig(
                 val bodyField: BodyField,
                 val label: String,
@@ -862,12 +888,12 @@ fun BodyGoldenRatioSection(
                 val onValueChange: (String) -> Unit
             )
             val fields = listOf(
-                FieldConfig(BodyField.SHOULDER, "Obseg ramen (cm)", shoulderInput,
-                    { newVal -> onInputChanged(newVal, waistInput, hipInput) }),
-                FieldConfig(BodyField.WAIST,    "Obseg pasu (cm)",  waistInput,
-                    { newVal -> onInputChanged(shoulderInput, newVal, hipInput) }),
-                FieldConfig(BodyField.HIP,      "Obseg bokov (cm)", hipInput,
-                    { newVal -> onInputChanged(shoulderInput, waistInput, newVal) })
+                FieldConfig(BodyField.SHOULDER, "Obseg ramen (cm)", localShoulder,
+                    { newVal -> localShoulder = newVal; onInputChanged(newVal, localWaist, localHip) }),
+                FieldConfig(BodyField.WAIST,    "Obseg pasu (cm)",  localWaist,
+                    { newVal -> localWaist = newVal;    onInputChanged(localShoulder, newVal, localHip) }),
+                FieldConfig(BodyField.HIP,      "Obseg bokov (cm)", localHip,
+                    { newVal -> localHip = newVal;      onInputChanged(localShoulder, localWaist, newVal) })
             )
             fields.forEach { field ->
                 OutlinedTextField(
@@ -919,17 +945,17 @@ fun BodyGoldenRatioSection(
 
             // Gumb za shranjevanje
             if (onSave != null) {
-                // Faza 31.4: canSave bere iz string parametrov (ne lokalnih vars)
-                val canSave = shoulderInput.isNotBlank() && waistInput.isNotBlank() && invalidFields.isEmpty()
+                // Faza 31.9: canSave bere iz LOKALNIH spremenljivk (ne VM state parametrov)
+                val canSave = localShoulder.isNotBlank() && localWaist.isNotBlank() && invalidFields.isEmpty()
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
                         if (!isSaving && canSave) {
                             // Parsiraj v Double za onSave callback (backward compat)
                             onSave(
-                                shoulderInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                                waistInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                                hipInput.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                localShoulder.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                localWaist.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                localHip.replace(",", ".").toDoubleOrNull() ?: 0.0,
                                 profileHeight ?: 0.0
                             )
                         }
