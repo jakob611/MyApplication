@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,7 +53,6 @@ import com.example.myapplication.domain.model.BodyRatioStatus
 import com.example.myapplication.domain.model.BodyField
 import com.example.myapplication.viewmodels.BodyUiEvent
 import com.example.myapplication.viewmodels.GoldenRatioUiState
-import com.example.myapplication.domain.usecase.ValidationResult
 import com.example.myapplication.R
 
 /**
@@ -1016,23 +1014,39 @@ fun BodyGoldenRatioSection(
                     }
                 }
             } ?: run {
-                // Faza 31.5 — Namig: prikaži ko data==null, ni validacijskih napak in vnos ni popoln
-                // Pogoji: !isInputComplete = vsaj eno polje je prazno/0
-                //          invalidFields.isEmpty() = ni neveljavnih vrednosti (napake se ne prekrivajo z namigom)
-                if (!isInputComplete && invalidFields.isEmpty()) {
+                // Faza 31.6 — Razlikujemo dva scenarija brez rezultata in brez napak:
+                //   1) Višina manjka v profilu → specifično opozorilo (ne splošni napotek)
+                //   2) Vnos nepopoln, višina OK → nevtralni napotek za vnos
+                if (invalidFields.isEmpty()) {
                     Spacer(Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp)
-                    ) {
-                        Text(
-                            // Faza 31.5 — Nevtralen siv napotek (ne napaka, ne rezultat)
-                            "💡 Vnesite vse mere za izračun vašega Zlatega reza.",
-                            color = Color(0xFF8899BB),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    val heightMissing = profileHeight == null || profileHeight == 0.0
+                    if (heightMissing) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                "⚠️ V nastavitvah profila morate najprej nastaviti svojo višino, da lahko izračunamo razmerja.",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    } else if (!isInputComplete) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                // Faza 31.5 — Nevtralen siv napotek (ne napaka, ne rezultat)
+                                "💡 Vnesite vse mere za izračun vašega Zlatega reza.",
+                                color = Color(0xFF8899BB),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             }

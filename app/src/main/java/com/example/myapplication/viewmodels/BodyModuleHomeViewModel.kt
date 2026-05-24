@@ -57,8 +57,10 @@ sealed interface BodyUiEvent {
  * Faza 31.1 — Enoten UI state za Golden Ratio sekcijo.
  * Faza 31.3 — inputErrorRes: Int? → invalidFields: Set<BodyField> za per-field natančnost.
  *
- * Nadomešča tri razpršene StateFlow-e:
- *   bodyProfile: StateFlow<UserProfile?>     → pokrit z Loading/Success
+ * Faza 31.6 — Dead code odstranjen: bodyProfile je zdaj private, measurementsHistory izbrisan.
+ *
+ * Nadomešča tri razpršene StateFlow-e (zdaj odstranjene/private):
+ *   bodyProfile (private)                → pokrit z Loading/Success
  *   goldenRatioResults: StateFlow<Result?>   → Success.data
  *   isSaving: StateFlow<Boolean>             → Success.isSaving
  *
@@ -213,27 +215,17 @@ class BodyModuleHomeViewModel(
      * flatMapLatest: ob vsaki spremembi stanja prijave (login/logout) se
      * avtomatično zamenja na pravi profil ali flowOf(null).
      * Preživi rotacijo zaslona — ViewModel ostane živ med config change.
+     *
+     * Faza 31.6 — private: profil se ne izpostavlja UI neposredno.
+     * Javni dostop poteka izključno prek goldenRatioUiState.
      */
-    val bodyProfile: StateFlow<UserProfile?> =
+    private val bodyProfile: StateFlow<UserProfile?> =
         authStateRepository.observeCurrentUserEmail()
             .flatMapLatest { email ->
                 if (email != null) userProfileRepository.observeUserProfile(email)
                 else flowOf(null)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    // ── Faza 30.6 — Reaktivni tok zgodovine meritev (za grafe napredka) ──────
-    /**
-     * Urejeno ASC po timestamp — pripravljeno za risanje grafov.
-     * Samodejno se ugasne ob odjavi (flatMapLatest + flowOf(emptyList())).
-     */
-    val measurementsHistory: StateFlow<List<BodyMeasurementEntry>> =
-        authStateRepository.observeCurrentUserEmail()
-            .flatMapLatest { email ->
-                if (email != null) bodyMeasurementsRepository.observeMeasurementsHistory()
-                else flowOf(emptyList())
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── Faza 30.1 → Faza 31.4 — Vhodni teksti (String, ne Double) v ViewModel ─
     /**
