@@ -69,7 +69,44 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 31.7 (2026-05-24)
+## DNEVNIK POPRAVKOV — Faza 31.8 (2026-05-24)
+
+### Room Schema + State Lifecycle Avdit — 4 anomalije odkrite, 2 kritični odpravljeni
+
+**AVDIT METODOLOGIJA:** Sistematičen pregled Room @Database/@Entity, ViewModel state inicializacije, async race pogoji in prehoda podatkov med zasloni.
+
+**KRITIČNI BUG #1 — WorkoutSessionScreen.kt vrstica 344 — Race Condition (planDay bran pred koncem LoadMetrics):**
+- ❌ `vm.ui.value.planDay` je snapshot ob zagonu LaunchedEffect. BodyHomeUiState začne z `planDay=1` (default).
+  Če Firestore ni vrnil odgovora ko user tapne "Start Workout", LaunchedEffect bere `planDay=1` namesto npr. `7`.
+  Posledica: trening generiran za **Dan 1** (napačen fokus, rotacija), prav tako `weeklyDone=0` in `weeklyTarget=3` (defaults).
+- ✅ **Rešeno**: `vm.ui.filter { !it.isLoading }.first()` — suspenda dokler LoadMetrics ne konča (isLoading→false).
+  Šele nato prebere `loadedUiState.planDay`, `loadedUiState.weeklyTarget`, `loadedUiState.weeklyDone`. Ni lažnih default vrednosti.
+
+**KRITIČNI BUG #2 — AppDatabase.kt — `fallbackToDestructiveMigration()` brez Migration(1,2) — Izguba aktivnih tekov:**
+- ❌ Stale komentar: "Verzija: 1 (začetna)" ampak `version = 2`.
+  Migracija v1→v2 (dodajanje stolpca `status NOT NULL DEFAULT 'COMPLETED'` v Fazi 15) ni bila definirana.
+  `fallbackToDestructiveMigration()` je zbrisalo VSO Room bazo pri upgradeu — vključno s tabelo `workout_sessions`.
+  **Kritično**: `IN_PROGRESS` session (checkpointiran tek) → wipe → `restoreFromInProgress()` = null → `stopSelf()` → **podatki aktivnega teka izgubljeni**.
+- ✅ **Rešeno**: Dodan `MIGRATION_1_2 = object : Migration(1, 2) { db.execSQL("ALTER TABLE workout_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'COMPLETED'") }`.
+  `.addMigrations(MIGRATION_1_2)` + `fallbackToDestructiveMigration(true)` (posodobili smo na novo API) — obstoječe seje ohranjene.
+
+**ARHITEKTURNA OPOZORILA (ne odpravljeni — riziki oz. hrane za razmislek):**
+
+- ⚠️ **WorkoutSessionScreen.kt vrstica 175 — Nestabilen VM factory:**
+  `ViewModelProvider.AndroidViewModelFactory` za `BodyModuleHomeViewModel` ki NI `AndroidViewModel`.
+  Deluje SAMO ker `BodyModuleHomeScreen` vedno odpre VM prej z `MyViewModelFactory`. Ob morebitnem deep linku ali spremenjenem navigacijskem redu → `IllegalArgumentException` runtime crash.
+  **Priporočilo**: Zamenjaj z `viewModel(factory = MyViewModelFactory(context))` — isti factory kot v BodyModuleHomeScreen.
+
+- ⚠️ **BodyModuleHomeScreen.kt vrstici 244+524 — ui.planDay=1 med loading:**
+  `PlanPathDialog(currentDay = ui.planDay)` prikaže "Day 1" med `isLoading=true`. Vizualni glitch.
+  **Vzrok**: `BodyHomeUiState` default `planDay=1`. Ni podatkovne korupcije — samo vizualno.
+  **Priporočilo**: Onemogočen gumb za Start Workout med `isLoading=true`.
+
+**5. BUILD SUCCESSFUL ✅**
+
+---
+
+
 
 ### Varnostni in arhitekturni avdit — 4 kritične napake odpravljene
 

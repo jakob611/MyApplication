@@ -59,6 +59,7 @@ import com.example.myapplication.domain.workout.WorkoutGoal
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filter
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.lifecycle.ViewModelProvider
@@ -297,9 +298,15 @@ fun WorkoutSessionScreen(
 
         // Določi ciljno težavnost glede na recovery/catchup/normalen način
         val isRecovery = AlgorithmPreferences.isRecoveryMode(context.getAlgoSettings())
-        // ✅ SSOT: beri weeklyTarget/weeklyDone iz BodyModuleHomeViewModel (Firestore), ne bm_prefs
-        val weeklyTarget = vm.ui.value.weeklyTarget.takeIf { it > 0 } ?: 3
-        val weeklyDone = vm.ui.value.weeklyDone
+
+        // ✅ SSOT: beri weeklyTarget/weeklyDone/planDay iz BodyModuleHomeViewModel (Firestore), ne bm_prefs
+        // ANTI RACE-CONDITION (Faza 31.8): počakamo da LoadMetrics konča preden beremo planDay.
+        // vm.ui.value.planDay = 1 (default) če Firestore ni vrnil še odgovora → napačen trening generiran.
+        // vm.ui.filter { !it.isLoading }.first() suspenda dokler isLoading → false (Firestore vrne pravo vrednost).
+        // Varno: StateFlow.first() ne blokira vedno — vrne takoj ko je isLoading=false.
+        val loadedUiState = vm.ui.filter { !it.isLoading }.first()
+        val weeklyTarget = loadedUiState.weeklyTarget.takeIf { it > 0 } ?: 3
+        val weeklyDone = loadedUiState.weeklyDone
 
         val targetDifficulty: Float = when {
             isRecovery -> {
@@ -340,8 +347,8 @@ fun WorkoutSessionScreen(
             } else {
                 rawFocus
             }
-            // ✅ SSOT: beri plan_day iz BodyModuleHomeViewModel (Firestore) namesto bm_prefs
-            val planDay = vm.ui.value.planDay.coerceAtLeast(1)
+            // ✅ SSOT: beri plan_day iz loadedUiState (že počakanega/naložen Firestore snapshot) namesto bm_prefs
+            val planDay = loadedUiState.planDay.coerceAtLeast(1)
             dailyFocus = if (allFocus.any {
                     it.equals("Full Body", ignoreCase = true) ||
                     it.equals("Balance", ignoreCase = true)
