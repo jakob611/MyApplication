@@ -73,14 +73,16 @@ sealed interface GoldenRatioUiState {
 
     /**
      * Profil naložen — pokaži celotni vmesnik z vnosi.
-     * @param profileHeight  Višina iz profila (za prikaz in izračun pas/višina razmerja)
-     * @param shoulderInput  Faza 31.4 — surovi vnos za ramena (String, ne Double)
-     * @param waistInput     Faza 31.4 — surovi vnos za pas
-     * @param hipInput       Faza 31.4 — surovi vnos za boke (prazno = ni vnosu)
-     * @param data           Rezultat izračuna; null dokler vnos ni veljaven
-     * @param isSaving       true med Firestore batch write — gumb onemogočen
-     * @param invalidFields  Set polj, ki so zunaj bioloških meja (30–250 cm).
-     *                       Prazen set = vsi vnosi veljavni. UI nastavi isError SAMO na teh poljih.
+     * @param profileHeight   Višina iz profila (za prikaz in izračun pas/višina razmerja)
+     * @param shoulderInput   Faza 31.4 — surovi vnos za ramena (String, ne Double)
+     * @param waistInput      Faza 31.4 — surovi vnos za pas
+     * @param hipInput        Faza 31.4 — surovi vnos za boke (prazno = ni vnosu)
+     * @param data            Rezultat izračuna; null dokler vnos ni veljaven/popoln
+     * @param isSaving        true med Firestore batch write — gumb onemogočen
+     * @param invalidFields   Set polj, ki so zunaj bioloških meja (30–250 cm).
+     * @param isInputComplete Faza 31.5 — true ko so vsa 4 polja (ramena, pas, boki, višina)
+     *                        uspešno parsana v vrednosti > 0.0. Ko false + data==null + ni napak,
+     *                        UI prikaže nevtralen napotek za vnos.
      */
     data class Success(
         val profileHeight: Double?,
@@ -89,7 +91,8 @@ sealed interface GoldenRatioUiState {
         val hipInput: String = "",
         val data: BodyGoldenRatioResult?,
         val isSaving: Boolean = false,
-        val invalidFields: Set<BodyField> = emptySet()
+        val invalidFields: Set<BodyField> = emptySet(),
+        val isInputComplete: Boolean = false
     ) : GoldenRatioUiState
 
     /**
@@ -254,10 +257,17 @@ class BodyModuleHomeViewModel(
         _inputText,
         _isSaving
     ) { profile, texts, saving ->
-        // Parsiraj enkrat v combine (EU format: "85,5" → 85.5)
-        val shoulderCm = texts.shoulder.replace(",", ".").toDoubleOrNull() ?: 0.0
-        val waistCm    = texts.waist.replace(",", ".").toDoubleOrNull() ?: 0.0
-        val hipCm      = texts.hip.replace(",", ".").toDoubleOrNull() ?: 0.0
+        // Faza 31.5 — Locale-safe parsing: zamenjaj vejico s piko (slovenska tipkovnica)
+        // "75,5" → "75.5" → 75.5  |  "" → 0.0  |  "abc" → 0.0
+        val shoulderCm = texts.shoulder.replace(',', '.').toDoubleOrNull() ?: 0.0
+        val waistCm    = texts.waist.replace(',', '.').toDoubleOrNull() ?: 0.0
+        val hipCm      = texts.hip.replace(',', '.').toDoubleOrNull() ?: 0.0
+        val heightCm   = profile?.height ?: 0.0
+
+        // Faza 31.5 — Zastavica za POPOLN vnos: vsa 4 polja > 0
+        // false → UI prikaže nevtralen napotek; true + data!=null → prikaži rezultat
+        val isInputComplete = shoulderCm > 0.0 && waistCm > 0.0
+                           && hipCm > 0.0 && heightCm > 0.0
 
         when {
             profile == null -> GoldenRatioUiState.Loading
@@ -268,17 +278,18 @@ class BodyModuleHomeViewModel(
                         shoulderCm = shoulderCm,
                         waistCm    = waistCm,
                         hipCm      = hipCm,
-                        heightCm   = profile.height ?: 0.0,
+                        heightCm   = heightCm,
                         isMale     = profile.gender?.equals("Male", ignoreCase = true) ?: true
                     )) {
                         is ValidationResult.Success -> GoldenRatioUiState.Success(
-                            profileHeight = profile.height,
-                            shoulderInput = texts.shoulder,
-                            waistInput    = texts.waist,
-                            hipInput      = texts.hip,
-                            data          = validation.data,
-                            isSaving      = saving,
-                            invalidFields = emptySet()
+                            profileHeight   = profile.height,
+                            shoulderInput   = texts.shoulder,
+                            waistInput      = texts.waist,
+                            hipInput        = texts.hip,
+                            data            = validation.data,
+                            isSaving        = saving,
+                            invalidFields   = emptySet(),
+                            isInputComplete = isInputComplete
                         )
                         is ValidationResult.Invalid -> {
                             android.util.Log.d(
@@ -286,27 +297,28 @@ class BodyModuleHomeViewModel(
                                 "Per-field napaka: ${validation.invalidFields}"
                             )
                             GoldenRatioUiState.Success(
-                                profileHeight = profile.height,
-                                // Faza 31.4: vnosni teksti OHRANJENI — ni izpraznjenja
-                                shoulderInput = texts.shoulder,
-                                waistInput    = texts.waist,
-                                hipInput      = texts.hip,
-                                data          = null,
-                                isSaving      = saving,
-                                invalidFields = validation.invalidFields
+                                profileHeight   = profile.height,
+                                shoulderInput   = texts.shoulder,
+                                waistInput      = texts.waist,
+                                hipInput        = texts.hip,
+                                data            = null,
+                                isSaving        = saving,
+                                invalidFields   = validation.invalidFields,
+                                isInputComplete = isInputComplete
                             )
                         }
                     }
                 } else {
                     // Polja prazna ali nepopolna — čisto stanje
                     GoldenRatioUiState.Success(
-                        profileHeight = profile.height,
-                        shoulderInput = texts.shoulder,
-                        waistInput    = texts.waist,
-                        hipInput      = texts.hip,
-                        data          = null,
-                        isSaving      = saving,
-                        invalidFields = emptySet()
+                        profileHeight   = profile.height,
+                        shoulderInput   = texts.shoulder,
+                        waistInput      = texts.waist,
+                        hipInput        = texts.hip,
+                        data            = null,
+                        isSaving        = saving,
+                        invalidFields   = emptySet(),
+                        isInputComplete = isInputComplete
                     )
                 }
             }

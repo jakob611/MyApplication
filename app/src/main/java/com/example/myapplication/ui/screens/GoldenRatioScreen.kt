@@ -813,6 +813,11 @@ fun BodyGoldenRatioSection(
      * UI nastavi isError = true SAMO na poljih znotraj tega seta.
      */
     invalidFields: Set<BodyField> = emptySet(),
+    /**
+     * Faza 31.5 — true ko so vsa 4 polja uspešno parsana v > 0.
+     * false + data==null + invalidFields.isEmpty() → prikaži napotek za vnos.
+     */
+    isInputComplete: Boolean = false,
     /** Faza 31.4 — Callback z surovimi string vrednostmi (parsing je v VM) */
     onInputChanged: (shoulder: String, waist: String, hip: String) -> Unit,
     onSave: ((shoulder: Double, waist: Double, hip: Double, height: Double) -> Unit)? = null
@@ -1011,13 +1016,24 @@ fun BodyGoldenRatioSection(
                     }
                 }
             } ?: run {
-                if (shoulderInput.isNotBlank() || waistInput.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Vnesi obseg ramen in pasu za izračun.",
-                        color = Color(0xFF8899BB),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                // Faza 31.5 — Namig: prikaži ko data==null, ni validacijskih napak in vnos ni popoln
+                // Pogoji: !isInputComplete = vsaj eno polje je prazno/0
+                //          invalidFields.isEmpty() = ni neveljavnih vrednosti (napake se ne prekrivajo z namigom)
+                if (!isInputComplete && invalidFields.isEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            // Faza 31.5 — Nevtralen siv napotek (ne napaka, ne rezultat)
+                            "💡 Vnesite vse mere za izračun vašega Zlatega reza.",
+                            color = Color(0xFF8899BB),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
