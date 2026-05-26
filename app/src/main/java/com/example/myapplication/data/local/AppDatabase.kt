@@ -21,7 +21,10 @@ import com.example.myapplication.data.local.entity.WorkoutSessionEntity
  * Zgodovina verzij:
  *  v1 → Faza 3: začetna shema (workout_sessions, gps_points brez status polja)
  *  v2 → Faza 15: dodan stolpec status TEXT NOT NULL DEFAULT 'COMPLETED' v workout_sessions
- *                (obnova po OOM kill — IN_PROGRESS seje preživijo restart servisa)
+ *                (obnava po OOM kill — IN_PROGRESS seje preživijo restart servisa)
+ *  v3 → Faza 33: schema mismatch fix — entity sprememba brez eksplicitne migracije.
+ *                fallbackToDestructiveMigration() zbriše staro lokalno bazo in jo ustvari znova.
+ *                (Lokalni Room podatki so samo cache Firestore — izguba ni kritična.)
  *
  * Ime datoteke: glow_upp_offline.db
  *
@@ -30,7 +33,7 @@ import com.example.myapplication.data.local.entity.WorkoutSessionEntity
  */
 @Database(
     entities = [WorkoutSessionEntity::class, GpsPointEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -63,8 +66,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "glow_upp_offline.db"
                 )
-                    .addMigrations(MIGRATION_1_2)         // v1→v2: ohrani aktivne seje (IN_PROGRESS)
-                    .fallbackToDestructiveMigration(true) // zadnja varovalka za nepričakovane prihodnje napake
+                    .addMigrations(MIGRATION_1_2)       // v1→v2: ohrani aktivne seje (IN_PROGRESS)
+                    .fallbackToDestructiveMigration()   // v2→v3+: brez eksplicitne migracije → zbriši in ustvari znova
                     .build()
                     .also { INSTANCE = it }
             }
