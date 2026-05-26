@@ -2,6 +2,7 @@ package com.example.myapplication.domain.usecase
 
 import com.example.myapplication.domain.model.BodyMetrics
 import com.example.myapplication.domain.repository.WorkoutStatsRepository
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 
@@ -59,6 +60,13 @@ class GetBodyMetricsUseCase(
                     ))
                 }
             }
+        } catch (e: FirebaseFirestoreException) {
+            // Faza 35 — PERMISSION_DENIED se propagira navzgor, ne ovije v BodyMetrics.
+            // ViewModel ima specifičen catch (e: FirebaseFirestoreException) blok ki nastavi
+            // isAuthExpired = true in emitira BodyUiEvent.AuthExpired.
+            // Brez tega bi channelFlow tihoma ujel izjemo in jo spremenil v errorMessage,
+            // ViewModel catch blok pa nikoli ne bi bil dosežen — auth expiry bi ostal neobravnavan.
+            throw e
         } catch (e: Exception) {
             // Firestore napaka (network, auth) ali close(error) iz callbackFlow
             // propagira kot BodyMetrics z dejanskim sporočilom — brez hardkodiranih ničel

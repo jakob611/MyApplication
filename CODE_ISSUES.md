@@ -1116,6 +1116,36 @@ This is the code block that represents the suggested code change:
 
 **BUILD SUCCESSFUL ✅**
 
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 35b (2026-05-26)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Regresijski unit testi za PERMISSION_DENIED → AuthExpired ✅
+
+**Kontekst:** Faza 35 je dodala `FirebaseFirestoreException(PERMISSION_DENIED)` handling v ViewModel. Brez testov bi prihodnji refaktorji nenamerno pokvarili to zaščito.
+
+**Odkrita arhitekturna napaka (kritično):**
+- `GetBodyMetricsUseCase` je imel le `catch (e: Exception)` ki je ujel `FirebaseFirestoreException` IN ga OVIL v `BodyMetrics(errorMessage)` — izjema NIKOLI ni dosegla ViewModel catch bloka!
+- ViewModel `catch (e: FirebaseFirestoreException)` je bil faktično mrtva koda — `isAuthExpired` se ni nikoli nastavil.
+
+**Rešitev GetBodyMetricsUseCase.kt:**
+- Dodan `catch (e: FirebaseFirestoreException) { throw e }` PRED `catch (e: Exception)` — propagira auth napake navzgor do ViewModel-a
+
+**Novo: `BodyModuleHomeViewModelTest.kt`** (4 unit testi):
+1. `LoadMetrics - PERMISSION_DENIED nastavi isAuthExpired na true` — primarni regresijski test
+2. `LoadMetrics - brez napake isAuthExpired ostane false` — negativni test
+3. `LoadMetrics - neprijavljen uporabnik nastavi errorMessage ne isAuthExpired` — ločuje "nikoli prijavljen" od "seja potekla"
+4. `privzeto stanje ViewModel-a ima isAuthExpired false` — robni primer
+
+**Testna arhitektura:**
+- Brez Mockito/MockK — ročni fake razredi (KMP-friendly, brez Android odvisnosti)
+- `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
+- `kotlinx-coroutines-test:1.8.1` dodan v `testImplementation`
+- `launch { uiEvents.collect }` pred intent dispatchom za Channel event zajem
+
+**BUILD SUCCESSFUL ✅**
+
 
 ```
 <userPrompt>

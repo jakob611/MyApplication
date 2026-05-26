@@ -7,7 +7,7 @@
 ```
 ## [DATUM] — [Kratek naslov spremembe]
 **Datoteke:** seznam.kt, datoteke.kt
-**Kaj:** Kaj točno je bilo sprememnjeno (1-3 stavki)
+**Kaj:** Kaj točno je bilo spremenjeno (1-3 stavki)
 **Zakaj:** Zakaj je bila sprememba potrebna
 **Tveganje:**  nizko /  srednje /  visoko
 ```
@@ -468,7 +468,7 @@ no replicira staro SimpleDateFormat obliko.
 ## 2026-05-22 — Faza 24: Unit Test Pokritost — Nutrition + XP/Level
 **Datoteke:** `app/src/test/.../NutritionCalculationsTest.kt` (NOVO), `app/src/test/.../GamificationXpLevelTest.kt` (NOVO)
 **Kaj:**
-1. **NutritionCalculationsTest.kt** — 30+ unit testov za vse funkcije v `domain/nutrition/NutritionCalculations.kt`: `calculateDailyWaterMl` (klampiranje 1500–5000ml, zaokroževanje na 100ml, gender faktor, workout bonus), `calculateSmartCalories` (vse cilje, minimumi 1500/1200 kcal, diabetes faktor), `calculateRestDayCalories` (prilagoditve po cilju, minimumi), `calculateAdvancedBMR` (Mifflin + Katch-McArdle, starostni faktorji), `calculateEnhancedTDEE` (delta logika, multiplierji), `calculateOptimalMacros` (keto meje 20–50g, zaščita negativnih vrednosti), `calculateAdaptiveTDEE` (confidence, minimum 800 kcal).
+1. **NutritionCalculationsTest.kt** — 30+ unit testov za vse funkcije v `domain/nutrition/NutritionCalculations.kt`: `calculateDailyWaterMl` (klampiranje 1500–5000ml, zaokroževanje na 100ml, gender faktor, workout bonus), `calculateSmartCalories` (vse cilje, minimumi 1500/1200 kcal, diabetes faktor), `calculateRestDayCalories` (prilagojene po cilju, minimumi), `calculateAdvancedBMR` (Mifflin + Katch-McArdle, starostni faktorji), `calculateEnhancedTDEE` (delta logika, multiplierji), `calculateOptimalMacros` (keto meje 20–50g, zaščita negativnih vrednosti), `calculateAdaptiveTDEE` (confidence, minimum 800 kcal).
 2. **GamificationXpLevelTest.kt** — 20+ unit testov za `UserProfile.calculateLevel()`, `xpRequiredForLevel()`, `progressToNextLevel`: mejne vrednosti za vsak nivo, level-up scenarij z ohranitvijo presežka XP, konsistentnost med funkcijami, eksponentna rast zahtev, robni primeri (0 XP, 1M XP).
 **Zakaj:** Testna pokritost ključnih kalkulacij za preprečevanje prihodnjih hroščev brez Android odvisnosti (KMP-ready).
 **Tveganje:** 🟢 nizko (samo dodajanje testov, ni sprememb produkcijske kode)
@@ -482,3 +482,13 @@ no replicira staro SimpleDateFormat obliko.
 4. **Room cache alignment — verifikacija** — Room `workout_sessions` je downstream replika Firestore `runSessions` za ActivityLog (teki). Gym workout seji (`workoutSessions`) se Firestore-je atomarno v `moveToNextDay` transakciji (Faza 34). Ni split-brain — Room nikoli ne tekmuje z Firestore transakcijo.
 **Zakaj:** Compose stability anotacije eliminirajo redundantne globalne rekomposicije. PERMISSION_DENIED je real-world edge case (token expiration po 1h inaktivnosti), ki je pred to spremembo povzročal tiho stuck loading stanje brez izhoda.
 **Tveganje:** 🟢 nizko (additive spremembe — novi event, anotacije, import)
+
+## 2026-05-26 — Faza 35b: Regresijski unit testi + GetBodyMetricsUseCase auth bug fix
+**Datoteke:** `domain/usecase/GetBodyMetricsUseCase.kt`, `app/src/test/.../BodyModuleHomeViewModelTest.kt` (NOVO), `app/build.gradle.kts`
+**Kaj:**
+1. **Kritičen bug fix — GetBodyMetricsUseCase** — `catch (e: Exception)` je ujel `FirebaseFirestoreException` IN ga ovil v `BodyMetrics(errorMessage)` preden je dosegel ViewModel. ViewModel `catch (e: FirebaseFirestoreException)` v `LoadMetrics` je bil faktično mrtva koda — `isAuthExpired` se nikoli ni nastavil. Popravljeno z dodajanjem `catch (e: FirebaseFirestoreException) { throw e }` PRED `catch (e: Exception)` — izjema se propagira navzgor do ViewModel-a.
+2. **BodyModuleHomeViewModelTest.kt** — 4 unit testi za PERMISSION_DENIED → AuthExpired regresijo: primarni test (`isAuthExpired=true` + `AuthExpired` event), negativni test (brez napake → `false`), test za neprijavljenega uporabnika (errorMessage, ne isAuthExpired), test za privzeto stanje.
+3. **kotlinx-coroutines-test:1.8.1** — dodan v `testImplementation` za `runTest`, `UnconfinedTestDispatcher`, `advanceUntilIdle`.
+**Zakaj:** Unit testi zagotavljajo, da prihodnji refaktorji ne pokvarijo auth expiry zaščite (Faza 35). Odkrit bug je bil, da PERMISSION_DENIED handling v VM sploh ni deloval — brez testov bi ostalo neopaženo.
+**Tveganje:** 🟢 nizko (nova testna datoteka + minimalni fix v UseCase catch bloku)
+
