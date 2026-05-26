@@ -7,6 +7,7 @@ import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.model.BodyMeasurementEntry
+import com.example.myapplication.domain.model.DomainException
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.profile.UserProfileRepository
 import com.example.myapplication.domain.repository.BodyMeasurementsRepository
@@ -19,7 +20,6 @@ import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.viewmodels.BodyHomeIntent
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.example.myapplication.viewmodels.BodyUiEvent
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -38,23 +38,25 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35 / Faza 36.
+ * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35 / Faza 37.
  *
- * Zagotavljajo, da FirebaseFirestoreException(PERMISSION_DENIED) pravilno:
+ * Zagotavljajo, da DomainException.AuthenticationExpired pravilno:
  *   1. Sproži BodyUiEvent.AuthExpired na uiEvents Channel
  *   2. Nastavi BodyHomeUiState.isAuthExpired = true
  *   3. Nastavi isLoading = false (UI ne ostane zamrznjen)
  *
- * Faza 36 — Clean Architecture klic chain, ki ga testi pokrivajo:
- *   FakeWorkoutStatsRepository.observeWorkoutStats() wirft FirebaseFirestoreException
- *     → GetBodyMetricsUseCase catch(FirebaseFirestoreException) prevede v DomainException.AuthenticationExpired
+ * Faza 37 — Clean Architecture klic chain, ki ga testi pokrivajo:
+ *   FakeWorkoutStatsRepository.observeWorkoutStats() vrže DomainException.AuthenticationExpired
+ *     → GetBodyMetricsUseCase catch(DomainException) propagira naprej (throw e)
  *     → BodyModuleHomeViewModel catch(DomainException.AuthenticationExpired) ujame
  *     → _ui.update { isAuthExpired=true, isLoading=false }
  *     → _uiEvent.send(BodyUiEvent.AuthExpired)
  *
- * OPOMBA: FakeWorkoutStatsRepository še vedno vrže FirebaseFirestoreException ker simulira
- * dejanski data sloj. GetBodyMetricsUseCase (pravi) jo prevede v DomainException preden
- * doseže ViewModel — presentation sloj nikoli ne vidi Firebase tipov.
+ * Faza 37 — Arhitekturna meja je zdaj POPOLNOMA ČISTA:
+ * FakeWorkoutStatsRepository neposredno vrže DomainException (ne Firebase tipov),
+ * kar simulira novo obnašanje UserWorkoutStatsRepository, ki prevede Firebase
+ * izjeme v DomainException ZNOTRAJ data sloja. Nobeden sloj nad data/ ne vsebuje
+ * Firebase importov.
  *
  * Testna strategija:
  *   - Brez mocking frameworka (Mockito/MockK) — ročni fake razredi (KMP-friendly, hitrejši)
@@ -93,11 +95,12 @@ class BodyModuleHomeViewModelTest {
     /**
      * Lažni WorkoutStatsRepository ki simulira dve stanji:
      *   [throwPermissionDenied = false] → posreduje empty flow (normalno delovanje)
-     *   [throwPermissionDenied = true]  → vrže FirebaseFirestoreException(PERMISSION_DENIED)
+     *   [throwPermissionDenied = true]  → vrže DomainException.AuthenticationExpired
      *
-     * Ključna točka: izjema je vržena ZNOTRAJ flow { ... } bloka, kar simulira
-     * dejansko obnašanje UserWorkoutStatsRepository.callbackFlow-a, ki kliče
-     * close(FirebaseFirestoreException) ob Firestore PERMISSION_DENIED napaki.
+     * Faza 37 — Clean Architecture: Fake zdaj simulira NOVO obnašanje data sloja —
+     * UserWorkoutStatsRepository prevede FirebaseFirestoreException(PERMISSION_DENIED) v
+     * DomainException.AuthenticationExpired ZNOTRAJ callbackFlow-a.
+     * Testi so posledično popolnoma Firebase-free: arhitekturna meja je čista.
      */
     private class FakeWorkoutStatsRepository(
         private val throwPermissionDenied: Boolean = false
@@ -105,12 +108,9 @@ class BodyModuleHomeViewModelTest {
 
         override fun observeWorkoutStats(email: String): Flow<WorkoutStats?> = flow {
             if (throwPermissionDenied) {
-                // Simuliramo PERMISSION_DENIED — auth token je potekel ali pravila so zavrnila dostop.
-                // FirebaseFirestoreException je čista Java RuntimeException — ni Android odvisnosti.
-                throw FirebaseFirestoreException(
-                    "Missing or insufficient permissions.",
-                    FirebaseFirestoreException.Code.PERMISSION_DENIED
-                )
+                // Simuliramo novo obnašanje data sloja: repository že prevede Firebase
+                // PERMISSION_DENIED v platformsko-nevtralni DomainException.
+                throw DomainException.AuthenticationExpired
             }
             // Normalen primer: null = dokument ne obstaja (nova registracija)
             emit(null)

@@ -3,7 +3,6 @@ package com.example.myapplication.domain.usecase
 import com.example.myapplication.domain.model.BodyMetrics
 import com.example.myapplication.domain.model.DomainException
 import com.example.myapplication.domain.repository.WorkoutStatsRepository
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 
@@ -19,9 +18,11 @@ import kotlinx.coroutines.flow.channelFlow
  * BUG-01 Fix: Null snapshot in Firestore napaka sta EKSPLICITNO propagirana prek
  * [BodyMetrics.errorMessage] — nobenih tihih padcev na hardkodirane privzete vrednosti.
  *
- * Faza 36 — Clean Architecture: FirebaseFirestoreException se PREVEDE v [DomainException]
- * tukaj, v domenskem sloju. Presentation sloj (ViewModel) nikoli ne vidi Firebase tipov.
- * Firebase SDK ostane izključno v data/ sloju.
+ * Faza 37 — Clean Architecture (popolna izčistitev):
+ * Firebase SDK je bil premaknen IZKLJUČNO v data sloj (UserWorkoutStatsRepository).
+ * Ta use case je zdaj 100% čist Kotlin — nobenih platform-odvisnih importov.
+ * Repository odda platformsko-nevtralni [DomainException], ki ga ta use case
+ * samo propagira navzgor do ViewModel-a. Presentation sloj nikoli ne vidi Firebase tipov.
  */
 class GetBodyMetricsUseCase(
     private val statsRepo: WorkoutStatsRepository
@@ -59,20 +60,11 @@ class GetBodyMetricsUseCase(
                     ))
                 }
             }
-        } catch (e: FirebaseFirestoreException) {
-            // Faza 36 — Clean Architecture: prevodi platform-specifične Firebase izjeme
-            // v domensko-nevtralne DomainException tipe.
-            //
-            // Firebase SDK SODI v data sloj — presentation sloj (ViewModel) ne sme imeti
-            // import com.google.firebase.* uvozov. DomainException je platforma-neodvisna.
-            //
-            // PERMISSION_DENIED = auth token potekel ali Firestore Security Rules zavrnile
-            // OSTALO             = omrežna/kvotna napaka (UNAVAILABLE, DEADLINE_EXCEEDED…)
-            if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                throw DomainException.AuthenticationExpired
-            } else {
-                throw DomainException.NetworkFailure(e.message ?: "Firestore error: ${e.code}")
-            }
+        } catch (e: DomainException) {
+            // Faza 37 — Clean Architecture: DomainException je že platformsko-nevtralna —
+            // use case jo samo propagira navzgor brez transformacije.
+            // Data sloj (UserWorkoutStatsRepository) je že prevedel Firebase izjeme.
+            throw e
         } catch (e: Exception) {
             // Splošne napake (IO, parsing) — zapakiraj v BodyMetrics za blag prikaz v UI.
             send(BodyMetrics(

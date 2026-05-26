@@ -2,10 +2,12 @@ package com.example.myapplication.data.repository
 
 import android.util.Log
 import com.example.myapplication.data.settings.UserPreferencesRepository
+import com.example.myapplication.domain.model.DomainException
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.repository.WorkoutStats
 import com.example.myapplication.domain.repository.WorkoutStatsRepository
 import com.example.myapplication.data.store.FirestoreHelper
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.awaitClose
@@ -105,9 +107,18 @@ class UserWorkoutStatsRepository(
 
         // Faza 34 — CRIT-01 Fix: Executor premakne callback na Dispatchers.Default —
         // O(n) mapiranje (LocalDate.parse, TimeZone lookup) se ne izvaja na Main niti.
+        //
+        // Faza 37 — Clean Architecture: FirebaseFirestoreException se prevede v platformsko-
+        // nevtralni DomainException TUKAJ, v data sloju. Domain/presentation sloja NIKOLI
+        // ne vidita Firebase tipov — izjemsko mapiranje je izključno odgovornost data sloja.
         val registration = docRef.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
             if (error != null) {
-                close(error)
+                val domainError = if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    DomainException.AuthenticationExpired
+                } else {
+                    DomainException.NetworkFailure(error.message ?: "Firestore listener error: ${error.code}")
+                }
+                close(domainError)
                 return@addSnapshotListener
             }
 
