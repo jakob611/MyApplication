@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.7: newStreak atomarno znotraj _ui.update, var capture)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.8: tryEmit → emit; snapshot lifecycle hardening)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,26 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.8 — BodyModuleHomeViewModel: 100% streak event dostava + snapshot hardening (2026-05-26)
+
+### Fix #1 — tryEmit → suspending emit na SharedFlow
+- 🐛 **Root cause:** `tryEmit()` na `MutableSharedFlow` takoj zavrže event, če ni aktivnih zbiralcev ali je buffer poln. Pri `extraBufferCapacity = 1` je to malo verjetno, ampak ni garantirano.
+- ✅ **Rešitev:** `_streakUpdatedEvent.tryEmit(...)` → `_streakUpdatedEvent.emit(...)`. Ker se klic izvede direktno v `viewModelScope.launch {}`, je suspend klic povsem podprt.
+
+### Fix #2 — Snapshot lifecycle: currentStateSnapshot.weeklyTarget po suspend točki
+- 🐛 **Root cause:** `currentStateSnapshot.weeklyTarget` se je bral znotraj `_ui.update { current -> }` po suspend klicu `updateBodyMetrics.invoke()`. Čeprav je `weeklyTarget` stabilen podatek, referenca na zastareli snapshot po suspend točki ni varna.
+- ✅ **Rešitev:** `currentStateSnapshot.weeklyTarget` → `current.weeklyTarget` znotraj update lambda-e.
+
+### Snapshot lifecycle — končni compliance pregled
+| Spremenljivka | Kje brana | Suspend točka | Status |
+|---|---|---|---|
+| `swapSnapshot` | pred `swapPlanDays.invoke()` | ✅ PRED | Clean |
+| `currentStateSnapshot.isDataLoaded` | pred `updateBodyMetrics.invoke()` | ✅ PRED | Clean |
+| `isRestDay/isExtra/oldPlanDay/oldWeeklyDone` | izvlečeni pred suspend | ✅ lokalne val | Clean |
+| `currentStateSnapshot.weeklyTarget` | **prej** po suspend znotraj `_ui.update` | ✅ ZDAJ `current.weeklyTarget` | Popravljeno |
 
 ---
 

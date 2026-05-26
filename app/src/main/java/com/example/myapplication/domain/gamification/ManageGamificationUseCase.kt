@@ -127,12 +127,17 @@ class ManageGamificationUseCase(
      * @return Novi streak po posodobitvi (ali obstoječi če akcija ni dovoljena).
      */
     suspend fun restDayInitiated(): Int {
-        val todayStatus = runCatching { repository.getTodayStatus() }
-            .getOrDefault(UserDayStatus.WORKOUT_PENDING)
+        // Faza 32.9 — BUG-04 Fix: getTodayStatus napaka propagira navzgor.
+        // Ne defaultiramo na WORKOUT_PENDING ob auth/network napaki — to bi
+        // dovolilo raztezanje ko je bil workout danes morda že opravljen.
+        val todayStatus = repository.getTodayStatus()
 
         // Guard: redni trening je danes že opravljen → raztezanje ni dovoljeno
         if (todayStatus == UserDayStatus.WORKOUT_DONE || todayStatus == UserDayStatus.REST_WORKOUT_DONE) {
-            return runCatching { repository.getCurrentStreak() }.getOrDefault(0)
+            // Faza 32.9 — BUG-04 Fix: Odstranjeno runCatching { }.getOrDefault(0).
+            // Če getCurrentStreak() spodleti, izjema propagira do CompleteRestDay
+            // catch bloka v ViewModel-u → ShowSnackbar namesto streak=0 v UI.
+            return repository.getCurrentStreak()
         }
 
         // REST_DAY_DONE = streak+1, plan_day nespremenjen, +10 XP
@@ -143,7 +148,14 @@ class ManageGamificationUseCase(
             caloriesBurned = 0.0,
             incrementPlanDay = false
         )
-        return if (newStreak > 0) newStreak else runCatching { repository.getCurrentStreak() }.getOrDefault(0)
+        // Faza 32.9 — BUG-04 Fix: De-dup (newStreak==0) ne pokliče getCurrentStreak()
+        // z nevarnim getOrDefault(0). Namesto tega vrnemo newStreak direktno:
+        //   newStreak > 0 → uspešna posodobitev, vrnemo jo
+        //   newStreak == 0 → de-dup (dan je bil že zaključen), vrnemo 0 →
+        //     ViewModel-ov takeIf { it > 0 } bo padel na fallback iz current.streakDays
+        //   newStreak == -1 → Firestore napaka, vrnemo -1 →
+        //     ViewModel-ov takeIf { it > 0 } bo pravilno filtiral
+        return newStreak
     }
 
     /** Worker (ob polnoči) pozove streak check za včerajšnji dan. */

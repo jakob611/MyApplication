@@ -1,6 +1,7 @@
 package com.example.myapplication.domain.repository
 
 import com.example.myapplication.domain.model.UserDayStatus
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Domenski model za workout statistike.
@@ -38,6 +39,14 @@ interface WorkoutStatsRepository {
      * @return WorkoutStats ali null, če podatki niso na voljo
      */
     suspend fun getWorkoutStats(email: String): WorkoutStats?
+
+    /**
+     * Faza 32.9 — Reaktivna Firestore poslušalnica za workout statistike.
+     * Emitira nov [WorkoutStats] ob vsakem Firestore document eventu.
+     * Ob napaki (auth, network) emitira null ali zaključi flow z izjemo.
+     * Kliče [awaitClose] za pravilno odstranitvev poslušalnice.
+     */
+    fun observeWorkoutStats(email: String): Flow<WorkoutStats?>
 
     /** Lokalni fallback: ali je trening opravljen danes (SharedPrefs)? */
     suspend fun isWorkoutDoneToday(): Boolean
