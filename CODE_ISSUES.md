@@ -1182,6 +1182,25 @@ viewmodels/ → DomainException (brez Firebase uvozov!)
 
 **BUILD SUCCESSFUL ✅**
 
+---
+
+### [2026-05-26] Faza 37 — Clean Architecture: Firebase izjemsko mapiranje v data sloj
+
+**Spremembe:**
+- `UserWorkoutStatsRepository.kt` (data): callbackFlow `close(error)` zdaj prevede `FirebaseFirestoreException` → `DomainException` (PERMISSION_DENIED → `AuthenticationExpired`, ostale → `NetworkFailure`). Dodana importa `DomainException` in `FirebaseFirestoreException`.
+- `GetBodyMetricsUseCase.kt` (domain): **POPOLNOMA ČIST KOTLIN** — odstranjen `import com.google.firebase.firestore.FirebaseFirestoreException`, odstranjen `catch(FirebaseFirestoreException)` blok. Dodan `catch(DomainException) { throw e }` za čisto propagacijo.
+- `BodyModuleHomeViewModelTest.kt` (test): `FakeWorkoutStatsRepository` zdaj vrže `DomainException.AuthenticationExpired` direktno. Odstranjen `import com.google.firebase.firestore.FirebaseFirestoreException`. Testi so **100% Firebase-free**.
+
+**Arhitekturna meja po Fazi 37 (POPOLNA):**
+```
+data/       → FirebaseFirestoreException preveden → DomainException (edini lastnik Firebase SDK)
+domain/     → DomainException propagira, 0x Firebase importov
+viewmodels/ → DomainException ujame, 0x Firebase importov
+tests/      → DomainException direktno, 0x Firebase importov
+```
+
+**BUILD SUCCESSFUL ✅**
+
 
 ```
 <userPrompt>
