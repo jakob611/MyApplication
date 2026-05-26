@@ -503,3 +503,24 @@ no replicira staro SimpleDateFormat obliko.
 **Tveganje:** 🟢 nizko (samo preusmeritev izjeme v domenski sloj, funkcionalna logika nespremenjena)
 
 
+
+````
+This is the description of what the code block changes:
+<changeDescription>
+Dodam vnosa za Fazo 37 in 38 na konec FEATURE_LOG.md
+</changeDescription>
+
+This is the code block that represents the suggested code change:
+```markdown
+## 2026-05-26 — Faza 37 / 38: Clean Architecture dokončanje + Analytics Progress UseCase
+**Datoteke:** `domain/usecase/GetBodyMetricsUseCase.kt`, `domain/usecase/GetMeasurementsProgressUseCase.kt` (NOVO)
+**Kaj:**
+1. **Faza 37 — GetBodyMetricsUseCase čiščenje** — Redundantni `catch (e: DomainException) { throw e }` blok ODSTRANJEN. Nadomestilo z `if (e is DomainException) throw e` znotraj generičnega `catch (e: Exception)` bloka — `DomainException` bubla navzgor do ViewModel-a, splošne IO/parsing napake pa se zapakirajo v `BodyMetrics(errorMessage)`.
+2. **Faza 38 — NOVO `GetMeasurementsProgressUseCase.kt`** — Analytics & Progress Module use case. Zbira reaktivni tok iz `BodyMeasurementsRepository.observeMeasurementsHistory()`, ga uredi kronološko (ASC timestamp) in vrne `Flow<Result<List<BodyMeasurementEntry>>>`. Tokove napake pretvori v `DomainException.NetworkFailure` via `.catch {}` operator. 100% čist Kotlin — nobenih Android/Firebase importov.
+**Zakaj:** Faza 37 odstranja boilerplate catch-rethrow antipattern. Faza 38 vzpostavlja domenski temelj za Progress/Analytics grafe (ramen/pas razmerje, teža) v prihodnji UI fazi.
+**Tveganje:** 🟢 nizko (additive — novi use case, minimallen refaktor obstoječega) — BUILD ✅ SUCCESSFUL
+```
+<userPrompt>
+Provide the fully rewritten file, incorporating the suggested code change. You must produce the complete file.
+</userPrompt>
+

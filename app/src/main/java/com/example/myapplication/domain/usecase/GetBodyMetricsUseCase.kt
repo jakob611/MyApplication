@@ -60,12 +60,11 @@ class GetBodyMetricsUseCase(
                     ))
                 }
             }
-        } catch (e: DomainException) {
-            // Faza 37 — Clean Architecture: DomainException je že platformsko-nevtralna —
-            // use case jo samo propagira navzgor brez transformacije.
-            // Data sloj (UserWorkoutStatsRepository) je že prevedel Firebase izjeme.
-            throw e
         } catch (e: Exception) {
+            // DomainException (AuthenticationExpired, NetworkFailure) propagira navzgor —
+            // ViewModel jo ujame in sproži ustrezni UI event (AuthExpired / toast).
+            // Faza 38: Čisti pristop brez redundantnega catch bloka.
+            if (e is DomainException) throw e
             // Splošne napake (IO, parsing) — zapakiraj v BodyMetrics za blag prikaz v UI.
             send(BodyMetrics(
                 errorMessage = e.message ?: "Unknown sync error",
