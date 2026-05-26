@@ -57,6 +57,12 @@ sealed interface BodyUiEvent {
     data object SaveSuccess : BodyUiEvent
     /** Napaka med shranjevanjem — prikaži Snackbar z [message]. */
     data class Error(val message: String) : BodyUiEvent
+    /**
+     * Faza 32.4 — Prehodna napaka enkratnih akcij (CompleteWorkoutSession, SwapDays, CompleteRestDay).
+     * Gre na Channel (enkratni sprejem) — ne onesnaži trajnega _ui.errorMessage stanja.
+     * UI ga prikaže kot Snackbar in ga samodejno zavrže ob dimissal.
+     */
+    data class ShowSnackbar(val message: String) : BodyUiEvent
 }
 
 /**
@@ -488,15 +494,11 @@ class BodyModuleHomeViewModel(
                                     // in spinner mora ostati viden.
                                     isLoading              = activeAsyncOperations.value > 0,
                                     isDataLoaded           = true,
-                                    // Faza 32.3 — Fix #2 (Transient Error Stomping): Firestore snapshot
-                                    // ne sme prebrisati aktivne napake iz SwapDays/CompleteWorkoutSession.
-                                    // Ohranimo current.errorMessage če operacija še teče (activeAsyncOperations > 0)
-                                    // ali če server ne pošilja napake medtem ko lokalni UI že ima eno.
-                                    errorMessage           = when {
-                                        activeAsyncOperations.value > 0                                    -> current.errorMessage
-                                        metrics.errorMessage == null && current.errorMessage != null       -> current.errorMessage
-                                        else                                                               -> metrics.errorMessage
-                                    }
+                                    // Faza 32.4 — Fix #2 (LoadMetrics Error Cleanup): Ker akcijske napake
+                                    // (SwapDays, CompleteWorkoutSession) zdaj grejo na Channel (ShowSnackbar),
+                                    // _ui.errorMessage vsebuje IZKLJUČNO persistentne repo napake iz LoadMetrics.
+                                    // Ohranimo current.errorMessage samo med aktivno operacijo, sicer prepišemo.
+                                    errorMessage           = if (activeAsyncOperations.value > 0) current.errorMessage else metrics.errorMessage
                                 )
                             }
                         }
@@ -531,9 +533,9 @@ class BodyModuleHomeViewModel(
                         ) }
                         _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
                     } catch (e: Exception) {
-                        // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                        // Faza 32.3 — Fix #3: localizedMessage za boljše sporočilo napake.
-                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
+                        // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar), ne _ui.errorMessage.
+                        // _ui.errorMessage ostane čist za persistentne repo napake iz LoadMetrics.
+                        _uiEvent.send(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
@@ -563,9 +565,10 @@ class BodyModuleHomeViewModel(
                         _ui.update { it.copy(isLoading = true, errorMessage = null) }
                         val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
                         val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                        // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                        // Ohranimo samo errorMessage posodobitev.
-                        _ui.update { it.copy(errorMessage = res.exceptionOrNull()?.message) }
+                        // Faza 32.4 — Fix #1: Napaka zamenjave → Channel (Snackbar), ne _ui.errorMessage.
+                        res.onFailure { e ->
+                            _uiEvent.trySend(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
+                        }
                         res.onSuccess { updatedPlan ->
                             // Faza 32.0 — Fix #2: Posodobi živi plan, da LoadMetrics collect blok
                             // pri naslednjem Firestore eventu izračuna todayIsRest iz zamenjanih dni.
@@ -573,9 +576,8 @@ class BodyModuleHomeViewModel(
                             intent.onResult(updatedPlan)
                         }
                     } catch (e: Exception) {
-                        // Faza 32.3 — Fix #3: Zaščita pred nepredvidenimi runtime izjemami (parsing,
-                        // SDK napake itd.) — prepreči crash in pokaže napako v UI.
-                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
+                        // Faza 32.4 — Fix #1: Nepredvidena runtime izjema → Channel (Snackbar).
+                        _uiEvent.send(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
@@ -597,8 +599,8 @@ class BodyModuleHomeViewModel(
 
                         // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
                         if (!currentStateSnapshot.isDataLoaded) {
-                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                            _ui.update { it.copy(errorMessage = "Metrics not yet loaded — please wait.") }
+                            // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar).
+                            _uiEvent.send(BodyUiEvent.ShowSnackbar("Metrics not yet loaded — please wait."))
                             intent.onCompletion(null)
                             return@launch
                         }
@@ -651,14 +653,13 @@ class BodyModuleHomeViewModel(
                             intent.onCompletion(completionResult)
                         }
                         result.onFailure { error ->
-                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                            _ui.update { it.copy(errorMessage = error.message) }
+                            // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar), ne _ui.errorMessage.
+                            _uiEvent.trySend(BodyUiEvent.ShowSnackbar(error.localizedMessage ?: "Unknown Error"))
                             intent.onCompletion(null)
                         }
                     } catch (e: Exception) {
-                        // Faza 32.3 — Fix #3: Zaščita pred nepredvidenimi runtime izjemami (parsing,
-                        // SDK napake itd.) — prepreči crash in pokaže napako v UI.
-                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
+                        // Faza 32.4 — Fix #1: Nepredvidena runtime izjema → Channel (Snackbar).
+                        _uiEvent.send(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
                         intent.onCompletion(null)
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.

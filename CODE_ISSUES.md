@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.2: LoadMetrics reaktivni isLoading + streak fallback guard)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.3: Error stomping fix + fatal exception catch + localizedMessage)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,25 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.3 — BodyModuleHomeViewModel: Resource management + error handling (2026-05-26)
+
+### Fix #1 — Firestore Listener Leaks (Job Management) — že implementirano
+- ℹ️ **Stanje:** `loadMetricsJob` + `loadMetricsJob?.cancel()` + `loadMetricsJob = viewModelScope.launch` so bili implementirani že pri Fazi 23/31.8. Nobene spremembe potrebne.
+
+### Fix #2 — Transient Error Stomping v LoadMetrics
+- 🐛 **Root cause:** `errorMessage = metrics.errorMessage` v collect bloku je slepo prepisal aktivne napake iz `SwapDays`/`CompleteWorkoutSession`. Takoj ko je prišel naslednji Firestore event (brez napake), je napaka izginila, preden je UI sploh uspel prikazati Snackbar.
+- ✅ **Rešitev:** Tristranski `when` pogoj ohrani `current.errorMessage`:
+  1. `activeAsyncOperations.value > 0` → operacija teče → ohrani lokalno napako
+  2. `metrics.errorMessage == null && current.errorMessage != null` → server ne sporoča napake, UI ima aktivno → ohrani
+  3. `else` → normal flow, prevzemi server napako
+
+### Fix #3 — Fatal Exception Protection (catch za SwapDays + CompleteWorkoutSession)
+- 🐛 **Root cause:** `SwapDays` in `CompleteWorkoutSession` sta imela samo `try { ... } finally { ... }` brez `catch` — nepredvidena `RuntimeException` (parsing, SDK napaka) bi ušla iz `finally` in crashala app brez sporočila.
+- ✅ **Rešitev:** Dodan `catch (e: Exception)` z `_ui.update { it.copy(errorMessage = e.localizedMessage) }` pred `finally` za oba intenta. `CompleteWorkoutSession` catch kliče tudi `intent.onCompletion(null)`.
+- ✅ `CompleteRestDay` je imel `e.message` → posodobljeno na `e.localizedMessage` za konsistentnost.
 
 ---
 

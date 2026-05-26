@@ -694,20 +694,28 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
             .flowWithLifecycle(lifecycleOwner.lifecycle)
             .collect { event ->
                 when (event) {
-                    is BodyUiEvent.SaveSuccess -> {
-                        snackbarHostState.showSnackbar(
-                            message  = "✅ Meritve uspešno shranjene!",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                    is BodyUiEvent.Error -> {
-                        snackbarHostState.showSnackbar(
-                            message     = "❌ ${event.message}",
-                            actionLabel = "Zapri",
-                            duration    = SnackbarDuration.Long
-                        )
-                    }
-                }
+                                    is BodyUiEvent.SaveSuccess -> {
+                                        snackbarHostState.showSnackbar(
+                                            message  = "✅ Meritve uspešno shranjene!",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                    }
+                                    is BodyUiEvent.Error -> {
+                                        snackbarHostState.showSnackbar(
+                                            message     = "❌ ${event.message}",
+                                            actionLabel = "Zapri",
+                                            duration    = SnackbarDuration.Long
+                                        )
+                                    }
+                                    is BodyUiEvent.ShowSnackbar -> {
+                                        // Faza 32.4 — Prehodna napaka akcij (SwapDays, CompleteWorkoutSession itd.)
+                                        snackbarHostState.showSnackbar(
+                                            message     = "⚠️ ${event.message}",
+                                            actionLabel = "Zapri",
+                                            duration    = SnackbarDuration.Long
+                                        )
+                                    }
+                                }
             }
     }
 
