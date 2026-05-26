@@ -633,28 +633,33 @@ class BodyModuleHomeViewModel(
                                 isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
                                 else                 -> UserDayStatus.WORKOUT_DONE
                             }
-                            // Faza 31.8 — Anomalija 4: Fallback vrednosti iz snapshot-a.
-                            // Faza 32.2 — Fix #2 (Optimistic Streak Double-Increment): Fallback
-                            // incrementira streak samo če trening res prispeva k streaku IN
-                            // trening danes še ni bil zaključen. Prepreči dvojni increment ob
-                            // multi-tap ali ob kasnejšem LoadMetrics Firestore eventu.
-                            val newStreak  = completionResult?.newStreakDays?.takeIf { it > 0 }
-                                ?: (_ui.value.streakDays + if (todayStatus.contributesToStreak && !_ui.value.isWorkoutDoneToday) 1 else 0)
-                            val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
-                                ?: (oldPlanDay + if (!isExtra) 1 else 0)
-                            val newWeekly  = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
-                                (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
-                            else oldWeeklyDone
 
-                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                            _ui.update { it.copy(
-                                streakDays              = newStreak,
-                                weeklyDone              = newWeekly,
-                                planDay                 = newPlanDay,
-                                isWorkoutDoneToday      = true,
-                                todayStatus             = todayStatus,
-                                showCompletionAnimation = !isExtra
-                            ) }
+                            // Faza 32.7 — Atomarno branje in pisanje stanja znotraj update lambda-e.
+                            // _ui.value.streakDays/.isWorkoutDoneToday so bili prej bralni zunaj
+                            // update bloka → race condition. Zdaj vse odvisnosti od current stanja
+                            // gredo prek `current` parametra lambda-e (atomarni CAS snapshot).
+                            // `var newStreak` capture je varen: CAS loop ob retry posodobi vrednost,
+                            // končna vrednost se ujema s tistim kar je bilo dejansko zapisano.
+                            var newStreak = 0
+                            _ui.update { current ->
+                                newStreak = completionResult?.newStreakDays?.takeIf { it > 0 }
+                                    ?: (current.streakDays + if (todayStatus.contributesToStreak && !current.isWorkoutDoneToday) 1 else 0)
+                                // Faza 31.8 — Anomalija 4: Fallback planDay/weeklyDone iz snapshot-a
+                                // (sta neodvisna od current stanja → snapshot je dovolj).
+                                val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
+                                    ?: (oldPlanDay + if (!isExtra) 1 else 0)
+                                val newWeekly = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
+                                    (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
+                                else oldWeeklyDone
+                                current.copy(
+                                    streakDays              = newStreak,
+                                    weeklyDone              = newWeekly,
+                                    planDay                 = newPlanDay,
+                                    isWorkoutDoneToday      = true,
+                                    todayStatus             = todayStatus,
+                                    showCompletionAnimation = !isExtra
+                                )
+                            }
                             _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
                         } else {

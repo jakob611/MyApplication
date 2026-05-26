@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.5: trySend → suspending send za garantirano dostavo UI eventov)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.6: onSuccess/onFailure → proceduralni if/else + direktni send())  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,33 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.6 — BodyModuleHomeViewModel: Proceduralni rezultat + atomarni send (2026-05-26)
+
+### Fix — Nested launch race condition
+- 🐛 **Root cause:** `result.onFailure { viewModelScope.launch { _uiEvent.send(...) } }` je ustvaril novo gnezdeno korutino z lastnim lifecycle. Vrstni red glede na `finally` blok ni bil garantiran — spinner se je lahko ugasnil PRED prikazom Snackbara.
+- ✅ **Rešitev:** Fluent `.onSuccess { }` / `.onFailure { }` verige zamenjane s proceduralnim `if (result.isSuccess) { ... } else { ... }`. `_uiEvent.send()` se zdaj kliče **direktno** v obstoječi suspend korutini → atomarni vrstni red: Snackbar se pošlje pred `finally` blokom.
+
+### SwapDays — pred/po:
+```kotlin
+// PREJ — nested launch, negarantiran vrstni red:
+res.onFailure { e -> viewModelScope.launch { _uiEvent.send(...) } }
+res.onSuccess { updatedPlan -> currentPlanState.value = updatedPlan; intent.onResult(updatedPlan) }
+
+// ZDAJ — čist proceduralni tok:
+if (res.isSuccess) {
+    currentPlanState.value = res.getOrNull()!!
+    intent.onResult(res.getOrNull()!!)
+} else {
+    _uiEvent.send(BodyUiEvent.ShowSnackbar(res.exceptionOrNull()?.localizedMessage ?: "Unknown Error"))
+}
+```
+
+### CompleteWorkoutSession — pred/po:
+- Odstranjen `result.onSuccess { }` in `result.onFailure { viewModelScope.launch { ... } }`
+- Zamenjano z `if (result.isSuccess) { ... } else { _uiEvent.send(...); intent.onCompletion(null) }`
 
 ---
 
