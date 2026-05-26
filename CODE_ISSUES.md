@@ -1229,7 +1229,50 @@ tests/      → DomainException direktno, 0x Firebase importov
 **BUILD SUCCESSFUL ✅**
 
 
-```
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 39 (2026-05-26)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### BodyUiState — Eliminacija Legacy Dolga + Ločitev Skrbi (Concern Separation)
+
+**NALOGA 1 — Legacy Debt: @Deprecated typealias IZBRISAN ✅**
+- `@Deprecated typealias BodyHomeUiState = BodyUiState` — popolnoma izbrisano.
+  Zero-tolerance politika za neprodukcijsko backwards compat.
+
+**NALOGA 2 — Nemogoča stanja: isDataLoaded IZBRISAN ✅**
+- `val isDataLoaded: Boolean = false` je bil redundantni boolean guard.
+- ✅ Nadomestek: `metrics == null` je inherentni guard — "LOADED ampak brez metrics objeta" ni mogoče stanje.
+- ✅ `BodyModuleHomeViewModel.CompleteWorkoutSession` guard: `!isDataLoaded` → `metrics == null`
+- ✅ `BodyModuleHomeScreen.kt`: `ui.isDataLoaded` → `ui.metrics != null` (2 mesti)
+
+**NALOGA 3 — Concern Separation: BodyUiState SAMO 4 polja ✅**
+`BodyUiState` zdaj vsebuje IZKLJUČNO: `isLoading`, `metrics`, `errorMessage`, `isAuthExpired`.
+
+Ločena področja:
+| Polje | Prej | Zdaj |
+|---|---|---|
+| `showCompletionAnimation` | `BodyUiState.showCompletionAnimation: Boolean` | `BodyModuleHomeViewModel.showCompletionAnimation: StateFlow<Boolean>` |
+| `challenges` | `BodyUiState.challenges: List<Challenge>` | `BodyModuleHomeViewModel.challenges: List<Challenge>` (nespremenljiv val) |
+| `outdoorSuggestion` | `BodyUiState.outdoorSuggestion: String?` | **IZBRISANO** (nikoli klicano iz UI) |
+
+**NALOGA 4 — ViewModel emisije posodobljene ✅**
+- `isDataLoaded = true` → odstranjeno iz LoadMetrics success bloka
+- `HideCompletionAnimation`: `_ui.update { showCompletionAnimation=false }` → `_showCompletionAnimation.value = false`
+- `CompleteWorkoutSession`: `showCompletionAnimation = !isExtra` → `if (!isExtra) _showCompletionAnimation.value = true`
+
+**NALOGA 5 — Screen posodobljen ✅**
+- `val showCompletionAnimation by vm.showCompletionAnimation.collectAsStateWithLifecycle()` — dodan
+- `ui.showCompletionAnimation` → `showCompletionAnimation` (2x)
+- `ui.isDataLoaded` → `ui.metrics != null` (2x)
+- `ui.challenges` → `vm.challenges`
+
+**TESTI ✅**
+- `BodyModuleHomeViewModelTest.kt` — 0 referenc na zbrisana polja, brez sprememb potrebnih.
+
+**BUILD SUCCESSFUL ✅**
+
+---
 <userPrompt>
 Provide the fully rewritten file, incorporating the suggested code change. You must produce the complete file.
 </userPrompt>
