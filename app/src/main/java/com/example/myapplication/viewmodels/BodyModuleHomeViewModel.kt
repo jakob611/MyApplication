@@ -391,11 +391,20 @@ class BodyModuleHomeViewModel(
                 }
                 result.onSuccess {
                     android.util.Log.d("BodyModuleHomeVM", "✅ Meritve shranjene v zgodovino")
-                    _uiEvent.send(BodyUiEvent.SaveSuccess)
+                    // Faza 32.0 — Fix #3 (NonCancellable Channel Exception):
+                    // withContext(NonCancellable) je zaključil zapis, ampak viewModelScope je
+                    // morda že preklican (uporabnik je odšel z zaslona). _uiEvent.send() je
+                    // suspending klic — v preklicani korutini vrže CancellationException in
+                    // preskoči finally blok. Preverimo isActive pred vsakim send() klicem.
+                    if (currentCoroutineContext().isActive) {
+                        _uiEvent.send(BodyUiEvent.SaveSuccess)
+                    }
                 }
                 result.onFailure { e ->
                     android.util.Log.e("BodyModuleHomeVM", "❌ Napaka pri shranjevanju meritev: ${e.message}")
-                    _uiEvent.send(BodyUiEvent.Error("Shranjevanje ni uspelo. Preverite povezavo."))
+                    if (currentCoroutineContext().isActive) {
+                        _uiEvent.send(BodyUiEvent.Error("Shranjevanje ni uspelo. Preverite povezavo."))
+                    }
                 }
             } finally {
                 // Vedno osvobodi, tudi ob nenapovedani izjemi
@@ -418,13 +427,30 @@ class BodyModuleHomeViewModel(
      */
     private var loadMetricsJob: Job? = null
 
+    /**
+     * Faza 32.0 — Fix #1 (State Stomp): Števec aktivnih async operacij.
+     * LoadMetrics ne sme postaviti isLoading=false, dokler SwapDays ali
+     * CompleteWorkoutSession še teče. Ko je vrednost > 0, spinner ostane viden.
+     */
+    private val activeAsyncOperations = MutableStateFlow(0)
+
+    /**
+     * Faza 32.0 — Fix #2 (Stale Plan Snapshot): Živi plan, ki ga LoadMetrics
+     * collect blok bere dinamično. SwapDays onResult ga posodobi, da todayIsRest
+     * izračun nikoli ne temelji na zastarelih podatkih začetne inicializacije.
+     */
+    private val currentPlanState = MutableStateFlow<PlanResult?>(null)
+
     fun handleIntent(intent: BodyHomeIntent) {
         when (intent) {
             is BodyHomeIntent.LoadMetrics -> {
                 // Cancela morebitni prejšnji LoadMetrics — prepreči dvojno branje
                 loadMetricsJob?.cancel()
+                // Faza 32.0 — Fix #2: inicializiraj živi plan pred launch-om, da collect
+                // blok takoj bere pravilni plan tudi ob prvem klicu.
+                currentPlanState.value = intent.plan
                 loadMetricsJob = viewModelScope.launch {
-                    _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
+                    _ui.update { it.copy(isLoading = true, errorMessage = null) }
                     try {
                         getBodyMetrics.invoke(intent.email).collect { metrics ->
                             if (metrics.isLoading) return@collect
@@ -433,37 +459,44 @@ class BodyModuleHomeViewModel(
                             // ravno zaključil mrežni klic in prišel do te točke v milisekundi
                             // POTEM ko novi job že nastavil isLoading = true.
                             // Brez tega guard-a bi stari job prebrisal isLoading = true novega joba.
-                            // currentCoroutineContext().isActive = false → ta korutina je preklicana → tiho zapustimo.
-                            // (isActive ni dostopen neposredno v collect {} lambdi — rabi currentCoroutineContext())
                             if (!currentCoroutineContext().isActive) return@collect
 
-                            val todayIsRest = intent.plan?.weeks
+                            // Faza 32.0 — Fix #2: Beremo iz currentPlanState.value (živi flow),
+                            // ne iz intent.plan (statični snapshot zajet ob inicializaciji).
+                            // SwapDays onResult posodobi currentPlanState → todayIsRest je vedno
+                            // izračunan iz aktualnega plana, ki vsebuje zamenjane dni.
+                            val todayIsRest = currentPlanState.value?.weeks
                                 ?.flatMap { it.days }
                                 ?.firstOrNull { it.dayNumber == metrics.planDay }
                                 ?.isRestDay ?: false
 
-                            _ui.value = _ui.value.copy(
-                                streakDays             = metrics.streakDays,
-                                streakFreezes          = metrics.streakFreezes,
-                                weeklyDone             = metrics.weeklyDone,
-                                weeklyTarget           = metrics.weeklyTarget,
-                                planDay                = metrics.planDay,
-                                totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
-                                isWorkoutDoneToday     = metrics.isWorkoutDoneToday,
-                                dailyKcal              = metrics.dailyKcal,
-                                todayIsRest            = todayIsRest,
-                                todayStatus            = metrics.todayStatus,
-                                isLoading              = false,
-                                isDataLoaded           = true,
-                                errorMessage           = metrics.errorMessage
-                            )
+                            _ui.update { current ->
+                                current.copy(
+                                    streakDays             = metrics.streakDays,
+                                    streakFreezes          = metrics.streakFreezes,
+                                    weeklyDone             = metrics.weeklyDone,
+                                    weeklyTarget           = metrics.weeklyTarget,
+                                    planDay                = metrics.planDay,
+                                    totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
+                                    isWorkoutDoneToday     = metrics.isWorkoutDoneToday,
+                                    dailyKcal              = metrics.dailyKcal,
+                                    todayIsRest            = todayIsRest,
+                                    todayStatus            = metrics.todayStatus,
+                                    // Faza 32.0 — Fix #1 (State Stomp): LoadMetrics ne sme ugasniti
+                                    // spinnerja, če SwapDays ali CompleteWorkoutSession še teče.
+                                    // activeAsyncOperations > 0 → spinner ostane viden.
+                                    isLoading              = activeAsyncOperations.value > 0,
+                                    isDataLoaded           = true,
+                                    errorMessage           = metrics.errorMessage
+                                )
+                            }
                         }
                     } catch (e: CancellationException) {
                         // Faza 31.8 — Anomalija 1: Preklicani stari job ne sme mutirati stanja novega joba.
                         // Re-throwamo, da isLoading = true (ki ga je postavil novi job) ostane nespremenjen.
                         throw e
                     } catch (e: Exception) {
-                        _ui.value = _ui.value.copy(errorMessage = e.message, isLoading = false)
+                        _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
                     }
                 }
             }
@@ -474,24 +507,24 @@ class BodyModuleHomeViewModel(
                     return
                 }
                 viewModelScope.launch {
-                    _ui.value = _ui.value.copy(isLoading = true)
+                    _ui.update { it.copy(isLoading = true) }
                     try {
                         val newStreak = gamificationUseCase.restDayInitiated()
-                        _ui.value = _ui.value.copy(
+                        _ui.update { it.copy(
                             isWorkoutDoneToday = true,
                             streakDays         = newStreak,
                             todayStatus        = UserDayStatus.REST_DAY_DONE,
                             isLoading          = false
-                        )
+                        ) }
                         _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
                     } catch (e: Exception) {
-                        _ui.value = _ui.value.copy(isLoading = false, errorMessage = e.message)
+                        _ui.update { it.copy(isLoading = false, errorMessage = e.message) }
                     }
                 }
             }
 
             is BodyHomeIntent.HideCompletionAnimation ->
-                _ui.value = _ui.value.copy(showCompletionAnimation = false)
+                _ui.update { it.copy(showCompletionAnimation = false) }
 
             is BodyHomeIntent.AcceptChallenge  -> { /* lokalni state */ }
             is BodyHomeIntent.CompleteChallenge -> { /* lokalni state */ }
@@ -500,91 +533,96 @@ class BodyModuleHomeViewModel(
                 // Faza 30.4: ViewModel kliče SAMO SwapPlanDaysUseCase — ne PlanDataStore.
                 // Klic chain: VM → UseCase (validacija + lokalni model) → Repository → DataStore
                 viewModelScope.launch {
-                    // Faza 31.8 — Anomalija 3: Snapshot pred pisanjem in pred suspend klicem.
-                    // lockedDay preberemo iz nespremenljivega snapshot-a, ne iz živega _ui.value.
-                    val swapSnapshot = _ui.value
-                    _ui.value = swapSnapshot.copy(isLoading = true, errorMessage = null)
-                    val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
-                    val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                    // Faza 31.8 — Anomalija 2: Atomarni zapis — isLoading in errorMessage v enem klicu.
-                    // UI ne vidi vmesnega stanja {isLoading=false, errorMessage=null} ko dejansko obstaja napaka.
-                    _ui.update { it.copy(isLoading = false, errorMessage = res.exceptionOrNull()?.message) }
-                    res.onSuccess { updatedPlan ->
-                        // Use case vrne posodobljeni model šele po uspešni Firestore transakciji
-                        intent.onResult(updatedPlan)
+                    // Faza 32.0 — Fix #1: Povečaj števec pred operacijo. LoadMetrics collect
+                    // bo videl activeAsyncOperations > 0 in ne bo ugasnil spinnerja.
+                    activeAsyncOperations.update { it + 1 }
+                    try {
+                        // Faza 31.8 — Anomalija 3: Snapshot pred pisanjem in pred suspend klicem.
+                        val swapSnapshot = _ui.value
+                        _ui.update { it.copy(isLoading = true, errorMessage = null) }
+                        val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
+                        val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
+                        // Faza 31.8 — Anomalija 2: Atomarni zapis — isLoading in errorMessage v enem klicu.
+                        _ui.update { it.copy(isLoading = false, errorMessage = res.exceptionOrNull()?.message) }
+                        res.onSuccess { updatedPlan ->
+                            // Faza 32.0 — Fix #2: Posodobi živi plan, da LoadMetrics collect blok
+                            // pri naslednjem Firestore eventu izračuna todayIsRest iz zamenjanih dni.
+                            currentPlanState.value = updatedPlan
+                            intent.onResult(updatedPlan)
+                        }
+                    } finally {
+                        // Faza 32.0 — Fix #1: Vedno zmanjšaj, tudi ob izjemi.
+                        activeAsyncOperations.update { it - 1 }
                     }
                 }
             }
 
             is BodyHomeIntent.CompleteWorkoutSession -> {
                 viewModelScope.launch {
-                    // Faza 31.8 — Anomalija 3: Nespremenljiv snapshot PRED vsemi pisanji in suspend klici.
-                    // Vsi nadaljnji izračuni (oldPlanDay, newStreak, newWeekly) temeljijo izključno
-                    // na tem snapshot-u, ne na živem _ui.value, ki ga medtem dapat spremeniti druga korutina.
-                    val currentStateSnapshot = _ui.value
-                    _ui.value = currentStateSnapshot.copy(isLoading = true, errorMessage = null)
+                    // Faza 32.0 — Fix #1: Povečaj števec pred operacijo.
+                    activeAsyncOperations.update { it + 1 }
+                    try {
+                        // Faza 31.8 — Anomalija 3: Nespremenljiv snapshot PRED vsemi pisanji in suspend klici.
+                        val currentStateSnapshot = _ui.value
+                        _ui.update { it.copy(isLoading = true, errorMessage = null) }
 
-                    // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
-                    // Prepreči pošiljanje privzetega planDay=1 v updateBodyMetrics, če LoadMetrics
-                    // še ni uspešno zaključil (Firestore napaka, offline, hiter tap ob zagonu).
-                    if (!currentStateSnapshot.isDataLoaded) {
-                        _ui.update { it.copy(isLoading = false, errorMessage = "Metrics not yet loaded — please wait.") }
-                        intent.onCompletion(null)
-                        return@launch
-                    }
-
-                    val isRestDay     = currentStateSnapshot.todayIsRest
-                    val isExtra       = intent.isExtraWorkout
-                    val oldPlanDay    = currentStateSnapshot.planDay
-                    val oldWeeklyDone = currentStateSnapshot.weeklyDone
-
-                    val result = updateBodyMetrics.invoke(
-                        email           = intent.email,
-                        totalKcal       = intent.totalKcal,
-                        totalTimeMin    = intent.totalTimeMin,
-                        exercisesCount  = intent.exerciseResults.size,
-                        planDay         = oldPlanDay,
-                        isExtra         = isExtra,
-                        exerciseResults = intent.exerciseResults,
-                        focusAreas      = intent.focusAreas,
-                        isRestDay       = isRestDay
-                    )
-
-                    result.onSuccess { completionResult ->
-                        // Faza 23: Optimistični update iz WorkoutCompletionResult — brez dodatnega Firestore read-a.
-                        // moveToNextDay() je atomarno že zapisal vse podatke; streak + planDay sta znana.
-                        val todayStatus = when {
-                            isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
-                            else                 -> UserDayStatus.WORKOUT_DONE
+                        // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
+                        if (!currentStateSnapshot.isDataLoaded) {
+                            _ui.update { it.copy(isLoading = false, errorMessage = "Metrics not yet loaded — please wait.") }
+                            intent.onCompletion(null)
+                            return@launch
                         }
-                        // Faza 31.8 — Anomalija 4: Fallback vrednosti beremo iz currentStateSnapshot,
-                        // ne iz živega _ui.value — _ui.value se je med suspend klicem (updateBodyMetrics)
-                        // morda spremenil (npr. vzporedni CompleteRestDay).
-                        // Faza 31.6 avdit: moveToNextDay() vrne -1 ob Firestore napaki in 0 ob
-                        // de-dup preskoku. Oba primera zafiltrirana z takeIf { it > 0 }.
-                        val newStreak  = completionResult?.newStreakDays?.takeIf { it > 0 }
-                            ?: currentStateSnapshot.streakDays
-                        val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
-                            ?: (oldPlanDay + if (!isExtra) 1 else 0)
-                        val newWeekly  = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
-                            (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
-                        else oldWeeklyDone
 
-                        _ui.value = _ui.value.copy(
-                            streakDays              = newStreak,
-                            weeklyDone              = newWeekly,
-                            planDay                 = newPlanDay,
-                            isWorkoutDoneToday      = true,
-                            todayStatus             = todayStatus,
-                            showCompletionAnimation = !isExtra,
-                            isLoading               = false
+                        val isRestDay     = currentStateSnapshot.todayIsRest
+                        val isExtra       = intent.isExtraWorkout
+                        val oldPlanDay    = currentStateSnapshot.planDay
+                        val oldWeeklyDone = currentStateSnapshot.weeklyDone
+
+                        val result = updateBodyMetrics.invoke(
+                            email           = intent.email,
+                            totalKcal       = intent.totalKcal,
+                            totalTimeMin    = intent.totalTimeMin,
+                            exercisesCount  = intent.exerciseResults.size,
+                            planDay         = oldPlanDay,
+                            isExtra         = isExtra,
+                            exerciseResults = intent.exerciseResults,
+                            focusAreas      = intent.focusAreas,
+                            isRestDay       = isRestDay
                         )
-                        _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
-                        intent.onCompletion(completionResult)
-                    }
-                    result.onFailure { error ->
-                        _ui.value = _ui.value.copy(isLoading = false, errorMessage = error.message)
-                        intent.onCompletion(null)
+
+                        result.onSuccess { completionResult ->
+                            val todayStatus = when {
+                                isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
+                                else                 -> UserDayStatus.WORKOUT_DONE
+                            }
+                            // Faza 31.8 — Anomalija 4: Fallback vrednosti iz snapshot-a.
+                            val newStreak  = completionResult?.newStreakDays?.takeIf { it > 0 }
+                                ?: currentStateSnapshot.streakDays
+                            val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
+                                ?: (oldPlanDay + if (!isExtra) 1 else 0)
+                            val newWeekly  = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
+                                (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
+                            else oldWeeklyDone
+
+                            _ui.update { it.copy(
+                                streakDays              = newStreak,
+                                weeklyDone              = newWeekly,
+                                planDay                 = newPlanDay,
+                                isWorkoutDoneToday      = true,
+                                todayStatus             = todayStatus,
+                                showCompletionAnimation = !isExtra,
+                                isLoading               = false
+                            ) }
+                            _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
+                            intent.onCompletion(completionResult)
+                        }
+                        result.onFailure { error ->
+                            _ui.update { it.copy(isLoading = false, errorMessage = error.message) }
+                            intent.onCompletion(null)
+                        }
+                    } finally {
+                        // Faza 32.0 — Fix #1: Vedno zmanjšaj, tudi ob izjemi.
+                        activeAsyncOperations.update { it - 1 }
                     }
                 }
             }
