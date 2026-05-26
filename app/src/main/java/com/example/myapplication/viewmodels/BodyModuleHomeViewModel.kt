@@ -488,7 +488,15 @@ class BodyModuleHomeViewModel(
                                     // in spinner mora ostati viden.
                                     isLoading              = activeAsyncOperations.value > 0,
                                     isDataLoaded           = true,
-                                    errorMessage           = metrics.errorMessage
+                                    // Faza 32.3 — Fix #2 (Transient Error Stomping): Firestore snapshot
+                                    // ne sme prebrisati aktivne napake iz SwapDays/CompleteWorkoutSession.
+                                    // Ohranimo current.errorMessage če operacija še teče (activeAsyncOperations > 0)
+                                    // ali če server ne pošilja napake medtem ko lokalni UI že ima eno.
+                                    errorMessage           = when {
+                                        activeAsyncOperations.value > 0                                    -> current.errorMessage
+                                        metrics.errorMessage == null && current.errorMessage != null       -> current.errorMessage
+                                        else                                                               -> metrics.errorMessage
+                                    }
                                 )
                             }
                         }
@@ -524,7 +532,8 @@ class BodyModuleHomeViewModel(
                         _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
                     } catch (e: Exception) {
                         // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                        _ui.update { it.copy(errorMessage = e.message) }
+                        // Faza 32.3 — Fix #3: localizedMessage za boljše sporočilo napake.
+                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
@@ -563,6 +572,10 @@ class BodyModuleHomeViewModel(
                             currentPlanState.value = updatedPlan
                             intent.onResult(updatedPlan)
                         }
+                    } catch (e: Exception) {
+                        // Faza 32.3 — Fix #3: Zaščita pred nepredvidenimi runtime izjemami (parsing,
+                        // SDK napake itd.) — prepreči crash in pokaže napako v UI.
+                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
@@ -642,6 +655,11 @@ class BodyModuleHomeViewModel(
                             _ui.update { it.copy(errorMessage = error.message) }
                             intent.onCompletion(null)
                         }
+                    } catch (e: Exception) {
+                        // Faza 32.3 — Fix #3: Zaščita pred nepredvidenimi runtime izjemami (parsing,
+                        // SDK napake itd.) — prepreči crash in pokaže napako v UI.
+                        _ui.update { it.copy(errorMessage = e.localizedMessage) }
+                        intent.onCompletion(null)
                     } finally {
                         // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }

@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.1: Multi-tap guards, CompleteRestDay tracking, reaktivni isLoading)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.2: LoadMetrics reaktivni isLoading + streak fallback guard)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1090,7 +1090,25 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 
 ---
 
-## Faza 32.1 — BodyModuleHomeViewModel: Multi-tap guards + reaktivni isLoading (2026-05-26)
+## Faza 32.2 — BodyModuleHomeViewModel: LoadMetrics isLoading + streak fallback guard (2026-05-26)
+
+### Fix #1 — LoadMetrics Premature Loading Overwrite (dokumentacija)
+- ℹ️ **Stanje:** `isLoading = activeAsyncOperations.value > 0` je že bil implementiran v Fazi 32.0. Komentar posodobljen v `Faza 32.0/32.2` za jasnost.
+- ✅ `LoadMetrics` collect blok nikoli ne nastavi `isLoading = false` hardcoded — vedno bere reaktivno vrednost iz `activeAsyncOperations`.
+
+### Fix #2 — Optimistic Streak Double-Increment Glitch
+- 🐛 **Root cause:** Fallback za `newStreak` (ko server ne vrne `newStreakDays`) je slepo dodajal `1` na `streakDays` brez preverjanja ali je bil trening danes že zaključen. Multi-tap ali kasnejši Firestore event bi povzročil dvojni increment.
+- ✅ **Rešitev:** Fallback zdaj preverja oba pogoja pred incrementom:
+  ```kotlin
+  val newStreak = completionResult?.newStreakDays?.takeIf { it > 0 }
+      ?: (_ui.value.streakDays + if (todayStatus.contributesToStreak && !_ui.value.isWorkoutDoneToday) 1 else 0)
+  ```
+  - `todayStatus.contributesToStreak` — streak se poveča samo za `WORKOUT_DONE` (ne za `REST_WORKOUT_DONE`)
+  - `!_ui.value.isWorkoutDoneToday` — prepreči double-increment, če je trening že zaključen
+
+---
+
+## Faza 32.1 — BodyModuleHomeViewModel: Multi-tap guards + reaktivni isLoading v finally (2026-05-26)
 
 ### Fix #1 — Multi-tap guard (Debounce za intente)
 - 🐛 **Root cause:** Hitra zaporedna klika na gumb sta sprožila dve vzporedni korutini — dvojni streak increment, pokvaren UI state.
