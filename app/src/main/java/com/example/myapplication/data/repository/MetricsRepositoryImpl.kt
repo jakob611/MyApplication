@@ -4,42 +4,49 @@ import com.example.myapplication.domain.metrics.MetricsRepository
 import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 /**
  * Android implementation of MetricsRepository using Firebase Firestore.
  */
 class MetricsRepositoryImpl : MetricsRepository {
 
-    override suspend fun saveWeight(uid: String, weightKg: Float, dateStr: String): Result<Unit> {
-        return try {
-            val userRef = FirestoreHelper.getCurrentUserDocRef()
+    /**
+     * [NonCancellable]: Teža se mora zapisati v oba dokumenta (weightLogs + dailyMetrics).
+     * Delni zapis (samo eden od dveh) bi povzročil neskladnost med Progress grafom in
+     * dnevnimi metrikami. NonCancellable zagotovi, da oba .await() klica zaključita.
+     */
+    override suspend fun saveWeight(uid: String, weightKg: Float, dateStr: String): Result<Unit> =
+        withContext(Dispatchers.IO + NonCancellable) {
+            try {
+                val userRef = FirestoreHelper.getCurrentUserDocRef()
 
-            // Save to weightLogs
-            userRef.collection("weightLogs").document(dateStr).set(
-                mapOf(
-                    "date" to dateStr,
-                    "weightKg" to weightKg.toDouble(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                ),
-                SetOptions.merge()
-            ).await()
+                userRef.collection("weightLogs").document(dateStr).set(
+                    mapOf(
+                        "date" to dateStr,
+                        "weightKg" to weightKg.toDouble(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                ).await()
 
-            // Save to dailyMetrics
-            userRef.collection("dailyMetrics").document(dateStr).set(
-                mapOf(
-                    "date" to dateStr,
-                    "weight" to weightKg,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                ),
-                SetOptions.merge()
-            ).await()
+                userRef.collection("dailyMetrics").document(dateStr).set(
+                    mapOf(
+                        "date" to dateStr,
+                        "weight" to weightKg,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                ).await()
 
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
-    }
 
     override suspend fun getWeight(uid: String, dateStr: String): Result<Float> {
         return try {

@@ -11,10 +11,13 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 /**
  * Singleton implementacija repozitorija,
@@ -77,44 +80,56 @@ object FoodRepositoryImpl : NutritionRepository {
         awaitClose { listener.remove() }
     }
 
-    suspend fun logCustomMeal(name: String, itemsList: List<Any>): String {
-        val docRef = FirestoreHelper.getCurrentUserDocRef()
-        val mealData = mapOf(
-            "name" to name,
-            "items" to itemsList,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
+    /**
+     * [NonCancellable]: Firestore transakcija mora biti atomarno zaključena.
+     * Delni custom meal vpis bi pustil dokument brez vseh polj (npr. items array prazen).
+     */
+    suspend fun logCustomMeal(name: String, itemsList: List<Any>): String =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
+            val mealData = mapOf(
+                "name" to name,
+                "items" to itemsList,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                val newRef = docRef.collection("customMeals").document()
+                transaction.set(newRef, mealData)
+                newRef.id
+            }.await()
+        }
 
-        // Zamenjavo klasičnega .add na Batch ali Transaction
-        return FirestoreHelper.getDb().runTransaction { transaction ->
-            val newRef = docRef.collection("customMeals").document()
-            transaction.set(newRef, mealData)
-            newRef.id
-        }.await()
-    }
+    /**
+     * [NonCancellable]: Brisanje mora biti v celoti zaključeno.
+     * Preklicana transakcija po poslanem zahtevku bi pustila dokument v Firestoru.
+     */
+    suspend fun deleteCustomMeal(mealId: String) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
+            val mealRef = docRef.collection("customMeals").document(mealId)
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                transaction.delete(mealRef)
+            }.await()
+        }
 
-    suspend fun deleteCustomMeal(mealId: String) {
-        val docRef = FirestoreHelper.getCurrentUserDocRef()
-        val mealRef = docRef.collection("customMeals").document(mealId)
-
-        FirestoreHelper.getDb().runTransaction { transaction ->
-            transaction.delete(mealRef)
-        }.await()
-    }
-
-    override suspend fun logWater(amountMl: Int, dateStr: String) {
-        val docRef = FirestoreHelper.getCurrentUserDocRef()
-        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
-        val data = mapOf(
-            "date" to dateStr,
-            "waterMl" to amountMl,
-            "updatedAt" to FieldValue.serverTimestamp()
-        )
-        FirestoreHelper.getDb().runTransaction { transaction ->
-            transaction.set(dailyLogRef, data, SetOptions.merge())
-            null
-        }.await()
-    }
+    /**
+     * [NonCancellable]: Vnos vode mora biti shranjen — delni zapis bi pustil napačne vrednosti
+     * v dailyLog dokumentu (waterMl neskladen z updatedAt).
+     */
+    override suspend fun logWater(amountMl: Int, dateStr: String) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
+            val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+            val data = mapOf(
+                "date" to dateStr,
+                "waterMl" to amountMl,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                transaction.set(dailyLogRef, data, SetOptions.merge())
+                null
+            }.await()
+        }
 
     /**
      * Faza 13b — Briši sledeni vnos hrane iz dailyLogs/{dateStr}/items.
@@ -128,59 +143,65 @@ object FoodRepositoryImpl : NutritionRepository {
      * @param dateStr     Datum v obliki "YYYY-MM-DD"
      * @param caloriesKcal Kalorije tega vnosa za odštevanje
      */
-    override suspend fun removeFoodItem(foodId: String, dateStr: String, caloriesKcal: Double) {
-        val docRef      = FirestoreHelper.getCurrentUserDocRef()
-        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+    /**
+     * [NonCancellable]: Firestore transakcija (read-then-write) mora atomarno zaključiti.
+     * Preklicana sredi transakcije bi pustila items seznam in consumedCalories v neskladju.
+     */
+    override suspend fun removeFoodItem(foodId: String, dateStr: String, caloriesKcal: Double) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val docRef      = FirestoreHelper.getCurrentUserDocRef()
+            val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
 
-        FirestoreHelper.getDb().runTransaction { transaction ->
-            val snapshot = transaction.get(dailyLogRef)
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                val snapshot = transaction.get(dailyLogRef)
 
-            // Preberi obstoječi items seznam
-            @Suppress("UNCHECKED_CAST")
-            val existingItems = (snapshot.get("items") as? List<Map<String, Any>>) ?: emptyList()
+                @Suppress("UNCHECKED_CAST")
+                val existingItems = (snapshot.get("items") as? List<Map<String, Any>>) ?: emptyList()
 
-            // Poišči in odstrani element po id — varno tudi če id ne obstaja
-            val updatedItems = existingItems.filter { item ->
-                (item["id"] as? String) != foodId
-            }
+                val updatedItems = existingItems.filter { item ->
+                    (item["id"] as? String) != foodId
+                }
 
-            // Odštej kalorije — coerceAtLeast(0.0) prepreči negativne vrednosti
-            val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
-            val newConsumed     = (currentConsumed - caloriesKcal).coerceAtLeast(0.0)
+                val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
+                val newConsumed     = (currentConsumed - caloriesKcal).coerceAtLeast(0.0)
 
-            transaction.update(dailyLogRef, mapOf(
-                "items"             to updatedItems,
-                "consumedCalories"  to newConsumed,
-                "updatedAt"         to FieldValue.serverTimestamp()
-            ))
-            null
-        }.await()
-    }
+                transaction.update(dailyLogRef, mapOf(
+                    "items"             to updatedItems,
+                    "consumedCalories"  to newConsumed,
+                    "updatedAt"         to FieldValue.serverTimestamp()
+                ))
+                null
+            }.await()
+        }
 
-    override suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) {
-        val docRef = FirestoreHelper.getCurrentUserDocRef()
-        val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
-        val calories = (foodItem["caloriesKcal"] as? Number)?.toDouble() ?: 0.0
+    /**
+     * [NonCancellable]: consumedCalories + items sta atomarno vezana. Preklic med
+     * transakcijo bi pustil kalorije brez živila ali živilo brez kalorij v dailyLog.
+     */
+    override suspend fun logFood(foodItem: Map<String, Any>, dateStr: String) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val docRef = FirestoreHelper.getCurrentUserDocRef()
+            val dailyLogRef = docRef.collection("dailyLogs").document(dateStr)
+            val calories = (foodItem["caloriesKcal"] as? Number)?.toDouble() ?: 0.0
 
-        FirestoreHelper.getDb().runTransaction { transaction ->
-            val snapshot = transaction.get(dailyLogRef)
-            val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
-            val newConsumed = currentConsumed + calories
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                val snapshot = transaction.get(dailyLogRef)
+                val currentConsumed = (snapshot.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
+                val newConsumed = currentConsumed + calories
 
-            val data = mutableMapOf<String, Any>(
-                "consumedCalories" to newConsumed,
-                "items" to FieldValue.arrayUnion(foodItem),
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-            // Ensure the date field is present
-            if (!snapshot.exists() || !snapshot.contains("date")) {
-                data["date"] = dateStr
-            }
+                val data = mutableMapOf<String, Any>(
+                    "consumedCalories" to newConsumed,
+                    "items" to FieldValue.arrayUnion(foodItem),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (!snapshot.exists() || !snapshot.contains("date")) {
+                    data["date"] = dateStr
+                }
 
-            transaction.set(dailyLogRef, data, SetOptions.merge())
-            null
-        }.await()
-    }
+                transaction.set(dailyLogRef, data, SetOptions.merge())
+                null
+            }.await()
+        }
 
     /** Faza 29.8: preseljeno iz NutritionViewModel.getCustomMealItems()
      *  Faza 31.7: FirestoreHelper.getUserRef(uid) namesto direktnega db.collection("users")...

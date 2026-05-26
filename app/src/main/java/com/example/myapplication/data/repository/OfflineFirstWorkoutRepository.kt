@@ -12,9 +12,12 @@ import com.example.myapplication.domain.model.LocationPoint
 import com.example.myapplication.domain.model.RunSession
 import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 /**
  * OfflineFirstWorkoutRepository — Faza 3: Offline-First strategija za Activity Log.
@@ -44,11 +47,12 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
     // ─── Firestore delta sync ─────────────────────────────────────────────
     /**
      * Prenese samo NOVE seje iz Firestora (po lastnem createdAt iz Rooma).
-     * Firestore query: whereGreaterThan("createdAt", lastTimestamp) + orderBy("createdAt")
-     * Ne zahteva kompozitnega indeksa — filter in orderBy sta na istem polju.
+     *
+     * [NonCancellable]: Room UPSERT mora v celoti zaključiti. Delna sinhronizacija
+     * (seje brez GPS ali GPS brez seje) bi pustila Room v nekonsistentnem stanju.
      */
-    suspend fun syncFromFirestore() {
-        val userId = FirestoreHelper.getCurrentUserDocId() ?: return
+    suspend fun syncFromFirestore() = withContext(Dispatchers.IO + NonCancellable) {
+        val userId = FirestoreHelper.getCurrentUserDocId() ?: return@withContext
         val lastTimestamp = db.workoutSessionDao().getLatestCreatedAt(userId) ?: 0L
 
         Log.d(TAG, "Delta sync: lastTimestamp=$lastTimestamp")
@@ -57,7 +61,6 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
             val userRef = FirestoreHelper.getCurrentUserDocRef()
             val baseCollection = userRef.collection("runSessions")
 
-            // Delta: samo novejši teki (prihrani ~90% Firestore reads ob rednih odprtjih)
             val filteredQuery: Query = if (lastTimestamp > 0L) {
                 baseCollection.whereGreaterThan("createdAt", lastTimestamp)
             } else {
@@ -72,7 +75,7 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
 
             if (snapshot.isEmpty) {
                 Log.d(TAG, "Sync: ni novih sej v Firestoreu")
-                return
+                return@withContext
             }
 
             val entities = mutableListOf<WorkoutSessionEntity>()
@@ -102,7 +105,6 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
                         )
                     )
 
-                    // Shrani kompresiran GPS iz Firestore (isRaw=false)
                     val existingCount = db.gpsPointDao().getPointCount(sessionId)
                     if (existingCount == 0) {
                         @Suppress("UNCHECKED_CAST")
@@ -120,7 +122,7 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
                                         speed = (pt["spd"] as? Number)?.toFloat() ?: 0f,
                                         accuracy = (pt["acc"] as? Number)?.toFloat() ?: 0f,
                                         timestamp = (pt["ts"] as? Number)?.toLong() ?: 0L,
-                                        isRaw = false // Firestore kompresiran GPS (RDP)
+                                        isRaw = false
                                     )
                                 } catch (e: Exception) { null }
                             }
@@ -149,47 +151,54 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
     /**
      * Shrani sejo in polne surove GPS točke v Room takoj po teku.
      * isRaw=true → se ohranijo ne glede na Firestore sync.
-     * Kliče se POLEG Firestore save v RunTrackerScreen — ne zamenja ga.
+     *
+     * [NonCancellable]: Seja in GPS točke morajo biti shranjene skupaj. Delni vpis
+     * (seja brez GPS ali GPS brez seje) bi pokvaril Activity Log prikaz.
      */
-    suspend fun insertLocalSession(session: RunSession, rawPoints: List<LocationPoint>) {
-        db.workoutSessionDao().upsert(session.toEntity()) // toEntity() → status = "COMPLETED"
-        if (rawPoints.isNotEmpty()) {
-            // Zbrišemo morebitne stare (kompresiran GPS) in nadomestimo s surovimi
-            db.gpsPointDao().deleteBySessionId(session.id)
-            db.gpsPointDao().insertAll(
-                rawPoints.map { it.toGpsPointEntity(session.id, isRaw = true) }
-            )
-            Log.d(TAG, "Local save: ${rawPoints.size} surovih GPS točk za ${session.id}")
+    suspend fun insertLocalSession(session: RunSession, rawPoints: List<LocationPoint>) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            db.workoutSessionDao().upsert(session.toEntity())
+            if (rawPoints.isNotEmpty()) {
+                db.gpsPointDao().deleteBySessionId(session.id)
+                db.gpsPointDao().insertAll(
+                    rawPoints.map { it.toGpsPointEntity(session.id, isRaw = true) }
+                )
+                Log.d(TAG, "Local save: ${rawPoints.size} surovih GPS točk za ${session.id}")
+            }
         }
-    }
 
     // ─── Faza 15: Checkpoint med tekom (IN_PROGRESS) ──────────────────────
     /**
      * Vmesno shranjevanje med aktivnim sledenjem — status ostane IN_PROGRESS.
      * Prepreči izgubo podatkov ob OOM-kill ali sesutju.
-     * Ko se tek konča, insertLocalSession() prepiše status v COMPLETED.
+     *
+     * [NonCancellable]: Checkpoint mora biti atomarno shranjen. OOM-kill med pisanjem
+     * bi pustil sejo in GPS točke v nekonsistentnem stanju brez možnosti obnove.
      */
-    suspend fun saveCheckpoint(session: RunSession, rawPoints: List<LocationPoint>) {
-        db.workoutSessionDao().upsert(session.toEntity().copy(status = "IN_PROGRESS"))
-        if (rawPoints.isNotEmpty()) {
-            // IGNORE strategija — točke z enakim uid se ne podvajajo
-            db.gpsPointDao().insertAll(
-                rawPoints.map { it.toGpsPointEntity(session.id, isRaw = true) }
-            )
-            Log.d(TAG, "Checkpoint saved: ${rawPoints.size} GPS točk za ${session.id}")
+    suspend fun saveCheckpoint(session: RunSession, rawPoints: List<LocationPoint>) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            db.workoutSessionDao().upsert(session.toEntity().copy(status = "IN_PROGRESS"))
+            if (rawPoints.isNotEmpty()) {
+                db.gpsPointDao().insertAll(
+                    rawPoints.map { it.toGpsPointEntity(session.id, isRaw = true) }
+                )
+                Log.d(TAG, "Checkpoint saved: ${rawPoints.size} GPS točk za ${session.id}")
+            }
         }
-    }
 
     // ─── Faza 15: Obnova po OOM restartu ─────────────────────────────────
     /** Vrne zadnjo aktivno (nedokončano) sejo za obnovo po OOM-kill */
     suspend fun getInProgressSession(): WorkoutSessionEntity? =
         db.workoutSessionDao().getInProgressSession()
 
-    /** Označi sejo kot dokončano (kliče se ob normalnem zaustavitvi) */
-    suspend fun markSessionCompleted(sessionId: String) {
-        // updateStatus() že interno kliče notifyInvalidation() v AppDatabase_Impl
-        db.workoutSessionDao().updateStatus(sessionId, "COMPLETED")
-    }
+    /** Označi sejo kot dokončano (kliče se ob normalnem zaustavitvi).
+     *  [NonCancellable]: Status COMPLETED mora biti shranjen — brez tega bi se seja
+     *  ob ponovnem zagonu aplikacije pojavila kot nedokončana (IN_PROGRESS).
+     */
+    suspend fun markSessionCompleted(sessionId: String) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            db.workoutSessionDao().updateStatus(sessionId, "COMPLETED")
+        }
 
     // ─── GPS točke za prikaz ──────────────────────────────────────────────
     /**
@@ -203,8 +212,11 @@ class OfflineFirstWorkoutRepository(private val db: AppDatabase) {
     }
 
     // ─── Brisanje ─────────────────────────────────────────────────────────
-    /** Room CASCADE bo samodejno zbrisal tudi gps_points za to sejo */
-    suspend fun deleteSession(sessionId: String) {
-        db.workoutSessionDao().deleteById(sessionId)
-    }
+    /** Room CASCADE bo samodejno zbrisal tudi gps_points za to sejo.
+     *  [NonCancellable]: Brisanje mora biti zaključeno — preklicana operacija bi pustila
+     *  siroto sejo v Room brez možnosti ponovnega brisanja (CASCADE se ne izvede). */
+    suspend fun deleteSession(sessionId: String) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            db.workoutSessionDao().deleteById(sessionId)
+        }
 }

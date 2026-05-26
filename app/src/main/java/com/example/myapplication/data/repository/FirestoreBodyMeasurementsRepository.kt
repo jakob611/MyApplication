@@ -6,10 +6,13 @@ import com.example.myapplication.domain.model.BodyMeasurementEntry
 import com.example.myapplication.domain.repository.BodyMeasurementsRepository
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 /**
  * Faza 30.6 — Edina Firestore implementacija BodyMeasurementsRepository.
@@ -42,6 +45,10 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
      *   b) Doda/posodobi dokument v measurements_history z ID = [dateId] (upsert)
      *
      * Faza 30.9 — [dateId] generira UseCase, ne ta razred. Repozitorij je determinističen.
+     *
+     * [NonCancellable]: Firestore batch.commit() mora v celoti zaključiti, tudi če
+     * klic­čev viewModelScope odpove (navigacija stran). Delni Firestore batch == korupcija
+     * (profil posodobljen, history ne — ali obratno). NonCancellable zagotavlja atomarnost.
      */
     override suspend fun saveMeasurements(
         dateId: String,
@@ -49,8 +56,8 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
         waistCm: Double,
         hipCm: Double,
         heightCm: Double
-    ): Result<Unit> {
-        return try {
+    ): Result<Unit> = withContext(Dispatchers.IO + NonCancellable) {
+        try {
             val db = FirestoreHelper.getDb()
             val userRef = FirestoreHelper.getCurrentUserDocRef()
             val timestamp = System.currentTimeMillis()
@@ -78,7 +85,6 @@ class FirestoreBodyMeasurementsRepository : BodyMeasurementsRepository {
                 "timestamp"  to timestamp
             )
             // Faza 31.0 — SetOptions.merge(): ne izbriše polj, ki jih ta klic ne pozna
-            // (npr. "weightKg", "bodyFatPct" ki bi jih dodali drugi moduli v prihodnosti)
             batch.set(historyRef, historyDoc, SetOptions.merge())
 
             batch.commit().await()

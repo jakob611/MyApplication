@@ -9,7 +9,10 @@ import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class FirestoreWorkoutRepository : WorkoutRepository {
 
@@ -29,15 +32,21 @@ class FirestoreWorkoutRepository : WorkoutRepository {
         }
     }
 
-    override suspend fun saveWorkoutSession(email: String, workoutDoc: Map<String, Any>): Boolean {
-        return try {
-            val ref = FirestoreHelper.getCurrentUserDocRef()
-            ref.collection("workoutSessions").add(workoutDoc).await()
-            true
-        } catch (e: Exception) {
-            false
+    /**
+     * [NonCancellable]: workoutSession dokument mora biti shranjen v Firestore v celoti.
+     * Preklicana operacija po .add() klicu (pred .await()) bi se v Firestoreu izvedla,
+     * a klicatelj nikoli ne bi dobil potrditve — tiha izguba podatkov.
+     */
+    override suspend fun saveWorkoutSession(email: String, workoutDoc: Map<String, Any>): Boolean =
+        withContext(Dispatchers.IO + NonCancellable) {
+            try {
+                val ref = FirestoreHelper.getCurrentUserDocRef()
+                ref.collection("workoutSessions").add(workoutDoc).await()
+                true
+            } catch (e: Exception) {
+                false
+            }
         }
-    }
 
     /**
      * Naloži GPS točke za sesijo — poskusi v vrstnem redu:
