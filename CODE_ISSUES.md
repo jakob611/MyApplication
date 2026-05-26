@@ -381,7 +381,7 @@ razdeljena med `processActivityCompletion()` in `updateStreak()`.
 - ✅ `NutritionScreen.kt` uporablja polno kvalificirano ime `com.example.myapplication.domain.nutrition.calculateDailyWaterMl` in `calculateRestDayCalories` — **BREZ NAPAK**.
 
 **2. Dead Code — VERIFICIRANO:**
-- ✅ `network/ai_utils.kt` — Prazna stub datoteka (samo `package` + `TODO` komentar). `requestAIPlan()` se nikjer ne kliče. Datoteka ne povzroča build napak.
+- ✅ `network/ai_utils.kt` — Prazna stub datoteka (samo `package` + `TODO` komentar). `requestAIPlan()` se nikjer ne klicana. Datoteka ne povzroča build napak.
 - ✅ `ui/adapters/ChallengeAdapter.kt` — Prazna stub datoteka. Ne povzroča napak.
 - ✅ `UserProfileManager.updateUserProgressAfterWorkout()` — `@Deprecated` no-op stub. Ni klicana nikjer v produkcijski kodi (samo v komentarju `UpdateBodyMetricsUseCase.kt`).
 
@@ -914,7 +914,7 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - ✅ **`AppViewModel.startInitialSync(context, email)`**: Nova suspending funkcija, ki vsebuje logiko `InitialSyncManager` (preseljenooiz `MainActivity` `LaunchedEffect`).
 - ✅ **`_isProfileReady: MutableStateFlow<Boolean>`** (default `false`) + **`_syncStatusMessage`**: Overlay se vrti čez cel zaslon dokler `isProfileReady != true`.
 - ✅ **`resetSyncState()`**: Pokliče se ob odjavi → naslednji login prikaže svež sync.
-- ✅ **MainActivity**: Zamenjani lokalni `var isSyncing` / `var syncStatusMessage` z `appViewModel.isProfileReady.collectAsState()` / `appViewModel.syncStatusMessage.collectAsState()`. Overlay pogoj spremenjen iz `isSyncing` v `!isProfileReady`.
+- ✅ `MainActivity`: Zamenjani lokalni `var isSyncing` / `var syncStatusMessage` z `appViewModel.isProfileReady.collectAsState()` / `appViewModel.syncStatusMessage.collectAsState()`. Overlay pogoj spremenjen iz `isSyncing` v `!isProfileReady`.
 - **Root cause**: Sync logika je bila vgrajena neposredno v `LaunchedEffect(Unit)` v Composable → ni preživela configuration change (rotacija zaslona). ViewModel sync preživi.
 
 **3. GPS Firestore Data Link (`FirestoreWorkoutRepository.kt`):**
@@ -987,7 +987,7 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - ✅ Vse tri metode (`getCurrentStreak`, `updateStreak`, `runMidnightStreakCheck`) zdaj pišejo/berejo `"streak_days"` namesto `"login_streak"`. Oba polja sta bila prisotna v Firestore — zdaj en vir resnice.
 
 **3. workoutSessions timestamp (`FirestoreWorkoutRepository.kt`):**
-- ✅ `getWeeklyDoneCount` popravljeno: prej je poizvedovalo po polju `"date"` s `Firestore Timestamp`, čeprav dokumenti hranijo epoch ms v polju `"timestamp"`. Zdaj primerja `"timestamp"` (epoch ms). Odstranjen neuporabljen `import com.google.firebase.Timestamp`.
+- ✅ `getWeeklyDoneCount` popravljeno: prej je poizvedovalo po polju `"date"` s `Firestore Timestamp`, čeprav dokumenti hranijo epoch ms v polju `"timestamp"`. Zdaj primerja `"timestamp"` (epoch ms). Odstranjen neuporabljeno `import com.google.firebase.Timestamp`.
 
 **4. GPS koordinate poenotene (`RunSession.kt`):**
 - ✅ `toFirestoreMap()` zdaj shranjuje koordinate z `"lat"`/`"lng"`/`"alt"`/`"spd"`/`"acc"`/`"ts"` — skladno z `RunTrackerScreen`, `RunRouteStore` in `gps_points` subkolekcijo. `FirestoreWorkoutRepository.getRunSessions()` podpira oba formata (backwards compat).
@@ -1087,3 +1087,22 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.0 — BodyModuleHomeViewModel: 3 napredne concurrency ranljivosti (2026-05-26)
+
+### Fix #1 — State Stomp (Race Condition med LoadMetrics in ostalimi operacijami)
+- 🐛 **Root cause:** `LoadMetrics` Firestore emit je prihajal z zakasnitvijo in slepo postavljal `isLoading=false`, čeprav je `CompleteWorkoutSession` ali `SwapDays` še tekel in kazal spinner.
+- 🐛 **Drugi vzrok:** Vse mutacije stanja so bile `_ui.value = _ui.value.copy(...)` (ne-atomarno read-modify-write).
+- ✅ **Rešitev:** Dodan `private val activeAsyncOperations = MutableStateFlow(0)`. `SwapDays` in `CompleteWorkoutSession` ga incrementirata pri vstopu in decrementiratu v `finally` bloku. `LoadMetrics` collect zdaj piše `isLoading = activeAsyncOperations.value > 0` (ne `false`). Vse mutacije zamenjane z `_ui.update { it.copy(...) }`.
+
+### Fix #2 — Stale Plan Snapshot (Zastarela lambda referenca v LoadMetrics)
+- 🐛 **Root cause:** `LoadMetrics` collect blok je bral `intent.plan` — statični snapshot zajet ob inicializaciji. Po uspešnem `SwapDays` (ki vrne posodobljeni plan) je `todayIsRest` izračun ignoriral zamenjane dni.
+- ✅ **Rešitev:** Dodan `private val currentPlanState = MutableStateFlow<PlanResult?>(null)`. `LoadMetrics` ga inicializira z `intent.plan` pred launch-om. `SwapDays` onResult posodobi `currentPlanState.value = updatedPlan`. Collect blok bere `currentPlanState.value` (živo stanje, ne statičen snapshot).
+
+### Fix #3 — NonCancellable Channel Exception (ViewModel Scope Cutoff)
+- 🐛 **Root cause:** `saveBodyMeasurements` po `withContext(NonCancellable)` vrne v preklicano `viewModelScope` kontekst. `_uiEvent.send(...)` je `suspend` klic — v preklicani korutini vrže `CancellationException` in preskoči `finally` blok.
+- ✅ **Rešitev:** `if (currentCoroutineContext().isActive)` guard pred vsakim `_uiEvent.send()` klicem. Event se pošlje le če je korutina še aktivna; `_isSaving = false` v `finally` se vedno izvede.
+
+
