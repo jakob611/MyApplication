@@ -42,7 +42,7 @@ import org.junit.Test
  *
  * Zagotavljajo, da DomainException.AuthenticationExpired pravilno:
  *   1. Sproži BodyUiEvent.AuthExpired na uiEvents Channel
- *   2. Nastavi BodyHomeUiState.isAuthExpired = true
+ *   2. Nastavi BodyUiState.isAuthExpired = true
  *   3. Nastavi isLoading = false (UI ne ostane zamrznjen)
  *
  * Faza 38 — Poenotena Result API pogodba — klic chain, ki ga testi pokrivajo:
@@ -261,7 +261,7 @@ class BodyModuleHomeViewModelTest {
 
         // Assert 1: isAuthExpired mora biti true — UI ve, da seja ni veljavna
         assertTrue(
-            "BodyHomeUiState.isAuthExpired mora biti true po PERMISSION_DENIED napaki." +
+            "BodyUiState.isAuthExpired mora biti true po PERMISSION_DENIED napaki." +
             "\nDejansko: ${vm.ui.value.isAuthExpired}" +
             "\nPoln stanje: ${vm.ui.value}",
             vm.ui.value.isAuthExpired
@@ -269,7 +269,7 @@ class BodyModuleHomeViewModelTest {
 
         // Assert 2: isLoading mora biti false — UI ne sme ostati zamrznjen v loading stanju
         assertFalse(
-            "BodyHomeUiState.isLoading mora biti false po napaki (ne sme ostati zamrznjen)." +
+            "BodyUiState.isLoading mora biti false po napaki (ne sme ostati zamrznjen)." +
             "\nDejansko: ${vm.ui.value.isLoading}",
             vm.ui.value.isLoading
         )
@@ -351,11 +351,11 @@ class BodyModuleHomeViewModelTest {
 
         // Assert: privzeto stanje nima aktivnega auth expiry
         assertFalse(
-            "BodyHomeUiState.isAuthExpired mora biti false v privzetem stanju.",
+            "BodyUiState.isAuthExpired mora biti false v privzetem stanju.",
             vm.ui.value.isAuthExpired
         )
         assertFalse(
-            "BodyHomeUiState.isLoading mora biti false v privzetem stanju.",
+            "BodyUiState.isLoading mora biti false v privzetem stanju.",
             vm.ui.value.isLoading
         )
     }

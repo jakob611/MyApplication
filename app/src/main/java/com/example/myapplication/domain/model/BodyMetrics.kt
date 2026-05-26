@@ -4,12 +4,15 @@ import androidx.compose.runtime.Immutable
 
 /**
  * Čisti domenski model za stanje telesa/treninga.
- * Nadomešča BodyHomeUiState kot return tip GetBodyMetricsUseCase.
+ *
+ * Faza 38 — Unified UI State refactoring:
+ * `isLoading` in `errorMessage` sta premeščena v [BodyUiState] (presentation sloj).
+ * Ta model vsebuje IZKLJUČNO domenske podatke — brez UI/loading stanja.
  *
  * KMP-ready: brez Android, brez viewmodels, brez data layer odvisnosti.
- * ViewModel je odgovoren za mapiranje BodyMetrics → BodyHomeUiState (za UI).
+ * ViewModel je odgovoren za mapiranje BodyMetrics → BodyUiState.metrics.
  *
- * todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
+ * todayStatus je tipsko-varni [UserDayStatus] namesto String.
  *
  * Faza 35 — @Immutable: vse lastnosti so val + primitivni tipi → Compose compiler
  * ne bo zgrešeno označil tega razreda kot "nestabilnega" ob morebitni Compose
@@ -27,7 +30,7 @@ data class BodyMetrics(
     val dailyKcal: Int = 0,
     val todayIsRest: Boolean = false,
     /** Tipsko-varni status današnjega dne */
-    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING
+    // ODSTRANJENO: isLoading → BodyUiState.isLoading (UI zadeva)
+    // ODSTRANJENO: errorMessage → BodyUiState.errorMessage (UI zadeva)
 )

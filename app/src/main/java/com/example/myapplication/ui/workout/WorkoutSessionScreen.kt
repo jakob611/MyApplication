@@ -301,12 +301,12 @@ fun WorkoutSessionScreen(
 
         // ✅ SSOT: beri weeklyTarget/weeklyDone/planDay iz BodyModuleHomeViewModel (Firestore), ne bm_prefs
         // ANTI RACE-CONDITION (Faza 31.8): počakamo da LoadMetrics konča preden beremo planDay.
-        // vm.ui.value.planDay = 1 (default) če Firestore ni vrnil še odgovora → napačen trening generiran.
-        // vm.ui.filter { !it.isLoading }.first() suspenda dokler isLoading → false (Firestore vrne pravo vrednost).
-        // Varno: StateFlow.first() ne blokira vedno — vrne takoj ko je isLoading=false.
+        // vm.ui.value.isLoading = true dokler Firestore ni vrnil pravega odgovora.
+        // vm.ui.filter { !it.isLoading }.first() suspenda dokler isLoading → false.
+        // Faza 38 — Metrile so vgnezdene v ui.metrics: null-safe dostop z ?: fallback.
         val loadedUiState = vm.ui.filter { !it.isLoading }.first()
-        val weeklyTarget = loadedUiState.weeklyTarget.takeIf { it > 0 } ?: 3
-        val weeklyDone = loadedUiState.weeklyDone
+        val weeklyTarget = (loadedUiState.metrics?.weeklyTarget ?: 3).takeIf { it > 0 } ?: 3
+        val weeklyDone = loadedUiState.metrics?.weeklyDone ?: 0
 
         val targetDifficulty: Float = when {
             isRecovery -> {
@@ -348,7 +348,8 @@ fun WorkoutSessionScreen(
                 rawFocus
             }
             // ✅ SSOT: beri plan_day iz loadedUiState (že počakanega/naložen Firestore snapshot) namesto bm_prefs
-            val planDay = loadedUiState.planDay.coerceAtLeast(1)
+            // Faza 38 — metrics je vgnezen: null-safe dostop.
+            val planDay = (loadedUiState.metrics?.planDay ?: 1).coerceAtLeast(1)
             dailyFocus = if (allFocus.any {
                     it.equals("Full Body", ignoreCase = true) ||
                     it.equals("Balance", ignoreCase = true)
@@ -408,7 +409,7 @@ fun WorkoutSessionScreen(
         workoutVm.prepareWorkout(
             focusAreas         = dailyFocus,
             equipment          = equipment,
-            planDay            = vmUiState.planDay.coerceAtLeast(1),
+            planDay            = (vmUiState.metrics?.planDay ?: 1).coerceAtLeast(1),
             exerciseCount      = (currentPlan.sessionLength / 4).coerceAtLeast(4).coerceAtMost(15),
             durationMinutes    = currentPlan.sessionLength,
             targetDifficulty   = targetDifficulty,
@@ -512,7 +513,7 @@ fun WorkoutSessionScreen(
             is WorkoutState.Celebration -> {
                 // ADDED: P1 UX Improvement - Next day preview
                 // ✅ SSOT: beri plan_day iz BodyModuleHomeViewModel (Firestore) namesto bm_prefs
-                val currentDay = vmUiState.planDay
+                val currentDay = vmUiState.metrics?.planDay ?: 1
                 val nextDayNumber = currentDay + 1
                 val nextDay = currentPlan?.weeks?.flatMap { it.days }?.firstOrNull { it.dayNumber == nextDayNumber }
                 val nextDayPreview = when {
@@ -524,8 +525,8 @@ fun WorkoutSessionScreen(
                 WorkoutCelebrationScreen(
                     isExtra = s.isExtra,
                     nextDayPreview = nextDayPreview,
-                    planDay = vmUiState.planDay,  // ✅ Firestore SSOT prek ViewModel
-                    streakDays = vmUiState.streakDays, // ✅ Firestore SSOT — ne bm_prefs
+                    planDay = vmUiState.metrics?.planDay ?: 1,  // ✅ Firestore SSOT prek ViewModel
+                    streakDays = vmUiState.metrics?.streakDays ?: 0, // ✅ Firestore SSOT — ne bm_prefs
                     onContinue = { state = WorkoutState.Report(s.results, s.skipped) }
                 )
             }

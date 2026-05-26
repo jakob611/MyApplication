@@ -1039,7 +1039,34 @@ if (res.isSuccess) {
 - 🐛 **Root cause:** Gumb je bil vedno `enabled = true` — ob kliku preden je `isDataLoaded=true`, VM je `CompleteWorkoutSession` prožil Firestore transakcijo z `planDay=1` (privzeta vrednost, ne Firestore vrednost).
 - ✅ **Rešitev:** `enabled = ui.isDataLoaded` na Start Workout gumbu. Ko `isDataLoaded=false`, gumb je vizualno onemogočen in klik ignoriran.
 
+---
 
+## 📋 DNEVNIK POPRAVKOV — Faza 38 (2026-05-26)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Island 3 Audit — Unified UI State: Eliminacija State Fragmentation v BodyModuleHomeViewModel
+
+**Problem pred Fazo 38:**
+`isAuthExpired` in `errorMessage` sta bila razpršeni spremenljivki na isti ravni kot domenske metrike (`streakDays`, `planDay`...) v `BodyHomeUiState`. To je povzročalo:
+- Race conditions v Jetpack Compose (vmesna nekonsistentna stanja)
+- `BodyMetrics` (domain model) je vseboval UI zadeve: `isLoading` in `errorMessage`
+- `GetBodyMetricsUseCase` je emitiral lažni loading sentinel — API design smell
+
+**Rešitev — 6 spremenjenjih datotek:**
+
+1. **`domain/model/BodyMetrics.kt`** — Odstranjeni `isLoading` in `errorMessage`. Čisti domenski model brez UI stanja.
+2. **`domain/usecase/GetBodyMetricsUseCase.kt`** — Odstranjen loading sentinel. Null snapshot → `Result.failure(DomainException.NetworkFailure(...))`.
+3. **`viewmodels/BodyModuleHomeViewModel.kt`** — `BodyHomeUiState` → `BodyUiState` (kohezivni vzorec):
+   - `isLoading`, `errorMessage`, `isAuthExpired` so top-level UI polja
+   - `metrics: BodyMetrics?` — domenski snapshot (null = še ni naložen)
+   - `BodyHomeUiState` ohranjen kot `@Deprecated typealias`
+4. **`ui/screens/BodyModuleHomeScreen.kt`** — `ui.streakDays` → `ui.metrics?.streakDays ?: 0` (null-safe)
+5. **`ui/workout/WorkoutSessionScreen.kt`** — `vmUiState.planDay` → `vmUiState.metrics?.planDay ?: 1`
+6. **`ui/run/RunTrackerScreen.kt`** — `uiState.planDay` → `uiState.metrics?.planDay ?: 1`
+
+**BUILD SUCCESSFUL ✅**
+
+---
 
 ````
 This is the description of what the code block changes:

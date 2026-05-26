@@ -62,6 +62,9 @@ fun BodyModuleHomeScreen(
     )
     // Faza 30.5: collectAsStateWithLifecycle — prihrani Firestore kvoto in baterijo v ozadju
     val ui by vm.ui.collectAsStateWithLifecycle()
+    // Faza 38 — Unified UI State: priročni alias za domenski snapshot.
+    // Null-safe dostop: metrics?.field ?: default prepreči "Day 1" glitch med loading.
+    val metrics = ui.metrics
 
     // Faza 33 — BUG-12: SnackbarHostState za Scaffold infrastrukturo
     val snackbarHostState = remember { SnackbarHostState() }
@@ -214,15 +217,15 @@ fun BodyModuleHomeScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${ui.weeklyDone} / ${ui.weeklyTarget}",
+                    text = "${metrics?.weeklyDone ?: 0} / ${metrics?.weeklyTarget ?: 3}",
                     color = buttonBlue,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            val target = ui.weeklyTarget.coerceAtLeast(1)
-            val rawProgress = (ui.weeklyDone.toFloat() / target).coerceIn(0f, 1f)
+            val target = (metrics?.weeklyTarget ?: 3).coerceAtLeast(1)
+            val rawProgress = ((metrics?.weeklyDone ?: 0).toFloat() / target).coerceIn(0f, 1f)
             val animatedProgress by animateFloatAsState(
                 targetValue = rawProgress,
                 animationSpec = tween(durationMillis = 1000),
@@ -245,7 +248,7 @@ fun BodyModuleHomeScreen(
             // in danes NI bil že opravljen redni trening (prepreči Stretching Loop).
             // Ref: ManageGamificationUseCase.restDayInitiated() ima server-side guard za dvojno varnost.
             // Faza 21: UserDayStatus.isDoneToday nadomešča trojno String primerjavo
-            if (ui.todayIsRest && !ui.isLoading && !ui.todayStatus.isDoneToday) {
+            if ((metrics?.todayIsRest ?: false) && !ui.isLoading && !(metrics?.todayStatus?.isDoneToday ?: false)) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
                     shape = MaterialTheme.shapes.large,
@@ -281,8 +284,8 @@ fun BodyModuleHomeScreen(
             }
 
             // Your plan card
-            val targetDay = if (ui.isWorkoutDoneToday) (if (ui.planDay > 1) ui.planDay - 1 else 1) else ui.planDay
-            
+            val targetDay = if (metrics?.isWorkoutDoneToday == true) (if ((metrics.planDay) > 1) metrics.planDay - 1 else 1) else (metrics?.planDay ?: 1)
+
             Card(
                 colors = CardDefaults.cardColors(containerColor = planCardBg),
                 shape = MaterialTheme.shapes.large,
@@ -306,7 +309,7 @@ fun BodyModuleHomeScreen(
                     }
                 } else {
                 androidx.compose.animation.AnimatedContent(
-                    targetState = targetDay to ui.todayIsRest,
+                    targetState = targetDay to (metrics?.todayIsRest ?: false),
                     transitionSpec = {
                         androidx.compose.animation.fadeIn(animationSpec = tween(500)) togetherWith 
                         androidx.compose.animation.fadeOut(animationSpec = tween(500))
@@ -369,36 +372,36 @@ fun BodyModuleHomeScreen(
                                     Spacer(Modifier.width(8.dp))
                                     // Animating Checkmark scale
                                     val doneScale = remember { androidx.compose.animation.core.Animatable(0.8f) }
-                                    LaunchedEffect(ui.isWorkoutDoneToday) {
-                                        if (ui.isWorkoutDoneToday) {
+                                    LaunchedEffect(metrics?.isWorkoutDoneToday) {
+                                        if (metrics?.isWorkoutDoneToday == true) {
                                             doneScale.animateTo(1.2f, androidx.compose.animation.core.spring(dampingRatio = 0.5f))
                                             doneScale.animateTo(1f)
                                         }
                                     }
 
                                     Text(
-                                        text = if (ui.isWorkoutDoneToday) "Completed" else "Not yet\ncompleted",
-                                        color = if (ui.isWorkoutDoneToday) UppColors.Orange else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        text = if (metrics?.isWorkoutDoneToday == true) "Completed" else "Not yet\ncompleted",
+                                        color = if (metrics?.isWorkoutDoneToday == true) UppColors.Orange else MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 14.sp,
                                         lineHeight = 16.sp,
                                         fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.scale(if (ui.isWorkoutDoneToday) doneScale.value else 1f)
+                                        modifier = Modifier.scale(if (metrics?.isWorkoutDoneToday == true) doneScale.value else 1f)
                                     )
                                 }
                                 
                                 StreakCounter(
-                                    targetValue = ui.streakDays,
+                                    targetValue = metrics?.streakDays ?: 0,
                                     animate = ui.showCompletionAnimation,
                                     color = buttonBlue,
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 // Faza 13.3: Streak Freeze prikaži, če ima uporabnik zamrznitve
-                                if (ui.streakFreezes > 0) {
+                                if ((metrics?.streakFreezes ?: 0) > 0) {
                                     Spacer(Modifier.height(2.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "❄️ × ${ui.streakFreezes}",
+                                            text = "❄️ × ${metrics?.streakFreezes ?: 0}",
                                             color = MaterialTheme.colorScheme.secondary,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium
@@ -582,9 +585,9 @@ fun BodyModuleHomeScreen(
 
         if (showPlanPath.value) {
             PlanPathDialog(
-                currentDay = ui.planDay,
-                isTodayDone = ui.isWorkoutDoneToday,
-                weeklyGoal = ui.weeklyTarget,
+                currentDay = metrics?.planDay ?: 1,
+                isTodayDone = metrics?.isWorkoutDoneToday ?: false,
+                weeklyGoal = metrics?.weeklyTarget ?: 3,
                 onClose = { showPlanPath.value = false },
                 onStartToday = {
                     onStartWorkout(currentPlan)

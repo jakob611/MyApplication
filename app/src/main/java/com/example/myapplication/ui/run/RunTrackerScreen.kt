@@ -793,8 +793,9 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                             MyViewModelFactory(context.applicationContext)
                                         ).get(BodyModuleHomeViewModel::class.java)
                                         val uiState = bodyVm.ui.value
-                                        val currentDay = uiState.planDay
-                                        if (!uiState.isWorkoutDoneToday && !uiState.todayIsRest && finalDistance > 1000) {
+                                        // Faza 38 — Metrile vgnezdene: null-safe dostop prek metrics?.
+                                        val currentDay = uiState.metrics?.planDay ?: 1
+                                        if (uiState.metrics?.isWorkoutDoneToday != true && uiState.metrics?.todayIsRest != true && finalDistance > 1000) {
                                             bodyVm.handleIntent(
                                                 BodyHomeIntent.CompleteWorkoutSession(
                                                 email = runEmail, // Firebase Auth — pravilni email

@@ -33,8 +33,8 @@ class GetBodyMetricsUseCase(
     private val statsRepo: WorkoutStatsRepository
 ) {
     fun invoke(email: String): Flow<Result<BodyMetrics>> = channelFlow {
-        // Takoj prikaži nalaganje — uspešna emisija z isLoading=true
-        send(Result.success(BodyMetrics(isLoading = true)))
+        // Faza 38 — Unified UI State: odstranil začetni loading sentinel
+        // (ViewModel nastavi isLoading=true neposredno pred tem klicem — ni redundantne emisije).
 
         try {
             // Faza 34 — MED-04 Fix: getDailyCalories() se kešira ENKRAT pred collect zanko.
@@ -54,14 +54,13 @@ class GetBodyMetricsUseCase(
                         dailyKcal              = stats.dailyKcal.takeIf { it > 0 }
                                                  ?: cachedDailyKcal,
                         todayIsRest            = stats.todayIsRest,
-                        todayStatus            = stats.todayStatus,
-                        isLoading              = false
+                        todayStatus            = stats.todayStatus
                     )))
                 } else {
-                    // Faza 32.9 — BUG-01 Fix: dokument ne obstaja ali ni auth uporabnika.
-                    send(Result.success(BodyMetrics(
-                        errorMessage = "Failed to sync with server — check connection",
-                        isLoading    = false
+                    // Faza 38 — Null snapshot → Result.failure (ne tiha meta-polja v BodyMetrics).
+                    // ViewModel ujame to v result.isFailure in nastavi errorMessage v BodyUiState.
+                    send(Result.failure(DomainException.NetworkFailure(
+                        "Failed to sync with server — check connection"
                     )))
                 }
             }

@@ -170,51 +170,68 @@ data class Challenge(
 )
 
 /**
- * UI stanje za Body Home zaslon.
+ * Enotno UI stanje za Body Home zaslon — Unified UI State vzorec (Island 3 refactoring).
  *
- * Faza 21: todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
+ * Faza 38 — State Fragmentation ELIMINIRAN:
+ * Prej so bili `isAuthExpired`, `errorMessage`, `isLoading` RAZPRŠENI med top-level polji
+ * ki so obenem vsebovala domenske podatke (streakDays, planDay...). To je povzročalo:
+ *   - Race condition: Compose je videl vmesna nekonsistentna stanja (isLoading=false + streakDays=0)
+ *   - Nestabilnost pri rekomposiciji: vsaka sprememba kateregakoli polja je triggerirala celoten zaslon
  *
- * Faza 35 — @Immutable: brez te anotacije bi Compose compiler videl List<Challenge>
- * kot nestabilen tip in rekomponiral CELOTEN zaslon ob vsaki spremembi streakDays/planDay
- * (ki nimajo nobene povezave s challenges listom). @Immutable sporoči compilerju, da se
- * vrednosti po kreaciji ne bodo spremenile — rekompozicija samo ob dejanskih sprememb
- * relevantnih parametrov.
+ * Rešitev — KOHEZIVNO stanje:
+ *   [isLoading]     = Firestore load v teku (spinner)
+ *   [metrics]       = domenski snapshot ko je nalaganje uspešno (null = še ni naloženo)
+ *   [errorMessage]  = persistentna napaka iz repo sloja (LoadMetrics)
+ *   [isAuthExpired] = seja je potekla — UI navigira na login
+ *   [isDataLoaded]  = guard za CompleteWorkoutSession (prepreči planDay=1 privzeto transakcijo)
+ *   [showCompletionAnimation] = enkratna animacija po zaključenem treningu
+ *   [challenges]    = lokalni UI state (ni domenski podatek)
+ *
+ * Faza 35 — @Immutable: Compose compiler zaupa, da se vrednosti ne spremenijo po kreaciji
+ * → selektivna rekomposicija samo ob dejansko spremenjenem stanju.
+ *
+ * Dostop do metrik: `ui.metrics?.streakDays ?: 0` — eksplicitni null safety
+ * kadar Firestore še ni vrnil podatkov.
  */
 @Immutable
-data class BodyHomeUiState(
-    val streakDays: Int = 0,
-    val streakFreezes: Int = 0,
-    val weeklyDone: Int = 0,
-    val weeklyTarget: Int = 3,
-    val planDay: Int = 1,
-    val totalWorkoutsCompleted: Int = 0,
-    val workoutsToday: Int = 0,
-    val isWorkoutDoneToday: Boolean = false,
-    val dailyKcal: Int = 0,
-    val showCompletionAnimation: Boolean = false,
-    val todayIsRest: Boolean = false,
-    val outdoorSuggestion: String? = null,
-    val errorMessage: String? = null,
+data class BodyUiState(
+    /** true med aktivnim Firestore/UseCase klicem — prikaži loading spinner. */
     val isLoading: Boolean = false,
-    /** Faza 31.8 — true šele ko LoadMetrics uspešno konča (Firestore vrne podatke).
-     *  false = privzete vrednosti (planDay=1 itd.) so ŠE VEDNO nezanesljive.
-     *  Guard v CompleteWorkoutSession prepreči Firestore transakcijo z napačnim planDay. */
-    val isDataLoaded: Boolean = false,
+    /**
+     * Domenske metrike iz Firestorea — null dokler [LoadMetrics] ni uspešno zaključil.
+     * Ko null: UI prikaže skeleton/spinner, ne privzetih vrednosti (prepreči misleading "Day 1").
+     */
+    val metrics: com.example.myapplication.domain.model.BodyMetrics? = null,
+    /**
+     * Persistentna napaka iz repo sloja (omrežna napaka, null snapshot).
+     * Gre v [_ui.errorMessage] — vidna dokler LoadMetrics ne vrne svežih podatkov.
+     * Akcijske napake (SwapDays, CompleteWorkout) gredo na [BodyUiEvent.ShowSnackbar] Channel.
+     */
+    val errorMessage: String? = null,
     /**
      * Faza 35 — Auth expiration flag.
      * true = Firestore vrnil PERMISSION_DENIED — seja je potekla ali token ni veljaven.
-     * UI mora prikazati opozorilo in preusmeriti na login, namesto da ostane v permanentnem
-     * loading stanju brez napake.
+     * UI mora prikazati opozorilo in preusmeriti na login.
      */
     val isAuthExpired: Boolean = false,
-    /** Tipsko-varni status današnjega dne — nadomešča String "WORKOUT_DONE" itd. */
-    val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
+    /**
+     * Faza 31.8 — Guard za CompleteWorkoutSession.
+     * true šele ko LoadMetrics uspešno konča. Prepreči Firestore transakcijo z napačnim planDay=1.
+     */
+    val isDataLoaded: Boolean = false,
+    /** Enkratna animacija po zaključenem treningu (ne rest day stretching). */
+    val showCompletionAnimation: Boolean = false,
+    val outdoorSuggestion: String? = null,
     val challenges: List<Challenge> = listOf(
         Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Perform core exercises daily.", 500),
         Challenge("c2", "30 days pushups", "Improve your pushups in 30 days. Do 50 pushups/day.", 300),
         Challenge("c3", "Mobility week", "Increase your ROM in 7 days. Stretch every morning.", 150)
     )
 )
+
+/** Ohrani typealiases za backwards compat z obstoječo kodo ki referira BodyHomeUiState. */
+@Deprecated("Zamenjano z BodyUiState (Faza 38 Unified UI State)", ReplaceWith("BodyUiState"))
+typealias BodyHomeUiState = BodyUiState
 
 sealed class BodyHomeIntent {
     /** Faza 33 — BUG-11: email je odstranjen iz intenta. ViewModel ga reši interno prek authStateRepository. */
@@ -473,8 +490,8 @@ class BodyModuleHomeViewModel(
 
     // ──────────────────────────────────────────────────────────────────────────
 
-    private val _ui = MutableStateFlow(BodyHomeUiState())
-    val ui: StateFlow<BodyHomeUiState> = _ui.asStateFlow()
+    private val _ui = MutableStateFlow(BodyUiState())
+    val ui: StateFlow<BodyUiState> = _ui.asStateFlow()
 
     private val _streakUpdatedEvent = MutableSharedFlow<StreakUpdateEvent>(extraBufferCapacity = 1)
     val streakUpdatedEvent: SharedFlow<StreakUpdateEvent> = _streakUpdatedEvent.asSharedFlow()
@@ -531,31 +548,29 @@ class BodyModuleHomeViewModel(
                         getBodyMetrics.invoke(email).collect { result ->
                             if (result.isSuccess) {
                                 val metrics = result.getOrThrow()
-                                if (metrics.isLoading) return@collect
+                                // Faza 38 — Ni več isLoading sentinel v BodyMetrics.
+                                // ViewModel sam nastavi isLoading=true pred klicem, UseCase ne emitira sentinel.
+
                                 // Faza 31.9 — Cooperative Cancellation Guard.
                                 if (!currentCoroutineContext().isActive) return@collect
 
                                 // Faza 32.0 — Fix #2: Beremo iz currentPlanState.value (živi flow).
-                                val todayIsRest = currentPlanState.value?.weeks
+                                // todayIsRest iz plana nadgradi domensko vrednost — plan je avtoritativen vir.
+                                val todayIsRestFromPlan = currentPlanState.value?.weeks
                                     ?.flatMap { it.days }
                                     ?.firstOrNull { it.dayNumber == metrics.planDay }
-                                    ?.isRestDay ?: false
+                                    ?.isRestDay ?: metrics.todayIsRest
+
+                                // Vgnezdi BodyMetrics kot atomarno stanje — ni razpršenih metrik na top-levelju.
+                                val updatedMetrics = metrics.copy(todayIsRest = todayIsRestFromPlan)
 
                                 _ui.update { current ->
                                     current.copy(
-                                        streakDays             = metrics.streakDays,
-                                        streakFreezes          = metrics.streakFreezes,
-                                        weeklyDone             = metrics.weeklyDone,
-                                        weeklyTarget           = metrics.weeklyTarget,
-                                        planDay                = metrics.planDay,
-                                        totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
-                                        isWorkoutDoneToday     = metrics.isWorkoutDoneToday,
-                                        dailyKcal              = metrics.dailyKcal,
-                                        todayIsRest            = todayIsRest,
-                                        todayStatus            = metrics.todayStatus,
-                                        isLoading              = activeAsyncOperations.value > 0,
-                                        isDataLoaded           = true,
-                                        errorMessage           = if (activeAsyncOperations.value > 0) current.errorMessage else metrics.errorMessage
+                                        metrics      = updatedMetrics,
+                                        isLoading    = activeAsyncOperations.value > 0,
+                                        isDataLoaded = true,
+                                        // errorMessage se ohrani med aktivno operacijo; ob novu Firestore eventu se počisti
+                                        errorMessage = if (activeAsyncOperations.value > 0) current.errorMessage else null
                                     )
                                 }
                             } else {
@@ -601,11 +616,16 @@ class BodyModuleHomeViewModel(
                     try {
                         val newStreak = gamificationUseCase.restDayInitiated()
                         // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
-                        _ui.update { it.copy(
-                            isWorkoutDoneToday = true,
-                            streakDays         = newStreak,
-                            todayStatus        = UserDayStatus.REST_DAY_DONE
-                        ) }
+                        // Faza 38 — Metrile vgnezdene: posodobi samo metrics.copy(), ne top-level polja.
+                        _ui.update { current ->
+                            current.copy(
+                                metrics = current.metrics?.copy(
+                                    isWorkoutDoneToday = true,
+                                    streakDays         = newStreak,
+                                    todayStatus        = UserDayStatus.REST_DAY_DONE
+                                )
+                            )
+                        }
                         // Faza 34 — MED-01 Fix: suspending emit() namesto tryEmit() —
                         // garantira dostavo evento tudi ob kratkotrajno nasičenem bufferju.
                         _streakUpdatedEvent.emit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
@@ -640,7 +660,7 @@ class BodyModuleHomeViewModel(
                         // Faza 31.8 — Anomalija 3: Snapshot pred pisanjem in pred suspend klicem.
                         val swapSnapshot = _ui.value
                         _ui.update { it.copy(isLoading = true, errorMessage = null) }
-                        val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
+                        val lockedDay = if (swapSnapshot.metrics?.isWorkoutDoneToday == true) swapSnapshot.metrics.planDay else null
                         val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
                         // Faza 32.6 — Proceduralni if/else nadomešča onSuccess/onFailure verige:
                         // send() se pokliče direktno v suspend korutini → atomarni vrstni red
@@ -684,10 +704,11 @@ class BodyModuleHomeViewModel(
                             return@launch
                         }
 
-                        val isRestDay     = currentStateSnapshot.todayIsRest
+                        // Faza 38 — Metrile dostopamo prek metrics snapshot (ne top-level polj).
+                        val isRestDay     = currentStateSnapshot.metrics?.todayIsRest ?: false
                         val isExtra       = intent.isExtraWorkout
-                        val oldPlanDay    = currentStateSnapshot.planDay
-                        val oldWeeklyDone = currentStateSnapshot.weeklyDone
+                        val oldPlanDay    = currentStateSnapshot.metrics?.planDay ?: 1
+                        val oldWeeklyDone = currentStateSnapshot.metrics?.weeklyDone ?: 0
 
                         val result = updateBodyMetrics.invoke(
                             email           = intent.email,
@@ -712,30 +733,29 @@ class BodyModuleHomeViewModel(
                             }
 
                             // Faza 32.7 — Atomarno branje in pisanje stanja znotraj update lambda-e.
-                            // _ui.value.streakDays/.isWorkoutDoneToday so bili prej bralni zunaj
-                            // update bloka → race condition. Zdaj vse odvisnosti od current stanja
-                            // gredo prek `current` parametra lambda-e (atomarni CAS snapshot).
-                            // `var newStreak` capture je varen: CAS loop ob retry posodobi vrednost,
-                            // končna vrednost se ujema s tistim kar je bilo dejansko zapisano.
+                            // Faza 38 — Metrile vgnezdene: posodobi izključno metrics.copy(), ne top-level polja.
                             var newStreak = 0
                             _ui.update { current ->
+                                val currentStreak   = current.metrics?.streakDays ?: 0
+                                val alreadyDone     = current.metrics?.isWorkoutDoneToday ?: false
                                 newStreak = completionResult?.newStreakDays?.takeIf { it > 0 }
-                                    ?: (current.streakDays + if (todayStatus.contributesToStreak && !current.isWorkoutDoneToday) 1 else 0)
+                                    ?: (currentStreak + if (todayStatus.contributesToStreak && !alreadyDone) 1 else 0)
                                 // Faza 31.8 — Anomalija 4: Fallback planDay/weeklyDone iz snapshot-a
                                 // (oldPlanDay/oldWeeklyDone so lokalne val-e, ne reference na snapshot).
-                                // Faza 32.8 — weeklyTarget: snapshot referenca po suspend točki
-                                // zamenjana z `current.weeklyTarget` — atomarno iz update lambda-e.
+                                // Faza 32.8 — weeklyTarget: current.metrics?.weeklyTarget namesto snapshot-a po suspend točki.
                                 val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
                                     ?: (oldPlanDay + if (!isExtra) 1 else 0)
                                 val newWeekly = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
-                                    (oldWeeklyDone + 1).coerceAtMost(current.weeklyTarget)
+                                    (oldWeeklyDone + 1).coerceAtMost(current.metrics?.weeklyTarget ?: 3)
                                 else oldWeeklyDone
                                 current.copy(
-                                    streakDays              = newStreak,
-                                    weeklyDone              = newWeekly,
-                                    planDay                 = newPlanDay,
-                                    isWorkoutDoneToday      = true,
-                                    todayStatus             = todayStatus,
+                                    metrics = current.metrics?.copy(
+                                        streakDays         = newStreak,
+                                        weeklyDone         = newWeekly,
+                                        planDay            = newPlanDay,
+                                        isWorkoutDoneToday = true,
+                                        todayStatus        = todayStatus
+                                    ),
                                     showCompletionAnimation = !isExtra
                                 )
                             }
