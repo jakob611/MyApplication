@@ -492,3 +492,14 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** Unit testi zagotavljajo, da prihodnji refaktorji ne pokvarijo auth expiry zaščite (Faza 35). Odkrit bug je bil, da PERMISSION_DENIED handling v VM sploh ni deloval — brez testov bi ostalo neopaženo.
 **Tveganje:** 🟢 nizko (nova testna datoteka + minimalni fix v UseCase catch bloku)
 
+## 2026-05-26 — Faza 36: DomainException — eliminacija Firebase SDK iz presentation sloja
+**Datoteke:** `domain/model/DomainException.kt` (NOVO), `domain/usecase/GetBodyMetricsUseCase.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `test/.../BodyModuleHomeViewModelTest.kt`
+**Kaj:**
+1. **NOVO `DomainException.kt`** — platforma-nevtralna `sealed class DomainException : RuntimeException()` z `AuthenticationExpired` in `NetworkFailure(message)` podtipi.
+2. **`GetBodyMetricsUseCase.kt`** — `catch (e: FirebaseFirestoreException)` zdaj PREVEDE: `PERMISSION_DENIED` → `throw DomainException.AuthenticationExpired`, ostale Firestore napake → `throw DomainException.NetworkFailure(e.message)`. Firebase SDK ostane v data sloju.
+3. **`BodyModuleHomeViewModel.kt`** — `import com.google.firebase.firestore.FirebaseFirestoreException` ODSTRANJEN. `catch (e: FirebaseFirestoreException)` zamenjana z `catch (e: DomainException) { when (e) { AuthenticationExpired → ...; NetworkFailure → ... } }`.
+4. **Regresijski testi** — klic chain komentarji posodobljeni (FakeRepo vrže FirebaseFirestoreException → UseCase prevede → VM ujame DomainException).
+**Zakaj:** Presentation sloj (ViewModel) je bil neposredno sklopljen s Firebase SDK — kršitev Clean Architecture. `DomainException` je platforma-nevtralna meja ki omogoča KMP iOS/Desktop reuse brez Firebase odvisnosti.
+**Tveganje:** 🟢 nizko (samo preusmeritev izjeme v domenski sloj, funkcionalna logika nespremenjena)
+
+

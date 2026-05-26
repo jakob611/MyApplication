@@ -20,9 +20,9 @@ import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
+import com.example.myapplication.domain.model.DomainException
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.ValidationResult
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -69,9 +69,12 @@ sealed interface BodyUiEvent {
     data class ShowSnackbar(val message: String) : BodyUiEvent
     /**
      * Faza 35 — Auth expiration event.
-     * Sproži se ob FirebaseFirestoreException(PERMISSION_DENIED) znotraj LoadMetrics.
+     * Sproži se ob [DomainException.AuthenticationExpired] znotraj LoadMetrics.
      * UI prikaže opozorilo, nastavi isAuthExpired=true v stanju in navigira nazaj na login.
      * Nadomešča generično errorMessage, ki bi pustila UI v permanentnem loading stanju.
+     *
+     * Faza 36 — ViewModel ne vidi FirebaseFirestoreException neposredno. GetBodyMetricsUseCase
+     * prevede PERMISSION_DENIED → DomainException.AuthenticationExpired (Clean Architecture meja).
      */
     data object AuthExpired : BodyUiEvent
 }
@@ -566,16 +569,21 @@ class BodyModuleHomeViewModel(
                         // Faza 31.8 — Anomalija 1: Preklicani stari job ne sme mutirati stanja novega joba.
                         // Re-throwamo, da isLoading = true (ki ga je postavil novi job) ostane nespremenjen.
                         throw e
-                    } catch (e: FirebaseFirestoreException) {
-                        // Faza 35 — Graceful auth expiration handling.
-                        // PERMISSION_DENIED = token je potekel ali Firestore pravila niso izpolnjena.
-                        // Namesto generične napake (ki pusti UI v permanentnem loading stanju) emitiramo
-                        // AuthExpired event — UI prikaže opozorilo in preusmeri na login.
-                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                            _ui.update { it.copy(isAuthExpired = true, isLoading = false) }
-                            _uiEvent.send(BodyUiEvent.AuthExpired)
-                        } else {
-                            _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
+                    } catch (e: DomainException) {
+                        // Faza 36 — Clean Architecture: ViewModel lovi domensko-nevtralnih DomainException.
+                        // Firebase SDK uvozi so ODSTRANJENI iz presentation sloja — GetBodyMetricsUseCase
+                        // (domain) je že prevedel FirebaseFirestoreException → DomainException.
+                        when (e) {
+                            is DomainException.AuthenticationExpired -> {
+                                // Auth token potekel / PERMISSION_DENIED — seja ni veljavna.
+                                // UI prikaže opozorilo in navigira nazaj na login.
+                                _ui.update { it.copy(isAuthExpired = true, isLoading = false) }
+                                _uiEvent.send(BodyUiEvent.AuthExpired)
+                            }
+                            is DomainException.NetworkFailure -> {
+                                // Omrežna napaka (UNAVAILABLE, kvota…) — prikaži errorMessage v UI.
+                                _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
+                            }
                         }
                     } catch (e: Exception) {
                         _ui.update { it.copy(errorMessage = e.message, isLoading = false) }

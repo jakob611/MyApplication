@@ -38,19 +38,23 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35.
+ * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35 / Faza 36.
  *
  * Zagotavljajo, da FirebaseFirestoreException(PERMISSION_DENIED) pravilno:
  *   1. Sproži BodyUiEvent.AuthExpired na uiEvents Channel
  *   2. Nastavi BodyHomeUiState.isAuthExpired = true
  *   3. Nastavi isLoading = false (UI ne ostane zamrznjen)
  *
- * Arhitekturni klic chain, ki ga testi pokrivajo:
+ * Faza 36 — Clean Architecture klic chain, ki ga testi pokrivajo:
  *   FakeWorkoutStatsRepository.observeWorkoutStats() wirft FirebaseFirestoreException
- *     → GetBodyMetricsUseCase catch(FirebaseFirestoreException) re-throws
- *     → BodyModuleHomeViewModel catch(FirebaseFirestoreException) ujame
+ *     → GetBodyMetricsUseCase catch(FirebaseFirestoreException) prevede v DomainException.AuthenticationExpired
+ *     → BodyModuleHomeViewModel catch(DomainException.AuthenticationExpired) ujame
  *     → _ui.update { isAuthExpired=true, isLoading=false }
  *     → _uiEvent.send(BodyUiEvent.AuthExpired)
+ *
+ * OPOMBA: FakeWorkoutStatsRepository še vedno vrže FirebaseFirestoreException ker simulira
+ * dejanski data sloj. GetBodyMetricsUseCase (pravi) jo prevede v DomainException preden
+ * doseže ViewModel — presentation sloj nikoli ne vidi Firebase tipov.
  *
  * Testna strategija:
  *   - Brez mocking frameworka (Mockito/MockK) — ročni fake razredi (KMP-friendly, hitrejši)

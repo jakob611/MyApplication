@@ -1146,6 +1146,42 @@ This is the code block that represents the suggested code change:
 
 **BUILD SUCCESSFUL ✅**
 
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 36 (2026-05-26)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### DomainException — eliminacija Firebase SDK iz presentation sloja ✅
+
+**Problem (pred Fazo 36):**
+- `GetBodyMetricsUseCase` (domain) je re-throwal `FirebaseFirestoreException` (Firebase SDK tip)
+- `BodyModuleHomeViewModel` (presentation) je imel `import com.google.firebase.firestore.FirebaseFirestoreException`
+- → Presentation sloj je bil **neposredno sklopljen s Firebase SDK** — kršitev Clean Architecture
+
+**Rešitev:**
+1. **NOVO: `domain/model/DomainException.kt`** — platforma-nevtralna sealed class:
+   ```kotlin
+   sealed class DomainException : RuntimeException() {
+       data object AuthenticationExpired : DomainException()
+       data class NetworkFailure(override val message: String) : DomainException()
+   }
+   ```
+2. **`GetBodyMetricsUseCase.kt`** — `catch (e: FirebaseFirestoreException)` PREVEDE v `DomainException`:
+   - `PERMISSION_DENIED` → `throw DomainException.AuthenticationExpired`
+   - Ostale Firestore napake → `throw DomainException.NetworkFailure(e.message)`
+3. **`BodyModuleHomeViewModel.kt`** — Firebase uvoz ODSTRANJEN, `catch (e: DomainException)` z `when`:
+   - `AuthenticationExpired` → `isAuthExpired=true` + `AuthExpired` event
+   - `NetworkFailure` → `errorMessage` v UI stanju
+
+**Arhitekturna meja po Fazi 36:**
+```
+data/    → FirebaseFirestoreException (smeje biti tukaj)
+domain/  → DomainException (prevajalna meja)
+viewmodels/ → DomainException (brez Firebase uvozov!)
+```
+
+**BUILD SUCCESSFUL ✅**
+
 
 ```
 <userPrompt>
