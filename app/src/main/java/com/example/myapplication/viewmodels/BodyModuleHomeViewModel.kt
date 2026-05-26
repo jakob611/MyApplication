@@ -1,5 +1,6 @@
 package com.example.myapplication.viewmodels
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,6 +22,7 @@ import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.domain.usecase.SwapPlanDaysUseCase
 import com.example.myapplication.domain.usecase.UpdateBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.ValidationResult
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -65,6 +67,13 @@ sealed interface BodyUiEvent {
      * UI ga prikaže kot Snackbar in ga samodejno zavrže ob dimissal.
      */
     data class ShowSnackbar(val message: String) : BodyUiEvent
+    /**
+     * Faza 35 — Auth expiration event.
+     * Sproži se ob FirebaseFirestoreException(PERMISSION_DENIED) znotraj LoadMetrics.
+     * UI prikaže opozorilo, nastavi isAuthExpired=true v stanju in navigira nazaj na login.
+     * Nadomešča generično errorMessage, ki bi pustila UI v permanentnem loading stanju.
+     */
+    data object AuthExpired : BodyUiEvent
 }
 
 /**
@@ -141,6 +150,12 @@ data class BodyMeasurementsInputText(
     val hip: String      = ""
 )
 
+/**
+ * Faza 35 — @Immutable: Compose compiler vidi data class kot stabilen tip.
+ * Brez anotacije: List<Challenge> v BodyHomeUiState bi povzročil globalno nestabilnost
+ * in nepotrebne rekomposicije celotnega zaslona.
+ */
+@Immutable
 data class Challenge(
     val id: String,
     val title: String,
@@ -155,7 +170,14 @@ data class Challenge(
  * UI stanje za Body Home zaslon.
  *
  * Faza 21: todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
+ *
+ * Faza 35 — @Immutable: brez te anotacije bi Compose compiler videl List<Challenge>
+ * kot nestabilen tip in rekomponiral CELOTEN zaslon ob vsaki spremembi streakDays/planDay
+ * (ki nimajo nobene povezave s challenges listom). @Immutable sporoči compilerju, da se
+ * vrednosti po kreaciji ne bodo spremenile — rekompozicija samo ob dejanskih sprememb
+ * relevantnih parametrov.
  */
+@Immutable
 data class BodyHomeUiState(
     val streakDays: Int = 0,
     val streakFreezes: Int = 0,
@@ -175,6 +197,13 @@ data class BodyHomeUiState(
      *  false = privzete vrednosti (planDay=1 itd.) so ŠE VEDNO nezanesljive.
      *  Guard v CompleteWorkoutSession prepreči Firestore transakcijo z napačnim planDay. */
     val isDataLoaded: Boolean = false,
+    /**
+     * Faza 35 — Auth expiration flag.
+     * true = Firestore vrnil PERMISSION_DENIED — seja je potekla ali token ni veljaven.
+     * UI mora prikazati opozorilo in preusmeriti na login, namesto da ostane v permanentnem
+     * loading stanju brez napake.
+     */
+    val isAuthExpired: Boolean = false,
     /** Tipsko-varni status današnjega dne — nadomešča String "WORKOUT_DONE" itd. */
     val todayStatus: UserDayStatus = UserDayStatus.WORKOUT_PENDING,
     val challenges: List<Challenge> = listOf(
@@ -203,6 +232,8 @@ sealed class BodyHomeIntent {
     ) : BodyHomeIntent()
 }
 
+/** Faza 35 — @Immutable: samo primitivne val lastnosti — Compose stability. */
+@Immutable
 data class StreakUpdateEvent(val newStreak: Int, val isRestDay: Boolean = false)
 
 /**
@@ -535,6 +566,17 @@ class BodyModuleHomeViewModel(
                         // Faza 31.8 — Anomalija 1: Preklicani stari job ne sme mutirati stanja novega joba.
                         // Re-throwamo, da isLoading = true (ki ga je postavil novi job) ostane nespremenjen.
                         throw e
+                    } catch (e: FirebaseFirestoreException) {
+                        // Faza 35 — Graceful auth expiration handling.
+                        // PERMISSION_DENIED = token je potekel ali Firestore pravila niso izpolnjena.
+                        // Namesto generične napake (ki pusti UI v permanentnem loading stanju) emitiramo
+                        // AuthExpired event — UI prikaže opozorilo in preusmeri na login.
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            _ui.update { it.copy(isAuthExpired = true, isLoading = false) }
+                            _uiEvent.send(BodyUiEvent.AuthExpired)
+                        } else {
+                            _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
+                        }
                     } catch (e: Exception) {
                         _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
                     }

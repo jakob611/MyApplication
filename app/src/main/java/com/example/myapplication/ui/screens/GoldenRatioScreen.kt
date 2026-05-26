@@ -707,12 +707,20 @@ fun GoldenRatioScreen(onBack: () -> Unit = {}) {
                                             duration    = SnackbarDuration.Long
                                         )
                                     }
-                                    is BodyUiEvent.ShowSnackbar -> {
+                                     is BodyUiEvent.ShowSnackbar -> {
                                         // Faza 32.4 — Prehodna napaka akcij (SwapDays, CompleteWorkoutSession itd.)
                                         snackbarHostState.showSnackbar(
                                             message     = "⚠️ ${event.message}",
                                             actionLabel = "Zapri",
                                             duration    = SnackbarDuration.Long
+                                        )
+                                    }
+                                    // Faza 35 — AuthExpired: na tem zaslonu samo prikaži opozorilo.
+                                    // BodyModuleHomeScreen že skrbi za navigacijo nazaj.
+                                    is BodyUiEvent.AuthExpired -> {
+                                        snackbarHostState.showSnackbar(
+                                            message  = "⚠️ Seja je potekla. Prijavite se znova.",
+                                            duration = SnackbarDuration.Long
                                         )
                                     }
                                 }

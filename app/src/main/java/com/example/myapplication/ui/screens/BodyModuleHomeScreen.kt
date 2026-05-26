@@ -79,6 +79,17 @@ fun BodyModuleHomeScreen(
                 )
                 is BodyUiEvent.SaveSuccess  -> snackbarHostState.showSnackbar("✅ Shranjeno")
                 is BodyUiEvent.Error        -> snackbarHostState.showSnackbar("❌ ${event.message}")
+                // Faza 35 — Auth expiration: seja potekla ali token ni veljaven.
+                // Prikaži opozorilo in navigiraj nazaj — MainAppContent bo reaktivno zaznal
+                // odjavo ali prazen auth stanje in preusmeril na login.
+                is BodyUiEvent.AuthExpired  -> {
+                    snackbarHostState.showSnackbar(
+                        message     = "⚠️ Seja je potekla. Prijavite se znova.",
+                        actionLabel = "OK",
+                        duration    = SnackbarDuration.Long
+                    )
+                    onBack()
+                }
             }
         }
     }

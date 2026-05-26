@@ -472,3 +472,13 @@ no replicira staro SimpleDateFormat obliko.
 2. **GamificationXpLevelTest.kt** — 20+ unit testov za `UserProfile.calculateLevel()`, `xpRequiredForLevel()`, `progressToNextLevel`: mejne vrednosti za vsak nivo, level-up scenarij z ohranitvijo presežka XP, konsistentnost med funkcijami, eksponentna rast zahtev, robni primeri (0 XP, 1M XP).
 **Zakaj:** Testna pokritost ključnih kalkulacij za preprečevanje prihodnjih hroščev brez Android odvisnosti (KMP-ready).
 **Tveganje:** 🟢 nizko (samo dodajanje testov, ni sprememb produkcijske kode)
+
+## 2026-05-26 — Faza 35: Compose Stability + Auth Expiration Hardening
+**Datoteke:** `viewmodels/BodyModuleHomeViewModel.kt`, `ui/screens/BodyModuleHomeScreen.kt`, `ui/screens/GoldenRatioScreen.kt`, `domain/model/BodyMetrics.kt`
+**Kaj:**
+1. **@Immutable anotacije** — `Challenge`, `BodyHomeUiState`, `StreakUpdateEvent`, `BodyMetrics` anotirani z `@androidx.compose.runtime.Immutable`. Brez te anotacije Compose compiler vidi `List<Challenge>` v `BodyHomeUiState` kot nestabilen tip → globalna rekomposicija zaslona ob vsaki spremembi `streakDays`/`planDay` ki nimata nobene zveze s challenge listom.
+2. **collectAsStateWithLifecycle() — verifikacija** — `vm.ui.collectAsStateWithLifecycle()` je bil že implementiran v Fazi 30.5 (vrstica 64). Dokumentirano da je Firestore listener lifecycle management pravilno nastavljen.
+3. **AuthExpired event + PERMISSION_DENIED handling** — Dodan `BodyUiEvent.AuthExpired` v sealed interface. `LoadMetrics` catch blok sedaj loči `FirebaseFirestoreException(PERMISSION_DENIED)` od generalnih napak → emitira `AuthExpired` event in nastavi `isAuthExpired=true` v stanju namesto generičnega `errorMessage` (ki bi pustil UI v permanentnem loading stanju). `BodyModuleHomeScreen` prikaže opozorilo + navigira nazaj. `GoldenRatioScreen` prikaže opozorilo (exhaustive when).
+4. **Room cache alignment — verifikacija** — Room `workout_sessions` je downstream replika Firestore `runSessions` za ActivityLog (teki). Gym workout seji (`workoutSessions`) se Firestore-je atomarno v `moveToNextDay` transakciji (Faza 34). Ni split-brain — Room nikoli ne tekmuje z Firestore transakcijo.
+**Zakaj:** Compose stability anotacije eliminirajo redundantne globalne rekomposicije. PERMISSION_DENIED je real-world edge case (token expiration po 1h inaktivnosti), ki je pred to spremembo povzročal tiho stuck loading stanje brez izhoda.
+**Tveganje:** 🟢 nizko (additive spremembe — novi event, anotacije, import)

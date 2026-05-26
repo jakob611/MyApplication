@@ -1,5 +1,7 @@
 package com.example.myapplication.domain.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Čisti domenski model za stanje telesa/treninga.
  * Nadomešča BodyHomeUiState kot return tip GetBodyMetricsUseCase.
@@ -8,7 +10,12 @@ package com.example.myapplication.domain.model
  * ViewModel je odgovoren za mapiranje BodyMetrics → BodyHomeUiState (za UI).
  *
  * todayStatus je zdaj tipsko-varni [UserDayStatus] namesto String.
+ *
+ * Faza 35 — @Immutable: vse lastnosti so val + primitivni tipi → Compose compiler
+ * ne bo zgrešeno označil tega razreda kot "nestabilnega" ob morebitni Compose
+ * integraciji domenskega sloja.
  */
+@Immutable
 data class BodyMetrics(
     val streakDays: Int = 0,
     val streakFreezes: Int = 0,

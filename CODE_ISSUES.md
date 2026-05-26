@@ -1091,6 +1091,32 @@ This is the code block that represents the suggested code change:
 **BUILD SUCCESSFUL ✅**
 
 
+## 📋 DNEVNIK POPRAVKOV — Faza 35 (2026-05-26)
+
+### Compose Stability + Auth Expiration Hardening — 4 spremembe, 4 datoteke
+
+**NALOGA 1 — @Immutable anotacije na UI state razredih ✅**
+- 🐛 **Root cause:** `BodyHomeUiState` vsebuje `val challenges: List<Challenge>`. Kotlin `List<T>` je za Compose compiler nestabilen tip (ker `List` interface nima garancij nespremenljivosti). Posledica: Compose compiler označi `BodyHomeUiState` kot nestabilno → globalna rekomposicija **celotnega** `BodyModuleHomeScreen` ob VSAKI spremembi katerekoli lastnosti (vključno z `streakDays`, `planDay`, `weeklyDone` ki nimajo nobene zveze s challenge listom).
+- ✅ **Rešitev:** `Challenge`, `BodyHomeUiState`, `StreakUpdateEvent`, `BodyMetrics` — vsi anotirani z `@androidx.compose.runtime.Immutable`. Compose compiler zaupa, da se vrednosti po kreaciji instance ne bodo spremenile → selektivna rekomposicija samo pri dejanskih data sprememb.
+
+**NALOGA 2 — collectAsStateWithLifecycle() → VERIFICIRANO ✅**  
+- ℹ️ `vm.ui.collectAsStateWithLifecycle()` je bil že implementiran v Fazi 30.5 (BodyModuleHomeScreen vrstica 64). Ko app gre v ozadje, `collectAsStateWithLifecycle()` ustavi branje UI stanja → prihrani CPU procesiranje. Firestore Snapshot Listener ostane aktiv v `viewModelScope` (normalno za ViewModel arhitekturo), toda Firestore SDK sam minimizira omrežni promet med ozadjem. Nobenih sprememb potrebnih.
+
+**NALOGA 3 — PERMISSION_DENIED → AuthExpired event ✅**
+- 🐛 **Root cause:** `catch (e: Exception)` v `LoadMetrics` je lovil `FirebaseFirestoreException(PERMISSION_DENIED)` enako kot vse druge napake in emitiral generični `errorMessage`. UI je ostal v permanentnem loading stanju brez vizualnega izhoda za uporabnika — `isLoading=false` se ni postavil, Snackbar se ni prikazal, navigacija ni bila sprožena.
+- ✅ **Rešitev:**
+  - `BodyUiEvent.AuthExpired` dodan v sealed interface
+  - `LoadMetrics` catch blok: `catch (e: FirebaseFirestoreException)` PRED `catch (e: Exception)` — loči PERMISSION_DENIED od omrežnih napak
+  - PERMISSION_DENIED → `_ui.update { isAuthExpired=true, isLoading=false }` + `_uiEvent.send(AuthExpired)`
+  - `BodyModuleHomeScreen`: `AuthExpired` event → Snackbar "Seja je potekla" + `onBack()` — navigira iz zaslona
+  - `GoldenRatioScreen`: exhaustive `when` posodobljen z `AuthExpired` vejo (samo Snackbar, brez navigacije)
+
+**NALOGA 4 — Room cache alignment → VERIFICIRANO ✅**
+- ℹ️ **Arhitekturna analiza:** Room tabela `workout_sessions` je downstream replika Firestore `runSessions` kolekcije za ActivityLog (teki). Polnjena prek `OfflineFirstWorkoutRepository.syncFromFirestore()` in `insertLocalSession()` — strogo DOWNSTREAM. Gym workout seji (`workoutSessions`) se zapisujejo atomarno ZNOTRAJ `moveToNextDay` Firestore transakcije (Faza 34 CRIT-03 fix). Room **nikoli** ne tekmuje z Firestore transakcijami za iste podatke — ni split-brain možen.
+
+**BUILD SUCCESSFUL ✅**
+
+
 ```
 <userPrompt>
 Provide the fully rewritten file, incorporating the suggested code change. You must produce the complete file.
