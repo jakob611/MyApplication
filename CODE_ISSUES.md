@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.6: onSuccess/onFailure → proceduralni if/else + direktni send())  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.7: newStreak atomarno znotraj _ui.update, var capture)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,23 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.7 — BodyModuleHomeViewModel: Atomarno branje stanja v update lambda (2026-05-26)
+
+### Fix — _ui.value race condition v CompleteWorkoutSession
+- 🐛 **Root cause:** `newStreak` je bila izračunana z `_ui.value.streakDays` in `_ui.value.isWorkoutDoneToday` **zunaj** `_ui.update { }` lambda-e. Med branjem in fiksiranjem vrednosti bi lahko `LoadMetrics` ali drug event spremenil stanje — streak bi seračunal iz zastarelega snapshota.
+- ✅ **Rešitev:** Celotna `newStreak` kalkulacija premaknjena v `_ui.update { current -> }`. `_ui.value.*` zamenjano z `current.*`.  
+  `var newStreak = 0` capture: ker `MutableStateFlow.update {}` interno dela CAS loop, vrednost ob uspešnem zapisu vedno ustreza temu kar je dejansko zapisano v StateFlow.
+
+### Compliance scan — preostale _ui.value reference
+| Vrstica | Vzorec | Status |
+|---|---|---|
+| `val swapSnapshot = _ui.value` | Snapshot pred operacijo | ✅ Pravilen vzorec |
+| `val currentStateSnapshot = _ui.value` | Snapshot pred operacijo | ✅ Pravilen vzorec |
+
+Nobenih `_ui.value` branj med `_ui.update {}` bloki — poln compliance.
 
 ---
 

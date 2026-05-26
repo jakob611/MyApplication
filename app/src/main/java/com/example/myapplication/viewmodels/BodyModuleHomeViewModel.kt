@@ -645,11 +645,13 @@ class BodyModuleHomeViewModel(
                                 newStreak = completionResult?.newStreakDays?.takeIf { it > 0 }
                                     ?: (current.streakDays + if (todayStatus.contributesToStreak && !current.isWorkoutDoneToday) 1 else 0)
                                 // Faza 31.8 — Anomalija 4: Fallback planDay/weeklyDone iz snapshot-a
-                                // (sta neodvisna od current stanja → snapshot je dovolj).
+                                // (oldPlanDay/oldWeeklyDone so lokalne val-e, ne reference na snapshot).
+                                // Faza 32.8 — weeklyTarget: snapshot referenca po suspend točki
+                                // zamenjana z `current.weeklyTarget` — atomarno iz update lambda-e.
                                 val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
                                     ?: (oldPlanDay + if (!isExtra) 1 else 0)
                                 val newWeekly = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
-                                    (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
+                                    (oldWeeklyDone + 1).coerceAtMost(current.weeklyTarget)
                                 else oldWeeklyDone
                                 current.copy(
                                     streakDays              = newStreak,
@@ -660,7 +662,7 @@ class BodyModuleHomeViewModel(
                                     showCompletionAnimation = !isExtra
                                 )
                             }
-                            _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
+                            _streakUpdatedEvent.emit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
                         } else {
                             // Faza 32.4/32.6 — Napaka → direktni send() brez nested launch.
