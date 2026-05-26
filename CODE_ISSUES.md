@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.3: Error stomping fix + fatal exception catch + localizedMessage)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.4: Sticky Error fix — akcijske napake → ShowSnackbar Channel)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,33 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.4 — BodyModuleHomeViewModel: Sticky Error ločitev (2026-05-26)
+
+### Arhitekturna odločitev: Ločitev trajnih in prehodnih napak
+| Tip napake | Kanal | Primer |
+|---|---|---|
+| Repo/Firestore napake | `_ui.errorMessage` (trajno) | LoadMetrics omrežna napaka |
+| Akcijske napake | `BodyUiEvent.ShowSnackbar` (enkratni) | SwapDays, CompleteWorkoutSession, CompleteRestDay |
+
+### Fix #1 — Redirect Action Errors → ShowSnackbar Channel
+- 🐛 **Root cause:** `_ui.update { it.copy(errorMessage = ...) }` iz akcij je onesnaževal trajni UI state. Snackbar se je ob rotaciji zaslona prikazal znova (StateFlow replay). Naslednji LoadMetrics emit je po nepotrebnem brisal napako.
+- ✅ **Rešitev:** Dodan `BodyUiEvent.ShowSnackbar(message: String)` v sealed interface. Vse `_ui.update { it.copy(errorMessage...) }` iz `CompleteRestDay`, `SwapDays`, `CompleteWorkoutSession` zamenjane z:
+  - `_uiEvent.send(BodyUiEvent.ShowSnackbar(...))` — v suspend kontekstu (catch bloki, early return)  
+  - `_uiEvent.trySend(BodyUiEvent.ShowSnackbar(...))` — v non-suspend lambdah (`onFailure`, `onSuccess`)
+
+### Fix #2 — LoadMetrics Error Cleanup (poenostavitev)
+- 🐛 **Root cause:** Kompleksni `when` blok iz Faze 32.3 je bil potreben samo zato, ker so akcijske napake pisale v `_ui.errorMessage`.
+- ✅ **Rešitev:** `when` blok zamenjan z čisto reaktivno enolično logiko:
+  ```kotlin
+  errorMessage = if (activeAsyncOperations.value > 0) current.errorMessage else metrics.errorMessage
+  ```
+
+### Popravljene datoteke
+- `BodyModuleHomeViewModel.kt` — ShowSnackbar event, LoadMetrics cleanup
+- `GoldenRatioScreen.kt` — dodan `is BodyUiEvent.ShowSnackbar` v when blok (sealed interface je exhaustive)
 
 ---
 

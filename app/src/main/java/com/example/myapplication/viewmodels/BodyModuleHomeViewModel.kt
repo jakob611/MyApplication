@@ -566,8 +566,12 @@ class BodyModuleHomeViewModel(
                         val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
                         val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
                         // Faza 32.4 — Fix #1: Napaka zamenjave → Channel (Snackbar), ne _ui.errorMessage.
+                        // Faza 32.5 — trySend → viewModelScope.launch + send: trySend takoj zavrže
+                        // event če je kanal zaseden; send garantira dostavo.
                         res.onFailure { e ->
-                            _uiEvent.trySend(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
+                            viewModelScope.launch {
+                                _uiEvent.send(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
+                            }
                         }
                         res.onSuccess { updatedPlan ->
                             // Faza 32.0 — Fix #2: Posodobi živi plan, da LoadMetrics collect blok
@@ -654,7 +658,10 @@ class BodyModuleHomeViewModel(
                         }
                         result.onFailure { error ->
                             // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar), ne _ui.errorMessage.
-                            _uiEvent.trySend(BodyUiEvent.ShowSnackbar(error.localizedMessage ?: "Unknown Error"))
+                            // Faza 32.5 — trySend → viewModelScope.launch + send: garantirana dostava.
+                            viewModelScope.launch {
+                                _uiEvent.send(BodyUiEvent.ShowSnackbar(error.localizedMessage ?: "Unknown Error"))
+                            }
                             intent.onCompletion(null)
                         }
                     } catch (e: Exception) {
