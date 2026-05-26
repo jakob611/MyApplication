@@ -507,18 +507,27 @@ class BodyModuleHomeViewModel(
                     return
                 }
                 viewModelScope.launch {
+                    // Faza 32.1 — Multi-tap guard: prezri klik, če operacija že teče.
+                    if (activeAsyncOperations.value > 0) return@launch
+                    // Faza 32.1 — Fix #2: Dodaj tracking kot pri SwapDays.
+                    activeAsyncOperations.update { it + 1 }
                     _ui.update { it.copy(isLoading = true) }
                     try {
                         val newStreak = gamificationUseCase.restDayInitiated()
+                        // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
                         _ui.update { it.copy(
                             isWorkoutDoneToday = true,
                             streakDays         = newStreak,
-                            todayStatus        = UserDayStatus.REST_DAY_DONE,
-                            isLoading          = false
+                            todayStatus        = UserDayStatus.REST_DAY_DONE
                         ) }
                         _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
                     } catch (e: Exception) {
-                        _ui.update { it.copy(isLoading = false, errorMessage = e.message) }
+                        // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
+                        _ui.update { it.copy(errorMessage = e.message) }
+                    } finally {
+                        // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
+                        activeAsyncOperations.update { it - 1 }
+                        _ui.update { it.copy(isLoading = activeAsyncOperations.value > 0) }
                     }
                 }
             }
@@ -533,6 +542,8 @@ class BodyModuleHomeViewModel(
                 // Faza 30.4: ViewModel kliče SAMO SwapPlanDaysUseCase — ne PlanDataStore.
                 // Klic chain: VM → UseCase (validacija + lokalni model) → Repository → DataStore
                 viewModelScope.launch {
+                    // Faza 32.1 — Multi-tap guard: prezri klik, če operacija že teče.
+                    if (activeAsyncOperations.value > 0) return@launch
                     // Faza 32.0 — Fix #1: Povečaj števec pred operacijo. LoadMetrics collect
                     // bo videl activeAsyncOperations > 0 in ne bo ugasnil spinnerja.
                     activeAsyncOperations.update { it + 1 }
@@ -542,8 +553,9 @@ class BodyModuleHomeViewModel(
                         _ui.update { it.copy(isLoading = true, errorMessage = null) }
                         val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
                         val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                        // Faza 31.8 — Anomalija 2: Atomarni zapis — isLoading in errorMessage v enem klicu.
-                        _ui.update { it.copy(isLoading = false, errorMessage = res.exceptionOrNull()?.message) }
+                        // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
+                        // Ohranimo samo errorMessage posodobitev.
+                        _ui.update { it.copy(errorMessage = res.exceptionOrNull()?.message) }
                         res.onSuccess { updatedPlan ->
                             // Faza 32.0 — Fix #2: Posodobi živi plan, da LoadMetrics collect blok
                             // pri naslednjem Firestore eventu izračuna todayIsRest iz zamenjanih dni.
@@ -551,14 +563,17 @@ class BodyModuleHomeViewModel(
                             intent.onResult(updatedPlan)
                         }
                     } finally {
-                        // Faza 32.0 — Fix #1: Vedno zmanjšaj, tudi ob izjemi.
+                        // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
+                        _ui.update { it.copy(isLoading = activeAsyncOperations.value > 0) }
                     }
                 }
             }
 
             is BodyHomeIntent.CompleteWorkoutSession -> {
                 viewModelScope.launch {
+                    // Faza 32.1 — Multi-tap guard: prezri klik, če operacija že teče.
+                    if (activeAsyncOperations.value > 0) return@launch
                     // Faza 32.0 — Fix #1: Povečaj števec pred operacijo.
                     activeAsyncOperations.update { it + 1 }
                     try {
@@ -568,7 +583,8 @@ class BodyModuleHomeViewModel(
 
                         // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
                         if (!currentStateSnapshot.isDataLoaded) {
-                            _ui.update { it.copy(isLoading = false, errorMessage = "Metrics not yet loaded — please wait.") }
+                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
+                            _ui.update { it.copy(errorMessage = "Metrics not yet loaded — please wait.") }
                             intent.onCompletion(null)
                             return@launch
                         }
@@ -604,25 +620,27 @@ class BodyModuleHomeViewModel(
                                 (oldWeeklyDone + 1).coerceAtMost(currentStateSnapshot.weeklyTarget)
                             else oldWeeklyDone
 
+                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
                             _ui.update { it.copy(
                                 streakDays              = newStreak,
                                 weeklyDone              = newWeekly,
                                 planDay                 = newPlanDay,
                                 isWorkoutDoneToday      = true,
                                 todayStatus             = todayStatus,
-                                showCompletionAnimation = !isExtra,
-                                isLoading               = false
+                                showCompletionAnimation = !isExtra
                             ) }
                             _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
                         }
                         result.onFailure { error ->
-                            _ui.update { it.copy(isLoading = false, errorMessage = error.message) }
+                            // Faza 32.1 — Fix #3: Odstranjen isLoading = false — reaktivni finally prevzame.
+                            _ui.update { it.copy(errorMessage = error.message) }
                             intent.onCompletion(null)
                         }
                     } finally {
-                        // Faza 32.0 — Fix #1: Vedno zmanjšaj, tudi ob izjemi.
+                        // Faza 32.1 — Fix #3: Reaktivno: isLoading temelji izključno na števcu.
                         activeAsyncOperations.update { it - 1 }
+                        _ui.update { it.copy(isLoading = activeAsyncOperations.value > 0) }
                     }
                 }
             }
