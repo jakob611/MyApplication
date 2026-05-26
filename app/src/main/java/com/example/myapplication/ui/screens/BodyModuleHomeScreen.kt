@@ -65,6 +65,8 @@ fun BodyModuleHomeScreen(
     // Faza 38 — Unified UI State: priročni alias za domenski snapshot.
     // Null-safe dostop: metrics?.field ?: default prepreči "Day 1" glitch med loading.
     val metrics = ui.metrics
+    // Faza 39 — showCompletionAnimation je ločen StateFlow (ne del BodyUiState).
+    val showCompletionAnimation by vm.showCompletionAnimation.collectAsStateWithLifecycle()
 
     // Faza 33 — BUG-12: SnackbarHostState za Scaffold infrastrukturo
     val snackbarHostState = remember { SnackbarHostState() }
@@ -295,7 +297,8 @@ fun BodyModuleHomeScreen(
                 // Faza 33 — BUG-06: Dokler Firestore ni vrnil pravih podatkov, prikaži skeleton
                 // namesto privzetih vrednosti (planDay=1). Prepreči dual-animation glitch:
                 // EpicCounter NE sme animirati s privzetimi vrednostmi ob nalaganju.
-                if (!ui.isDataLoaded) {
+                // Faza 39 — metrics != null nadomešča zastareli isDataLoaded boolean.
+                if (ui.metrics == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -363,7 +366,7 @@ fun BodyModuleHomeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     EpicCounter(
                                         targetValue = animTargetDay,
-                                        animate = ui.showCompletionAnimation, // Pass animation flag
+                                        animate = showCompletionAnimation, // Pass animation flag
                                         onAnimationEnd = { vm.handleIntent(BodyHomeIntent.HideCompletionAnimation) }, // Reset flag
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 34.sp,
@@ -391,7 +394,7 @@ fun BodyModuleHomeScreen(
                                 
                                 StreakCounter(
                                     targetValue = metrics?.streakDays ?: 0,
-                                    animate = ui.showCompletionAnimation,
+                                animate = showCompletionAnimation,
                                     color = buttonBlue,
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold
@@ -433,9 +436,10 @@ fun BodyModuleHomeScreen(
                                     colors = ButtonDefaults.buttonColors(containerColor = buttonBlue),
                                     shape = MaterialTheme.shapes.large,
                                     // Faza 33 — BUG-13: Onemogoči gumb dokler Firestore ni vrnil
-                                    // pravih podatkov. isDataLoaded=false pomeni planDay=1 je še
+                                    // pravih podatkov. metrics==null pomeni planDay=1 je še
                                     // privzeta vrednost — ne smemo sprožiti transakcije z napačnim dayom.
-                                    enabled = ui.isDataLoaded,
+                                    // Faza 39 — metrics != null nadomešča zastareli isDataLoaded boolean.
+                                    enabled = ui.metrics != null,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 12.dp)
@@ -503,7 +507,8 @@ fun BodyModuleHomeScreen(
                     .fillMaxWidth()
                     .horizontalScroll(challengesScroll)
             ) {
-                ui.challenges.forEach { ch ->
+                // Faza 39 — challenges je nespremenljiv val na VM (ne del BodyUiState).
+                vm.challenges.forEach { ch ->
                     ChallengeCard(
                         challenge = ch,
                         onClick = {

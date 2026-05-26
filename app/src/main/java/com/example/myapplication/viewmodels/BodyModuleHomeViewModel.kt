@@ -173,19 +173,22 @@ data class Challenge(
  * Enotno UI stanje za Body Home zaslon — Unified UI State vzorec (Island 3 refactoring).
  *
  * Faza 38 — State Fragmentation ELIMINIRAN:
- * Prej so bili `isAuthExpired`, `errorMessage`, `isLoading` RAZPRŠENI med top-level polji
- * ki so obenem vsebovala domenske podatke (streakDays, planDay...). To je povzročalo:
- *   - Race condition: Compose je videl vmesna nekonsistentna stanja (isLoading=false + streakDays=0)
- *   - Nestabilnost pri rekomposiciji: vsaka sprememba kateregakoli polja je triggerirala celoten zaslon
+ * Faza 39 — Concern Separation DOKONČAN:
+ *   Prej: isDataLoaded, showCompletionAnimation, challenges mešali domenski in UI nivo.
+ *   Zdaj: BodyUiState vsebuje IZKLJUČNO 4 polja relevantna za Body Metrics:
  *
- * Rešitev — KOHEZIVNO stanje:
  *   [isLoading]     = Firestore load v teku (spinner)
  *   [metrics]       = domenski snapshot ko je nalaganje uspešno (null = še ni naloženo)
  *   [errorMessage]  = persistentna napaka iz repo sloja (LoadMetrics)
  *   [isAuthExpired] = seja je potekla — UI navigira na login
- *   [isDataLoaded]  = guard za CompleteWorkoutSession (prepreči planDay=1 privzeto transakcijo)
- *   [showCompletionAnimation] = enkratna animacija po zaključenem treningu
- *   [challenges]    = lokalni UI state (ni domenski podatek)
+ *
+ * Null-safety kot guard:
+ *   `metrics == null` nadomešča zastareli `isDataLoaded` boolean.
+ *   Ni mogoče imeti "LOADED ampak brez podatkov" — to je nemogoče stanje.
+ *
+ * Ločeni koncepti (ne v BodyUiState):
+ *   showCompletionAnimation → BodyModuleHomeViewModel.showCompletionAnimation (StateFlow)
+ *   challenges              → BodyModuleHomeViewModel.challenges (nespremenljiv val)
  *
  * Faza 35 — @Immutable: Compose compiler zaupa, da se vrednosti ne spremenijo po kreaciji
  * → selektivna rekomposicija samo ob dejansko spremenjenem stanju.
@@ -200,6 +203,7 @@ data class BodyUiState(
     /**
      * Domenske metrike iz Firestorea — null dokler [LoadMetrics] ni uspešno zaključil.
      * Ko null: UI prikaže skeleton/spinner, ne privzetih vrednosti (prepreči misleading "Day 1").
+     * Nadomešča zastareli `isDataLoaded` boolean — prisotnost metrik JE dokaz uspešnega nalaganja.
      */
     val metrics: com.example.myapplication.domain.model.BodyMetrics? = null,
     /**
@@ -213,25 +217,8 @@ data class BodyUiState(
      * true = Firestore vrnil PERMISSION_DENIED — seja je potekla ali token ni veljaven.
      * UI mora prikazati opozorilo in preusmeriti na login.
      */
-    val isAuthExpired: Boolean = false,
-    /**
-     * Faza 31.8 — Guard za CompleteWorkoutSession.
-     * true šele ko LoadMetrics uspešno konča. Prepreči Firestore transakcijo z napačnim planDay=1.
-     */
-    val isDataLoaded: Boolean = false,
-    /** Enkratna animacija po zaključenem treningu (ne rest day stretching). */
-    val showCompletionAnimation: Boolean = false,
-    val outdoorSuggestion: String? = null,
-    val challenges: List<Challenge> = listOf(
-        Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Perform core exercises daily.", 500),
-        Challenge("c2", "30 days pushups", "Improve your pushups in 30 days. Do 50 pushups/day.", 300),
-        Challenge("c3", "Mobility week", "Increase your ROM in 7 days. Stretch every morning.", 150)
-    )
+    val isAuthExpired: Boolean = false
 )
-
-/** Ohrani typealiases za backwards compat z obstoječo kodo ki referira BodyHomeUiState. */
-@Deprecated("Zamenjano z BodyUiState (Faza 38 Unified UI State)", ReplaceWith("BodyUiState"))
-typealias BodyHomeUiState = BodyUiState
 
 sealed class BodyHomeIntent {
     /** Faza 33 — BUG-11: email je odstranjen iz intenta. ViewModel ga reši interno prek authStateRepository. */
@@ -493,6 +480,25 @@ class BodyModuleHomeViewModel(
     private val _ui = MutableStateFlow(BodyUiState())
     val ui: StateFlow<BodyUiState> = _ui.asStateFlow()
 
+    /**
+     * Faza 39 — Ločen lifecycle za animacijo po zaključenem treningu.
+     * Ni del BodyUiState — to je UI concern, ne domenski podatek.
+     * true = prikaži animacijo; false = skrij (nastavi HideCompletionAnimation intent).
+     */
+    private val _showCompletionAnimation = MutableStateFlow(false)
+    val showCompletionAnimation: StateFlow<Boolean> = _showCompletionAnimation.asStateFlow()
+
+    /**
+     * Faza 39 — Statični seznam izzivov kot nespremenljiv val.
+     * Ni del BodyUiState — izzivi so konstantni podatki, ne reaktivni tok.
+     * UI dostopa z `vm.challenges` direktno.
+     */
+    val challenges: List<Challenge> = listOf(
+        Challenge("c1", "30 days sixpack", "Get a sixpack in 30 days. Perform core exercises daily.", 500),
+        Challenge("c2", "30 days pushups", "Improve your pushups in 30 days. Do 50 pushups/day.", 300),
+        Challenge("c3", "Mobility week", "Increase your ROM in 7 days. Stretch every morning.", 150)
+    )
+
     private val _streakUpdatedEvent = MutableSharedFlow<StreakUpdateEvent>(extraBufferCapacity = 1)
     val streakUpdatedEvent: SharedFlow<StreakUpdateEvent> = _streakUpdatedEvent.asSharedFlow()
 
@@ -568,8 +574,7 @@ class BodyModuleHomeViewModel(
                                     current.copy(
                                         metrics      = updatedMetrics,
                                         isLoading    = activeAsyncOperations.value > 0,
-                                        isDataLoaded = true,
-                                        // errorMessage se ohrani med aktivno operacijo; ob novu Firestore eventu se počisti
+                                        // errorMessage se ohrani med aktivno operacijo; ob novem Firestore eventu se počisti
                                         errorMessage = if (activeAsyncOperations.value > 0) current.errorMessage else null
                                     )
                                 }
@@ -642,7 +647,7 @@ class BodyModuleHomeViewModel(
             }
 
             is BodyHomeIntent.HideCompletionAnimation ->
-                _ui.update { it.copy(showCompletionAnimation = false) }
+                _showCompletionAnimation.value = false
 
             is BodyHomeIntent.AcceptChallenge  -> { /* lokalni state */ }
             is BodyHomeIntent.CompleteChallenge -> { /* lokalni state */ }
@@ -696,8 +701,10 @@ class BodyModuleHomeViewModel(
                         val currentStateSnapshot = _ui.value
                         _ui.update { it.copy(isLoading = true, errorMessage = null) }
 
-                        // Faza 31.8 — Anomalija 5: Guard pred Firestore transakcijo.
-                        if (!currentStateSnapshot.isDataLoaded) {
+                        // Faza 39 — Null-safe guard nadomešča zastareli isDataLoaded boolean.
+                        // metrics == null pomeni LoadMetrics ni uspešno zaključil — ni varnega
+                        // planDay za Firestore transakcijo. Brez tega bi poslali planDay=1 (default).
+                        if (currentStateSnapshot.metrics == null) {
                             // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar).
                             _uiEvent.send(BodyUiEvent.ShowSnackbar("Metrics not yet loaded — please wait."))
                             intent.onCompletion(null)
@@ -755,10 +762,12 @@ class BodyModuleHomeViewModel(
                                         planDay            = newPlanDay,
                                         isWorkoutDoneToday = true,
                                         todayStatus        = todayStatus
-                                    ),
-                                    showCompletionAnimation = !isExtra
+                                    )
                                 )
                             }
+                            // Faza 39 — showCompletionAnimation je ločen StateFlow (ne del BodyUiState).
+                            // Nastavi samo za regularne workout-e — ne za extra workout na rest dnevu.
+                            if (!isExtra) _showCompletionAnimation.value = true
                             _streakUpdatedEvent.emit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
                         } else {
