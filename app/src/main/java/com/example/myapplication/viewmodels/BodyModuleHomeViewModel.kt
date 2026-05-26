@@ -27,6 +27,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -183,7 +184,8 @@ data class BodyHomeUiState(
 )
 
 sealed class BodyHomeIntent {
-    data class LoadMetrics(val email: String, val plan: PlanResult? = null) : BodyHomeIntent()
+    /** Faza 33 — BUG-11: email je odstranjen iz intenta. ViewModel ga reši interno prek authStateRepository. */
+    data class LoadMetrics(val plan: PlanResult? = null) : BodyHomeIntent()
     object CompleteRestDay : BodyHomeIntent()
     object HideCompletionAnimation : BodyHomeIntent()
     data class AcceptChallenge(val id: String) : BodyHomeIntent()
@@ -458,7 +460,13 @@ class BodyModuleHomeViewModel(
                 loadMetricsJob = viewModelScope.launch {
                     _ui.update { it.copy(isLoading = true, errorMessage = null) }
                     try {
-                        getBodyMetrics.invoke(intent.email).collect { metrics ->
+                        // Faza 33 — BUG-11: email se resolvi interno iz authStateRepository.
+                        // UI (Composable) ne sme nikoli klicati Firebase SDK neposredno.
+                        val email = authStateRepository.observeCurrentUserEmail().first() ?: run {
+                            _ui.update { it.copy(errorMessage = "Uporabnik ni prijavljen.", isLoading = false) }
+                            return@launch
+                        }
+                        getBodyMetrics.invoke(email).collect { metrics ->
                             if (metrics.isLoading) return@collect
                             // Faza 31.9 — Popravek #4: Cooperative Cancellation Guard.
                             // Stari, pravkar preklicani job (loadMetricsJob?.cancel()) je morda

@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.8: tryEmit → emit; snapshot lifecycle hardening)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 33: BUG-11/08/12/06/09/13 — BodyModuleHomeScreen Scaffold + Auth čiščenje)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1090,6 +1090,34 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 
 ---
 
+## Faza 32.9 — BodyModule Data Layer: reaktivni callbackFlow + error propagation (2026-05-26)
+
+### BUG-05 Fix — One-shot → Reaktivni Firestore tok (GetBodyMetrics)
+- 🐛 **Root cause:** `GetBodyMetricsUseCase` je bil `flow {}` z enkratnim `.get().await()`. Flow se je zaključil po enem emitu — nobene aktivne Firestore poslušalnice. `loadMetricsJob?.cancel()` v VM-u je bil funkcionalno neustrezen (job je bil že zaključen).
+- ✅ **Rešitev:** 
+  1. `WorkoutStatsRepository` interface dobil novo metodo `observeWorkoutStats(email): Flow<WorkoutStats?>`
+  2. `UserWorkoutStatsRepository` implementira jo z `callbackFlow { addSnapshotListener(...) }` + `awaitClose { registration.remove() }` za pravilno čiščenje ob cancellationu
+  3. `GetBodyMetricsUseCase` prepisan v `channelFlow` ki zbira iz `observeWorkoutStats` — ob vsaki Firestore spremembi UI samodejno prejme svežo vrednost
+
+### BUG-01 Fix — Silent State Reset eliminiran
+- 🐛 **Root cause:** Ko Firestore vrne `null` ali je dokument prazen, fallback je tiho postavil `streak=0, weeklyDone=0, weeklyTarget=3` brez `errorMessage`.
+- ✅ **Rešitev:** `GetBodyMetricsUseCase` zdaj emitira `BodyMetrics(errorMessage = "Failed to sync with server — check connection")` za `null` snapshot. Firestore exception propagira prek `close(error)` → catch → `BodyMetrics(errorMessage = e.message)`.
+
+### BUG-04 Fix — restDayInitiated streak reset
+- 🐛 **Root cause:** De-dup pot + `getCurrentStreak().getOrDefault(0)` → streak = 0 v UI ob network napaki
+- ✅ **Rešitev:** Odstranjeni vsi `runCatching { }.getOrDefault(0)` pozivi:
+  - `getTodayStatus()` se zdaj kliče direktno — napaka propagira navzgor
+  - Guard `getCurrentStreak()` se kliče direktno — napaka ujame ViewModel catch
+  - De-dup path vrne `moveToNextDay()` vrednost direktno (`-1/0/n`) — VM `takeIf { it > 0 }` pravilno filtrira vse tri primere
+
+### Popravljene datoteke
+- `WorkoutStatsRepository.kt` — dodana `observeWorkoutStats` metoda
+- `UserWorkoutStatsRepository.kt` — implementacija `callbackFlow` z Firestore listener
+- `GetBodyMetricsUseCase.kt` — `flow{}` → `channelFlow{}`, reaktivni collect
+- `ManageGamificationUseCase.kt` — odstranjeni `getOrDefault(0)` nevarni fallbacki
+
+---
+
 ## Faza 32.8 — BodyModuleHomeViewModel: 100% streak event dostava + snapshot hardening (2026-05-26)
 
 ### Fix #1 — tryEmit → suspending emit na SharedFlow
@@ -1266,5 +1294,34 @@ if (res.isSuccess) {
 ### Fix #3 — NonCancellable Channel Exception (ViewModel Scope Cutoff)
 - 🐛 **Root cause:** `saveBodyMeasurements` po `withContext(NonCancellable)` vrne v preklicano `viewModelScope` kontekst. `_uiEvent.send(...)` je `suspend` klic — v preklicani korutini vrže `CancellationException` in preskoči `finally` blok.
 - ✅ **Rešitev:** `if (currentCoroutineContext().isActive)` guard pred vsakim `_uiEvent.send()` klicem. Event se pošlje le če je korutina še aktivna; `_isSaving = false` v `finally` se vedno izvede.
+
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 33 (2026-05-26)
+**Commit:** "Faza 33 — BUG-11/08/12/06/09/13 Fix: BodyModuleHomeScreen Scaffold + Auth čiščenje"
+
+### BUG-11 — Firebase Auth ODSTRANJEN iz Composable-a ✅
+- 🐛 **Root cause:** `BodyModuleHomeScreen.kt` vrstica 73 neposredno klicala `FirebaseAuth.getInstance().currentUser?.email` — kršitev arhitekturnega pravila, Firebase SDK v UI.
+- ✅ **Rešitev:** Odstranil `email` iz `LoadMetrics` intenta. ViewModel ga zdaj resolvi interno: `authStateRepository.observeCurrentUserEmail().first()` znotraj korutine. UI pošlje samo `LoadMetrics(plan = currentPlan)` brez Auth dependency.
+
+### BUG-08 (CRITICAL) — uiEvents Channel ni bil konzumiran ✅
+- 🐛 **Root cause:** `BodyModuleHomeScreen.kt` ni imel `LaunchedEffect` za `vm.uiEvents` — vsi `ShowSnackbar` eventi so bili tiho zavrženi. Napake iz `SwapDays`, `CompleteWorkoutSession`, `CompleteRestDay` so bile nevidne.
+- ✅ **Rešitev:** Dodan `LaunchedEffect(Unit) { vm.uiEvents.collect { event -> when(event) { is ShowSnackbar -> snackbarHostState.showSnackbar(...) ... } } }`.
+
+### BUG-12 — Ni Scaffold/SnackbarHost infrastrukture ✅
+- 🐛 **Root cause:** Zunanji `Box` ni imel `SnackbarHost` — brez tega snacki fizično ne morejo biti prikazani.
+- ✅ **Rešitev:** Zamenjal zunanji `Box` s `Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, containerColor = UppColors.Background)`. `padding(paddingValues)` dodan na notranji Box.
+
+### BUG-09 — streakUpdatedEvent brez lifecycle-awareness ✅
+- 🐛 **Root cause:** `LaunchedEffect(vm)` — ključ `vm` se nikoli ne spremeni med lifecycle = LaunchedEffect se morda ne restarta pravilno.
+- ✅ **Rešitev:** Spremenjen ključ na `LaunchedEffect(Unit)` — aktiven dokler je composable v kompoziciji, se samodejno prekine ob izhodu.
+
+### BUG-06 — planDay=1 animacija pred Firestore odzivom ✅
+- 🐛 **Root cause:** `EpicCounter(targetValue = animTargetDay)` in `StreakCounter` sta se prikazala s privzetimi vrednostmi (`planDay=1`, `streakDays=0`) preden je Firestore vrnil prave podatke. `AnimatedContent` je animiral prehod, ki ni nosil informacije.
+- ✅ **Rešitev:** Plan kartica zdaj preveri `ui.isDataLoaded`. Dokler je `false`, prikaže `CircularProgressIndicator` v 120dp `Box`. Ko je `true`, prikaže `AnimatedContent` z realnimi vrednostmi.
+
+### BUG-13 — Start Workout gumb aktiven pred nalaganjem ✅
+- 🐛 **Root cause:** Gumb je bil vedno `enabled = true` — ob kliku preden je `isDataLoaded=true`, VM je `CompleteWorkoutSession` prožil Firestore transakcijo z `planDay=1` (privzeta vrednost, ne Firestore vrednost).
+- ✅ **Rešitev:** `enabled = ui.isDataLoaded` na Start Workout gumbu. Ko `isDataLoaded=false`, gumb je vizualno onemogočen in klik ignoriran.
 
 

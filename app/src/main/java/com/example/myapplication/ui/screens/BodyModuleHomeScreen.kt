@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue // Add this
 import com.example.myapplication.ui.run.EpicCounter
 import com.example.myapplication.ui.run.PlanPathDialog
 import com.example.myapplication.viewmodels.BodyHomeIntent
+import com.example.myapplication.viewmodels.BodyUiEvent
 import com.example.myapplication.ui.theme.UppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,21 +63,41 @@ fun BodyModuleHomeScreen(
     // Faza 30.5: collectAsStateWithLifecycle — prihrani Firestore kvoto in baterijo v ozadju
     val ui by vm.ui.collectAsStateWithLifecycle()
 
+    // Faza 33 — BUG-12: SnackbarHostState za Scaffold infrastrukturo
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Faza 33 — BUG-08 (CRITICAL): Konsumacija uiEvents Channela.
+    // Prej so bili vsi ShowSnackbar eventi tiho zavrženi — UI ni bil naročen.
+    // LaunchedEffect(Unit) je lifecycle-aware: prekine se ob izhodu iz kompozicije.
+    LaunchedEffect(Unit) {
+        vm.uiEvents.collect { event ->
+            when (event) {
+                is BodyUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(
+                    message     = "⚠️ ${event.message}",
+                    actionLabel = "Zapri",
+                    duration    = SnackbarDuration.Long
+                )
+                is BodyUiEvent.SaveSuccess  -> snackbarHostState.showSnackbar("✅ Shranjeno")
+                is BodyUiEvent.Error        -> snackbarHostState.showSnackbar("❌ ${event.message}")
+            }
+        }
+    }
+
     // Faza 23: En sam LaunchedEffect (currentPlan) za LoadMetrics.
-    // Prej sta bila DVA (Unit + currentPlan) ki sta ob vstopu na zaslon sprožila dve vzporedni
-    // Firestore branji → race condition. LaunchedEffect(currentPlan) pokrije:
-    //   (a) začetni load ob vstopu, (b) osvežitev ob spremembi plana, (c) navigacijo nazaj.
+    // Faza 33 — BUG-11: Firebase Auth ODSTRANJEN iz Composable-a.
+    // ViewModel resolvi email interno prek authStateRepository.observeCurrentUserEmail().first()
     LaunchedEffect(currentPlan) {
         if (currentPlan == null) {
             onStartPlan()
         } else {
-            val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-            vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(userEmail, currentPlan))
+            vm.handleIntent(com.example.myapplication.viewmodels.BodyHomeIntent.LoadMetrics(currentPlan))
         }
     }
 
     // Faza 4b: Toast + HapticFeedback ko se streak poveča (workout ali stretching)
-    LaunchedEffect(vm) {
+    // Faza 33 — BUG-09: LaunchedEffect(Unit) je lifecycle-aware (prekine se ob izhodu iz kompozicije).
+    // flowWithLifecycle ni potreben znotraj LaunchedEffect — Compose ga avtomatično upravlja.
+    LaunchedEffect(Unit) {
         vm.streakUpdatedEvent.collect { event ->
             // S24 Ultra natančna vibracija — SUCCESS tip
             com.example.myapplication.utils.HapticFeedback.performHapticFeedback(
@@ -101,12 +122,20 @@ fun BodyModuleHomeScreen(
     val prefs = context.getSharedPreferences("app_flags", android.content.Context.MODE_PRIVATE)
     var showOnboarding by remember { mutableStateOf(!prefs.getBoolean("hide_body_hint", false)) }
 
+    // Faza 33 — BUG-12: Scaffold z SnackbarHost infrastrukturo.
+    // Nadomesti zunanji Box — Scaffold obvladuje padding in Snackbar prikaz.
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = UppColors.Background,
+        contentColor = MaterialTheme.colorScheme.onBackground
+    ) { paddingValues ->
     // FIX #2: Eksplicitno UppColors.Background za VSA stanja (loading, error, content).
     // MaterialTheme.colorScheme.background bi utripal med theme init — hardkodirano prepreči glitch.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(UppColors.Background)
+            .padding(paddingValues)
     ) {
         Column(
             modifier = Modifier
@@ -249,6 +278,22 @@ fun BodyModuleHomeScreen(
                 elevation = CardDefaults.cardElevation(3.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // Faza 33 — BUG-06: Dokler Firestore ni vrnil pravih podatkov, prikaži skeleton
+                // namesto privzetih vrednosti (planDay=1). Prepreči dual-animation glitch:
+                // EpicCounter NE sme animirati s privzetimi vrednostmi ob nalaganju.
+                if (!ui.isDataLoaded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = buttonBlue,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                } else {
                 androidx.compose.animation.AnimatedContent(
                     targetState = targetDay to ui.todayIsRest,
                     transitionSpec = {
@@ -373,14 +418,19 @@ fun BodyModuleHomeScreen(
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = buttonBlue),
                                     shape = MaterialTheme.shapes.large,
+                                    // Faza 33 — BUG-13: Onemogoči gumb dokler Firestore ni vrnil
+                                    // pravih podatkov. isDataLoaded=false pomeni planDay=1 je še
+                                    // privzeta vrednost — ne smemo sprožiti transakcije z napačnim dayom.
+                                    enabled = ui.isDataLoaded,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 12.dp)
-                                ) { Text("Start workout", color = MaterialTheme.colorScheme.onPrimary, fontSize = 16.sp) }
+                ) { Text("Start workout", color = MaterialTheme.colorScheme.onPrimary, fontSize = 16.sp) }
                             }
                         }
                     }
                 }
+                } // konec else (isDataLoaded)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -569,7 +619,8 @@ fun BodyModuleHomeScreen(
                 }
             )
         }
-    }
+    } // konec Box
+    } // konec Scaffold
 }
 
 @Composable
