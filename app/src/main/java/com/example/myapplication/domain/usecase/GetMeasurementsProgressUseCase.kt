@@ -3,8 +3,10 @@ package com.example.myapplication.domain.usecase
 import com.example.myapplication.domain.model.BodyMeasurementEntry
 import com.example.myapplication.domain.model.DomainException
 import com.example.myapplication.domain.repository.BodyMeasurementsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 /**
@@ -15,12 +17,17 @@ import kotlinx.coroutines.flow.map
  * reaktivni tok, urejen kronološko (ASC po timestamp). Grafične komponente v UI
  * prejmejo podatke v pravilnem časovnem zaporedju brez dodatnega urejanja.
  *
+ * Faza 38b — Performance audit:
+ * `.flowOn(Dispatchers.Default)` zagotavlja, da se CPU-intenzivno sortiranje
+ * izvaja IZKLJUČNO na ozadnjem nitnem bazenu, ne glede na to, s katerega
+ * dispatcherja ViewModel zbira tok. Preprečuje UI jank pri velikih podatkovnih setih
+ * (npr. 365+ dnevnih meritev).
+ *
  * Arhitekturna čistost:
- *   - 100% čist Kotlin — nobenih Android ali Firebase importov.
- *   - Vse platformske napake (Firestore, mreža) so že prevedene v [DomainException]
- *     v data sloju (FirestoreBodyMeasurementsRepository) — ta use case je od tega neodvisen.
- *   - Vrne [Result] omotač, kar Presentation sloju omogoča čisto ločevanje
- *     uspešnega stanja od napake brez try/catch v ViewModelu.
+ *   - 100% čist Kotlin — nobenih Android ali UI importov.
+ *   - [Dispatchers.Default] je del `kotlinx.coroutines` — ni Android-specifičen.
+ *   - Vse platformske napake so že prevedene v [DomainException] v data sloju.
+ *   - Vrne [Result] omotač za čisto ločevanje uspešnega stanja od napake v ViewModelu.
  */
 class GetMeasurementsProgressUseCase(
     private val bodyMeasurementsRepository: BodyMeasurementsRepository
@@ -41,6 +48,10 @@ class GetMeasurementsProgressUseCase(
                 val sorted = entries.sortedBy { it.timestamp }
                 Result.success(sorted)
             }
+            // Faza 38b — Performance: .flowOn() premakne VSE operacije nad njim (.map + izvor)
+            // na Dispatchers.Default (CPU thread pool). ViewModel zbira tok na Main, sortiranje
+            // pa se vedno izvede v ozadju — zero UI jank za 1000+ vnosov.
+            .flowOn(Dispatchers.Default)
             .catch { throwable ->
                 // Prevajanje napak v domenski tip — Presentation sloj ne vidi surovih izjem.
                 val domainException = when (throwable) {
