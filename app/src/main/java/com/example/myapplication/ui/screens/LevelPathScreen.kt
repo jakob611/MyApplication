@@ -31,7 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.data.store.FollowStore
 import com.example.myapplication.ui.run.PlanPathVisualizer

@@ -1,7 +1,7 @@
 package com.example.myapplication.ui.shared
 
 import androidx.lifecycle.ViewModel
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.domain.gamification.GamificationState
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.model.AchievementProfile

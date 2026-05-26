@@ -1231,6 +1231,53 @@ tests/      → DomainException direktno, 0x Firebase importov
 
 ---
 
+## 📋 DNEVNIK POPRAVKOV — Faza 40 (2026-05-26)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Clean Architecture Fix — Anomaly 4 (Domain Pollution) + Anomaly 7 (Hidden Dependencies)
+
+**ANOMALY 4 — DOMAIN POLLUTION: UserProfile premaknjen iz data → domain/model ✅**
+- 🐛 **Root cause:** `UserProfile` data class je bil definiran v `data/UserProfile.kt` (paket `com.example.myapplication.data`). To je pomenilo, da je domain sloj (`UserProfileRepository`, `ObserveUserProfileUseCase`) in presentation sloj (ViewModels, UI) uvažal razred iz data paketa — kršitev Dependency Inversion Principle.
+- ✅ **Rešitev:**
+  1. **NOVO:** `domain/model/UserProfile.kt` — razred premaknjen v domenski paket (`com.example.myapplication.domain.model`). Enaka vsebina, pravilna arhitekturna lokacija.
+  2. **`data/UserProfile.kt`** — nadomeščen z `@Deprecated typealias UserProfile = domain.model.UserProfile` za backwards compat data-sloja brez prekinitve obstoječih importov.
+  3. **Posodobljeni importi** (13 datotek) na `domain.model.UserProfile`:
+     - Domain: `UserProfileRepository.kt`, `ObserveUserProfileUseCase.kt`
+     - Presentation: `BodyModuleHomeViewModel.kt`, `AppDrawer.kt`, `NutritionViewModel.kt`, `AppViewModel.kt`, `GamificationSharedViewModel.kt`, `Progress.kt`, `DeveloperSettingsScreen.kt`, `LevelPathScreen.kt`, `MyAccountScreen.kt`, `ShopViewModel.kt`
+     - Testi: `BodyModuleHomeViewModelTest.kt`, `GamificationXpLevelTest.kt`
+  4. Data-sloj (`FirestoreGamificationRepository`, `UserProfileManager`, `ProfileStore`, `FirestoreUserProfileRepository`) ostane nespremenjen — typealias absorbira spremembo.
+
+**ANOMALY 7 — HIDDEN DEPENDENCIES: CalculateBodyGoldenRatioUseCase + SaveBodyMeasurementsUseCase ✅**
+- 🐛 **Root cause:** `BodyModuleHomeViewModel` je interno instantiiral oba use case-a:
+  ```kotlin
+  // PRED — skrita instantiacija (anti-pattern):
+  private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
+  private val saveMeasurementsUseCase = SaveBodyMeasurementsUseCase(bodyMeasurementsRepository)
+  ```
+  Odvisnosti so bile nevidne na callsite-u — `MyViewModelFactory` ni vedel, da VM potrebuje ta dva use case-a. Ni bilo mogoče mockati v testih brez reflection.
+- ✅ **Rešitev — `BodyModuleHomeViewModel.kt`:**
+  ```kotlin
+  // ZDAJ — eksplicitni konstruktorski parametri z varnimi default vrednosti:
+  private val calculateBodyGoldenRatio: CalculateBodyGoldenRatioUseCase = CalculateBodyGoldenRatioUseCase(),
+  private val saveMeasurementsUseCase: SaveBodyMeasurementsUseCase = SaveBodyMeasurementsUseCase(bodyMeasurementsRepository),
+  ```
+- ✅ **Rešitev — `MyViewModelFactory.kt`:**
+  ```kotlin
+  val bodyMeasurementsRepo = FirestoreBodyMeasurementsRepository()
+  return BodyModuleHomeViewModel(
+      ...
+      bodyMeasurementsRepo,
+      CalculateBodyGoldenRatioUseCase(),             // eksplicitna DI
+      SaveBodyMeasurementsUseCase(bodyMeasurementsRepo), // eksplicitna DI
+      savedStateHandle
+  )
+  ```
+  Dodan `import` za oba use case-a v MyViewModelFactory. bodyMeasurementsRepo izračunan enkrat in posredovan v oba artefakta.
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
 ## 📋 DNEVNIK POPRAVKOV — Faza 39 (2026-05-26)
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 

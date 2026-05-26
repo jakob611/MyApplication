@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.domain.profile.ObserveUserProfileUseCase
 import com.example.myapplication.data.profile.FirestoreUserProfileRepository

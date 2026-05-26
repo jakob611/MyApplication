@@ -1,6 +1,6 @@
 package com.example.myapplication
 
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

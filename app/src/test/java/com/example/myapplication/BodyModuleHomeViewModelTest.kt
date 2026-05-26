@@ -1,7 +1,7 @@
 package com.example.myapplication
 
 import androidx.lifecycle.SavedStateHandle
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.domain.auth.AuthStateRepository
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState

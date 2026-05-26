@@ -5,7 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.R
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.domain.model.BodyField
 import com.example.myapplication.domain.model.BodyGoldenRatioResult
 import com.example.myapplication.domain.model.PlanResult
@@ -264,6 +264,11 @@ class BodyModuleHomeViewModel(
     private val authStateRepository: AuthStateRepository,
     // Faza 30.6: Repozitorij za shranjevanje in opazovanje zgodovine meritev
     private val bodyMeasurementsRepository: BodyMeasurementsRepository,
+    // Faza 40 — FIX Anomaly 7 (Hidden Instantiation): oba use case-a sta zdaj eksplicitna
+    // konstruktorska parametra — odvisnosti so vidne na callsite-u (MyViewModelFactory).
+    // Prej sta bili instantiirani tiho znotraj razreda (hidden dependency anti-pattern).
+    private val calculateBodyGoldenRatio: CalculateBodyGoldenRatioUseCase = CalculateBodyGoldenRatioUseCase(),
+    private val saveMeasurementsUseCase: SaveBodyMeasurementsUseCase = SaveBodyMeasurementsUseCase(bodyMeasurementsRepository),
     // Faza 34 — HIGH-04 Fix: SavedStateHandle za Process Death recovery.
     private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
@@ -273,14 +278,12 @@ class BodyModuleHomeViewModel(
      * Shranjuje IZKLJUČNO email (ne volatilnih stanj kot isDataLoaded, streakDays itd.).
      * Pri ponovni kreaciji ViewModel-a po Process Death bo email že na voljo →
      * LoadMetrics se re-triggerira brez čakanja na auth observable.
+     *
+     * Faza 40 — Anomaly 7 rešen: calculateBodyGoldenRatio in saveMeasurementsUseCase
+     * sta zdaj konstruktorski parametri — ni več skrite instantiacije.
      */
     val cachedEmail = savedStateHandle.getStateFlow("email", "")
 
-    // ── Faza 30.1 — Domain Use Case za telesni Zlati Rez ──────────────────────
-    private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
-
-    // ── Faza 30.6 — Use Case za shranjevanje meritev (DI prek konstruktorja) ──
-    private val saveMeasurementsUseCase = SaveBodyMeasurementsUseCase(bodyMeasurementsRepository)
 
     // ── Faza 30.2 — Reaktivni profil brez Firebase v VM ──────────────────────
     /**

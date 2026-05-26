@@ -49,7 +49,7 @@ import com.example.myapplication.utils.HapticFeedback
 import com.example.myapplication.domain.nutrition.calculateEMA
 import com.example.myapplication.domain.nutrition.calculateAdaptiveTDEE
 import java.util.Locale
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.debug.NutritionDebugStore
 import com.example.myapplication.debug.WeightPredictorStore
 import com.example.myapplication.data.store.FirestoreHelper

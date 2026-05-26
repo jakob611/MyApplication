@@ -1,6 +1,6 @@
 package com.example.myapplication.domain.profile
 
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import kotlinx.coroutines.flow.Flow
 
 interface UserProfileRepository {

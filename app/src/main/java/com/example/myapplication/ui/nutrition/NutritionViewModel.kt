@@ -30,7 +30,7 @@ import kotlinx.datetime.toLocalDateTime
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.data.NutritionPlan
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.repository.NutritionRepository
 import com.example.myapplication.data.settings.UserProfileManager

@@ -24,6 +24,8 @@ import com.example.myapplication.data.repository.UserWorkoutStatsRepository
 import com.example.myapplication.data.auth.FirebaseAuthStateRepository
 import com.example.myapplication.data.repository.PlanRepositoryImpl
 import com.example.myapplication.data.repository.FirestoreBodyMeasurementsRepository
+import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
+import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
 
@@ -40,8 +42,11 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             val gamificationUseCase = GamificationFactory.provide(context)
             val settingsRepo = UserPreferencesRepository(context)
             val statsRepo = UserWorkoutStatsRepository(settingsRepo)
-            // Faza 34 — CRIT-03: workoutRepo ODSTRANJEN iz UpdateBodyMetricsUseCase.
-            // Workout session se zdaj zapisuje atomarno znotraj gamification transakcije.
+            // Faza 40 — FIX Anomaly 7: bodyMeasurementsRepo izračunan enkrat in posredovan
+            // eksplicitno v BodyModuleHomeViewModel ORAZ SaveBodyMeasurementsUseCase.
+            // Pred tem sta bila CalculateBodyGoldenRatioUseCase in SaveBodyMeasurementsUseCase
+            // skrito instantiirana znotraj ViewModel razreda — nevidna odvisnost.
+            val bodyMeasurementsRepo = FirestoreBodyMeasurementsRepository()
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(statsRepo),
                 UpdateBodyMetricsUseCase(gamificationUseCase),
@@ -49,7 +54,9 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
                 gamificationUseCase,                           // non-nullable (Faza 34 — LOW-03)
                 FirestoreUserProfileRepository(),
                 FirebaseAuthStateRepository(),
-                FirestoreBodyMeasurementsRepository(),          // Faza 30.6: história meritev
+                bodyMeasurementsRepo,                          // Faza 30.6: história meritev
+                CalculateBodyGoldenRatioUseCase(),             // Faza 40: eksplicitna DI
+                SaveBodyMeasurementsUseCase(bodyMeasurementsRepo), // Faza 40: eksplicitna DI
                 savedStateHandle                               // Faza 34 — HIGH-04: Process Death
             ) as T
         }
@@ -94,6 +101,7 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             val gamificationUseCase = GamificationFactory.provide(context)
             val settingsRepo = UserPreferencesRepository(context)
             val statsRepo = UserWorkoutStatsRepository(settingsRepo)
+            val bodyMeasurementsRepo = FirestoreBodyMeasurementsRepository()
             @Suppress("UNCHECKED_CAST")
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(statsRepo),
@@ -102,7 +110,9 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
                 gamificationUseCase,
                 FirestoreUserProfileRepository(),
                 FirebaseAuthStateRepository(),
-                FirestoreBodyMeasurementsRepository()
+                bodyMeasurementsRepo,
+                CalculateBodyGoldenRatioUseCase(),
+                SaveBodyMeasurementsUseCase(bodyMeasurementsRepo)
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

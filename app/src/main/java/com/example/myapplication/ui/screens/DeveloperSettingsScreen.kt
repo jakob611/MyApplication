@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.myapplication.data.repository.AdvancedExerciseRepository
 import com.example.myapplication.domain.model.RefinedExercise
-import com.example.myapplication.data.UserProfile
+import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.workout.WorkoutGenerationParams
 import com.example.myapplication.domain.workout.WorkoutGenerator
