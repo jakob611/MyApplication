@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-24 (Faza 31.7: Varnostni in arhitekturni avdit — 4 kritične napake odpravljene)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.1: Multi-tap guards, CompleteRestDay tracking, reaktivni isLoading)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,22 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.1 — BodyModuleHomeViewModel: Multi-tap guards + reaktivni isLoading (2026-05-26)
+
+### Fix #1 — Multi-tap guard (Debounce za intente)
+- 🐛 **Root cause:** Hitra zaporedna klika na gumb sta sprožila dve vzporedni korutini — dvojni streak increment, pokvaren UI state.
+- ✅ **Rešitev:** `if (activeAsyncOperations.value > 0) return@launch` na začetku `launch` bloka za `CompleteWorkoutSession`, `SwapDays` in `CompleteRestDay`. Drugi klik se popolnoma ignorira, dokler prva operacija ni zaključena.
+
+### Fix #2 — CompleteRestDay brez operation trackinga
+- 🐛 **Root cause:** `CompleteRestDay` je klical `gamificationUseCase.restDayInitiated()` asinhronostno, nikoli pa ni povečal `activeAsyncOperations` — `LoadMetrics` je med tem lahko ugasnil spinner.
+- ✅ **Rešitev:** `CompleteRestDay` zdaj ima identičen `activeAsyncOperations.update { it + 1 }` + `try/finally` pattern kot `SwapDays`.
+
+### Fix #3 — Imperativni isLoading overwrites v onSuccess/onFailure
+- 🐛 **Root cause:** Hardcoded `isLoading = false` in `isLoading = true` znotraj `.onSuccess` in `.onFailure` blokov so povzročali race condition — postavljali so stanje neodvisno od `activeAsyncOperations` števca.
+- ✅ **Rešitev:** Vsi `isLoading = false/true` odstranjeni iz `onSuccess`/`onFailure` blokov. Stanje se posodobi izključno v `finally` bloku: `activeAsyncOperations.update { it - 1 }` → `_ui.update { it.copy(isLoading = activeAsyncOperations.value > 0) }`.
 
 ---
 

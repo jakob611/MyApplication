@@ -482,9 +482,10 @@ class BodyModuleHomeViewModel(
                                     dailyKcal              = metrics.dailyKcal,
                                     todayIsRest            = todayIsRest,
                                     todayStatus            = metrics.todayStatus,
-                                    // Faza 32.0 — Fix #1 (State Stomp): LoadMetrics ne sme ugasniti
-                                    // spinnerja, če SwapDays ali CompleteWorkoutSession še teče.
-                                    // activeAsyncOperations > 0 → spinner ostane viden.
+                                    // Faza 32.0/32.2 — Fix #1 (LoadMetrics Premature Overwrite):
+                                    // Ne smemo slepo pisati isLoading=false — če SwapDays ali
+                                    // CompleteWorkoutSession še teče, activeAsyncOperations > 0
+                                    // in spinner mora ostati viden.
                                     isLoading              = activeAsyncOperations.value > 0,
                                     isDataLoaded           = true,
                                     errorMessage           = metrics.errorMessage
@@ -612,8 +613,12 @@ class BodyModuleHomeViewModel(
                                 else                 -> UserDayStatus.WORKOUT_DONE
                             }
                             // Faza 31.8 — Anomalija 4: Fallback vrednosti iz snapshot-a.
+                            // Faza 32.2 — Fix #2 (Optimistic Streak Double-Increment): Fallback
+                            // incrementira streak samo če trening res prispeva k streaku IN
+                            // trening danes še ni bil zaključen. Prepreči dvojni increment ob
+                            // multi-tap ali ob kasnejšem LoadMetrics Firestore eventu.
                             val newStreak  = completionResult?.newStreakDays?.takeIf { it > 0 }
-                                ?: currentStateSnapshot.streakDays
+                                ?: (_ui.value.streakDays + if (todayStatus.contributesToStreak && !_ui.value.isWorkoutDoneToday) 1 else 0)
                             val newPlanDay = completionResult?.newPlanDay?.takeIf { it > 0 }
                                 ?: (oldPlanDay + if (!isExtra) 1 else 0)
                             val newWeekly  = if (todayStatus != UserDayStatus.REST_WORKOUT_DONE)
