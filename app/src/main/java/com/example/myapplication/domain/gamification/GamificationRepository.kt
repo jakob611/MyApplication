@@ -75,6 +75,7 @@ interface GamificationRepository {
     //   ④ XP + Level posodobitev
     //   ⑤ Zapis v dailyHistory z UserDayStatus.firestoreValue
     //   ⑥ Porabljene kalorije v dailyLogs (Nutrition bridge)
+    //   ⑦ Faza 34 — CRIT-03: Atomarni zapis workoutSessionDoc v workoutSessions
     //
     // Logika glede na [newStatus]:
     //   WORKOUT_DONE     → streak+1, plan_day+1 (če incrementPlanDay=true)
@@ -89,6 +90,12 @@ interface GamificationRepository {
         xpReason: String = "",
         caloriesBurned: Double = 0.0,
         /** true = plan_day +1. Privzeto: samo za WORKOUT_DONE. */
-        incrementPlanDay: Boolean = newStatus.shouldIncrementPlanDay
+        incrementPlanDay: Boolean = newStatus.shouldIncrementPlanDay,
+        /**
+         * Faza 34 — CRIT-03: Opcijski workout session dokument za atomarni zapis
+         * v workoutSessions sub-kolekcijo znotraj iste Firestore transakcije.
+         * Zagotavlja, da gamification posodobitev IN zapis seje uspeta ali propadeta skupaj.
+         */
+        workoutSessionDoc: Map<String, Any>? = null
     ): Int
 }

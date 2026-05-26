@@ -49,7 +49,8 @@ class UserDayStatusTest {
             xpToBeAwarded: Int,
             xpReason: String,
             caloriesBurned: Double,
-            incrementPlanDay: Boolean
+            incrementPlanDay: Boolean,
+            workoutSessionDoc: Map<String, Any>?  // Faza 34 — CRIT-03: atomarni workout session
         ): Int {
             moveCallCount++
             if (throwOnNextDay) throw RuntimeException("Simulirana Firestore transakcijska napaka")

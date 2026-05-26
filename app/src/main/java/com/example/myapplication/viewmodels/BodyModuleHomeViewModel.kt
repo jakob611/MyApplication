@@ -1,5 +1,6 @@
 package com.example.myapplication.viewmodels
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.R
@@ -208,6 +209,9 @@ data class StreakUpdateEvent(val newStreak: Int, val isRestDay: Boolean = false)
  * Faza 30.2 — BodyModuleHomeViewModel brez kakršnih koli Firebase SDK klicev.
  * Faza 30.6 — Dodan BodyMeasurementsRepository za zgodovino meritev.
  *
+ * Faza 34 — Process Death recovery prek SavedStateHandle.email.
+ * gamificationUseCase je non-nullable — DI factory vedno zagotovi instanco.
+ *
  * Auth stanje pride reaktivno prek [AuthStateRepository] vmesnika.
  * Profil se avtomatično osvežuje ob spremembi prijave (flatMapLatest).
  */
@@ -215,12 +219,24 @@ class BodyModuleHomeViewModel(
     private val getBodyMetrics: GetBodyMetricsUseCase,
     private val updateBodyMetrics: UpdateBodyMetricsUseCase,
     private val swapPlanDays: SwapPlanDaysUseCase,
-    private val gamificationUseCase: ManageGamificationUseCase? = null,
+    // Faza 34 — LOW-03 Fix: Non-nullable — DI factory vedno zagotovi veljavno instanco.
+    // Prejšnji `? = null` default je tiho degradiral funkcionalnost brez opozorila v produkciji.
+    private val gamificationUseCase: ManageGamificationUseCase,
     private val userProfileRepository: UserProfileRepository,
     private val authStateRepository: AuthStateRepository,
     // Faza 30.6: Repozitorij za shranjevanje in opazovanje zgodovine meritev
-    private val bodyMeasurementsRepository: BodyMeasurementsRepository
+    private val bodyMeasurementsRepository: BodyMeasurementsRepository,
+    // Faza 34 — HIGH-04 Fix: SavedStateHandle za Process Death recovery.
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
+
+    /**
+     * Faza 34 — HIGH-04: Minimalni query key za Process Death recovery.
+     * Shranjuje IZKLJUČNO email (ne volatilnih stanj kot isDataLoaded, streakDays itd.).
+     * Pri ponovni kreaciji ViewModel-a po Process Death bo email že na voljo →
+     * LoadMetrics se re-triggerira brez čakanja na auth observable.
+     */
+    val cachedEmail = savedStateHandle.getStateFlow("email", "")
 
     // ── Faza 30.1 — Domain Use Case za telesni Zlati Rez ──────────────────────
     private val calculateBodyGoldenRatio = CalculateBodyGoldenRatioUseCase()
@@ -460,12 +476,17 @@ class BodyModuleHomeViewModel(
                 loadMetricsJob = viewModelScope.launch {
                     _ui.update { it.copy(isLoading = true, errorMessage = null) }
                     try {
+                        // Faza 34 — HIGH-04: Fast path prek SavedStateHandle — ob Process Death
+                        // recovery je email že v cache-u in preskočimo auth observable čakanje.
                         // Faza 33 — BUG-11: email se resolvi interno iz authStateRepository.
                         // UI (Composable) ne sme nikoli klicati Firebase SDK neposredno.
-                        val email = authStateRepository.observeCurrentUserEmail().first() ?: run {
-                            _ui.update { it.copy(errorMessage = "Uporabnik ni prijavljen.", isLoading = false) }
-                            return@launch
-                        }
+                        val email = savedStateHandle.get<String>("email")?.takeIf { it.isNotEmpty() }
+                            ?: authStateRepository.observeCurrentUserEmail().first() ?: run {
+                                _ui.update { it.copy(errorMessage = "Uporabnik ni prijavljen.", isLoading = false) }
+                                return@launch
+                            }
+                        // Faza 34: Keširaj email za naslednji Process Death recovery
+                        savedStateHandle["email"] = email
                         getBodyMetrics.invoke(email).collect { metrics ->
                             if (metrics.isLoading) return@collect
                             // Faza 31.9 — Popravek #4: Cooperative Cancellation Guard.
@@ -521,10 +542,8 @@ class BodyModuleHomeViewModel(
             }
 
             is BodyHomeIntent.CompleteRestDay -> {
-                if (gamificationUseCase == null) {
-                    android.util.Log.w("BodyModuleHomeVM", "gamificationUseCase ni nastavljen — preskočim CompleteRestDay")
-                    return
-                }
+                // Faza 34 — LOW-03 Fix: gamificationUseCase null check ODSTRANJEN —
+                // dependency je zdaj non-nullable; DI factory vedno zagotovi instanco.
                 viewModelScope.launch {
                     // Faza 32.1 — Multi-tap guard: prezri klik, če operacija že teče.
                     if (activeAsyncOperations.value > 0) return@launch
@@ -539,7 +558,9 @@ class BodyModuleHomeViewModel(
                             streakDays         = newStreak,
                             todayStatus        = UserDayStatus.REST_DAY_DONE
                         ) }
-                        _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
+                        // Faza 34 — MED-01 Fix: suspending emit() namesto tryEmit() —
+                        // garantira dostavo evento tudi ob kratkotrajno nasičenem bufferju.
+                        _streakUpdatedEvent.emit(StreakUpdateEvent(newStreak = newStreak, isRestDay = true))
                     } catch (e: Exception) {
                         // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar), ne _ui.errorMessage.
                         // _ui.errorMessage ostane čist za persistentne repo napake iz LoadMetrics.

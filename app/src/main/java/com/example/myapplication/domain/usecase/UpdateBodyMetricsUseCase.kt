@@ -2,15 +2,22 @@ package com.example.myapplication.domain.usecase
 
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
-import com.example.myapplication.domain.repository.WorkoutRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+/**
+ * Faza 34 — CRIT-03 Refaktor: workoutRepo odvisnost ODSTRANJENA.
+ *
+ * Workout session dokument se zdaj zapisuje znotraj iste Firestore transakcije
+ * kot gamification posodobitev (streak, XP, plan_day) prek
+ * `gamificationUseCase.recordWorkoutCompletion(workoutSessionDoc = ...)`.
+ *
+ * Zagotavlja all-or-nothing atomarnost: ali gamification + seja uspeta skupaj,
+ * ali nobena — odpravlja delno korupcijo stanja (gamification OK, seja izgubljena).
+ */
 class UpdateBodyMetricsUseCase(
-    private val workoutRepo: WorkoutRepository,
     private val gamificationUseCase: ManageGamificationUseCase
-    // settingsRepo odstranjen — Global Audit Faza 13.3: bm_prefs ni več SSOT za streak/planDay
 ) {
     suspend operator fun invoke(
         email: String,
@@ -31,38 +38,34 @@ class UpdateBodyMetricsUseCase(
             val hour = now.toLocalDateTime(tz).hour
             val timestamp = now.toEpochMilliseconds()
 
-            // 1. Pridobivanje nagrad (XP, Early Bird, Critical Hit) + Faza 8: Unified Streak Engine
-            // isRestDay = isExtra && isRestDay → extra workout na rest dnevu = samo XP, brez streak
-            // incrementPlanDay = !isExtra → extra workout ne napreduje plan_day
-            val res = gamificationUseCase.recordWorkoutCompletion(
-                caloriesBurned   = totalKcal.toDouble(),
-                hour             = hour,
-                isRestDay        = isRestDay && isExtra,
-                incrementPlanDay = !isExtra,
-                currentPlanDay   = planDay          // Faza 23: za optimistični newPlanDay izračun
-            )
-
-            // 2. Priprava podatkov (BREZ FIREBASE IMPORTA)
-            val workoutDoc = mutableMapOf(
-                "timestamp" to timestamp,
-                "type" to if (isExtra) "extra" else "regular",
-                "totalKcal" to totalKcal,
-                "totalTimeMin" to totalTimeMin,
+            // Faza 34 — CRIT-03: Workout session dokument sestavimo PRED klicem gamification,
+            // da ga posredujemo v isto Firestore transakcijo (atomarni zapis).
+            val workoutDoc = mutableMapOf<String, Any>(
+                "timestamp"      to timestamp,
+                "type"           to if (isExtra) "extra" else "regular",
+                "totalKcal"      to totalKcal,
+                "totalTimeMin"   to totalTimeMin,
                 "exercisesCount" to exercisesCount,
-                "planDay" to planDay,
-                "exercises" to exerciseResults,
+                "planDay"        to planDay,
+                "exercises"      to exerciseResults,
                 // Faza 12: focusAreas za fetchLastSessionForFocus() iskanje
-                "focusAreas" to focusAreas
+                "focusAreas"     to focusAreas
             )
 
-            // 3. Shranjevanje v bazo
-            workoutRepo.saveWorkoutSession(email, workoutDoc)
+            // 1. Gamification (XP, streak, plan_day) + atomarni zapis seje v isti transakciji.
+            //    isRestDay = isExtra && isRestDay → extra workout na rest dnevu = samo XP, brez streak
+            //    incrementPlanDay = !isExtra → extra workout ne napreduje plan_day
+            val res = gamificationUseCase.recordWorkoutCompletion(
+                caloriesBurned    = totalKcal.toDouble(),
+                hour              = hour,
+                isRestDay         = isRestDay && isExtra,
+                incrementPlanDay  = !isExtra,
+                currentPlanDay    = planDay,          // Faza 23: za optimistični newPlanDay izračun
+                workoutSessionDoc = workoutDoc        // Faza 34: atomarni zapis v isti transakciji
+            )
 
-            // 3b. [Faza 8 — Unified Streak Engine] Streak je zdaj v celoti v ManageGamificationUseCase
-            //     → recordWorkoutCompletion() → repository.processWorkoutCompletion()
-            //     UserProfileManager.updateUserProgressAfterWorkout() je DEPRECATED no-op.
-
-            // 4–6. Ostalo nespremenjeno (XP, burnedCalories bridge so v ManageGamificationUseCase)
+            // 2. Ločeni workoutRepo.saveWorkoutSession() klic ODSTRANJEN — seja je atomarno
+            //    zapisana znotraj moveToNextDay() transakcije zgoraj (Faza 34 — CRIT-03).
 
             Result.success(res)
         } catch (e: Exception) {

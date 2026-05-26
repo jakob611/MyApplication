@@ -25,6 +25,11 @@ class GetBodyMetricsUseCase(
         send(BodyMetrics(isLoading = true))
 
         try {
+            // Faza 34 — MED-04 Fix: getDailyCalories() se kešira ENKRAT pred collect zanko.
+            // Prejšnji klic `statsRepo.getDailyCalories()` znotraj collect bloka je izvajal
+            // SharedPreferences I/O operacijo ob VSAKEM Firestore eventu — ponavljajoče sinhrone I/O.
+            val cachedDailyKcal = statsRepo.getDailyCalories()
+
             // Zbieramo reaktivni tok iz Firestore poslušalnice
             statsRepo.observeWorkoutStats(email).collect { stats ->
                 if (stats != null) {
@@ -38,7 +43,7 @@ class GetBodyMetricsUseCase(
                         totalWorkoutsCompleted = stats.totalWorkoutsCompleted,
                         isWorkoutDoneToday     = stats.todayStatus.isDoneToday,
                         dailyKcal              = stats.dailyKcal.takeIf { it > 0 }
-                                                 ?: statsRepo.getDailyCalories(),
+                                                 ?: cachedDailyKcal,  // enkrat keširan vrednost
                         todayIsRest            = stats.todayIsRest,
                         todayStatus            = stats.todayStatus,
                         isLoading              = false

@@ -1,13 +1,17 @@
 package com.example.myapplication.data.repository
 
+import android.util.Log
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.domain.repository.WorkoutStats
 import com.example.myapplication.domain.repository.WorkoutStatsRepository
 import com.example.myapplication.data.store.FirestoreHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -30,6 +34,10 @@ import kotlinx.datetime.toLocalDateTime
 class UserWorkoutStatsRepository(
     private val prefs: UserPreferencesRepository
 ) : WorkoutStatsRepository {
+
+    companion object {
+        private const val TAG = "UserWorkoutStatsRepo"
+    }
 
     override suspend fun getWorkoutStats(email: String): WorkoutStats? {
         return try {
@@ -76,13 +84,14 @@ class UserWorkoutStatsRepository(
     /**
      * Faza 32.9 — Reaktivna Firestore poslušalnica z [callbackFlow].
      *
-     * Pritrdi [addSnapshotListener] na dokument trenutnega uporabnika.
-     * Ob vsakem Firestore eventu mapira snapshot v [WorkoutStats] in ga pošlje dolvodnemu
-     * zbiralcu prek [trySend]. Ob napaki ali odhodu zbiralca [awaitClose] pravilno
-     * odstrani poslušalnico — brez memory leakov.
+     * Faza 34 — CRIT-01 Fix: Firestore callback se zdaj izvaja na [Dispatchers.Default]
+     * prek `Dispatchers.Default.asExecutor()` — O(n) LocalDate.parse() zanka in
+     * TimeZone lookup ne blokirata več Main niti.
+     * `.flowOn(Dispatchers.Default)` zagotavlja, da celotni upstream (builder blok +
+     * awaitClose) teče na Default dispatcherju.
      *
-     * Napaka v poslušalnici se propagira prek [close(error)] →
-     * ViewModel catch blok jo ujame in prikaže ShowSnackbar.
+     * Faza 34 — HIGH-03 Fix: Vsi [trySend] klici imajo validacijo rezultata —
+     * zasičeni kanali ne izgubijo eventov tiho, ampak beležijo opozorilo.
      */
     override fun observeWorkoutStats(email: String): Flow<WorkoutStats?> = callbackFlow {
         val docRef = FirestoreHelper.getCurrentUserDocRef() ?: run {
@@ -94,21 +103,20 @@ class UserWorkoutStatsRepository(
         // Pre-fetch lokalnih kalorij v callbackFlow suspend kontekstu (pred listener-jem)
         val localKcal = prefs.getDailyCalories().toInt()
 
-        val registration = docRef.addSnapshotListener { snapshot, error ->
-            // Firestore je sporočil napako (izguba mreže, auth revokacija itd.)
-            // close(error) propagira izjemo do collect {} catch bloka v UseCase-u
+        // Faza 34 — CRIT-01 Fix: Executor premakne callback na Dispatchers.Default —
+        // O(n) mapiranje (LocalDate.parse, TimeZone lookup) se ne izvaja na Main niti.
+        val registration = docRef.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
             if (error != null) {
                 close(error)
                 return@addSnapshotListener
             }
 
-            // Dokument ne obstaja (prvi vpis ali izbrisan profil) → null signal
             if (snapshot == null || !snapshot.exists()) {
-                trySend(null)
+                val r = trySend(null)
+                if (r.isFailure) Log.w(TAG, "callbackFlow buffer poln — null snapshot event izgubljen")
                 return@addSnapshotListener
             }
 
-            // Varno mapiranje snapshot-a → WorkoutStats
             try {
                 val today = Clock.System.now()
                     .toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -126,7 +134,7 @@ class UserWorkoutStatsRepository(
                     try { val d = LocalDate.parse(dateStr); d in monday..today } catch (_: Exception) { false }
                 }
 
-                trySend(WorkoutStats(
+                val r = trySend(WorkoutStats(
                     streakDays             = snapshot.getLong("streak_days")?.toInt() ?: 0,
                     streakFreezes          = snapshot.getLong("streak_freezes")?.toInt() ?: 0,
                     weeklyDone             = weeklyDoneCalc,
@@ -138,15 +146,15 @@ class UserWorkoutStatsRepository(
                     todayIsRest            = false,
                     dailyKcal              = localKcal
                 ))
+                if (r.isFailure) Log.w(TAG, "callbackFlow buffer poln — stats event izgubljen (Firestore emit preskočen)")
             } catch (e: Exception) {
-                // Mapiranje snapshot-a je spodletelo — propagiraj napako
                 close(e)
             }
         }
 
         // Ko zbiralec prekine (navigacija, lifecycle, cancel) — odstrani poslušalnico
         awaitClose { registration.remove() }
-    }
+    }.flowOn(Dispatchers.Default)  // Faza 34 — CRIT-01: celoten upstream na Default dispatcher
 
     override suspend fun isWorkoutDoneToday(): Boolean = prefs.isWorkoutDoneToday()
 

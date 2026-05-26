@@ -2,6 +2,8 @@ package com.example.myapplication.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
 import android.content.Context
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.example.myapplication.ui.run.RunTrackerViewModel
@@ -24,6 +26,37 @@ import com.example.myapplication.data.repository.PlanRepositoryImpl
 import com.example.myapplication.data.repository.FirestoreBodyMeasurementsRepository
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
+
+    /**
+     * Faza 34 — HIGH-04: CreationExtras-aware override za SavedStateHandle podporo.
+     * Klicano za BodyModuleHomeViewModel, ki zahteva SavedStateHandle za Process Death recovery.
+     * Ostali ViewModel-i se delegirajo na `create(modelClass)` (stari API).
+     */
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+        if (modelClass.isAssignableFrom(BodyModuleHomeViewModel::class.java)) {
+            requireNotNull(context) { "Context required for BodyModuleHomeViewModel" }
+            val savedStateHandle = extras.createSavedStateHandle()
+            val gamificationUseCase = GamificationFactory.provide(context)
+            val settingsRepo = UserPreferencesRepository(context)
+            val statsRepo = UserWorkoutStatsRepository(settingsRepo)
+            // Faza 34 — CRIT-03: workoutRepo ODSTRANJEN iz UpdateBodyMetricsUseCase.
+            // Workout session se zdaj zapisuje atomarno znotraj gamification transakcije.
+            return BodyModuleHomeViewModel(
+                GetBodyMetricsUseCase(statsRepo),
+                UpdateBodyMetricsUseCase(gamificationUseCase),
+                SwapPlanDaysUseCase(PlanRepositoryImpl()),
+                gamificationUseCase,                           // non-nullable (Faza 34 — LOW-03)
+                FirestoreUserProfileRepository(),
+                FirebaseAuthStateRepository(),
+                FirestoreBodyMeasurementsRepository(),          // Faza 30.6: história meritev
+                savedStateHandle                               // Faza 34 — HIGH-04: Process Death
+            ) as T
+        }
+        // Delegiraj ostale ViewModel-e na stari create(modelClass) override
+        return create(modelClass)
+    }
+
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(BodyOverviewViewmodel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -58,20 +91,18 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
         }
         if (modelClass.isAssignableFrom(BodyModuleHomeViewModel::class.java)) {
             requireNotNull(context) { "Context required for BodyModuleHomeViewModel" }
-            val workoutRepo = FirestoreWorkoutRepository()
             val gamificationUseCase = GamificationFactory.provide(context)
             val settingsRepo = UserPreferencesRepository(context)
             val statsRepo = UserWorkoutStatsRepository(settingsRepo)
-
             @Suppress("UNCHECKED_CAST")
             return BodyModuleHomeViewModel(
                 GetBodyMetricsUseCase(statsRepo),
-                UpdateBodyMetricsUseCase(workoutRepo, gamificationUseCase),
+                UpdateBodyMetricsUseCase(gamificationUseCase),
                 SwapPlanDaysUseCase(PlanRepositoryImpl()),
                 gamificationUseCase,
                 FirestoreUserProfileRepository(),
                 FirebaseAuthStateRepository(),
-                FirestoreBodyMeasurementsRepository() // Faza 30.6: história meritev
+                FirestoreBodyMeasurementsRepository()
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

@@ -41,8 +41,9 @@ class ManageGamificationUseCase(
 ) {
 
     fun getGamificationStateFlow(): Flow<GamificationState> = flow {
-        try { emit(repository.getGamificationState()) }
-        catch (_: Exception) { emit(GamificationState()) }
+        // Faza 34 — CRIT-02 Fix: Ne lovimo izjem tihoma z emitiranjem praznega stanja.
+        // Propagiraj napako navzgor — klicatelji (ViewModel catch bloki) upravljajo UI napake.
+        emit(repository.getGamificationState())
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -50,13 +51,16 @@ class ManageGamificationUseCase(
     //
     // @param isRestDay      true = extra workout na rest dnevu → REST_WORKOUT_DONE
     // @param incrementPlanDay true = redni workout → plan_day +1
+    // @param workoutSessionDoc Faza 34 — CRIT-03: opcionalni workout session dokument
+    //                          za atomarni zapis v isti Firestore transakciji kot gamification.
     // ─────────────────────────────────────────────────────────────────────────
     suspend fun recordWorkoutCompletion(
         caloriesBurned: Double,
         hour: Int,
         isRestDay: Boolean = false,
         incrementPlanDay: Boolean = true,
-        currentPlanDay: Int = 0
+        currentPlanDay: Int = 0,
+        workoutSessionDoc: Map<String, Any>? = null
     ): WorkoutCompletionResult {
 
         val calorieXP      = (caloriesBurned / 8).toInt()
@@ -74,7 +78,8 @@ class ManageGamificationUseCase(
             xpToBeAwarded    = totalXP,
             xpReason         = xpReason,
             caloriesBurned   = caloriesBurned,
-            incrementPlanDay = shouldIncrement
+            incrementPlanDay = shouldIncrement,
+            workoutSessionDoc = workoutSessionDoc  // Faza 34: atomarni passthrough
         )
         val newPlanDay = if (shouldIncrement && currentPlanDay > 0) currentPlanDay + 1 else currentPlanDay
 
