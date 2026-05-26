@@ -565,19 +565,17 @@ class BodyModuleHomeViewModel(
                         _ui.update { it.copy(isLoading = true, errorMessage = null) }
                         val lockedDay = if (swapSnapshot.isWorkoutDoneToday) swapSnapshot.planDay else null
                         val res = swapPlanDays.invoke(intent.currentPlan, intent.dayA, intent.dayB, lockedDay)
-                        // Faza 32.4 — Fix #1: Napaka zamenjave → Channel (Snackbar), ne _ui.errorMessage.
-                        // Faza 32.5 — trySend → viewModelScope.launch + send: trySend takoj zavrže
-                        // event če je kanal zaseden; send garantira dostavo.
-                        res.onFailure { e ->
-                            viewModelScope.launch {
-                                _uiEvent.send(BodyUiEvent.ShowSnackbar(e.localizedMessage ?: "Unknown Error"))
-                            }
-                        }
-                        res.onSuccess { updatedPlan ->
+                        // Faza 32.6 — Proceduralni if/else nadomešča onSuccess/onFailure verige:
+                        // send() se pokliče direktno v suspend korutini → atomarni vrstni red
+                        // (Snackbar se pošlje PRED finally blokom, ki ugasne spinner).
+                        if (res.isSuccess) {
                             // Faza 32.0 — Fix #2: Posodobi živi plan, da LoadMetrics collect blok
                             // pri naslednjem Firestore eventu izračuna todayIsRest iz zamenjanih dni.
-                            currentPlanState.value = updatedPlan
-                            intent.onResult(updatedPlan)
+                            currentPlanState.value = res.getOrNull()!!
+                            intent.onResult(res.getOrNull()!!)
+                        } else {
+                            val msg = res.exceptionOrNull()?.localizedMessage ?: "Unknown Error"
+                            _uiEvent.send(BodyUiEvent.ShowSnackbar(msg))
                         }
                     } catch (e: Exception) {
                         // Faza 32.4 — Fix #1: Nepredvidena runtime izjema → Channel (Snackbar).
@@ -626,7 +624,11 @@ class BodyModuleHomeViewModel(
                             isRestDay       = isRestDay
                         )
 
-                        result.onSuccess { completionResult ->
+                        // Faza 32.6 — Proceduralni if/else nadomešča onSuccess/onFailure verige:
+                        // send() se pokliče direktno v suspend korutini → atomarni vrstni red
+                        // (Snackbar se pošlje PRED finally blokom, ki ugasne spinner).
+                        if (result.isSuccess) {
+                            val completionResult = result.getOrNull()
                             val todayStatus = when {
                                 isRestDay && isExtra -> UserDayStatus.REST_WORKOUT_DONE
                                 else                 -> UserDayStatus.WORKOUT_DONE
@@ -655,13 +657,10 @@ class BodyModuleHomeViewModel(
                             ) }
                             _streakUpdatedEvent.tryEmit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
-                        }
-                        result.onFailure { error ->
-                            // Faza 32.4 — Fix #1: Prehodna napaka → Channel (Snackbar), ne _ui.errorMessage.
-                            // Faza 32.5 — trySend → viewModelScope.launch + send: garantirana dostava.
-                            viewModelScope.launch {
-                                _uiEvent.send(BodyUiEvent.ShowSnackbar(error.localizedMessage ?: "Unknown Error"))
-                            }
+                        } else {
+                            // Faza 32.4/32.6 — Napaka → direktni send() brez nested launch.
+                            val msg = result.exceptionOrNull()?.localizedMessage ?: "Unknown Error"
+                            _uiEvent.send(BodyUiEvent.ShowSnackbar(msg))
                             intent.onCompletion(null)
                         }
                     } catch (e: Exception) {

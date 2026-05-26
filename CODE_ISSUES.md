@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 32.4: Sticky Error fix — akcijske napake → ShowSnackbar Channel)  
+**Zadnja posodobitev:** 2026-05-26 (Faza 32.5: trySend → suspending send za garantirano dostavo UI eventov)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -1087,6 +1087,24 @@ Isti dokument → vedno prepiše obstoječo vrstico, brez podvajanja.
 - Kotlin verzija: **2.2.10** (`org.jetbrains.kotlin.android` v root build.gradle.kts)
 - KSP za Kotlin 2.2.10: bo `2.2.10-1.0.X` — preveriti na https://github.com/google/ksp/releases
 - Komentar v build.gradle.kts že opozarja da uradna verzija še ni objavljena
+
+---
+
+## Faza 32.5 — BodyModuleHomeViewModel: trySend → garantiran send (2026-05-26)
+
+### Fix — Dropped UI Events (trySend nevarnost)
+- 🐛 **Root cause:** `_uiEvent.trySend(...)` v `.onFailure { }` lambdah (SwapDays, CompleteWorkoutSession) takoj zavrže event, če je kanal zaseden ali ViewModel scope ne sprejema. Z `Channel.BUFFERED` to redko pride, ampak ni garantirano.
+- ✅ **Rešitev:** `trySend` zamenjan z `viewModelScope.launch { _uiEvent.send(...) }` — nova korutina čaka dokler channel ni pripravljen, event je garantirano dostavljen.
+  ```kotlin
+  // PREJ — ni guarantee:
+  res.onFailure { e -> _uiEvent.trySend(BodyUiEvent.ShowSnackbar(...)) }
+  
+  // ZDAJ — garantirano:
+  res.onFailure { e ->
+      viewModelScope.launch { _uiEvent.send(BodyUiEvent.ShowSnackbar(...)) }
+  }
+  ```
+- ✅ Popravljeni mesti: `SwapDays.onFailure` + `CompleteWorkoutSession.result.onFailure`
 
 ---
 
