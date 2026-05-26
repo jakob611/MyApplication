@@ -521,71 +521,69 @@ class BodyModuleHomeViewModel(
                             }
                         // Faza 34: Keširaj email za naslednji Process Death recovery
                         savedStateHandle["email"] = email
-                        getBodyMetrics.invoke(email).collect { metrics ->
-                            if (metrics.isLoading) return@collect
-                            // Faza 31.9 — Popravek #4: Cooperative Cancellation Guard.
-                            // Stari, pravkar preklicani job (loadMetricsJob?.cancel()) je morda
-                            // ravno zaključil mrežni klic in prišel do te točke v milisekundi
-                            // POTEM ko novi job že nastavil isLoading = true.
-                            // Brez tega guard-a bi stari job prebrisal isLoading = true novega joba.
-                            if (!currentCoroutineContext().isActive) return@collect
+                        // Faza 38 — Result API: collect prejema Result<BodyMetrics> namesto
+                        // surovih BodyMetrics z meta-polji. Uspešne emisije in domenske napake
+                        // so ločene na tipu — brez catch blokov po stream logiki.
+                        //
+                        // Opomba: Result.fold() ni suspend-aware (kotlin.Result.fold ne sprejme
+                        // suspend lambda-e), zato uporabljamo if/when v kolektovem suspend kontekstu,
+                        // kar je semantično enakovredno in edino pravilno.
+                        getBodyMetrics.invoke(email).collect { result ->
+                            if (result.isSuccess) {
+                                val metrics = result.getOrThrow()
+                                if (metrics.isLoading) return@collect
+                                // Faza 31.9 — Cooperative Cancellation Guard.
+                                if (!currentCoroutineContext().isActive) return@collect
 
-                            // Faza 32.0 — Fix #2: Beremo iz currentPlanState.value (živi flow),
-                            // ne iz intent.plan (statični snapshot zajet ob inicializaciji).
-                            // SwapDays onResult posodobi currentPlanState → todayIsRest je vedno
-                            // izračunan iz aktualnega plana, ki vsebuje zamenjane dni.
-                            val todayIsRest = currentPlanState.value?.weeks
-                                ?.flatMap { it.days }
-                                ?.firstOrNull { it.dayNumber == metrics.planDay }
-                                ?.isRestDay ?: false
+                                // Faza 32.0 — Fix #2: Beremo iz currentPlanState.value (živi flow).
+                                val todayIsRest = currentPlanState.value?.weeks
+                                    ?.flatMap { it.days }
+                                    ?.firstOrNull { it.dayNumber == metrics.planDay }
+                                    ?.isRestDay ?: false
 
-                            _ui.update { current ->
-                                current.copy(
-                                    streakDays             = metrics.streakDays,
-                                    streakFreezes          = metrics.streakFreezes,
-                                    weeklyDone             = metrics.weeklyDone,
-                                    weeklyTarget           = metrics.weeklyTarget,
-                                    planDay                = metrics.planDay,
-                                    totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
-                                    isWorkoutDoneToday     = metrics.isWorkoutDoneToday,
-                                    dailyKcal              = metrics.dailyKcal,
-                                    todayIsRest            = todayIsRest,
-                                    todayStatus            = metrics.todayStatus,
-                                    // Faza 32.0/32.2 — Fix #1 (LoadMetrics Premature Overwrite):
-                                    // Ne smemo slepo pisati isLoading=false — če SwapDays ali
-                                    // CompleteWorkoutSession še teče, activeAsyncOperations > 0
-                                    // in spinner mora ostati viden.
-                                    isLoading              = activeAsyncOperations.value > 0,
-                                    isDataLoaded           = true,
-                                    // Faza 32.4 — Fix #2 (LoadMetrics Error Cleanup): Ker akcijske napake
-                                    // (SwapDays, CompleteWorkoutSession) zdaj grejo na Channel (ShowSnackbar),
-                                    // _ui.errorMessage vsebuje IZKLJUČNO persistentne repo napake iz LoadMetrics.
-                                    // Ohranimo current.errorMessage samo med aktivno operacijo, sicer prepišemo.
-                                    errorMessage           = if (activeAsyncOperations.value > 0) current.errorMessage else metrics.errorMessage
-                                )
+                                _ui.update { current ->
+                                    current.copy(
+                                        streakDays             = metrics.streakDays,
+                                        streakFreezes          = metrics.streakFreezes,
+                                        weeklyDone             = metrics.weeklyDone,
+                                        weeklyTarget           = metrics.weeklyTarget,
+                                        planDay                = metrics.planDay,
+                                        totalWorkoutsCompleted = metrics.totalWorkoutsCompleted,
+                                        isWorkoutDoneToday     = metrics.isWorkoutDoneToday,
+                                        dailyKcal              = metrics.dailyKcal,
+                                        todayIsRest            = todayIsRest,
+                                        todayStatus            = metrics.todayStatus,
+                                        isLoading              = activeAsyncOperations.value > 0,
+                                        isDataLoaded           = true,
+                                        errorMessage           = if (activeAsyncOperations.value > 0) current.errorMessage else metrics.errorMessage
+                                    )
+                                }
+                            } else {
+                                // Faza 38 — Result.failure: domenska napaka iz UseCase/Repository.
+                                // Prezentacijski sloj ne potrebuje catch bloka — napaka je vrednost.
+                                when (val exception = result.exceptionOrNull()) {
+                                    is DomainException.AuthenticationExpired -> {
+                                        // Auth token potekel / PERMISSION_DENIED — seja ni veljavna.
+                                        _ui.update { it.copy(isAuthExpired = true, isLoading = false) }
+                                        _uiEvent.send(BodyUiEvent.AuthExpired)
+                                    }
+                                    is DomainException.NetworkFailure -> {
+                                        // Omrežna napaka (UNAVAILABLE, kvota…) — prikaži errorMessage.
+                                        _ui.update { it.copy(errorMessage = exception.message, isLoading = false) }
+                                    }
+                                    else -> {
+                                        _ui.update { it.copy(errorMessage = exception?.message ?: "Unknown error", isLoading = false) }
+                                    }
+                                }
                             }
                         }
                     } catch (e: CancellationException) {
-                        // Faza 31.8 — Anomalija 1: Preklicani stari job ne sme mutirati stanja novega joba.
-                        // Re-throwamo, da isLoading = true (ki ga je postavil novi job) ostane nespremenjen.
+                        // Faza 31.8 — Preklicani stari job ne sme mutirati stanja novega joba.
                         throw e
-                    } catch (e: DomainException) {
-                        // Faza 36 — Clean Architecture: ViewModel lovi domensko-nevtralnih DomainException.
-                        // Firebase SDK uvozi so ODSTRANJENI iz presentation sloja — GetBodyMetricsUseCase
-                        // (domain) je že prevedel FirebaseFirestoreException → DomainException.
-                        when (e) {
-                            is DomainException.AuthenticationExpired -> {
-                                // Auth token potekel / PERMISSION_DENIED — seja ni veljavna.
-                                // UI prikaže opozorilo in navigira nazaj na login.
-                                _ui.update { it.copy(isAuthExpired = true, isLoading = false) }
-                                _uiEvent.send(BodyUiEvent.AuthExpired)
-                            }
-                            is DomainException.NetworkFailure -> {
-                                // Omrežna napaka (UNAVAILABLE, kvota…) — prikaži errorMessage v UI.
-                                _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
-                            }
-                        }
                     } catch (e: Exception) {
+                        // Faza 38 — Nepričakovane izjeme zunaj UseCase toka (npr. auth observable,
+                        // SavedStateHandle). DomainException se nikoli ne pojavi tukaj — UseCase
+                        // jo vgradi v Result.failure in ViewModel jo obdela v collect bloku.
                         _ui.update { it.copy(errorMessage = e.message, isLoading = false) }
                     }
                 }

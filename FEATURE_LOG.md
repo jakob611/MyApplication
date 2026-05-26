@@ -504,14 +504,6 @@ no replicira staro SimpleDateFormat obliko.
 
 
 
-````
-This is the description of what the code block changes:
-<changeDescription>
-Dodam vnosa za Fazo 37 in 38 na konec FEATURE_LOG.md
-</changeDescription>
-
-This is the code block that represents the suggested code change:
-```markdown
 ## 2026-05-26 — Faza 37 / 38: Clean Architecture dokončanje + Analytics Progress UseCase
 **Datoteke:** `domain/usecase/GetBodyMetricsUseCase.kt`, `domain/usecase/GetMeasurementsProgressUseCase.kt` (NOVO)
 **Kaj:**
@@ -519,8 +511,12 @@ This is the code block that represents the suggested code change:
 2. **Faza 38 — NOVO `GetMeasurementsProgressUseCase.kt`** — Analytics & Progress Module use case. Zbira reaktivni tok iz `BodyMeasurementsRepository.observeMeasurementsHistory()`, ga uredi kronološko (ASC timestamp) in vrne `Flow<Result<List<BodyMeasurementEntry>>>`. Tokove napake pretvori v `DomainException.NetworkFailure` via `.catch {}` operator. 100% čist Kotlin — nobenih Android/Firebase importov.
 **Zakaj:** Faza 37 odstranja boilerplate catch-rethrow antipattern. Faza 38 vzpostavlja domenski temelj za Progress/Analytics grafe (ramen/pas razmerje, teža) v prihodnji UI fazi.
 **Tveganje:** 🟢 nizko (additive — novi use case, minimallen refaktor obstoječega) — BUILD ✅ SUCCESSFUL
-```
-<userPrompt>
-Provide the fully rewritten file, incorporating the suggested code change. You must produce the complete file.
-</userPrompt>
 
+## 2026-05-26 — Faza 38b: Poenotena Result API pogodba — odprava arhitekturne shizofrenije
+**Datoteke:** `domain/usecase/GetBodyMetricsUseCase.kt`, `viewmodels/BodyModuleHomeViewModel.kt`, `test/.../BodyModuleHomeViewModelTest.kt`
+**Kaj:**
+1. **`GetBodyMetricsUseCase.kt` — Nov povratni tip `Flow<Result<BodyMetrics>>`**: Vse uspešne emisije ovite v `Result.success(...)`, predvidljive domenske napake (`DomainException.AuthenticationExpired`, `DomainException.NetworkFailure`) emitirajo kot `Result.failure(...)` — UseCase nikoli ne meta izjem za domenske napake. Dodan ekspliciten `catch (e: CancellationException) { throw e }` pred geneičnim catch blokom.
+2. **`BodyModuleHomeViewModel.kt` — Result-aware collect blok**: `getBodyMetrics.invoke(email).collect { result -> }` procesira emisije prek `if (result.isSuccess) { ... } else { when(val exception = result.exceptionOrNull()) { ... } }`. Odstranjeni sta `catch (e: DomainException)` iz outer try/catch (napake so zdaj vrednosti, ne izjeme). Presentation sloj nima več stream-level catch blokov za domenske napake.
+3. **`BodyModuleHomeViewModelTest.kt`** — Posodobljeni KDoc in klic chain opisi: opisujejo novi Result API tok. Funkcionalnost fake repozitorijev in testi se niso spremenili — arhitekturna meja pozostane čista.
+**Zakaj:** `GetBodyMetricsUseCase` je metal surove `DomainException`, `GetMeasurementsProgressUseCase` pa vrača `Flow<Result<...>>` — dve različni pogodbi za isti vmesnik. Poenoten pristop: vse moderne podatkovne operacije vračajo `Result` omotač; nobeden use case ne meta za predvidljive domenske napake.
+**Tveganje:** 🟢 nizko (refaktoring z enakim vedédenjem — VM logika za `isAuthExpired`/`errorMessage` nespremenjena) — BUILD ✅ SUCCESSFUL

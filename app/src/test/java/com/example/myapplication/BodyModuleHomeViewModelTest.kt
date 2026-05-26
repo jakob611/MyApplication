@@ -38,25 +38,27 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35 / Faza 37.
+ * Regresijski unit testi za BodyModuleHomeViewModel — Faza 35 / Faza 38.
  *
  * Zagotavljajo, da DomainException.AuthenticationExpired pravilno:
  *   1. Sproži BodyUiEvent.AuthExpired na uiEvents Channel
  *   2. Nastavi BodyHomeUiState.isAuthExpired = true
  *   3. Nastavi isLoading = false (UI ne ostane zamrznjen)
  *
- * Faza 37 — Clean Architecture klic chain, ki ga testi pokrivajo:
+ * Faza 38 — Poenotena Result API pogodba — klic chain, ki ga testi pokrivajo:
  *   FakeWorkoutStatsRepository.observeWorkoutStats() vrže DomainException.AuthenticationExpired
- *     → GetBodyMetricsUseCase catch(DomainException) propagira naprej (throw e)
- *     → BodyModuleHomeViewModel catch(DomainException.AuthenticationExpired) ujame
+ *     → GetBodyMetricsUseCase catch(Exception) prevede v Result.failure(DomainException.AuthenticationExpired)
+ *     → GetBodyMetricsUseCase emitira Result.failure prek channelFlow.send()
+ *     → BodyModuleHomeViewModel collect { result -> result.isFailure }
+ *     → when (exception) { is DomainException.AuthenticationExpired → ... }
  *     → _ui.update { isAuthExpired=true, isLoading=false }
  *     → _uiEvent.send(BodyUiEvent.AuthExpired)
  *
- * Faza 37 — Arhitekturna meja je zdaj POPOLNOMA ČISTA:
- * FakeWorkoutStatsRepository neposredno vrže DomainException (ne Firebase tipov),
- * kar simulira novo obnašanje UserWorkoutStatsRepository, ki prevede Firebase
- * izjeme v DomainException ZNOTRAJ data sloja. Nobeden sloj nad data/ ne vsebuje
- * Firebase importov.
+ * Arhitekturna meja je POPOLNOMA ČISTA (Faza 37/38):
+ * FakeWorkoutStatsRepository vrže DomainException (ne Firebase tipov),
+ * UseCase ga emitira kot Result.failure, ViewModel ga procesira prek Result.isFailure check-a.
+ * Nobeden sloj nad data/ ne vsebuje Firebase importov. Presenta­cijski sloj nima catch blokov
+ * za domenske napake na stream nivoju — vse napake so vrednosti (tipsko-varne).
  *
  * Testna strategija:
  *   - Brez mocking frameworka (Mockito/MockK) — ročni fake razredi (KMP-friendly, hitrejši)
@@ -227,12 +229,12 @@ class BodyModuleHomeViewModelTest {
      * Scenarij: Auth token je potekel → Firestore vrne PERMISSION_DENIED →
      * ViewModel mora nastaviti isAuthExpired=true, isLoading=false in emitirati AuthExpired.
      *
-     * Klic chain:
+     * Faza 38 — klic chain (Result API):
      *   handleIntent(LoadMetrics) →
-     *   getBodyMetrics.invoke(email).collect →
-     *   FakeWorkoutStatsRepository.observeWorkoutStats() wirft PERMISSION_DENIED →
-     *   GetBodyMetricsUseCase catch(FirebaseFirestoreException) { throw e } →
-     *   ViewModel catch(FirebaseFirestoreException) ujame →
+     *   getBodyMetrics.invoke(email).collect { result -> } →
+     *   FakeWorkoutStatsRepository.observeWorkoutStats() vrže DomainException.AuthenticationExpired →
+     *   GetBodyMetricsUseCase catch(Exception) → emitira Result.failure(DomainException.AuthenticationExpired) →
+     *   ViewModel: result.isFailure → when(exception) is AuthenticationExpired →
      *   _ui.update { isAuthExpired=true, isLoading=false } + _uiEvent.send(AuthExpired)
      */
     @Test
