@@ -9,7 +9,7 @@ import kotlin.math.roundToInt
 
 // ---------- Enumi ----------
 
-internal enum class MealType(val title: String) {
+enum class MealType(val title: String) {
     Breakfast("Breakfast"),
     Lunch("Lunch"),
     Dinner("Dinner"),
@@ -18,7 +18,7 @@ internal enum class MealType(val title: String) {
 
 // ---------- Podatkovni modeli ----------
 
-internal data class TrackedFood(
+data class TrackedFood(
     val id: String,
     val name: String,
     val meal: MealType,
@@ -53,7 +53,7 @@ data class NutritionTargets(
 
 // ---------- Pomožne funkcije ----------
 
-internal fun parseMacroBreakdown(text: String?): NutritionTargets {
+fun parseMacroBreakdown(text: String?): NutritionTargets {
     if (text.isNullOrBlank()) return NutritionTargets(null, null, null, null)
     val proteinTotalRe = Regex("""Protein:\s*[\d.]+g/kg\s*\(([\d.]+)g total\)""", RegexOption.IGNORE_CASE)
     val proteinSimpleRe = Regex("""Protein:\s*([\d.]+)g(?:\b|,)""", RegexOption.IGNORE_CASE)
@@ -68,7 +68,7 @@ internal fun parseMacroBreakdown(text: String?): NutritionTargets {
     return NutritionTargets(calories, protein, carbs, fat)
 }
 
-internal fun formatMacroWeight(grams: Double?, unitPreference: String): String {
+fun formatMacroWeight(grams: Double?, unitPreference: String): String {
     val g = grams ?: 0.0
     return if (unitPreference == "lbs" || unitPreference == "lb") {
         val oz = g / 28.3495
@@ -87,7 +87,7 @@ internal fun formatMacroWeight(grams: Double?, unitPreference: String): String {
 //
 // POPRAVEK: roundToInt() — enako natančno kot že unče (oz) veja.
 // ══════════════════════════════════════════════════════════════════════════════
-internal fun macroLabel(label: String, consumed: Double, target: Int, unitPreference: String): String {
+fun macroLabel(label: String, consumed: Double, target: Int, unitPreference: String): String {
     val emoji = when (label) {
         "Protein" -> "🥩"
         "Fat"     -> "🥑"
