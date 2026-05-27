@@ -26,6 +26,8 @@ import com.example.myapplication.data.repository.PlanRepositoryImpl
 import com.example.myapplication.data.repository.FirestoreBodyMeasurementsRepository
 import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
+import com.example.myapplication.viewmodels.BodyPlanQuizViewModel
+import com.example.myapplication.data.repository.MetricsRepositoryImpl
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
 
@@ -65,8 +67,7 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
     }
 
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(BodyOverviewViewmodel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
+        if (modelClass.isAssignableFrom(BodyOverviewViewmodel::class.java)) {            @Suppress("UNCHECKED_CAST")
             // Faza 41 — Anomaly 2/3 Fix: PlanRepositoryImpl (data) injiciran v domenski vmesnik PlanRepository.
             // BodyOverviewViewmodel zdaj NE ve za PlanDataStore ali FirestoreHelper.
             return BodyOverviewViewmodel(PlanRepositoryImpl()) as T
@@ -115,6 +116,16 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
                 bodyMeasurementsRepo,
                 CalculateBodyGoldenRatioUseCase(),
                 SaveBodyMeasurementsUseCase(bodyMeasurementsRepo)
+            ) as T
+        }
+        if (modelClass.isAssignableFrom(BodyPlanQuizViewModel::class.java)) {
+            // Faza 42 — Anomaly 1 Fix: BodyPlanQuizViewModel DI via domenski vmesniki.
+            // MetricsRepositoryImpl implementira MetricsRepository (domain interface).
+            // FirebaseAuthStateRepository implementira AuthStateRepository (domain interface).
+            @Suppress("UNCHECKED_CAST")
+            return BodyPlanQuizViewModel(
+                metricsRepository = MetricsRepositoryImpl(),
+                authRepository    = FirebaseAuthStateRepository()
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

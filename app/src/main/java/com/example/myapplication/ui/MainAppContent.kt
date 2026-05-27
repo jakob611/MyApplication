@@ -508,7 +508,11 @@ fun MainAppContent(
                                     onFreeTrial = {}, onContinue = { if (isLoggedIn) { errorMessage = null; navigateTo(Screen.ProSubscription) } },
                                     onBack = { errorMessage = null; navigateBack() }, errorMessage = errorMessage
                                 )
-                                currentScreen is Screen.BodyModule -> BodyPlanQuizScreen(
+                                currentScreen is Screen.BodyModule -> {
+                                    val quizViewModel: com.example.myapplication.viewmodels.BodyPlanQuizViewModel =
+                                        viewModel(factory = MyViewModelFactory(context))
+                                    BodyPlanQuizScreen(
+                                        viewModel = quizViewModel,
                                     onBack = ::navigateBack,
                                     onQuizDataCollected = { quizData ->
                                         @Suppress("UNCHECKED_CAST")
@@ -556,13 +560,14 @@ fun MainAppContent(
                                                     FirestoreHelper.getCurrentUserDocRef()
                                                         .set(mapOf("plan_day" to 1, "weekly_target" to weeklyTargetToSave, "weekly_done" to 0),
                                                             com.google.firebase.firestore.SetOptions.merge()).await()
-                                                } catch (e: Exception) { Log.e("MainApp", "New plan Firestore init: ${e.message}") }
+                                                 } catch (e: Exception) { Log.e("MainApp", "New plan Firestore init: ${e.message}") }
                                             }
                                             bodyOverviewViewModel.refreshPlans()
                                             navViewModel.navigateTo(Screen.BodyOverview)
                                         }
                                     }
                                 )
+                                }
                                 currentScreen is Screen.ProSubscription -> ProSubscriptionScreen(onBack = ::navigateBack, onSubscribed = { navigateTo(Screen.Dashboard) })
                                 currentScreen is Screen.MyPlans -> MyPlansScreen(
                                     plans = plans, onPlanClick = { selectedPlan = it },

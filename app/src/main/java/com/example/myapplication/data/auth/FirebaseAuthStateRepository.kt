@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.callbackFlow
  */
 class FirebaseAuthStateRepository : AuthStateRepository {
 
+    override fun getCurrentUid(): String? = FirebaseAuth.getInstance().currentUser?.uid
+
     override fun observeCurrentUserEmail(): Flow<String?> = callbackFlow {
         val auth = FirebaseAuth.getInstance()
 

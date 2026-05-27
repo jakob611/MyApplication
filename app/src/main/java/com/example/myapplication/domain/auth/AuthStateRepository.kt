@@ -11,4 +11,7 @@ import kotlinx.coroutines.flow.Flow
 interface AuthStateRepository {
     /** Reaktivni tok e-poštnega naslova prijavljenega uporabnika. null = odjavljen. */
     fun observeCurrentUserEmail(): Flow<String?>
+
+    /** Sinhrono vrne UID trenutno prijavljenega uporabnika ali null, če ni prijavljen. */
+    fun getCurrentUid(): String?
 }
