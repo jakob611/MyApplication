@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-27 (Faza 45: Detekt statična analiza konfigurirana)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 46: Multi-tenant data leak popravljen v FirestoreGamificationRepository)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---

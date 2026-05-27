@@ -553,3 +553,10 @@ no replicira staro SimpleDateFormat obliko.
 **Kaj:** Bash skript ki rekurzivno poišče vse `.kt` datoteke v `app/src/main/java`, `domain/`, `data/`, `ui/` in jih združi v eno datoteko `glowupp_source_audit.txt`. Vsaka datoteka dobi standardizirani header `// FILE PATH: [pot]`. Izključeni direktoriji: `build/`, `.gradle/`, `.git/`, `app/build/`, `androidTest/`, `test/`. Izpiše statistiko (število datotek, skupno vrstic, velikost).
 **Zakaj:** Potreba po determinističnem zbiranju celotne kode baze za deep-context AI arhitekturni avdit brez človeške napake pri izbiranju datotek.
 **Tveganje:** 🟢 nizko (samo-contained skript, ne modificira nobene projektne datoteke) — BUILD ✅ SUCCESSFUL
+
+## 2026-05-27 — Faza 46: Multi-tenant data leak fix v FirestoreGamificationRepository
+**Datoteke:** `data/gamification/FirestoreGamificationRepository.kt`
+**Kaj:** Popravljeni dve mesti kjer `dailyLogs` zapis je bil usmerjen na globalno kolekcijo `db.collection("dailyLogs").document(todayStr)` namesto na user-scoped podkolekcijo `userRef.collection("dailyLogs").document(todayStr)`. Popravljeni funkciji: `logBurnedCalories()` (vrstica 136) in `moveToNextDay()` (vrstica 220). Dodatno: odpravljena tiha izjema v `consumeStreakFreeze()` — zdaj logira z `Log.e("FirestoreGamificationRepo", ...)`.
+**Zakaj:** KRITIČNA arhitekturna napaka: podatki o porabljenih kalorijah vseh uporabnikov so se pisali na isto globalno pot v Firestoreu, kar je povzročilo cross-user data leakaže (Multi-Tenant Data Leak). Vsak prijavljeni uporabnik bi prepisal kalorije prejšnjega.
+**Tveganje:** 🔴 kritično pred popravkom → 🟢 nizko po popravku — BUILD ✅ SUCCESSFUL
+

@@ -123,13 +123,17 @@ class FirestoreGamificationRepository : GamificationRepository {
                 }
             }.await() ?: false
             consumed
-        } catch (e: Exception) { false }
+        } catch (e: Exception) {
+            Log.e("FirestoreGamificationRepo", "consumeStreakFreeze failed", e)
+            false
+        }
     }
 
     override suspend fun logBurnedCalories(todayStr: String, calories: Double) {
         try {
             val userRef     = FirestoreHelper.getCurrentUserDocRef() ?: return
-            val dailyLogRef = db.collection("dailyLogs").document(todayStr)
+            // FIX Faza 46: user-scoped pot namesto globalnega db.collection("dailyLogs")
+            val dailyLogRef = userRef.collection("dailyLogs").document(todayStr)
             db.runTransaction { transaction ->
                 val snap     = transaction.get(dailyLogRef)
                 val existing = (snap.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
@@ -141,7 +145,7 @@ class FirestoreGamificationRepository : GamificationRepository {
                 null
             }.await()
         } catch (e: Exception) {
-            Log.e("GamificationRepo", "logBurnedCalories failed: ${e.message}")
+            Log.e("FirestoreGamificationRepo", "Failed to update user-scoped daily log (logBurnedCalories)", e)
         }
     }
 
@@ -212,7 +216,8 @@ class FirestoreGamificationRepository : GamificationRepository {
                 val currentXp     = (snapshot.getLong("xp")                  ?: 0L).toInt()
 
                 // Burned calories za Nutrition bridge
-                val dailyLogRef = db.collection("dailyLogs").document(todayStr)
+                // FIX Faza 46: user-scoped pot namesto globalnega db.collection("dailyLogs")
+                val dailyLogRef = userRef.collection("dailyLogs").document(todayStr)
                 val logSnapshot = if (caloriesBurned > 0.0) transaction.get(dailyLogRef) else null
                 val existingCals = (logSnapshot?.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
 
