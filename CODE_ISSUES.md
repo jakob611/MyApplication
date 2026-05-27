@@ -69,6 +69,59 @@
 
 ---
 
+## 📋 DNEVNIK POPRAVKOV — Faza 50 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### NutritionScreen SRP Refaktoriranje — Modularizacija (911 → ~220 vrstic)
+
+**HIGH PRIORITY ISSUE — God Component: `NutritionScreen.kt` (911 vrstic, 5 odgovornosti) ✅**
+
+**Root cause:** `NutritionScreen.kt` je bil god composable z mešanimi odgovornostmi:
+1. Kalorični progress prikaz (DonutProgressView, ActiveCaloriesBar)
+2. Sledilnik vode (WaterControlsRow + haptic feedback)
+3. Seznam zasledovanih jedi po obrokih (4× MealCard)
+4. Custom meal dialogi (MakeCustomMealsDialog, ChooseMealDialog, delete, Other Macros)
+5. Orchestracija celotnega layouta
+
+**Rešitev — 4 nove datoteke + refaktoriranje NutritionScreen.kt:**
+
+1. **NOVA: `ui/nutrition/components/CalorieProgressHeader.kt`**
+   - `CalorieProgressHeader` composable: DonutProgressView + workout/rest day label + water goal text + activity boost
+   - `ActiveCaloriesBar` composable (preseljeno iz NutritionScreen.kt)
+
+2. **NOVA: `ui/nutrition/components/WaterTrackerSection.kt`**
+   - `WaterTrackerSection` composable: wrapper za WaterControlsRow (iz NutritionComponents.kt) z vgrajenim HapticFeedback
+
+3. **NOVA: `ui/nutrition/components/TrackedFoodsList.kt`**
+   - `TrackedFoodsList` composable: 4 MealCard koraki + inline `TrackedFoodDetailDialog` (lokalni state)
+
+4. **NOVA: `ui/nutrition/components/CustomMealDialogs.kt`**
+   - `CustomMealSection` composable: MAKE CUSTOM MEALS gumb + SavedMealChip seznam + MakeCustomMealsDialog + ChooseMealDialog + delete AlertDialog + Other Macros AlertDialog
+   - Vsi dialog stati upravljani lokalno znotraj komponente
+
+5. **REFAKTORIRAN: `ui/screens/NutritionScreen.kt`** (911 → ~220 vrstic):
+   - OSTANE: state collection (17× collectAsState), LaunchedEffects, derived values, Scaffold + layout orchestration
+   - ODSTRANJENO: ActiveCaloriesBar definicija, vse dialog kode, vse MealCard zanke, vsi inline BoxLayout bloki
+   - UI je zdaj transparenten koordinator brez kakršne koli UI logike
+
+6. **POSODOBLJENO: `ui/screens/NutritionModels.kt`**
+   - `internal enum class MealType` → `enum class MealType` (public)
+   - `internal data class TrackedFood` → `data class TrackedFood` (public)
+   - `internal fun formatMacroWeight/macroLabel/parseMacroBreakdown` → public
+
+**Arhitekturna meja po Fazi 50:**
+```
+ui/nutrition/components/CalorieProgressHeader → SAMO: kalorični donut prikaz
+ui/nutrition/components/WaterTrackerSection   → SAMO: voda sledenje + gumbi
+ui/nutrition/components/TrackedFoodsList      → SAMO: meal kartice + food detail dialog
+ui/nutrition/components/CustomMealDialogs     → SAMO: custom meal UI + dialogi
+ui/screens/NutritionScreen                   → SAMO: state orchestration + layout skeleton
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
 ## 📋 DNEVNIK POPRAVKOV — Faza 49 (2026-05-27)
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 
