@@ -547,3 +547,9 @@ no replicira staro SimpleDateFormat obliko.
 **Kaj:** Odstranjen duplikat `BodyModuleHomeViewModel` instantiacije iz `create(modelClass: Class<T>)`. Pred spremembo je obstajal blok (vrstice 107–124) ki je ustvarjal `BodyModuleHomeViewModel` **brez** `SavedStateHandle` — tiha varnostna luknja za Process Death recovery. Po spremembi obstaja samo ena ustvarjalna pot: `create(modelClass, extras: CreationExtras)` z `extras.createSavedStateHandle()`.
 **Zakaj:** Ob določenih lifecycle scenarijih (Back Stack restoration, sistem kills procesom) je Android Lifecycle klical `create(modelClass)` legacy override — ta je ustvaril `BodyModuleHomeViewModel` brez `SavedStateHandle`, kar je pomenilo izgubo stanja po Process Death. Duplikat je bil uveden v prejšnji fazi ko je bila `create(modelClass, extras)` dodana kot NOVA metoda, stara pa ni bila počiščena.
 **Tveganje:** 🟢 nizko (samo brisanje mrtvega duplikata — create(modelClass, extras) je bila vedno preferirana pot od Faze 34 dalje) — BUILD ✅ SUCCESSFUL
+
+## 2026-05-27 — Faza 45b: gather_code.sh — AI avditni agregator izvorne kode
+**Datoteke:** `gather_code.sh` (NOVO)
+**Kaj:** Bash skript ki rekurzivno poišče vse `.kt` datoteke v `app/src/main/java`, `domain/`, `data/`, `ui/` in jih združi v eno datoteko `glowupp_source_audit.txt`. Vsaka datoteka dobi standardizirani header `// FILE PATH: [pot]`. Izključeni direktoriji: `build/`, `.gradle/`, `.git/`, `app/build/`, `androidTest/`, `test/`. Izpiše statistiko (število datotek, skupno vrstic, velikost).
+**Zakaj:** Potreba po determinističnem zbiranju celotne kode baze za deep-context AI arhitekturni avdit brez človeške napake pri izbiranju datotek.
+**Tveganje:** 🟢 nizko (samo-contained skript, ne modificira nobene projektne datoteke) — BUILD ✅ SUCCESSFUL
