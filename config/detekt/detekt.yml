@@ -1,0 +1,452 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Detekt konfiguracija — Glow Upp projekt (Faza 45 — Finalni Avdit)
+# Verzija: 1.23.6
+# Posodobljeno: 2026-05-27
+#
+# Strategija: buildUponDefaultConfig = true
+#   → Ta datoteka samo PREGLASI privzete vrednosti, ne zamenja celotnega ruleset-a.
+#   → Vsaka sekcija preglasi samo tista pravila, ki so specifična za ta projekt.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── GLOBALNE NASTAVITVE ────────────────────────────────────────────────────────
+build:
+  maxIssues: 0          # Build ne sme uspeti z nobeno nebaselinizirano kršitvijo
+
+processors:
+  active: true
+  exclude:
+    - 'DetektProgressListener'
+
+console-reports:
+  active: true
+  exclude:
+    - 'ProjectStatisticsReport'
+    - 'HtmlOutputReport'
+
+# ── KOMPLEKSNOST ───────────────────────────────────────────────────────────────
+complexity:
+  active: true
+
+  ComplexMethod:
+    active: true
+    threshold: 20             # Jetpack Compose lambde so inherentno globlje — privzeto 10 je prestrogo
+    ignoreSingleWhenExpression: true
+    ignoreSimpleWhenEntries: false
+
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 20
+
+  LongMethod:
+    active: true
+    threshold: 80             # Compose screen funkcije so pogosto daljše od privzetih 60 vrstic
+
+  LongParameterList:
+    active: true
+    functionThreshold: 7      # Compose funkcije imajo pogosto 6+ parametrov
+    constructorThreshold: 9
+    ignoreDefaultParameters: true
+    ignoreDataClasses: true
+    ignoreAnnotated:
+      - 'Composable'
+
+  LargeClass:
+    active: true
+    threshold: 600            # ViewModel razredi so pogosto obsežni
+
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 40
+    thresholdInClasses: 30
+    thresholdInInterfaces: 15
+    thresholdInObjects: 20
+    thresholdInEnums: 10
+    ignoreDeprecated: true
+    ignorePrivate: false
+    ignoreOverridden: false
+    ignoreAnnotated:
+      - 'Composable'
+
+  NestedBlockDepth:
+    active: true
+    threshold: 5
+
+# ── CLEAN CODE — POIMENOVANJE ──────────────────────────────────────────────────
+naming:
+  active: true
+
+  FunctionNaming:
+    active: true
+    functionPattern: '[a-z][a-zA-Z0-9]*'
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+    ignoreAnnotated:
+      - 'Composable'          # Compose je PascalCase za funkcije (npr. DashboardScreen)
+
+  TopLevelPropertyNaming:
+    active: true
+    constantPattern: '[A-Z][_A-Z0-9]*'
+    propertyPattern: '[a-z][A-Za-z0-9]*'
+    privatePropertyPattern: '_?[a-z][A-Za-z0-9]*'
+
+  VariableNaming:
+    active: true
+    variablePattern: '[a-z][A-Za-z0-9]*'
+    privateVariablePattern: '(_)?[a-z][A-Za-z0-9]*'   # dovoli _ prefix za StateFlow backing
+
+  ClassNaming:
+    active: true
+    classPattern: '[A-Z][a-zA-Z0-9]*'
+
+  PackageNaming:
+    active: true
+    packagePattern: '^[a-z]+(\.[a-z][A-Za-z0-9]*)*$'
+
+# ── STILI ──────────────────────────────────────────────────────────────────────
+style:
+  active: true
+
+  MagicNumber:
+    active: true
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '0.0'
+      - '0.5'
+      - '1'
+      - '1.0'
+      - '2'
+      - '100'
+    ignoreHashCodeFunction: true
+    ignorePropertyDeclaration: true
+    ignoreLocalVariableDeclaration: false
+    ignoreConstantDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreNamedArgument: true
+    ignoreEnums: true
+    ignoreRanges: false
+    ignoreExtensionFunctions: true
+
+  UnusedPrivateMember:
+    active: true
+    allowedNames: '(_|ignored|expected|serialVersionUID)'
+
+  ReturnCount:
+    active: true
+    max: 4                  # Boost za clean architecture guard patterns (isDataLoaded, auth guard itd.)
+    excludedFunctions:
+      - 'equals'
+    excludeLabeled: false
+    excludeReturnFromLambda: true
+    excludeGuardClauses: true    # Guard clauses (early return) so sprejemljivi vzorec
+
+  WildcardImport:
+    active: true
+    excludeImports:
+      - 'kotlinx.coroutines.*'
+      - 'androidx.compose.material3.*'
+      - 'androidx.compose.ui.*'
+
+  MaxLineLength:
+    active: true
+    maxLineLength: 160          # Kotlin standard je 120; 160 je pragmatičen za Compose chains
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: false
+
+  ForbiddenComment:
+    active: true
+    values:
+      - 'STOPSHIP'
+      - 'FIXME'
+    allowedPatterns: '(TODO|HACK|NOTE|OPOMBA).*'
+
+  SpacingBetweenPackageAndImports:
+    active: true
+
+  NewLineAtEndOfFile:
+    active: true
+
+# ── POTENCIALNE NAPAKE ─────────────────────────────────────────────────────────
+potential-bugs:
+  active: true
+
+  AvoidReferentialEquality:
+    active: true
+
+  CastToNullableType:
+    active: true
+
+  DontDowncastCollectionTypes:
+    active: true
+
+  ExplicitGarbageCollectionCall:
+    active: true
+
+  HasPlatformType:
+    active: true
+
+  IgnoredReturnValue:
+    active: true
+
+  ImplicitDefaultLocale:
+    active: true
+
+  InvalidRange:
+    active: true
+
+  IteratorHasNextCallsNextMethod:
+    active: true
+
+  LateinitUsage:
+    active: true
+    ignoreAnnotated:
+      - 'Inject'
+
+  MapGetWithNotNullAssertionOperator:
+    active: true
+
+  UnconditionalJumpStatementInLoop:
+    active: true
+
+  UnnecessaryNotNullCheck:
+    active: true
+
+  UnnecessaryNotNullOperator:
+    active: true
+
+  UnsafeCallOnNullableType:
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+
+  UnsafeCast:
+    active: true
+
+  UselessPostfixExpression:
+    active: true
+
+# ── ZMOGLJIVOST ────────────────────────────────────────────────────────────────
+performance:
+  active: true
+
+  ArrayPrimitive:
+    active: true
+
+  CouldBeSequence:
+    active: true
+    threshold: 3
+
+  ForEachOnRange:
+    active: true
+
+  SpreadOperator:
+    active: true
+    excludes:
+      - '**/test/**'
+
+  UnnecessaryTemporaryInstantiation:
+    active: true
+
+# ── IZJEME ─────────────────────────────────────────────────────────────────────
+exceptions:
+  active: true
+
+  ExceptionRaisedInUnexpectedLocation:
+    active: true
+
+  PrintStackTrace:
+    active: true
+
+  RethrowCaughtException:
+    active: true
+
+  ReturnFromFinally:
+    active: true
+
+  SwallowedException:
+    active: true
+    ignoredExceptionTypes:
+      - 'InterruptedException'
+      - 'MalformedURLException'
+      - 'NumberFormatException'
+      - 'ParseException'
+    allowedExceptionNameRegex: '_|(ignored)'
+
+  ThrowingExceptionFromFinally:
+    active: true
+
+  ThrowingExceptionInMain:
+    active: true
+
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames:
+      - 'ArrayIndexOutOfBoundsException'
+      - 'Error'
+      - 'Exception'
+      - 'IllegalMonitorStateException'
+      - 'NullPointerException'
+      - 'IndexOutOfBoundsException'
+      - 'RuntimeException'
+      - 'Throwable'
+    allowedExceptionNameRegex: '_|(ignored)'
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+
+  TooGenericExceptionThrown:
+    active: true
+
+# ── DOKUMENTACIJSKI KOMENTARJI ─────────────────────────────────────────────────
+comments:
+  active: true
+
+  AbsentOrWrongFileLicense:
+    active: false           # Ni licenčnih headerjev na tem projektu
+
+  CommentOverPrivateFunction:
+    active: false
+
+  CommentOverPrivateProperty:
+    active: false
+
+  DeprecatedBlockTag:
+    active: true
+
+  EndOfSentenceFormat:
+    active: false
+
+  UndocumentedPublicClass:
+    active: false           # Preveč šuma za Compose projekt
+
+  UndocumentedPublicFunction:
+    active: false           # Idem
+
+  UndocumentedPublicProperty:
+    active: false
+
+# ── KORELICA / FORMATIRANJE (detekt-formatting / ktlint) ──────────────────────
+formatting:
+  active: true
+  android: true             # Uveljavlja Android Kotlin Style Guide namesto Google Java Style
+
+  AnnotationOnSeparateLine:
+    active: false           # Compose anotacije so pogosto inline
+
+  ArgumentListWrapping:
+    active: false           # Preveč agresivno za dolge Compose parameter liste
+
+  ChainWrapping:
+    active: true
+
+  CommentSpacing:
+    active: true
+
+  EnumEntryNameCase:
+    active: true
+
+  Filename:
+    active: true
+
+  FinalNewline:
+    active: true
+    insertFinalNewLine: true
+
+  ImportOrdering:
+    active: true
+
+  Indentation:
+    active: true
+    indentSize: 4
+
+  MaximumLineLength:
+    active: false           # Pokrito z style.MaxLineLength zgoraj
+
+  ModifierOrdering:
+    active: true
+
+  MultiLineIfElse:
+    active: true
+
+  NoBlankLineBeforeRbrace:
+    active: true
+
+  NoConsecutiveBlankLines:
+    active: true
+
+  NoEmptyFirstLineInMethodBlock:
+    active: true
+
+  NoLineBreakAfterElse:
+    active: true
+
+  NoLineBreakBeforeAssignment:
+    active: true
+
+  NoMultipleSpaces:
+    active: true
+
+  NoSemicolons:
+    active: true
+
+  NoTrailingSpaces:
+    active: true
+
+  NoUnusedImports:
+    active: true
+
+  NoWildcardImports:
+    active: true
+
+  PackageName:
+    active: true
+
+  ParameterListWrapping:
+    active: false           # Preveč šuma za Compose
+
+  SpacingAroundColon:
+    active: true
+
+  SpacingAroundComma:
+    active: true
+
+  SpacingAroundCurly:
+    active: true
+
+  SpacingAroundKeyword:
+    active: true
+
+  SpacingAroundOperators:
+    active: true
+
+  SpacingAroundParens:
+    active: true
+
+  SpacingAroundRangeOperator:
+    active: true
+
+  SpacingAroundUnaryOperator:
+    active: true
+
+  SpacingBetweenDeclarationsWithAnnotations:
+    active: true
+
+  SpacingBetweenDeclarationsWithComments:
+    active: true
+
+  StringTemplate:
+    active: true
+
+  TrailingCommaOnCallSite:
+    active: false
+
+  TrailingCommaOnDeclarationSite:
+    active: false
+
+  Wrapping:
+    active: false
+

@@ -9,6 +9,9 @@ plugins {
     // KSP 2.1.0-1.0.29 je uradno dostopen za Kotlin 2.1.0 — Room generira kodo samodejno
     id("com.google.devtools.ksp")
     // ─────────────────────────────────────────────────────────────────────────
+    // ─── Detekt — statična analiza kode (Faza 45) ────────────────────────────
+    id("io.gitlab.arturbosch.detekt")
+    // ─────────────────────────────────────────────────────────────────────────
 }
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -179,5 +182,29 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
+    // ─── Detekt — statična analiza kode (Faza 45) ────────────────────────────
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.6")
+    // ─────────────────────────────────────────────────────────────────────────
 }
+
+// ─── Detekt konfiguracija (Faza 45) ──────────────────────────────────────────
+detekt {
+    // Gradi na vrhu privzetih pravil (ne zamenja jih)
+    buildUponDefaultConfig = true
+    // allRules = false → ne vklopi eksperimentalnih/previewing pravil
+    allRules = false
+    // Pot do projektne konfiguracijske datoteke
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    // Baseline — ob prvem zagonu ustvari baseline.xml z obstoječimi kršitvami;
+    // nadaljnji zagoni javljajo samo NOVE kršitve (postopna uvedba)
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+    // Analiziraj tudi testne izvorne datoteke
+    source.setFrom(
+        "src/main/java",
+        "src/test/java",
+        "src/androidTest/java"
+    )
+}
+// ─────────────────────────────────────────────────────────────────────────────
 

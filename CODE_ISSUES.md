@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-27 (Faza 43: Anomaly 5 — PlanDataStore SRP Fix + PlanNetworkService/PlanApiClient)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 45: Detekt statična analiza konfigurirana)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,57 @@
 
 ---
 
-## 📋 DNEVNIK POPRAVKOV — Faza 43 (2026-05-27)
+## 📋 DNEVNIK POPRAVKOV — Faza 45 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Detekt statična analiza kode — konfiguracija za finalni avdit celotne kode baze
+
+**Cilj:** Deterministična statična analiza >20k vrstičnega projekta za odkrivanje skritih kode-smradov, arhitekturnih kršitev in potencialnih hroščev brez človeške ali AI napake.
+
+**Spremembe:**
+
+1. **`build.gradle.kts` (root)** — Dodan Detekt plugin `1.23.6`:
+   ```kotlin
+   id("io.gitlab.arturbosch.detekt") version "1.23.6" apply false
+   ```
+
+2. **`app/build.gradle.kts`** — Aplikacija Detekt vtičnika + konfiguracija:
+   - `id("io.gitlab.arturbosch.detekt")` dodan v plugins blok
+   - `detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.6")` — ktlint formator
+   - `detekt { }` konfiguracija:
+     - `buildUponDefaultConfig = true` — gradi na vrhu privzetih pravil
+     - `allRules = false` — eksperimentalna pravila izključena
+     - `config.setFrom(files("$rootDir/config/detekt/detekt.yml"))` — projektna konfiguracija
+     - `baseline = file("$rootDir/config/detekt/baseline.xml")` — postopna uvedba (obstoječe kršitve)
+     - `source.setFrom(...)` — vključuje main, test, androidTest izvorne sete
+
+3. **`config/detekt/detekt.yml`** (NOVA datoteka) — 300+ vrstična projektno specifična konfiguracija:
+   - **Kompleksnost**: `ComplexMethod.threshold=20` (Compose lambde), `LongMethod.threshold=80` (Compose screени), `LongParameterList` z `ignoreAnnotated = ['Composable']`
+   - **Poimenovanje**: `FunctionNaming.ignoreAnnotated = ['Composable']` — dovoljuje PascalCase za Compose funkcije
+   - **Stili**: `MagicNumber` z izjemami za 0/1/2/100, `ReturnCount.max=4` z `excludeGuardClauses=true`, `MaxLineLength=160` za Compose verižne klice
+   - **Potencialne napake**: `UnsafeCallOnNullableType`, `UnsafeCast`, `LateinitUsage`, `MapGetWithNotNullAssertionOperator` — vse aktivno
+   - **Zmogljivost**: `CouldBeSequence`, `SpreadOperator`, `ForEachOnRange` — aktivno
+   - **Izjeme**: `TooGenericExceptionCaught` aktiven za produkcijsko kodo, izključen za teste
+   - **Formatiranje**: Android Kotlin Style Guide (`android: true`), `Indentation=4`, `NoUnusedImports`, `NoWildcardImports`
+
+**Vzorec za zagon Detekt analize:**
+```bash
+./gradlew detekt                      # Run detekt checks + generiraj report
+./gradlew detektBaseline              # Ustvari baseline.xml z obstoječimi kršitvami (prvi zagon)
+./gradlew detekt --continue           # Nadaljuj kljub kršitvam (za analizo brez blokiranja builda)
+```
+
+**Arhitekturna opomba:**
+```
+config/detekt/detekt.yml  → SSOT za vse statične analize nastavitve projekta
+config/detekt/baseline.xml → Ustvari ob prvem zagonu ./gradlew detektBaseline
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 44 (2026-05-27)
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 
 ### Clean Architecture — Anomaly 5 Fix: PlanDataStore SRP Kršitev (OkHttp v persistence sloju)

@@ -541,3 +541,9 @@ no replicira staro SimpleDateFormat obliko.
 4. **`MyViewModelFactory.kt`** — dodana uvoza `PlanApiClient` + `PlanNetworkService`, dokumentiran DI vzorec za ločitev odgovornosti.
 **Zakaj:** `PlanDataStore` je kršil SRP — vseboval je enako OkHttp mrežno kodo kot (neaktivna) `network/ai_utils.kt`, zmešano z lokalno persistenco. Vsaka sprememba API endpointa je zahtevala odpiranje persistence datoteke. Ekstrakcija v `PlanApiClient` sledi layered architecture (domain → data/network ≠ data/store).
 **Tveganje:** 🟢 nizko (requestAIPlan ni bila klicana nikjer — mrtva koda v napačnem sloju; vedenje aplikacije se ni spremenilo) — BUILD ✅ SUCCESSFUL
+
+## 2026-05-27 — Faza 44: Anomaly 6 Fix — MyViewModelFactory duplikat removal
+**Datoteke:** `ui/screens/MyViewModelFactory.kt`
+**Kaj:** Odstranjen duplikat `BodyModuleHomeViewModel` instantiacije iz `create(modelClass: Class<T>)`. Pred spremembo je obstajal blok (vrstice 107–124) ki je ustvarjal `BodyModuleHomeViewModel` **brez** `SavedStateHandle` — tiha varnostna luknja za Process Death recovery. Po spremembi obstaja samo ena ustvarjalna pot: `create(modelClass, extras: CreationExtras)` z `extras.createSavedStateHandle()`.
+**Zakaj:** Ob določenih lifecycle scenarijih (Back Stack restoration, sistem kills procesom) je Android Lifecycle klical `create(modelClass)` legacy override — ta je ustvaril `BodyModuleHomeViewModel` brez `SavedStateHandle`, kar je pomenilo izgubo stanja po Process Death. Duplikat je bil uveden v prejšnji fazi ko je bila `create(modelClass, extras)` dodana kot NOVA metoda, stara pa ni bila počiščena.
+**Tveganje:** 🟢 nizko (samo brisanje mrtvega duplikata — create(modelClass, extras) je bila vedno preferirana pot od Faze 34 dalje) — BUILD ✅ SUCCESSFUL
