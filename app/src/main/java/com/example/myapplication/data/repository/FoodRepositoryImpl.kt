@@ -103,13 +103,14 @@ object FoodRepositoryImpl : NutritionRepository {
      * [NonCancellable]: Brisanje mora biti v celoti zaključeno.
      * Preklicana transakcija po poslanem zahtevku bi pustila dokument v Firestoru.
      */
-    suspend fun deleteCustomMeal(mealId: String) =
+    override suspend fun deleteCustomMeal(mealId: String): Unit =
         withContext(Dispatchers.IO + NonCancellable) {
             val docRef = FirestoreHelper.getCurrentUserDocRef()
             val mealRef = docRef.collection("customMeals").document(mealId)
             FirestoreHelper.getDb().runTransaction { transaction ->
                 transaction.delete(mealRef)
             }.await()
+            Unit  // explicit Unit — runTransaction vrača Transaction, ne Unit
         }
 
     /**

@@ -32,4 +32,10 @@ interface NutritionRepository {
 
     /** Naloži seznam živil iz custom obroka. null = ne obstaja. */
     suspend fun getCustomMealItems(uid: String, mealId: String): List<Map<String, Any>>?
+
+    /**
+     * Faza 47 — Izbriše shranjeni custom meal po id za trenutnega uporabnika.
+     * NonCancellable: delete transakcija mora atomarno zaključiti.
+     */
+    suspend fun deleteCustomMeal(mealId: String)
 }

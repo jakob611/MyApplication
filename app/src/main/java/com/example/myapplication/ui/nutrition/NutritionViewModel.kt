@@ -6,7 +6,11 @@ import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
 import com.example.myapplication.domain.usecase.GetNutritionTargetsUseCase
 import com.example.myapplication.domain.model.NutritionTargets
+import com.example.myapplication.domain.model.PlanResult
+import com.example.myapplication.domain.nutrition.calculateDailyWaterMl
+import com.example.myapplication.domain.nutrition.calculateRestDayCalories
 import com.example.myapplication.ui.screens.MealType
+import com.example.myapplication.ui.screens.SavedCustomMeal
 import com.example.myapplication.ui.screens.TrackedFood
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,9 +26,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import android.content.Context
@@ -99,6 +107,16 @@ class NutritionViewModel(
     // ── uidFlow — SSOT za trenutnega uporabnika (mora biti PRVA deklaracija) ───
     // clearUser() nastavi na null → vse flatMapLatest niti se samodejno prekinejo.
     private val uidFlow = MutableStateFlow<String?>(FirestoreHelper.getCurrentUserDocId())
+
+    // ── Plan result flow (workout calendar) — Faza 47 ────────────────────────
+    // Screen kliče updatePlanResult(plan) v LaunchedEffect(plan).
+    // combine v todayNutritionContext ga reaktivno združi s profilom in cilji.
+    private val _planResultFlow = MutableStateFlow<PlanResult?>(null)
+
+    /** Posodobi workout plan; sproži reaktiven recompute todayNutritionContext. */
+    fun updatePlanResult(plan: PlanResult?) {
+        _planResultFlow.value = plan
+    }
 
     // ── Faza 29.2: Reaktivni profil in plan — ViewModel jih naloži sam, brez LaunchedEffect ──────
 
@@ -314,6 +332,8 @@ class NutritionViewModel(
         _baseTdee.value = 0.0
         _goalAdjustment.value = 0
         _frozenTargets.value = null
+        _planResultFlow.value = null      // Faza 47: počisti plan ob odjavi
+        _xpAwardedDates.clear()           // Faza 47: počisti anti-farming set ob odjavi
         // P1 SSOT: počisti hibridni TDEE singleton — prepreči uhajanje podatkov med računi
         WeightPredictorStore.reset()
         Log.d("NutritionVM", "clearUser() — Firestore listener prekličen, stanje + WeightPredictorStore počiščeni")
@@ -323,6 +343,30 @@ class NutritionViewModel(
         if (uid == null) flowOf(null)
         else nutritionRepo.observeCustomMeals(uid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * Faza 47 — Custom meals parsirani v ViewModel — Screen ne izvaja več
+     * List<Map<String,Any?>> parsiranja iz QuerySnapshot v LaunchedEffect.
+     * Reaktivno na customMealsState, izpostavljeno v todayNutritionContext.customMeals.
+     */
+    val parsedCustomMeals: StateFlow<List<SavedCustomMeal>> = customMealsState.map { snaps ->
+        snaps?.documents?.mapNotNull { doc ->
+            val name = doc.getString("name") ?: "Custom meal"
+            @Suppress("UNCHECKED_CAST")
+            val itemsAny = doc.get("items") as? List<Map<String, Any?>>
+            val items: List<Map<String, Any>> = itemsAny?.mapNotNull { m ->
+                try {
+                    mutableMapOf<String, Any>().also { map ->
+                        map["id"]   = m["id"]   as? String ?: ""
+                        map["name"] = m["name"] as? String ?: ""
+                        map["amt"]  = (m["amt"] as? String) ?: (m["amt"]?.toString() ?: "")
+                        map["unit"] = m["unit"] as? String ?: ""
+                    }
+                } catch (_: Exception) { null }
+            } ?: emptyList()
+            SavedCustomMeal(id = doc.id, name = name, items = items)
+        } ?: emptyList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── Data Budgeting: Skupni Firestore listener za hrano ─────────────────────
     /**
@@ -416,6 +460,65 @@ class NutritionViewModel(
         SharingStarted.WhileSubscribed(5000),
         NutritionTargets()
     )
+
+    /**
+     * Faza 47 — SSOT za dnevni nutrition kontekst.
+     *
+     * combine() reaktivno poveže:
+     *   ① _planResultFlow   → workout/rest day izračun (epoch-based, DST-safe)
+     *   ② _internalProfile  → teža, spol, cilj za vodo in kalorični fallback
+     *   ③ nutritionTargets  → kalorični cilj tega dne
+     *   ④ parsedCustomMeals → shranjene kombinacije obrokov
+     *
+     * Screen bere samo .isWorkoutDay, .adjustedWaterTargetMl, .adjustedCalorieTarget, .customMeals.
+     * Vse business logike (epoch algebra, calculateDailyWaterMl, calculateRestDayCalories) so tukaj.
+     */
+    val todayNutritionContext: StateFlow<TodayNutritionContext> = combine(
+        _planResultFlow,
+        _internalProfile,
+        nutritionTargets,
+        parsedCustomMeals
+    ) { plan, profile, targets, meals ->
+
+        // ── ① Workout / Rest day (epoch-based) ───────────────────────────────
+        val isWorkoutDay = if (plan == null) false else {
+            val startDate = try {
+                LocalDate.parse(plan.startDate)
+            } catch (_: Exception) {
+                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            }
+            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val daysSinceStart = (todayDate.toEpochDays() - startDate.toEpochDays())
+            plan.weeks.flatMap { it.days }.getOrNull(daysSinceStart.toInt())?.isRestDay?.not() ?: true
+        }
+
+        // ── ② Prilagojen cilj za vodo ─────────────────────────────────────────
+        val wKg: Double = run {
+            val caloriesPerKg = plan?.algorithmData?.caloriesPerKg
+            val calories      = plan?.calories
+            if (caloriesPerKg != null && caloriesPerKg > 0.0 && calories != null && calories > 0) {
+                calories.toDouble() / caloriesPerKg
+            } else 70.0
+        }
+        val isMale   = profile?.gender?.equals("Male", ignoreCase = true) ?: true
+        val actLevel = profile?.activityLevel ?: "Sedentary"
+        val waterMl  = calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDay).toInt()
+
+        // ── ③ Prilagojene kalorije (workout vs rest day) ─────────────────────
+        val adjustedCalories = if (isWorkoutDay) {
+            targets.calories
+        } else {
+            val goal = profile?.workoutGoal?.ifBlank { null }
+            calculateRestDayCalories(targets.calories.toDouble(), goal, isMale)
+        }
+
+        TodayNutritionContext(
+            isWorkoutDay          = isWorkoutDay,
+            adjustedWaterTargetMl = waterMl,
+            adjustedCalorieTarget = adjustedCalories,
+            customMeals           = meals
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TodayNutritionContext())
 
     /**
      * Nastavi BMR in cilj, ko je plan/profil naložen.
@@ -712,10 +815,74 @@ class NutritionViewModel(
         _uiState.value = DailyTotals(consumed = consumed, burned = burned, water = water)
     }
 
-    fun awardNutritionXP(xp: Int) {
+    // ── Faza 47: XP anti-farming — brez Android Context ───────────────────────
+
+    /**
+     * Dnevi, za katere smo v tej seji že podelili XP.
+     * In-memory set zagotavlja unit-testability; clearUser() ga počisti ob odjavi.
+     *
+     * Opomba: za cross-session persistent zaščito bo prihodnja verzija preverila
+     * Firestore xp_history kolekcijo (datum == todayStr AND reason == NUTRITION_GOAL).
+     */
+    private val _xpAwardedDates = mutableSetOf<String>()
+
+    /**
+     * Enkratni event — Screen zbira z LaunchedEffect za onXPAdded() callback.
+     * extraBufferCapacity=1 zagotavlja, da emit ne blokira, če Screen trenutno ni aktiven.
+     */
+    private val _xpAwardedEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val xpAwardedEvent: SharedFlow<Unit> = _xpAwardedEvent.asSharedFlow()
+
+    /**
+     * Faza 47 — Preveri kalorični cilj in podeli XP ob dosegu (anti-farming).
+     *
+     * Logika: porabljene kalorije znotraj ±20% od cilja → XP ni bil podeljen danes
+     *   → podeli 100 XP in emitira xpAwardedEvent.
+     *
+     * Kliče se iz Screen — LaunchedEffect(firestoreFoods, todayId).
+     * Ne zahteva Android Context (predhodni SharedPreferences je bil odstranjem).
+     */
+    fun verifyAndAwardNutritionXP() {
         viewModelScope.launch {
-            gamificationUseCase.awardXP(xp, "NUTRITION_GOAL")
+            val todayStr = _activeDateFlow.value
+            if (todayStr in _xpAwardedDates) return@launch
+
+            val consumedKcal = _firestoreFoods.value.sumOf { it.caloriesKcal.roundToInt() }
+            val dynTarget    = dynamicTargetCalories.value
+            val staticTarget = nutritionTargets.value.calories
+            val targetCal    = if (dynTarget > 0) dynTarget else staticTarget
+            if (targetCal <= 0 || consumedKcal <= 0) return@launch
+
+            val percentageDiff = kotlin.math.abs(targetCal - consumedKcal).toDouble() / targetCal.toDouble()
+            if (percentageDiff <= 0.20) {
+                val userEmail = Firebase.auth.currentUser?.email ?: return@launch
+                Log.d("NutritionVM", "✅ verifyAndAwardNutritionXP: $consumedKcal/$targetCal kcal " +
+                    "(${(percentageDiff * 100).toInt()}% diff), email=$userEmail")
+                _xpAwardedDates.add(todayStr)
+                gamificationUseCase.awardXP(100, "NUTRITION_GOAL")
+                _xpAwardedEvent.tryEmit(Unit)
+            }
         }
+    }
+
+    /** Faza 47: deleteCustomMeal prek NutritionRepository vmesnika (ne direktnega FoodRepositoryImpl). */
+    fun deleteCustomMealAsync(mealId: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                nutritionRepo.deleteCustomMeal(mealId)
+                Log.d("NutritionVM", "✅ deleteCustomMeal: id=$mealId")
+            } catch (e: Exception) {
+                Log.e("NutritionVM", "❌ deleteCustomMeal failed: ${e.message}", e)
+            } finally {
+                onDone()
+            }
+        }
+    }
+
+    /** Faza 47: Overload brez uid — ViewModel določi uid sam iz FirestoreHelper cache-a. */
+    suspend fun getCustomMealItems(mealId: String): List<Map<String, Any>>? {
+        val uid = FirestoreHelper.getCurrentUserDocId() ?: return null
+        return nutritionRepo.getCustomMealItems(uid, mealId)
     }
 
     /** Faza 29.8: delegira na NutritionRepository — brez direktnih Firestore klicev v VM */

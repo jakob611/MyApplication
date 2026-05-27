@@ -554,7 +554,19 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** Potreba po determinističnem zbiranju celotne kode baze za deep-context AI arhitekturni avdit brez človeške napake pri izbiranju datotek.
 **Tveganje:** 🟢 nizko (samo-contained skript, ne modificira nobene projektne datoteke) — BUILD ✅ SUCCESSFUL
 
-## 2026-05-27 — Faza 46b: Cache Guard v FirestoreHelper.getCurrentUserDocRef()
+## 2026-05-27 — Faza 47: NutritionScreen/ViewModel Clean Architecture refaktoring
+**Datoteke:** `ui/nutrition/NutritionViewModel.kt`, `ui/screens/NutritionScreen.kt`, `ui/nutrition/TodayNutritionContext.kt` (NOVO), `data/repository/NutritionRepository.kt`, `data/repository/FoodRepositoryImpl.kt`
+**Kaj:**
+1. **TodayNutritionContext** — nov `data class` v `ui/nutrition/` združuje isWorkoutDay + adjustedWaterTargetMl + adjustedCalorieTarget + customMeals
+2. **todayNutritionContext StateFlow** — combine(_planResultFlow, _internalProfile, nutritionTargets, parsedCustomMeals) v ViewModel; Screen samo bere
+3. **parsedCustomMeals StateFlow** — parsanje QuerySnapshot preseljeno iz Screen LaunchedEffect v ViewModel
+4. **verifyAndAwardNutritionXP()** — XP logika preseljena iz Screen v ViewModel; SharedPreferences Context odstranjeno; in-memory Set _xpAwardedDates za anti-farming
+5. **xpAwardedEvent SharedFlow** — enkratni event za onXPAdded() callback; Screen zbira z LaunchedEffect
+6. **deleteCustomMealAsync()** — prek NutritionRepository vmesnika (ne direktnega FoodRepositoryImpl.deleteCustomMeal)
+7. **getCustomMealItems(mealId)** overload — brez uid parametra, ViewModel določi uid sam
+8. **clearUser()** — dodan _xpAwardedDates.clear() in _planResultFlow.value = null
+**Zakaj:** NutritionScreen je vseboval 3 `remember` bloke z domensko logiko (isWorkoutDay, vodna + kalorična prilagoditev), XP LaunchedEffect s SharedPreferences Context (anti-pattern za MVVM), parsanje QuerySnapshot (data sloj v UI) in direkten poziv FoodRepositoryImpl (data impl v UI). Vse preseljeno v ViewModel.
+**Tveganje:** 🟡 srednje (veliki refaktoring, toda strukturno čist) — BUILD ✅ SUCCESSFUL
 **Datoteke:** `data/store/FirestoreHelper.kt`
 **Kaj:** Dodan fast-path guard clause na začetek `getCurrentUserDocRef()`. Preveri `cachedForUid == uid && cachedResolvedId != null` — ob ujemanju takoj vrne `db.collection("users").document(resolvedId)` brez mrežnih klicev. Lokalna kopija `val resolvedId = cachedResolvedId` prepreči TOCTOU race pri @Volatile branju. Slow path (Firestore `.get()`) se izvede samo ob prvem loginu ali po process death. `clearCache()` ostaja nespremenjen — pravilno klicat v AuthRepository (vrstica 49) in MainAppContent (vrstica 597).
 **Zakaj:** Brez guard clause je vsak klic `getCurrentUserDocRef()` (poklicat 5-10x na ekran nalaganje) sprožil 1-2 Firestore network GET klica. Pri intenzivni uporabi to pomeni stotine nepotrebnih reads/mesec in latency spike pri vsaki navigaciji. Cache spremenljivki sta obstajali, toda nikoli preverjeni.

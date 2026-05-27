@@ -40,8 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.myapplication.data.repository.FoodRepositoryImpl
-import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.network.OpenFoodFactsProduct
 import com.example.myapplication.ui.nutrition.NutritionViewModel
 import kotlinx.datetime.Clock
@@ -133,6 +131,25 @@ fun NutritionScreen(
     val targetProtein  = targets.protein
     val targetCarbs    = targets.carbs
     val targetFat      = targets.fat
+
+    // Faza 47 — SSOT: todayNutritionContext združi workout/rest day + voda + kalorije + custom meale.
+    // NutritionScreen ne izračunava ničesar — bere samo iz tega contexta.
+    val nutritionContext by nutritionViewModel.todayNutritionContext.collectAsState()
+    val isWorkoutDayToday      = nutritionContext.isWorkoutDay
+    val adjustedWaterTarget    = nutritionContext.adjustedWaterTargetMl.toFloat()
+    val adjustedTargetCalories = nutritionContext.adjustedCalorieTarget
+
+    // Faza 47: Posodobi plan v ViewModel reaktivno ob vsaki zunanji spremembi
+    LaunchedEffect(plan) {
+        nutritionViewModel.updatePlanResult(plan)
+    }
+
+    // Faza 47: Zberi XP event iz ViewModel za onXPAdded() callback (brez Context/SharedPreferences)
+    LaunchedEffect(nutritionViewModel) {
+        nutritionViewModel.xpAwardedEvent.collect {
+            onXPAdded()
+        }
+    }
 
     // Snackbar feedback state
     var showAddedMessage by remember { mutableStateOf<String?>(null) }
@@ -242,35 +259,12 @@ fun NutritionScreen(
         }
     }
 
-    // Real-time shranjeni custom meals (ÄŤipi)
-    var savedMeals by remember { mutableStateOf<List<SavedCustomMeal>>(emptyList()) }
+    // Real-time shranjeni custom meals — parsirani v ViewModel, Screen samo bere iz contexta
+    // Faza 47: savedMeals ni več lokalni state — prihaja iz nutritionContext.customMeals
     val confirmDelete = remember { mutableStateOf<SavedCustomMeal?>(null) }
 
     // StateFlow collect zamenjuje direktni collect v UI
     val snaps by nutritionViewModel.customMealsState.collectAsState()
-    LaunchedEffect(snaps) {
-        if (snaps != null) {
-            val list = snaps!!.documents.mapNotNull { doc ->
-                val name = doc.getString("name") ?: "Custom meal"
-                @Suppress("UNCHECKED_CAST")
-                val itemsAny = doc.get("items") as? List<Map<String, Any?>>
-                val items: List<Map<String, Any>> = itemsAny?.mapNotNull { m ->
-                    try {
-                        val map = mutableMapOf<String, Any>()
-                        map["id"] = m["id"] as? String ?: ""
-                        map["name"] = m["name"] as? String ?: ""
-                        map["amt"] = (m["amt"] as? String) ?: (m["amt"]?.toString() ?: "")
-                        map["unit"] = m["unit"] as? String ?: ""
-                        map
-                    } catch (_: Exception) {
-                        null
-                    }
-                } ?: emptyList()
-                SavedCustomMeal(id = doc.id, name = name, items = items)
-            }
-            savedMeals = list
-        }
-    }
 
     // Faza 14b: todayId NI VEČ remember{} — prihaja iz ViewModel.currentDate StateFlow.
     // Ob polnočnem prehodu ViewModel kliče onDayTransition(newDate) → currentDate se posodobi
@@ -321,29 +315,11 @@ fun NutritionScreen(
         }
     }
 
-    // Faza 5: Lokalni JSON cache odstranjen — Firestore je Single Source of Truth.
-    // Ta LaunchedEffect zdaj skrbi SAMO za XP nagrado ob doseganju kaloričnega cilja.
-    LaunchedEffect(trackedFoods, todayId) {
-        val consumedKcal = trackedFoods.sumOf { it.caloriesKcal.roundToInt() }
-
-        // XP nagrada za dosežen kalorični cilj (anti-farming: enkrat na dan)
-        // Uporablja efectiveTargetCalories = dynamicTarget (real-time) ali statični fallback
-        val targetCal = if (dynamicTargetCalories > 0) dynamicTargetCalories else targetCalories
-        val consumedCal = consumedKcal
-        val difference = kotlin.math.abs(targetCal - consumedCal)
-        val percentageDiff = if (targetCal > 0) (difference.toDouble() / targetCal.toDouble()) else 1.0
-        if (percentageDiff <= 0.20) {
-            val xpKey = "nutrition_xp_$todayId"
-            val prefs = context.getSharedPreferences("nutrition_xp", Context.MODE_PRIVATE)
-            if (!prefs.getBoolean(xpKey, false)) {
-                val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
-                if (userEmail != null) {
-                    prefs.edit().putBoolean(xpKey, true).apply()
-                    nutritionViewModel.awardNutritionXP(100)
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onXPAdded() }
-                }
-            }
-        }
+    // Faza 5 → Faza 47: XP logika preseljena v ViewModel.verifyAndAwardNutritionXP().
+    // SharedPreferences Context odstranjem — anti-farming je zdaj in-memory Set v ViewModel.
+    // xpAwardedEvent se zbira v LaunchedEffect(nutritionViewModel) zgoraj (onXPAdded callback).
+    LaunchedEffect(firestoreFoods, todayId) {
+        nutritionViewModel.verifyAndAwardNutritionXP()
     }
 
     // Barve iz teme — preberi enkrat v Composable kontekstu
@@ -351,46 +327,11 @@ fun NutritionScreen(
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
     val textPrimary = MaterialTheme.colorScheme.onBackground
 
-    // Ugotovi ali je danes workout day ali rest day (glede na aktiven plan)
-    val isWorkoutDayToday = remember(plan) {
-        if (plan == null) false
-        else {
-            // Preveri pri tekočem planu ali je danes trening ali počitek
-            val startDate = try { kotlinx.datetime.LocalDate.parse(plan.startDate) } catch (_: Exception) { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
-            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val daysSinceStart = (todayDate.toEpochDays() - startDate.toEpochDays())
-            val allDays = plan.weeks.flatMap { it.days }
-            val todayDayInPlan = allDays.getOrNull(daysSinceStart)
-            // Če ni podatka o dnevu, predpostavi workout day
-            todayDayInPlan?.isRestDay?.not() ?: true
-        }
-    }
-
-    // Prilagojeni cilj za vodo — glede na profil in dan
-    val adjustedWaterTarget = remember(userProfile, plan, isWorkoutDayToday) {
-        // Teža: vzamemo iz algorithmData (kalorij/kg * skupne kalorije) ali fallback 70 kg
-        val wKg: Double = run {
-            val caloriesPerKg = plan?.algorithmData?.caloriesPerKg
-            val calories = plan?.calories
-            if (caloriesPerKg != null && caloriesPerKg > 0.0 && calories != null && calories > 0) {
-                calories.toDouble() / caloriesPerKg
-            } else 70.0
-        }
-        val isMale = userProfile.gender == "Male"
-        val actLevel = userProfile.activityLevel ?: "Sedentary"
-        com.example.myapplication.domain.nutrition.calculateDailyWaterMl(wKg, isMale, actLevel, isWorkoutDayToday)
-    }
-
-    // Prilagojene kalorije — workout day vs rest day (statični fallback)
-    val adjustedTargetCalories = remember(targetCalories, isWorkoutDayToday, userProfile) {
-        if (isWorkoutDayToday) {
-            targetCalories
-        } else {
-            val isMale = userProfile.gender == "Male"
-            val goal = userProfile.workoutGoal.ifBlank { null }
-            com.example.myapplication.domain.nutrition.calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
-        }
-    }
+    // ── Faza 47: vse tri vrednosti prihajajo iz nutritionContext (ViewModel SSOT) ──
+    // isWorkoutDayToday, adjustedWaterTarget, adjustedTargetCalories so zbrani zgoraj.
+    // Predhodni remember(plan), remember(userProfile, plan, isWorkoutDayToday),
+    // remember(targetCalories, isWorkoutDayToday, userProfile) bloki so odstranjeni —
+    // vsa logika je zdaj v NutritionViewModel.todayNutritionContext combine().
 
     // ── Dinamični kalorični limit ──────────────────────────────────────────────
     // dynamicTargetCalories = BMR×1.2 + burnedCalories + goalAdj (real-time)
@@ -625,8 +566,8 @@ fun NutritionScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Saved custom meals
-            savedMeals.forEach { meal ->
+            // Saved custom meals — Faza 47: iz nutritionContext (ViewModel SSOT), ne LocalState
+            nutritionContext.customMeals.forEach { meal ->
                 SavedMealChip(
                     meal = meal,
                     textPrimary = textPrimary,
@@ -777,20 +718,12 @@ fun NutritionScreen(
             },
             onConfirmAsync = { mealChosen ->
                 val cm = pendingCustomMeal.value!!
-                val currentUid = FirestoreHelper.getCurrentUserDocId()
-
-                if (currentUid == null) {
-                    // Removed redundant qualifier
-                    android.widget.Toast.makeText(context, "Not logged in", android.widget.Toast.LENGTH_SHORT).show()
-                    pendingCustomMeal.value = null
-                    askWhereToAdd.value = false
-                    return@ChooseMealDialog true
-                }
 
                 val scope = kotlinx.coroutines.MainScope()
                 scope.launch {
                     try {
-                        val items = nutritionViewModel.getCustomMealItems(currentUid, cm.id)
+                        // Faza 47: getCustomMealItems(mealId) — ViewModel določi uid sam (brez FirestoreHelper v UI)
+                        val items = nutritionViewModel.getCustomMealItems(cm.id)
 
                         if (items == null) {
                             android.widget.Toast.makeText(context, "Meal not found", android.widget.Toast.LENGTH_SHORT).show()
@@ -862,20 +795,11 @@ fun NutritionScreen(
             onDismissRequest = { confirmDelete.value = null },
             confirmButton = {
                 Button(onClick = {
-                    val uidDel = FirestoreHelper.getCurrentUserDocId()
-                    if (uidDel != null) {
-                        val scope = kotlinx.coroutines.MainScope()
-                        scope.launch {
-                            try {
-                                FoodRepositoryImpl.deleteCustomMeal(mealToDelete.id)
-                                confirmDelete.value = null
-                                // Refresh quick meal widget after deletion
-                                com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)
-                            } catch (_: Exception) {
-                                // handle
-                            }
-                        }
-                    } else confirmDelete.value = null
+                    // Faza 47: deleteCustomMealAsync prek NutritionRepository vmesnika (ne FoodRepositoryImpl)
+                    nutritionViewModel.deleteCustomMealAsync(mealToDelete.id) {
+                        confirmDelete.value = null
+                        com.example.myapplication.widget.QuickMealWidgetProvider.forceRefresh(context)
+                    }
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirmDelete.value = null }) { Text("Cancel") } },
