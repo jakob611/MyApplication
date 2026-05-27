@@ -28,6 +28,11 @@ import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.viewmodels.BodyPlanQuizViewModel
 import com.example.myapplication.data.repository.MetricsRepositoryImpl
+// Faza 43 — SRP fix: PlanApiClient je edina pravilna DI odvisnost za HTTP plan generiranje.
+// PlanDataStore se NE injicira za mrežne operacije — samo za persistenco.
+// Ko bo ViewModel zahteval AI plan generiranje → inject PlanApiClient() as PlanNetworkService.
+import com.example.myapplication.data.network.PlanApiClient
+import com.example.myapplication.domain.network.PlanNetworkService
 
 class MyViewModelFactory(private val context: Context? = null) : ViewModelProvider.Factory {
 

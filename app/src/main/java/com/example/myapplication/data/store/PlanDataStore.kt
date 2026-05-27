@@ -1,11 +1,13 @@
 package com.example.myapplication.data.store
 
+// Faza 43 — SRP fix (Anomaly 5): Vse OkHttp/mrežne odvisnosti PREMAKNJENE v data/network/PlanApiClient.kt.
+// PlanDataStore zdaj strogo obravnava SAMO lokalni DataStore in Firestore persistenco.
+
 import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.myapplication.BuildConfig
 import com.example.myapplication.domain.DateFormatter
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.model.WeekPlan
@@ -18,21 +20,12 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.toLocalDateTime
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.IOException
-import java.util.concurrent.TimeUnit
-
-import okhttp3.RequestBody.Companion.toRequestBody
 
 // Firebase imports
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
-import java.util.UUID
 
 val Context.dataStore by preferencesDataStore(name = "plans_datastore")
 
@@ -522,147 +515,15 @@ object PlanDataStore {
         }
     }
 
-    // KLJUČNO: klic na Cloud Run z Authorization headerjem
-    fun requestAIPlan(
-        quizData: Map<String, Any>,
-        onResult: (PlanResult) -> Unit,
-        onError: (String?) -> Unit
-    ) {
-        val baseUrl = BuildConfig.FITNESS_API_BASE_URL.ifBlank {
-            "https://fitness-plan-api-551351477998.europe-west1.run.app"
-        }
-        val url = "${baseUrl.trimEnd('/')}/generate-plan"
-
-        try {
-            val currentUser = auth.currentUser
-            val userId = currentUser?.uid
-            val userEmail = currentUser?.email
-
-            if (userId == null) {
-                onError("User not logged in"); return
-            }
-
-            val json = JSONObject().apply {
-                put("user_data", JSONObject().apply {
-                    put("user_id", userId)
-                    put("user_email", userEmail ?: "")
-                    put("gender", quizData["gender"] ?: "")
-                    put("age", quizData["age"] ?: "")
-                    put("height", quizData["height"] ?: "")
-                    put("weight", quizData["weight"] ?: "")
-                    put("goal", quizData["goal"] ?: "")
-                    put("experience", quizData["experience"] ?: "")
-                    put("training_location", quizData["training_location"] ?: "")
-                    put("trainingDays", quizData["trainingDays"] ?: 3)
-                    put("limitations", JSONArray(quizData["limitations"] as? List<*> ?: emptyList<String>()))
-                    put("nutrition", quizData["nutrition"] ?: "")
-                    put("sleep", quizData["sleep"] ?: "")
-                })
-                put("timestamp", System.currentTimeMillis())
-            }
-
-            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "application/json")
-                .addHeader("Authorization", "Bearer ${BuildConfig.BACKEND_API_KEY}")
-                .build()
-
-            val client = OkHttpClient.Builder()
-                .connectTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(60, TimeUnit.SECONDS)
-                .readTimeout(180, TimeUnit.SECONDS)
-                .callTimeout(240, TimeUnit.SECONDS)
-                .build()
-
-            client.newCall(request).enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    Log.e("PlanDataStore", "AI request failed: ${e.message}")
-                    if (e.message?.contains("timeout", ignoreCase = true) == true) {
-                        onError("AI is taking longer than expected. Please try again or use the local plan.")
-                    } else {
-                        onError("Connection error: ${e.localizedMessage}")
-                    }
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    val responseBody = response.body?.string()
-                    if (!response.isSuccessful) {
-                        onError("Server error ${response.code}: $responseBody"); return
-                    }
-
-                    val planObj = try {
-                        val jsonObject = JSONObject(responseBody ?: "{}")
-                        val weeks = if (jsonObject.has("weeks")) {
-                            parseWeeksFromJson(jsonObject.getJSONArray("weeks"))
-                        } else emptyList()
-
-                        PlanResult(
-                            id = UUID.randomUUID().toString(),
-                            name = jsonObject.optString("name", "AI Plan"),
-                            calories = jsonObject.optInt("calories", 2000),
-                            protein = jsonObject.optInt("protein", 150),
-                            carbs = jsonObject.optInt("carbs", 200),
-                            fat = jsonObject.optInt("fat", 50),
-                            trainingPlan = jsonObject.optString(
-                                "suggestedWorkout",
-                                jsonObject.optString("trainingPlan", "Default training plan")
-                            ),
-                            trainingDays = jsonObject.optInt("trainingDays", 3),
-                            sessionLength = jsonObject.optInt("sessionLength", 60),
-                            tips = parseStringArray(jsonObject.optJSONArray("tips")),
-                            createdAt = System.currentTimeMillis(),
-                            trainingLocation = quizData["training_location"] as? String ?: "Home",
-                            experience = jsonObject.optString("experience").takeIf { it.isNotEmpty() },
-                            goal = jsonObject.optString("goal").takeIf { it.isNotEmpty() },
-                            weeks = weeks,
-                            algorithmData = null
-                        )
-                    } catch (e: Exception) {
-                        Log.e("PlanDataStore", "Error parsing AI response: ${e.message}")
-                        null
-                    }
-
-                    if (planObj != null) onResult(planObj) else onError("Failed to parse AI response")
-                }
-            })
-        } catch (e: Exception) {
-            Log.e("PlanDataStore", "AI request setup failed: ${e.message}")
-            onError("Request setup error: ${e.localizedMessage}")
-        }
-    }
-
-    private fun parseStringArray(jsonArray: JSONArray?): List<String> {
-        if (jsonArray == null) return emptyList()
-        return buildList {
-            for (i in 0 until jsonArray.length()) add(jsonArray.getString(i))
-        }
-    }
-
-    fun parseWeeksFromJson(weeksJson: JSONArray): List<WeekPlan> {
-        val weeks = mutableListOf<WeekPlan>()
-        for (i in 0 until weeksJson.length()) {
-            val weekObj = weeksJson.getJSONObject(i)
-            val weekNumber = weekObj.getInt("weekNumber")
-            val daysJson = weekObj.getJSONArray("days")
-            val days = mutableListOf<DayPlan>()
-            for (j in 0 until daysJson.length()) {
-                val dayObj = daysJson.getJSONObject(j)
-                val dayNumber = dayObj.getInt("dayNumber")
-                val exercisesJson = dayObj.optJSONArray("exercises") ?: JSONArray()
-                val exercises = mutableListOf<String>()
-                for (k in 0 until exercisesJson.length()) {
-                    exercises.add(exercisesJson.getString(k))
-                }
-                val isRestDay = dayObj.optBoolean("isRestDay", false)
-                val focusLabel = dayObj.optString("focusLabel", "")
-                days.add(DayPlan(dayNumber, exercises, isRestDay, focusLabel))
-            }
-            weeks.add(WeekPlan(weekNumber, days))
-        }
-        return weeks
-    }
+    // -----------------------------------------------------------------------
+    // Faza 43 — SRP fix: requestAIPlan(), parseStringArray(), parseWeeksFromJson()
+    // so bile PREMAKNJENE v data/network/PlanApiClient.kt.
+    //
+    // PlanDataStore zdaj vsebuje IZKLJUČNO:
+    //   - Lokalni DataStore branje/pisanje (saveToLocalDataStore, loadLocalPlansAndSend)
+    //   - Firestore CRUD operacije (addPlan, deletePlan, updatePlan, savePlans, plansFlow)
+    //   - Atomarne swap transakcije (swapDaysAtomically)
+    //
+    // Za AI plan generiranje prek HTTP → PlanApiClient implements PlanNetworkService
+    // -----------------------------------------------------------------------
 }
