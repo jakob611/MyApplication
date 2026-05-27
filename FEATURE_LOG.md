@@ -531,3 +531,13 @@ no replicira staro SimpleDateFormat obliko.
 5. **`MainAppContent.kt`** — ViewModel instanciran prek `viewModel(factory=MyViewModelFactory(context))`, posredovan v Screen.
 **Zakaj:** `BodyModule.kt` je kršil Clean Architecture — `MetricsRepositoryImpl()`, `FirestoreHelper.getCurrentUserDocId()`, BMI/TDEE `remember()` bloki, `scope.launch` s konkretnimi data klici. Vse to je SODOBNA kršitev ki jo nalažejo Android Architecture Guidelines.
 **Tveganje:** 🟢 nizko (vedenje je ekvivalentno — vse iste kalkulacije, samo na pravilnem sloju) — BUILD ✅ SUCCESSFUL
+
+## 2026-05-27 — Faza 43: Anomaly 5 Fix — PlanDataStore SRP Kršitev (OkHttp ekstrakcija)
+**Datoteke:** `domain/network/PlanNetworkService.kt` (NOVO), `data/network/PlanApiClient.kt` (NOVO), `data/store/PlanDataStore.kt`, `ui/screens/MyViewModelFactory.kt`
+**Kaj:**
+1. **`domain/network/PlanNetworkService.kt` (NOVO)** — domenski vmesnik: `suspend fun generatePlan(quizData: Map<String, Any>): Result<PlanResult>`. KMP-ready, brez Android odvisnosti.
+2. **`data/network/PlanApiClient.kt` (NOVO)** — OkHttp implementacija vmesnika: Cloud Run AI endpoint, `suspendCancellableCoroutine` wrapping, `invokeOnCancellation` za čisto prekinjanje, JSON parsing (premaknjeno iz PlanDataStore).
+3. **`PlanDataStore.kt`** — PURGIRAN: odstranjeni vsi OkHttp uvozi (`BuildConfig`, `okhttp3.*`, `JSONArray`, `JSONObject`, `IOException`, `TimeUnit`, `UUID`) in funkcije (`requestAIPlan()`, `parseStringArray()`, `parseWeeksFromJson()`). Zdaj strogo persistenca: DataStore R/W + Firestore CRUD + `swapDaysAtomically()`.
+4. **`MyViewModelFactory.kt`** — dodana uvoza `PlanApiClient` + `PlanNetworkService`, dokumentiran DI vzorec za ločitev odgovornosti.
+**Zakaj:** `PlanDataStore` je kršil SRP — vseboval je enako OkHttp mrežno kodo kot (neaktivna) `network/ai_utils.kt`, zmešano z lokalno persistenco. Vsaka sprememba API endpointa je zahtevala odpiranje persistence datoteke. Ekstrakcija v `PlanApiClient` sledi layered architecture (domain → data/network ≠ data/store).
+**Tveganje:** 🟢 nizko (requestAIPlan ni bila klicana nikjer — mrtva koda v napačnem sloju; vedenje aplikacije se ni spremenilo) — BUILD ✅ SUCCESSFUL

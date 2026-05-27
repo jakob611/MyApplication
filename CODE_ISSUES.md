@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-27 (Faza 42: Anomaly 1 — BodyPlanQuizViewModel Clean Architecture Refactoring)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 43: Anomaly 5 — PlanDataStore SRP Fix + PlanNetworkService/PlanApiClient)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,50 @@
 
 ---
 
-## 📋 DNEVNIK POPRAVKOV — Faza 42 (2026-05-27)
+## 📋 DNEVNIK POPRAVKOV — Faza 43 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Clean Architecture — Anomaly 5 Fix: PlanDataStore SRP Kršitev (OkHttp v persistence sloju)
+
+**ANOMALY 5 — SRP KRŠITEV: PlanDataStore je mešal lokalno/Firestore persistenco z OkHttp HTTP klici ✅**
+- 🐛 **Root cause:** `PlanDataStore.kt` je vseboval:
+  - `requestAIPlan()` — OkHttp klient, HTTP POST na Cloud Run AI endpoint, JSON serializacija/deserializacija
+  - `parseWeeksFromJson()` + `parseStringArray()` — JSON parsing pomožne funkcije
+  - Uvozi: `BuildConfig`, `okhttp3.*`, `JSONArray`, `JSONObject`, `IOException`, `TimeUnit`, `UUID`
+  - **Rezultat:** Datoteka ni niti čista persistenca niti čist network layer — SRP kršitev
+
+- ✅ **Rešitev:**
+
+1. **NOVA: `domain/network/PlanNetworkService.kt`** — domenski vmesnik:
+   - `suspend fun generatePlan(quizData: Map<String, Any>): Result<PlanResult>`
+   - KMP-ready: brez Android odvisnosti
+   - Klicatelji (ViewModel, UseCase) poznajo samo ta vmesnik — brez OkHttp odvisnosti
+
+2. **NOVA: `data/network/PlanApiClient.kt`** — implementacija vmesnika:
+   - `OkHttpClient` z `60s/180s/240s` timeouty (Cloud Run AI endpoint)
+   - `suspendCancellableCoroutine` wrapping za coroutine-friendly API
+   - `invokeOnCancellation { call.cancel() }` — pravilno prekinjanje koroutin
+   - `parseWeeksFromJson()` + `parseStringArray()` — premaknjeno iz PlanDataStore
+
+3. **REFAKTORIRAN: `data/store/PlanDataStore.kt`** — zdaj ZGOLJ persistenca:
+   - Odstranjeni uvozi: `BuildConfig`, `okhttp3.*`, `JSONArray`, `JSONObject`, `IOException`, `TimeUnit`, `UUID`
+   - Odstranjene funkcije: `requestAIPlan()`, `parseStringArray()`, `parseWeeksFromJson()`
+   - Ostane: DataStore R/W, Firestore CRUD, `swapDaysAtomically()`
+
+4. **POSODOBLJEN: `ui/screens/MyViewModelFactory.kt`**:
+   - Dodana uvoza `PlanApiClient` + `PlanNetworkService`
+   - Dokumentiran DI vzorec: "PlanDataStore = persistenca only; PlanApiClient = HTTP only"
+
+**ARHITEKTURNA PRAVILA (posodobitev):**
+```
+PlanDataStore  → SAMO: DataStore R/W, Firestore plan CRUD, swapDaysAtomically()
+PlanApiClient  → SAMO: OkHttp HTTP, JSON parsing, Cloud Run AI endpoint
+PlanNetworkService → domenski vmesnik (brez Android/OkHttp odvisnosti)
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 
 ### Clean Architecture — Anomaly 1 Fix: BodyPlanQuizViewModel (BodyModule.kt refaktoring)

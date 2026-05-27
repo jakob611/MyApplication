@@ -104,25 +104,9 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             @Suppress("UNCHECKED_CAST")
             return GamificationSharedViewModel(gamificationUseCase) as T
         }
-        if (modelClass.isAssignableFrom(BodyModuleHomeViewModel::class.java)) {
-            requireNotNull(context) { "Context required for BodyModuleHomeViewModel" }
-            val gamificationUseCase = GamificationFactory.provide(context)
-            val settingsRepo = UserPreferencesRepository(context)
-            val statsRepo = UserWorkoutStatsRepository(settingsRepo)
-            val bodyMeasurementsRepo = FirestoreBodyMeasurementsRepository()
-            @Suppress("UNCHECKED_CAST")
-            return BodyModuleHomeViewModel(
-                GetBodyMetricsUseCase(statsRepo),
-                UpdateBodyMetricsUseCase(gamificationUseCase),
-                SwapPlanDaysUseCase(PlanRepositoryImpl()),
-                gamificationUseCase,
-                FirestoreUserProfileRepository(),
-                FirebaseAuthStateRepository(),
-                bodyMeasurementsRepo,
-                CalculateBodyGoldenRatioUseCase(),
-                SaveBodyMeasurementsUseCase(bodyMeasurementsRepo)
-            ) as T
-        }
+        // Faza 44 — Anomaly 6 Fix: BodyModuleHomeViewModel se instantiira IZKLJUČNO v
+        // create(modelClass, extras) zgoraj — skupaj z extras.createSavedStateHandle().
+        // Duplikat brez SavedStateHandle je bil tukaj odstranjen.
         if (modelClass.isAssignableFrom(BodyPlanQuizViewModel::class.java)) {
             // Faza 42 — Anomaly 1 Fix: BodyPlanQuizViewModel DI via domenski vmesniki.
             // MetricsRepositoryImpl implementira MetricsRepository (domain interface).
