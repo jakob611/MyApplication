@@ -9,6 +9,7 @@ import com.example.myapplication.domain.model.NutritionTargets
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.nutrition.calculateDailyWaterMl
 import com.example.myapplication.domain.nutrition.calculateRestDayCalories
+import com.example.myapplication.domain.repository.PlanRepository
 import com.example.myapplication.ui.screens.MealType
 import com.example.myapplication.ui.screens.SavedCustomMeal
 import com.example.myapplication.ui.screens.TrackedFood
@@ -95,7 +96,9 @@ data class MacroTotals(
 class NutritionViewModel(
     private val gamificationUseCase: ManageGamificationUseCase,
     // Faza 29.8: DI vmesnik — NE referiramo FoodRepositoryImpl direktno
-    private val nutritionRepo: NutritionRepository
+    private val nutritionRepo: NutritionRepository,
+    // Faza 48 — UDF fix: reaktivni vir resnice za workout plan (ne UI posredovanje)
+    private val planRepository: PlanRepository
 ) : ViewModel() {
 
     /** Faza 9 — SSOT za kalorični izračun */
@@ -108,15 +111,13 @@ class NutritionViewModel(
     // clearUser() nastavi na null → vse flatMapLatest niti se samodejno prekinejo.
     private val uidFlow = MutableStateFlow<String?>(FirestoreHelper.getCurrentUserDocId())
 
-    // ── Plan result flow (workout calendar) — Faza 47 ────────────────────────
-    // Screen kliče updatePlanResult(plan) v LaunchedEffect(plan).
-    // combine v todayNutritionContext ga reaktivno združi s profilom in cilji.
-    private val _planResultFlow = MutableStateFlow<PlanResult?>(null)
-
-    /** Posodobi workout plan; sproži reaktiven recompute todayNutritionContext. */
-    fun updatePlanResult(plan: PlanResult?) {
-        _planResultFlow.value = plan
-    }
+    // ── Faza 48 (UDF fix): Reaktivni tok aktivnega workout plana iz PlanRepository ────────────────
+    // PRED: Screen je kličal vm.updatePlanResult(plan) v LaunchedEffect → kršitev UDF.
+    // PO:   ViewModel sam naroči na PlanRepository.observePlans() → en vir resnice, brez UI posredovanja.
+    // firstOrNull() izbere aktiven plan; ob praznem seznamu ali odjavi emitira null.
+    private val _activePlanFlow: StateFlow<PlanResult?> = planRepository.observePlans()
+        .map { plans -> plans.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // ── Faza 29.2: Reaktivni profil in plan — ViewModel jih naloži sam, brez LaunchedEffect ──────
 
@@ -332,7 +333,8 @@ class NutritionViewModel(
         _baseTdee.value = 0.0
         _goalAdjustment.value = 0
         _frozenTargets.value = null
-        _planResultFlow.value = null      // Faza 47: počisti plan ob odjavi
+        // Faza 48 — UDF fix: _planResultFlow.value = null ODSTRANJENO.
+        // _activePlanFlow se reaktivno počisti ko PlanRepository vrne prazen seznam.
         _xpAwardedDates.clear()           // Faza 47: počisti anti-farming set ob odjavi
         // P1 SSOT: počisti hibridni TDEE singleton — prepreči uhajanje podatkov med računi
         WeightPredictorStore.reset()
@@ -463,9 +465,10 @@ class NutritionViewModel(
 
     /**
      * Faza 47 — SSOT za dnevni nutrition kontekst.
+     * Faza 48 — UDF fix: _planResultFlow (UI-driven) → _activePlanFlow (PlanRepository reaktivni tok).
      *
      * combine() reaktivno poveže:
-     *   ① _planResultFlow   → workout/rest day izračun (epoch-based, DST-safe)
+     *   ① _activePlanFlow  → workout/rest day izračun (epoch-based, DST-safe) — iz PlanRepository
      *   ② _internalProfile  → teža, spol, cilj za vodo in kalorični fallback
      *   ③ nutritionTargets  → kalorični cilj tega dne
      *   ④ parsedCustomMeals → shranjene kombinacije obrokov
@@ -474,7 +477,7 @@ class NutritionViewModel(
      * Vse business logike (epoch algebra, calculateDailyWaterMl, calculateRestDayCalories) so tukaj.
      */
     val todayNutritionContext: StateFlow<TodayNutritionContext> = combine(
-        _planResultFlow,
+        _activePlanFlow,
         _internalProfile,
         nutritionTargets,
         parsedCustomMeals

@@ -139,11 +139,6 @@ fun NutritionScreen(
     val adjustedWaterTarget    = nutritionContext.adjustedWaterTargetMl.toFloat()
     val adjustedTargetCalories = nutritionContext.adjustedCalorieTarget
 
-    // Faza 47: Posodobi plan v ViewModel reaktivno ob vsaki zunanji spremembi
-    LaunchedEffect(plan) {
-        nutritionViewModel.updatePlanResult(plan)
-    }
-
     // Faza 47: Zberi XP event iz ViewModel za onXPAdded() callback (brez Context/SharedPreferences)
     LaunchedEffect(nutritionViewModel) {
         nutritionViewModel.xpAwardedEvent.collect {

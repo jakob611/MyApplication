@@ -90,7 +90,9 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
             // Faza 29.8: FoodRepositoryImpl kot NutritionRepository vmesnik (DI)
-            return NutritionViewModel(gamificationUseCase, FoodRepositoryImpl) as T
+            // Faza 48 — UDF fix: PlanRepositoryImpl() injiciran kot PlanRepository domenski vmesnik.
+            // NutritionViewModel ne prejema več PlanResult iz UI — sam se naroči na reaktivni tok.
+            return NutritionViewModel(gamificationUseCase, FoodRepositoryImpl, PlanRepositoryImpl()) as T
         }
         if (modelClass.isAssignableFrom(ProgressViewModel::class.java)) {
             requireNotNull(context) { "Context required for ProgressViewModel" }
