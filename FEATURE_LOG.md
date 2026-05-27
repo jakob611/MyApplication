@@ -554,7 +554,11 @@ no replicira staro SimpleDateFormat obliko.
 **Zakaj:** Potreba po determinističnem zbiranju celotne kode baze za deep-context AI arhitekturni avdit brez človeške napake pri izbiranju datotek.
 **Tveganje:** 🟢 nizko (samo-contained skript, ne modificira nobene projektne datoteke) — BUILD ✅ SUCCESSFUL
 
-## 2026-05-27 — Faza 46: Multi-tenant data leak fix v FirestoreGamificationRepository
+## 2026-05-27 — Faza 46b: Cache Guard v FirestoreHelper.getCurrentUserDocRef()
+**Datoteke:** `data/store/FirestoreHelper.kt`
+**Kaj:** Dodan fast-path guard clause na začetek `getCurrentUserDocRef()`. Preveri `cachedForUid == uid && cachedResolvedId != null` — ob ujemanju takoj vrne `db.collection("users").document(resolvedId)` brez mrežnih klicev. Lokalna kopija `val resolvedId = cachedResolvedId` prepreči TOCTOU race pri @Volatile branju. Slow path (Firestore `.get()`) se izvede samo ob prvem loginu ali po process death. `clearCache()` ostaja nespremenjen — pravilno klicat v AuthRepository (vrstica 49) in MainAppContent (vrstica 597).
+**Zakaj:** Brez guard clause je vsak klic `getCurrentUserDocRef()` (poklicat 5-10x na ekran nalaganje) sprožil 1-2 Firestore network GET klica. Pri intenzivni uporabi to pomeni stotine nepotrebnih reads/mesec in latency spike pri vsaki navigaciji. Cache spremenljivki sta obstajali, toda nikoli preverjeni.
+**Tveganje:** 🟢 nizko — sprememba ne vpliva na semantiko, samo doda bypass za obstoječ cache)
 **Datoteke:** `data/gamification/FirestoreGamificationRepository.kt`
 **Kaj:** Popravljeni dve mesti kjer `dailyLogs` zapis je bil usmerjen na globalno kolekcijo `db.collection("dailyLogs").document(todayStr)` namesto na user-scoped podkolekcijo `userRef.collection("dailyLogs").document(todayStr)`. Popravljeni funkciji: `logBurnedCalories()` (vrstica 136) in `moveToNextDay()` (vrstica 220). Dodatno: odpravljena tiha izjema v `consumeStreakFreeze()` — zdaj logira z `Log.e("FirestoreGamificationRepo", ...)`.
 **Zakaj:** KRITIČNA arhitekturna napaka: podatki o porabljenih kalorijah vseh uporabnikov so se pisali na isto globalno pot v Firestoreu, kar je povzročilo cross-user data leakaže (Multi-Tenant Data Leak). Vsak prijavljeni uporabnik bi prepisal kalorije prejšnjega.

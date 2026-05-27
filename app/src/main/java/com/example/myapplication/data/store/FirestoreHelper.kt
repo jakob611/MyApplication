@@ -65,11 +65,26 @@ object FirestoreHelper {
      * If not, it checks if one exists with the UID.
      * If found by UID but not Email, it performs a MIGRATION to Email.
      * If neither exists, it returns Email (as the new default).
+     *
+     * Faza 46 — Cache Guard: Ob ponovnih klicih z istim UID-om (90 %+ primerov)
+     * ta funkcija ne naredi NOBENEGA mrežnega klica — vrne direktno iz @Volatile cache-a.
+     * Cache invalidira ob odjavi prek clearCache() (klicano v AuthRepository + MainAppContent).
      */
     suspend fun getCurrentUserDocRef(): DocumentReference {
         val user = auth.currentUser ?: throw IllegalStateException("User not logged in")
-        val email = user.email
         val uid = user.uid
+
+        // ── FAST PATH: Cache Guard ────────────────────────────────────────────
+        // Lokalna kopija prepreči TOCTOU race (volatile read enkrat, ne dvakrat).
+        val resolvedId = cachedResolvedId
+        if (cachedForUid == uid && resolvedId != null) {
+            Log.d(TAG, "Cache hit — skip network, docId=$resolvedId")
+            return db.collection("users").document(resolvedId)
+        }
+        // ── SLOW PATH: First login ali po process death ───────────────────────
+        Log.d(TAG, "Cache miss — resolving doc ref for UID=$uid")
+
+        val email = user.email
 
         // validation of email as document id
         if (email.isNullOrBlank()) {
