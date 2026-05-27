@@ -3,19 +3,28 @@ package com.example.myapplication.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
-import com.example.myapplication.data.store.PlanDataStore
 import com.example.myapplication.domain.model.PlanResult
-import com.example.myapplication.data.store.FirestoreHelper
+import com.example.myapplication.domain.repository.PlanRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
+/**
+ * Faza 41 — Clean Architecture: Anomaly 2 Fix.
+ * ViewModel NE sme uvažati iz data paketa (PlanDataStore, FirestoreHelper).
+ * Samo domenski vmesnik PlanRepository je dovoljen.
+ *
+ * Klic chain: BodyOverviewVM → PlanRepository (domain) → PlanRepositoryImpl (data) → PlanDataStore
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
-class BodyOverviewViewmodel : ViewModel() {
-    private val _currentUserId = MutableStateFlow<String?>(null)
+class BodyOverviewViewmodel(
+    private val planRepository: PlanRepository
+) : ViewModel() {
 
-    val plans: StateFlow<List<PlanResult>> = _currentUserId
-        .filterNotNull()
+    private val _isActive = MutableStateFlow(true)
+
+    val plans: StateFlow<List<PlanResult>> = _isActive
+        .filter { it }
         .flatMapLatest {
-            PlanDataStore.plansFlow()
+            planRepository.observePlans()
         }
         .stateIn(
             scope = viewModelScope,
@@ -23,15 +32,13 @@ class BodyOverviewViewmodel : ViewModel() {
             initialValue = emptyList()
         )
 
-    init {
-        refreshPlans()
-    }
-
     fun clearPlans() {
-        _currentUserId.value = null
+        _isActive.value = false
     }
 
     fun refreshPlans() {
-        _currentUserId.value = FirestoreHelper.getCurrentUserDocId()
+        // Reaktivni Flow se samodejno osveži ob spremembi v Firestore.
+        // Ta metoda zagotavlja, da je flow aktiven (ob ponovni prijavi).
+        _isActive.value = true
     }
 }

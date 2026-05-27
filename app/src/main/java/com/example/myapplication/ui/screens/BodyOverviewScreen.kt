@@ -22,19 +22,27 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
+import com.example.myapplication.domain.model.AlgorithmData
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.model.WeekPlan
 import com.example.myapplication.domain.model.DayPlan
-import com.example.myapplication.data.store.AlgorithmData
 
+/**
+ * Faza 41 — Clean Architecture: Anomaly 3 Fix.
+ * Screen NE uvaja iz data paketa. AlgorithmData je premaknjen v domain.model.
+ * Stanje planov je zbrano iz BodyOverviewViewmodel prek collectAsStateWithLifecycle().
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BodyOverviewScreen(
-    plans: List<PlanResult>,
     onCreateNewPlan: () -> Unit,
     onBack: () -> Unit = {}
 ) {
+    val vm: BodyOverviewViewmodel = viewModel(factory = MyViewModelFactory())
+    val plans by vm.plans.collectAsStateWithLifecycle()
     // Novo: dialog za potrditve, če že obstaja plan
     var showReplaceDialog by remember { mutableStateOf(false) }
 

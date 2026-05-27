@@ -67,7 +67,9 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(BodyOverviewViewmodel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return BodyOverviewViewmodel() as T
+            // Faza 41 — Anomaly 2/3 Fix: PlanRepositoryImpl (data) injiciran v domenski vmesnik PlanRepository.
+            // BodyOverviewViewmodel zdaj NE ve za PlanDataStore ali FirestoreHelper.
+            return BodyOverviewViewmodel(PlanRepositoryImpl()) as T
         }
         if (modelClass.isAssignableFrom(RunTrackerViewModel::class.java)) {
             requireNotNull(context) { "Context required for RunTrackerViewModel" }

@@ -490,7 +490,7 @@ fun MainAppContent(
                                     onViewProfile = { userId -> navigateTo(Screen.PublicProfile(userId)) }
                                 )
                                 currentScreen is Screen.BodyOverview -> BodyOverviewScreen(
-                                    plans = plans, onCreateNewPlan = { navigateTo(Screen.BodyModule) }, onBack = ::navigateBack
+                                    onCreateNewPlan = { navigateTo(Screen.BodyModule) }, onBack = ::navigateBack
                                 )
                                 currentScreen is Screen.Dashboard -> DashboardScreen(
                                     userEmail = userEmail,

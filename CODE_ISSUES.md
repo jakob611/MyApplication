@@ -1278,7 +1278,46 @@ tests/      → DomainException direktno, 0x Firebase importov
 
 ---
 
-## 📋 DNEVNIK POPRAVKOV — Faza 39 (2026-05-26)
+## 📋 DNEVNIK POPRAVKOV — Faza 41 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Clean Architecture — Anomaly 2 + Anomaly 3 Fix: BodyOverviewViewmodel + BodyOverviewScreen
+
+**ANOMALY 2 — BodyOverviewViewmodel: Neposredni dostop do data sloja iz Presentation sloja ✅**
+- 🐛 **Root cause:** `BodyOverviewViewmodel` je uvažal `PlanDataStore` (data.store) in `FirestoreHelper` (persistence) neposredno. Presentation sloj je bil sklopljen z implementacijo, ne z abstrakcijo — kršitev Dependency Inversion Principle.
+- ✅ **Rešitev:**
+  1. **`domain/repository/PlanRepository.kt`** — Dodan `observePlans(): Flow<List<PlanResult>>` podpisni metodi. Vmesnik zdaj pokriva tako branje (observePlans) kot pisanje (swapDays).
+  2. **`data/repository/PlanRepositoryImpl.kt`** — Implementirana `observePlans()` — delegira na `PlanDataStore.plansFlow()`. Data sloj je edini lastnik znanja o PlanDataStore.
+  3. **`viewmodels/BodyOverviewViewmodel.kt`** — Konstruktor spremenjen: `class BodyOverviewViewmodel(private val planRepository: PlanRepository) : ViewModel()`. Odstranjeni: `import PlanDataStore`, `import FirestoreHelper`. Plans se zbira prek `planRepository.observePlans()`.
+
+**ANOMALY 3 — BodyOverviewScreen: Neposredni uvoz AlgorithmData iz data paketa ✅**
+- 🐛 **Root cause:** `BodyOverviewScreen.kt` je uvažal `com.example.myapplication.data.store.AlgorithmData` — UI sloj je bil neposredno sklopljen z data paketom. Poleg tega je `AlgorithmData` bil definiran v `data.store`, čeprav je čisto domenski model (BMI, BMR, TDEE, makri).
+- ✅ **Rešitev:**
+  1. **NOVO: `domain/model/AlgorithmData.kt`** — AlgorithmData premaknjen v domenski paket.
+  2. **`data/store/AlgorithmData.kt`** — Nadomeščen z `typealias AlgorithmData = domain.model.AlgorithmData` za brezšivno backwards compat data sloja.
+  3. **`domain/model/PlanModels.kt`** — Posodobljen: komentar namesto uvoza (AlgorithmData je v istem paketu).
+  4. **`ui/screens/BodyOverviewScreen.kt`** — Odstranil: `import data.store.AlgorithmData`, dodal: `import domain.model.AlgorithmData`. Spremenjen podpis: `BodyOverviewScreen(plans: List<PlanResult>, ...)` → `BodyOverviewScreen(onCreateNewPlan, onBack)`. Stanje se zbira interno prek `vm.plans.collectAsStateWithLifecycle()`.
+
+**DI FACTORY POSODOBITEV ✅**
+- **`ui/screens/MyViewModelFactory.kt`** — `BodyOverviewViewmodel()` → `BodyOverviewViewmodel(PlanRepositoryImpl())`. Eksplicitna DI v skladu s Clean Architecture.
+
+**NAVEGACIJA POSODOBITEV ✅**
+- **`ui/MainAppContent.kt`** — Odstranjen `plans = plans` parameter iz `BodyOverviewScreen` klica. Screen zdaj sam zbira stanje iz ViewModel.
+
+**Arhitekturna meja po Fazi 41:**
+```
+data/    → PlanDataStore.plansFlow() (edini lastnik callbackFlow)
+domain/  → PlanRepository.observePlans() (domenski vmesnik)
+         → AlgorithmData (domenski model, NE v data/)
+viewmodels/ → BodyOverviewViewmodel(PlanRepository) (brez data uvozov!)
+ui/      → BodyOverviewScreen zbira iz VM, brez data uvozov
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 
 ### BodyUiState — Eliminacija Legacy Dolga + Ločitev Skrbi (Concern Separation)

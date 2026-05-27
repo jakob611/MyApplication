@@ -1,6 +1,6 @@
 package com.example.myapplication.domain.model
 
-import com.example.myapplication.data.store.AlgorithmData
+// AlgorithmData je v istem paketu (domain.model) — ni potreben ekspliciten import
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
