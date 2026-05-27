@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-27 (Faza 47: NutritionScreen/VM Clean Architecture refaktoring)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 48: NutritionViewModel UDF Reverse Data Flow fix)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,46 @@
 
 ---
 
-## 📋 DNEVNIK POPRAVKOV — Faza 45 (2026-05-27)
+## 📋 DNEVNIK POPRAVKOV — Faza 48 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### UDF Arhitekturna korekcija — Reverse Data Flow anomalija v NutritionViewModel
+
+**ANOMALY 6 — REVERSE DATA FLOW: NutritionScreen je bil "data broker" za domenski plan ✅**
+- 🐛 **Root cause:** `NutritionScreen.kt` je imel `LaunchedEffect(plan) { vm.updatePlanResult(plan) }`.
+  UI composable je posredoval `PlanResult?` nazaj v ViewModel ob vsaki zunanji spremembi `plan` parametra.
+  Posledica: UI → ViewModel smer za domensko stanje = kršitev Unidirectional Data Flow.
+
+- ✅ **Rešitev (3 datoteke):**
+
+1. **`NutritionViewModel.kt`** — Arhitekturna sanacija:
+   - **ODSTRANJENO:** `private val _planResultFlow = MutableStateFlow<PlanResult?>(null)` in `fun updatePlanResult(plan: PlanResult?)`
+   - **DODANO:** `private val planRepository: PlanRepository` kot konstruktorski parameter
+   - **DODANO:** `private val _activePlanFlow: StateFlow<PlanResult?> = planRepository.observePlans().map { plans -> plans.firstOrNull() }.stateIn(...)` — reaktivni tok iz domenskega vmesnika
+   - **POSODOBLJENO:** `todayNutritionContext` combine: `_planResultFlow` → `_activePlanFlow` (enaka logika, pravilni vir)
+   - **POSODOBLJENO:** `clearUser()`: `_planResultFlow.value = null` ODSTRANJENO — `_activePlanFlow` se reaktivno počisti prek Firestore
+
+2. **`NutritionScreen.kt`** — Odstranjeno posredovanje:
+   - `LaunchedEffect(plan) { nutritionViewModel.updatePlanResult(plan) }` — IZBRISANO
+   - UI je zdaj 100% pasiven konzumer stanja brez data broker vloge
+
+3. **`MyViewModelFactory.kt`** — DI posodobitev:
+   - `NutritionViewModel(gamificationUseCase, FoodRepositoryImpl)` → `NutritionViewModel(gamificationUseCase, FoodRepositoryImpl, PlanRepositoryImpl())`
+   - `PlanRepositoryImpl()` injiciran kot implementacija `PlanRepository` domenskega vmesnika
+
+**Arhitekturna meja po Fazi 48:**
+```
+data/       → PlanRepositoryImpl.observePlans() — edini lastnik callbackFlow za plane
+domain/     → PlanRepository.observePlans() — domenski vmesnik brez data odvisnosti
+viewmodels/ → NutritionViewModel(planRepository) — samo se naroči na reaktivni tok
+ui/         → NutritionScreen bere SAMO todayNutritionContext — 0x domenskih write klicev
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 47 (2026-05-27)
 **Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
 
 ### Detekt statična analiza kode — konfiguracija za finalni avdit celotne kode baze
