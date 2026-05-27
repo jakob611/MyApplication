@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.store.AlgorithmPreferences
 import com.example.myapplication.domain.model.RefinedExercise
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.domain.workout.LastExerciseRecord
 import com.example.myapplication.domain.workout.WorkoutGenerationParams
 import com.example.myapplication.domain.workout.WorkoutGenerator
@@ -119,7 +120,7 @@ class WorkoutSessionViewModel(application: Application) : AndroidViewModel(appli
                 val uid = FirestoreHelper.getCurrentUserDocId() ?: ""
                 val profile = runCatching {
                     UserProfileManager.loadProfileFromFirestore(uid)
-                }.getOrNull() ?: UserProfileManager.loadProfile(uid)
+                }.getOrNull() ?: UserLocalStore.loadProfile(uid)
 
                 val genderOverride = profile.gender?.lowercase()?.trim() ?: ""
 

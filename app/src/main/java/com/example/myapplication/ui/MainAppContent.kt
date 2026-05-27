@@ -30,6 +30,8 @@ import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.data.auth.AuthRepository
 import com.example.myapplication.data.gamification.GamificationFactory
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
+import com.example.myapplication.domain.usecase.DeleteAccountUseCase
 import com.example.myapplication.data.store.DailySyncManager
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.data.store.NutritionPlanStore
@@ -133,7 +135,7 @@ fun MainAppContent(
                 val user = Firebase.auth.currentUser
                 if (user?.email != null) {
                     isLoggedIn = true; userEmail = user.email!!
-                    appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                    appViewModel.handleIntent(AppIntent.SetProfile(UserLocalStore.loadProfile(userEmail)))
                     scope.launch {
                         val dark = UserProfileManager.isDarkMode(userEmail)
                         isDarkMode = dark
@@ -178,7 +180,7 @@ fun MainAppContent(
         val user = Firebase.auth.currentUser
         if (user != null && (user.isEmailVerified || user.providerData.any { it.providerId == "google.com" })) {
             userEmail = user.email ?: ""; isLoggedIn = true
-            appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+            appViewModel.handleIntent(AppIntent.SetProfile(UserLocalStore.loadProfile(userEmail)))
             val firestoreDark = UserProfileManager.isDarkMode(userEmail)
             isDarkMode = firestoreDark
             context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
@@ -189,7 +191,7 @@ fun MainAppContent(
                 try {
                     val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
                     if (remote != null) {
-                        UserProfileManager.saveProfile(remote)
+                        UserLocalStore.saveProfile(remote)
                         remote.activityLevel?.replace("x","")?.toIntOrNull()?.takeIf { it > 0 }?.let { parsed ->
                             context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE).edit().putInt("weekly_target", parsed).apply()
                         }
@@ -202,7 +204,7 @@ fun MainAppContent(
                 catch (e: Exception) { Log.e("MainApp", "Login streak: ${e.message}") }
             }
             scope.launch(Dispatchers.IO) {
-                try { com.example.myapplication.workers.WeeklyStreakWorker.ensureScheduled(context, UserProfileManager.loadProfile(userEmail).startOfWeek) }
+                try { com.example.myapplication.workers.WeeklyStreakWorker.ensureScheduled(context, UserLocalStore.loadProfile(userEmail).startOfWeek) }
                 catch (e: Exception) { Log.e("MainApp", "WeeklyStreakWorker: ${e.message}") }
             }
             try { RunRouteCleanupWorker.ensureScheduled(context) } catch (_: Exception) {}
@@ -299,7 +301,7 @@ fun MainAppContent(
                             onLogout = ::performLogout,
                             onProfileUpdate = { p ->
                                 appViewModel.handleIntent(AppIntent.SetProfile(p))
-                                UserProfileManager.saveProfile(p)
+                                UserLocalStore.saveProfile(p)
                                 scope.launch { UserProfileManager.saveProfileFirestore(p) }
                             },
                             isDarkMode = isDarkMode,
@@ -406,14 +408,14 @@ fun MainAppContent(
                                         onXPAdded = {
                                             appViewModel.handleIntent(
                                                 AppIntent.SetProfile(
-                                                    UserProfileManager.loadProfile(userEmail)
+                                                    UserLocalStore.loadProfile(userEmail)
                                                 )
                                             )
                                         },
                                         onBadgeUnlocked = { badge ->
                                             unlockedBadge = badge; appViewModel.handleIntent(
                                             AppIntent.SetProfile(
-                                                UserProfileManager.loadProfile(userEmail)
+                                                UserLocalStore.loadProfile(userEmail)
                                             )
                                         )
                                         }
@@ -448,7 +450,7 @@ fun MainAppContent(
                                     scannedProduct = scannedProduct,
                                     onProductConsumed = { scannedProduct = null },
                                     openBarcodeScan = openBarcodeScan, openFoodSearch = openFoodSearch,
-                                    onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail))) },
+                                    onXPAdded = { appViewModel.handleIntent(AppIntent.SetProfile(UserLocalStore.loadProfile(userEmail))) },
                                     snackbarHostState = nutritionSnackbarHostState,
                                     userProfile = userProfile, isOnline = isOnline,
                                     onOpenMenu = { HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.DRAWER_OPEN); scope.launch { drawerState.open() } },
@@ -530,7 +532,7 @@ fun MainAppContent(
                                             sleepHours = quizData["sleep"] as? String
                                         )
                                         appViewModel.handleIntent(AppIntent.SetProfile(updatedFromQuiz))
-                                        UserProfileManager.saveProfile(updatedFromQuiz)
+                                        UserLocalStore.saveProfile(updatedFromQuiz)
                                         scope.launch { UserProfileManager.saveProfileFirestore(updatedFromQuiz) }
                                         (quizData["frequency"] as? String)?.replace("x","")?.trim()?.toIntOrNull()?.takeIf { it > 0 }?.let { freq ->
                                             context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE).edit().putInt("weekly_target", freq).apply()
@@ -541,12 +543,12 @@ fun MainAppContent(
                                             if (plans.isNotEmpty()) plans.forEach { PlanDataStore.deletePlan(context, it.id) }
                                             PlanDataStore.addPlan(context, plan)
                                             var currentProfile = userProfile
-                                            if (currentProfile.height == null || currentProfile.height == 0.0) currentProfile = UserProfileManager.loadProfile(userEmail)
+                                            if (currentProfile.height == null || currentProfile.height == 0.0) currentProfile = UserLocalStore.loadProfile(userEmail)
                                             val finalProfile = currentProfile.copy(equipment = plan.equipment, focusAreas = plan.focusAreas)
-                                            UserProfileManager.saveProfileFirestore(finalProfile); UserProfileManager.saveProfile(finalProfile)
+                                            UserProfileManager.saveProfileFirestore(finalProfile); UserLocalStore.saveProfile(finalProfile)
                                             appViewModel.handleIntent(AppIntent.SetProfile(finalProfile))
                                             GamificationFactory.provide(context).recordPlanCreation()
-                                            appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                                            appViewModel.handleIntent(AppIntent.SetProfile(UserLocalStore.loadProfile(userEmail)))
                                             FirestoreHelper.getCurrentUserDocId()?.let { uid ->
                                                 val nutritionPlan = com.example.myapplication.data.NutritionPlan(
                                                     calories = plan.calories, protein = plan.protein, carbs = plan.carbs, fat = plan.fat,
@@ -583,17 +585,17 @@ fun MainAppContent(
                                 currentScreen is Screen.MyAccount -> MyAccountScreen(
                                     userProfile = userProfile,
                                     onNavigateToDevSettings = { navigateTo(Screen.DeveloperSettings) },
-                                    onProfileUpdate = { p -> appViewModel.handleIntent(AppIntent.SetProfile(p)); UserProfileManager.saveProfile(p); scope.launch { UserProfileManager.saveProfileFirestore(p) } },
+                                    onProfileUpdate = { p -> appViewModel.handleIntent(AppIntent.SetProfile(p)); UserLocalStore.saveProfile(p); scope.launch { UserProfileManager.saveProfileFirestore(p) } },
                                     onDeleteAllData = {
                                         scope.launch {
-                                            try { UserProfileManager.deleteUserData(userEmail); PlanDataStore.deleteAllPlans(); PlanDataStore.clearPlan(context); UserProfileManager.clearAllLocalData(); bodyOverviewViewModel.clearPlans(); errorMessage = "All data deleted." }
+                                            try { DeleteAccountUseCase().invoke(userEmail); PlanDataStore.deleteAllPlans(); PlanDataStore.clearPlan(context); UserLocalStore.clearAllLocalData(); bodyOverviewViewModel.clearPlans(); errorMessage = "All data deleted." }
                                             catch (e: Exception) { errorMessage = "Delete failed: ${e.localizedMessage}" }
                                         }
                                     },
                                     onDeleteAccount = {
                                         scope.launch {
                                             try {
-                                                UserProfileManager.deleteUserData(userEmail); PlanDataStore.deleteAllPlans(); PlanDataStore.clearPlan(context); UserProfileManager.clearAllLocalData()
+                                                DeleteAccountUseCase().invoke(userEmail); PlanDataStore.deleteAllPlans(); PlanDataStore.clearPlan(context); UserLocalStore.clearAllLocalData()
                                                 FirestoreHelper.clearCache()
                                                 try { Firebase.auth.currentUser?.delete()?.await() }
                                                 catch (_: com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException) {
@@ -674,7 +676,7 @@ fun MainAppContent(
                                             val u = Firebase.auth.currentUser
                                             if (u != null && u.isEmailVerified) {
                                                 isLoggedIn = true; userEmail = email
-                                                appViewModel.handleIntent(AppIntent.SetProfile(UserProfileManager.loadProfile(userEmail)))
+                                                appViewModel.handleIntent(AppIntent.SetProfile(UserLocalStore.loadProfile(userEmail)))
                                                 scope.launch { isDarkMode = UserProfileManager.isDarkMode(userEmail) }
                                                 navViewModel.clearStack(); navViewModel.navigateTo(Screen.Dashboard)
                                             } else if (u != null) { errorMessage = context.getString(com.example.myapplication.R.string.error_verify_email_first); Firebase.auth.signOut() }

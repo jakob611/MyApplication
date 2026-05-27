@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.domain.profile.ObserveUserProfileUseCase
 import com.example.myapplication.data.profile.FirestoreUserProfileRepository
 import com.example.myapplication.data.store.FirestoreHelper
@@ -126,7 +127,7 @@ class AppViewModel(
                         weightDeferred.await()  // segreje Firestore cache za teže
 
                         if (remote != null) {
-                            UserProfileManager.saveProfile(remote)
+                            UserLocalStore.saveProfile(remote)
                             val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
                             if (actParsed != null && actParsed > 0) {
                                 context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)
@@ -147,7 +148,7 @@ class AppViewModel(
                         // ── Normalni zagon: samo profil (Firestore cache že topel) ──────
                         val remote = UserProfileManager.loadProfileFromFirestore(userEmail)
                         if (remote != null) {
-                            UserProfileManager.saveProfile(remote)
+                            UserLocalStore.saveProfile(remote)
                             val actParsed = remote.activityLevel?.replace("x", "")?.toIntOrNull()
                             if (actParsed != null && actParsed > 0) {
                                 context.getSharedPreferences("bm_prefs", Context.MODE_PRIVATE)

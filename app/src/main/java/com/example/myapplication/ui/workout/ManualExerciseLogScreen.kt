@@ -39,6 +39,7 @@ import com.example.myapplication.data.repository.AdvancedExerciseRepository
 import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.gamification.FirestoreGamificationRepository
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.utils.HapticFeedback
@@ -116,7 +117,7 @@ object GenderCache {
             }
 
             val remoteProfile = UserProfileManager.loadProfileFromFirestore(email)
-            val finalProfile = remoteProfile ?: UserProfileManager.loadProfile(email)
+            val finalProfile = remoteProfile ?: UserLocalStore.loadProfile(email)
 
             val g = finalProfile.gender
             val eqSet = finalProfile.equipment.map { it.lowercase() }.toSet() + setOf("bodyweight")

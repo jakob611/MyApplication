@@ -67,6 +67,7 @@ import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.data.Badge
 import com.example.myapplication.data.BadgeDefinitions
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.domain.gamification.WorkoutCompletionResult
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.utils.AppToast
@@ -339,7 +340,7 @@ fun WorkoutSessionScreen(
         } else {
             // Navaden workout: rotacija fokusa po planDay
             val rawFocus = currentPlan.focusAreas.ifEmpty {
-                val profile = UserProfileManager.loadProfile(uid ?: "")
+                val profile = UserLocalStore.loadProfile(uid ?: "")
                 profile.focusAreas.ifEmpty { listOf("Full Body") }
             }
             val allFocus = if (rawFocus.any { it.equals("None", ignoreCase = true) }) {
@@ -383,7 +384,7 @@ fun WorkoutSessionScreen(
             equipment = extraEquipment.map { it.trim().lowercase() }.toSet()
         } else {
             val rawEquipment = currentPlan.equipment.ifEmpty {
-                val profile = UserProfileManager.loadProfile(uid ?: "")
+                val profile = UserLocalStore.loadProfile(uid ?: "")
                 profile.equipment
             }
             equipment = if (rawEquipment.isNotEmpty()) {

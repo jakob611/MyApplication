@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-27 (Faza 48: NutritionViewModel UDF Reverse Data Flow fix)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 49: UserProfileManager God Object razgradnja — SRP refaktoriranje)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -66,6 +66,76 @@
 - [2026-03-29] `RunTrackerScreen.kt`: Aplikacija med tekom/hoja ni omogočala prostega premikanja po zemljevidu in je vedno na silo vračala na trenuten položaj uporabnika. Dodano je bilo, da uporabnikov dotik ustavi samodejno sledenje, hkrati pa je dodan gumb "Re-center map".
 - [2026-03-28] `WorkoutSessionScreen.kt`: Uporabnik je lahko po nesreči zapustil trening brez opozorila, izgubil progress. Dodan BackHandler za potrditev.
 - [2026-04-02 (Activity Log Pagination)] — V `RunTrackerViewModel` smo dodali `limit(15)` in `startAfter()` za optimizacijo pri pridobivanju iz Firestore-a, v `ActivityLogScreen.kt` pa avtomatsko load-more paginacijo, ki po potrebi prenaša po 15 kartic, kar ublaži težave na napravah ob dolgi zgodovini.
+
+---
+
+## 📋 DNEVNIK POPRAVKOV — Faza 49 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### SRP Refaktoriranje — UserProfileManager God Object razgradnja
+
+**HIGH PRIORITY ISSUE #1 — God Object: `UserProfileManager` (481 vrstic, 5 odgovornosti) ✅**
+
+**Root cause:** `UserProfileManager` je bil god object z mešanimi odgovornostmi:
+1. Lokalna SharedPreferences persistenca (`saveProfile`, `loadProfile`, vsi KEY_ konstanti)
+2. DTO mapiranje Firestore DocumentSnapshot → UserProfile (`documentToUserProfile`)
+3. Firestore cloud operacije (`saveProfileFirestore`, `loadProfileFromFirestore`, ...)
+4. Brisanje računa in Firestore podkolekcij (`deleteUserData`)
+5. Lokalno čiščenje SharedPreferences (`clearAllLocalData`)
++ Deprecated no-op stub `updateUserProgressAfterWorkout()` (Faza 8 artifact)
+
+**Rešitev — 3 nove datoteke + refaktoriranje UserProfileManager:**
+
+1. **NOVA: `data/settings/UserLocalStore.kt`** — Lokalna persistenca (SRP: SAMO SharedPreferences):
+   - `saveProfile(profile: UserProfile)` — 40+ polj local prefs
+   - `loadProfile(email: String): UserProfile` — bere iz local prefs
+   - `clearAllLocalData()` — čisti vseh 13 SharedPreferences namespace-ov
+   - Vse `KEY_*` konstante za lokalno shranjevanje
+
+2. **NOVA: `data/settings/UserProfileMapper.kt`** — DTO mapiranje (SRP: SAMO pretvorba):
+   - `documentToUserProfile(doc: DocumentSnapshot, email: String): UserProfile`
+   - Pure function — brez I/O, brez stranskih učinkov
+   - Enako preslikavanje kot prej v UserProfileManager, zdaj ločena enota
+
+3. **NOVA: `domain/usecase/DeleteAccountUseCase.kt`** — Logika brisanja računa (SRP: SAMO delete):
+   - `invoke(email: String)` — atomarno briše podkolekcije, dokumente, user_plans, follows
+   - Pokriva vse identifikatorje: email, UID, resolvedId
+   - Propagira izjeme za pravilno obravnavo napak v UI
+
+4. **REFAKTORIRAN: `data/settings/UserProfileManager.kt`** (481 → 220 vrstic):
+   - ODSTRANJENO: `saveProfile()`, `loadProfile()`, vse KEY_* lokalne konstante → `UserLocalStore`
+   - OD STRANI: `documentToUserProfile()` → `UserProfileMapper`
+   - ODSTRANJENO: `deleteUserData()` → `DeleteAccountUseCase`
+   - ODSTRANJENO: `clearAllLocalData()` → `UserLocalStore`
+   - ODSTRANJENO: `@Deprecated updateUserProgressAfterWorkout()` + `WorkoutProgressResult` data class
+   - **OSTANE:** `setDarkMode()`, `isDarkMode()`, `saveProfileFirestore()`, `loadProfileFromFirestore()` (delegira na UserProfileMapper), `saveWorkoutStats()`, `getWorkoutStats()`
+   - `loadProfileFromFirestore()` posodobljeno: kliče `UserProfileMapper.documentToUserProfile()`
+
+**Posodobljeni klicatelji (10 datotek):**
+| Datoteka | Stara koda | Nova koda |
+|---|---|---|
+| `ui/MainAppContent.kt` | `UserProfileManager.saveProfile()` | `UserLocalStore.saveProfile()` |
+| `ui/MainAppContent.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+| `ui/MainAppContent.kt` | `UserProfileManager.deleteUserData()` | `DeleteAccountUseCase().invoke()` |
+| `ui/MainAppContent.kt` | `UserProfileManager.clearAllLocalData()` | `UserLocalStore.clearAllLocalData()` |
+| `ui/main/AppViewModel.kt` | `UserProfileManager.saveProfile()` | `UserLocalStore.saveProfile()` |
+| `viewmodels/ShopViewModel.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+| `workers/StreakReminderWorker.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+| `data/profile/FirestoreUserProfileRepository.kt` | `UserProfileManager.documentToUserProfile()` | `UserProfileMapper.documentToUserProfile()` |
+| `ui/nutrition/NutritionViewModel.kt` | `UserProfileManager.documentToUserProfile()` | `UserProfileMapper.documentToUserProfile()` |
+| `ui/workout/ManualExerciseLogScreen.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+| `ui/workout/WorkoutSessionScreen.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+| `ui/workout/WorkoutSessionViewModel.kt` | `UserProfileManager.loadProfile()` | `UserLocalStore.loadProfile()` |
+
+**Arhitekturna meja po Fazi 49:**
+```
+data/settings/UserLocalStore     → SAMO: SharedPreferences R/W za UserProfile
+data/settings/UserProfileMapper  → SAMO: DocumentSnapshot → UserProfile DTO pretvorba
+data/settings/UserProfileManager → SAMO: Firestore cloud operacije (setDarkMode, saveProfileFirestore, ...)
+domain/usecase/DeleteAccountUseCase → SAMO: logika brisanja Firestore podatkov računa
+```
+
+**BUILD SUCCESSFUL ✅**
 
 ---
 

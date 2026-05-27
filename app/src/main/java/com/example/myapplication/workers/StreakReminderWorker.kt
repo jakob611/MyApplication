@@ -14,6 +14,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.MainActivity
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.data.store.FirestoreHelper
 import com.example.myapplication.data.repository.FirestoreWorkoutRepository
 import com.google.firebase.auth.ktx.auth
@@ -110,7 +111,7 @@ class StreakReminderWorker(
         }
 
         val email = currentUser.email.orEmpty()
-        val userProfile = UserProfileManager.loadProfile(email)
+        val userProfile = UserLocalStore.loadProfile(email)
 
         // --- 1. QUIET HOURS PREVERBA (na podlagi uporabnikovih nastavitev) ---
         try {
@@ -238,7 +239,7 @@ class StreakReminderWorker(
         val email = Firebase.auth.currentUser?.email
         // --- 6. PREBERI ŠTEVILO ZAMRZOVANJ (FROZEN DAYS) ---
         val streakFreezes = try {
-            runCatching { UserProfileManager.loadProfile(email ?: "").streakFreezes }.getOrDefault(0)
+            runCatching { UserLocalStore.loadProfile(email ?: "").streakFreezes }.getOrDefault(0)
         } catch (e: Exception) {
             0
         }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserLocalStore
 
 data class ShopState(
     val userXP: Int = 0,
@@ -45,7 +46,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             if (email.isNotBlank()) {
                 val profile = UserProfileManager.loadProfileFromFirestore(email)
-                    ?: UserProfileManager.loadProfile(email)
+                    ?: UserLocalStore.loadProfile(email)
                 _state.value = _state.value.copy(
                     userXP = profile.xp,
                     streakFreezes = profile.streakFreezes

@@ -42,7 +42,7 @@ import com.example.myapplication.data.NutritionPlan
 import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.data.daily.DailyLogRepository
 import com.example.myapplication.data.repository.NutritionRepository
-import com.example.myapplication.data.settings.UserProfileManager
+import com.example.myapplication.data.settings.UserProfileMapper
 import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.debug.NutritionDebugStore
 import com.example.myapplication.debug.WeightPredictorStore
@@ -133,7 +133,7 @@ class NutritionViewModel(
             val docRef = FirestoreHelper.getUserRef(uid)
             val listener = docRef.addSnapshotListener { snap, err ->
                 if (err != null || snap == null || !snap.exists()) return@addSnapshotListener
-                trySend(UserProfileManager.documentToUserProfile(snap, email))
+                trySend(UserProfileMapper.documentToUserProfile(snap, email))
             }
             awaitClose { listener.remove() }
         }
