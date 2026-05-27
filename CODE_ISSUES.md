@@ -1,7 +1,7 @@
 # CODE_ISSUES.md
 > **NAVODILO ZA AI:** To datoteko VEDNO preberi na začetku seje. Po vsakem popravku dodaj vnos na dno pod "DNEVNIK POPRAVKOV".
 
-**Zadnja posodobitev:** 2026-05-26 (Faza 33: BUG-11/08/12/06/09/13 — BodyModuleHomeScreen Scaffold + Auth čiščenje)  
+**Zadnja posodobitev:** 2026-05-27 (Faza 42: Anomaly 1 — BodyPlanQuizViewModel Clean Architecture Refactoring)  
 **Trenutno stanje: VSE ZNANE TEŽAVE ODPRAVLJENE ✅**
 
 ---
@@ -69,7 +69,51 @@
 
 ---
 
-## DNEVNIK POPRAVKOV — Faza 32.0 (2026-05-24)
+## 📋 DNEVNIK POPRAVKOV — Faza 42 (2026-05-27)
+**Avtor:** GitHub Copilot | **Build:** ✅ SUCCESSFUL
+
+### Clean Architecture — Anomaly 1 Fix: BodyPlanQuizViewModel (BodyModule.kt refaktoring)
+
+**ANOMALY 1 — EGREGIOUS VIOLATION: Neposredni Data/Network klici v Jetpack Compose ✅**
+- 🐛 **Root cause:** `BodyModule.kt` je vseboval:
+  - `scope.launch { MetricsRepositoryImpl().saveWeight() }` — data layer klic v Composable
+  - `FirestoreHelper.getCurrentUserDocId()` — neposreden data layer dostop v UI
+  - `algorithmData = remember() { ... CalculateDailyCalorieTargetUseCase()... }` — poslovna logika v remember()
+  - All Kotlin/DateTime imports za biznis operacije znotraj UI sloja
+- ✅ **Rešitev:**
+
+1. **NOVA: `viewmodels/BodyPlanQuizViewModel.kt`** — vsa poslovna logika premaknjeno:
+   - `sealed interface QuizUiState { Idle, Loading, Success(PlanResult, QuizAnswers), Error(String) }`
+   - `data class QuizAnswers` — tipsko-varni zbiralec 14 kviz korakov + `toMap()` za callbacks
+   - `BodyPlanQuizViewModel(metricsRepository: MetricsRepository, authRepository: AuthStateRepository)` — domenski VMESNIKI, ne konkretne implementacije
+   - `computePreview(answers)` → AlgorithmData izračun + plan generacija za predogled
+   - `submitQuiz(answers)` → auth preverba, BMI/BMR/TDEE, `viewModelScope.launch` za weight saving
+   - `computeAlgorithmData()` — division-by-zero guard + Faza 9 SSOT UseCase klic
+
+2. **REFAKTORIRAN: `ui/screens/BodyModule.kt`** — popolnoma čist:
+   - Odstranjeni vsi `data` in `FirestoreHelper` uvozi (MetricsRepositoryImpl, AlgorithmData, FirestoreHelper, generateIntelligentTrainingPlan)
+   - Odstranjeni: `kotlinx.coroutines.launch`, `rememberCoroutineScope`, `LocalContext`, `android.util.Log`
+   - `BodyPlanQuizScreen` sprejema `viewModel: BodyPlanQuizViewModel`
+   - `PlanResultStep` brez poslovne logike — samo `viewModel.submitQuiz()` klic in StateFlow opazovanje
+
+3. **RAZŠIRJEN: `domain/auth/AuthStateRepository.kt`** — `getCurrentUid(): String?` dodano
+4. **IMPLEMENTIRAN: `data/auth/FirebaseAuthStateRepository.kt`** — `getCurrentUid()` implementiran
+5. **POSODOBLJEN: `ui/screens/MyViewModelFactory.kt`** — `BodyPlanQuizViewModel` DI z domenskimi vmesniki
+6. **POSODOBLJEN: `ui/MainAppContent.kt`** — ViewModel instanciran prek factory, posredovan v Screen
+
+**Arhitekturna meja po Fazi 42:**
+```
+ui/         → QuizUiState opazovanje, viewModel.submitQuiz() klic, 0x data uvozov
+viewmodels/ → BodyPlanQuizViewModel: vsa logika, MetricsRepository + AuthStateRepository vmesniki
+domain/     → AuthStateRepository.getCurrentUid() (Firebase-free vmesnik)
+data/       → FirebaseAuthStateRepository, MetricsRepositoryImpl (edina Firebase lastnika)
+```
+
+**BUILD SUCCESSFUL ✅**
+
+---
+
+
 
 ### BodyModule — 4 napredne asinhrone in arhitekturne ranljivosti odpravljene
 

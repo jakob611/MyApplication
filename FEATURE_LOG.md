@@ -520,3 +520,14 @@ no replicira staro SimpleDateFormat obliko.
 3. **`BodyModuleHomeViewModelTest.kt`** — Posodobljeni KDoc in klic chain opisi: opisujejo novi Result API tok. Funkcionalnost fake repozitorijev in testi se niso spremenili — arhitekturna meja pozostane čista.
 **Zakaj:** `GetBodyMetricsUseCase` je metal surove `DomainException`, `GetMeasurementsProgressUseCase` pa vrača `Flow<Result<...>>` — dve različni pogodbi za isti vmesnik. Poenoten pristop: vse moderne podatkovne operacije vračajo `Result` omotač; nobeden use case ne meta za predvidljive domenske napake.
 **Tveganje:** 🟢 nizko (refaktoring z enakim vedédenjem — VM logika za `isAuthExpired`/`errorMessage` nespremenjena) — BUILD ✅ SUCCESSFUL
+
+## 2026-05-27 — Faza 42: Anomaly 1 Fix — BodyPlanQuizViewModel (Clean Architecture Refaktoring)
+**Datoteke:** `viewmodels/BodyPlanQuizViewModel.kt` (NOVO), `ui/screens/BodyModule.kt`, `ui/screens/MyViewModelFactory.kt`, `domain/auth/AuthStateRepository.kt`, `data/auth/FirebaseAuthStateRepository.kt`, `ui/MainAppContent.kt`
+**Kaj:**
+1. **`BodyPlanQuizViewModel.kt` (NOVO)** — `sealed interface QuizUiState`, `data class QuizAnswers`, `computePreview()`, `submitQuiz()`, `computeAlgorithmData()`. VSA poslovna logika (BMI/BMR/TDEE, alphaData, weight saving, auth check) premaknjeno iz Composable-a v ViewModel. DI prek domenskih vmesnikov: `MetricsRepository` in `AuthStateRepository`.
+2. **`BodyModule.kt`** — odstranjeni VSI `data`/`FirestoreHelper` uvozi. `BodyPlanQuizScreen` sprejema `viewModel: BodyPlanQuizViewModel`. `PlanResultStep` brez poslovne logike — samo `viewModel.submitQuiz()` klic in `collectAsState()` opazovanje.
+3. **`AuthStateRepository.kt`** — dodan `getCurrentUid(): String?` (Firebase-free domenski vmesnik).
+4. **`MyViewModelFactory.kt`** — `BodyPlanQuizViewModel` DI: `MetricsRepositoryImpl()` + `FirebaseAuthStateRepository()`.
+5. **`MainAppContent.kt`** — ViewModel instanciran prek `viewModel(factory=MyViewModelFactory(context))`, posredovan v Screen.
+**Zakaj:** `BodyModule.kt` je kršil Clean Architecture — `MetricsRepositoryImpl()`, `FirestoreHelper.getCurrentUserDocId()`, BMI/TDEE `remember()` bloki, `scope.launch` s konkretnimi data klici. Vse to je SODOBNA kršitev ki jo nalažejo Android Architecture Guidelines.
+**Tveganje:** 🟢 nizko (vedenje je ekvivalentno — vse iste kalkulacije, samo na pravilnem sloju) — BUILD ✅ SUCCESSFUL
