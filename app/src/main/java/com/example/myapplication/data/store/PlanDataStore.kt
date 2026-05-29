@@ -21,9 +21,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.toLocalDateTime
 
-// Firebase imports
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+// Faza 57 — FirebaseAuth + FirebaseFirestore direktni import ODSTRANJENI.
+// Vse Firestore operacije potekajo izključno prek FirestoreHelper.getDb() / getCurrentUserDocRef().
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 
@@ -31,19 +30,18 @@ val Context.dataStore by preferencesDataStore(name = "plans_datastore")
 
 object PlanDataStore {
     private val PLANS_KEY = stringPreferencesKey("my_plans")
-    private val firestore = FirebaseFirestore.getInstance()
-    private val auth = FirebaseAuth.getInstance()
-
+    // Faza 57: FirebaseFirestore.getInstance() + FirebaseAuth.getInstance() odstranjeni.
+    // Vse dostopne točke tečejo izključno prek FirestoreHelper.getDb() (SSOT).
     private const val PLANS_COLLECTION = "user_plans"
 
 
-    // Helper to get resolved ID
+    // Faza 57: auth.currentUser preverjanje + fallback odstranjeni — FirestoreHelper je SSOT.
+    // getCurrentUserDocRef() vrže IllegalStateException, ko ni prijavljen → catch vrne null.
     suspend fun getResolvedUserId(): String? {
-        if (auth.currentUser == null) return null
         return try {
             FirestoreHelper.getCurrentUserDocRef().id
-        } catch (e: Exception) {
-            auth.currentUser?.uid // Fallback
+        } catch (_: Exception) {
+            null  // Ni prijavljen ali je ID resolucija spodletela
         }
     }
 
@@ -56,7 +54,7 @@ object PlanDataStore {
             if (localPlans.isEmpty()) return
 
             // preveri, če user že ima plane v Firestore
-            val snapshot = firestore.collection(PLANS_COLLECTION)
+            val snapshot = FirestoreHelper.getDb().collection(PLANS_COLLECTION)
                 .document(userId)
                 .get()
                 .await()
@@ -77,7 +75,7 @@ object PlanDataStore {
         val userId = getResolvedUserId() ?: return
         try {
             // Check if user has plans in Firestore
-            val docRef = firestore.collection(PLANS_COLLECTION).document(userId)
+            val docRef = FirestoreHelper.getDb().collection(PLANS_COLLECTION).document(userId)
             val snapshot = docRef.get().await()
 
             if (snapshot.exists()) {
@@ -91,11 +89,11 @@ object PlanDataStore {
     }
 
     fun plansFlow(): Flow<List<PlanResult>> = callbackFlow {
-        // Resolve ID async inside the flow
+        // Faza 57: auth.currentUser preverjanje odstranjeno — FirestoreHelper je SSOT.
         val userId = try {
-            if (auth.currentUser != null) FirestoreHelper.getCurrentUserDocRef().id else null
-        } catch (e: Exception) {
-            auth.currentUser?.uid
+            FirestoreHelper.getCurrentUserDocRef().id
+        } catch (_: Exception) {
+            null  // Ni prijavljen
         }
 
         Log.d("PlanDataStore", "plansFlow called with resolved userId: $userId")
@@ -107,7 +105,7 @@ object PlanDataStore {
             return@callbackFlow
         }
 
-        val listener = firestore.collection(PLANS_COLLECTION)
+        val listener = FirestoreHelper.getDb().collection(PLANS_COLLECTION)
             .document(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -201,7 +199,7 @@ object PlanDataStore {
                 planMap
             }
 
-            firestore.collection(PLANS_COLLECTION)
+            FirestoreHelper.getDb().collection(PLANS_COLLECTION)
                 .document(userId)
                 .set(hashMapOf("plans" to plansData))
                 .await()
@@ -222,7 +220,7 @@ object PlanDataStore {
         }
 
         try {
-            val currentPlansSnapshot = firestore.collection(PLANS_COLLECTION)
+            val currentPlansSnapshot = FirestoreHelper.getDb().collection(PLANS_COLLECTION)
                 .document(userId)
                 .get()
                 .await()
@@ -247,7 +245,7 @@ object PlanDataStore {
     suspend fun updatePlan(context: Context, updatedPlan: PlanResult) {
         val userId = getResolvedUserId() ?: return
         try {
-            val snap = firestore.collection(PLANS_COLLECTION).document(userId).get().await()
+            val snap = FirestoreHelper.getDb().collection(PLANS_COLLECTION).document(userId).get().await()
             @Suppress("UNCHECKED_CAST")
             val currentPlans = (snap.get("plans") as? List<Map<String, Any>>)
                 ?.mapNotNull { convertMapToPlanResult(it) }
@@ -269,7 +267,7 @@ object PlanDataStore {
         }
 
         try {
-            val currentPlansSnapshot = firestore.collection(PLANS_COLLECTION)
+            val currentPlansSnapshot = FirestoreHelper.getDb().collection(PLANS_COLLECTION)
                 .document(userId)
                 .get()
                 .await()
@@ -405,8 +403,8 @@ object PlanDataStore {
             ?: return Result.failure(Exception("User not logged in — cannot swap."))
 
         return try {
-            firestore.runTransaction { transaction ->
-                val docRef = firestore.collection(PLANS_COLLECTION).document(userId)
+            FirestoreHelper.getDb().runTransaction { transaction ->
+                val docRef = FirestoreHelper.getDb().collection(PLANS_COLLECTION).document(userId)
                 val snapshot = transaction.get(docRef)
 
                 // Faza 31.9 — Popravek #1: Firestore vrne notranji AbstractList (nespremenljiv).
