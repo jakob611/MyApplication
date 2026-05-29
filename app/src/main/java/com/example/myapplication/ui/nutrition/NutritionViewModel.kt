@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.usecase.CalculateDailyCalorieTargetUseCase
+import com.example.myapplication.domain.usecase.GetBodyMetricsUseCase
 import com.example.myapplication.domain.usecase.GetNutritionTargetsUseCase
+import com.example.myapplication.domain.model.BodyMetrics
 import com.example.myapplication.domain.model.NutritionTargets
 import com.example.myapplication.domain.model.PlanResult
 import com.example.myapplication.domain.nutrition.calculateDailyWaterMl
@@ -33,7 +35,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import android.content.Context
@@ -98,7 +99,9 @@ class NutritionViewModel(
     // Faza 29.8: DI vmesnik — NE referiramo FoodRepositoryImpl direktno
     private val nutritionRepo: NutritionRepository,
     // Faza 48 — UDF fix: reaktivni vir resnice za workout plan (ne UI posredovanje)
-    private val planRepository: PlanRepository
+    private val planRepository: PlanRepository,
+    // Faza 55 — SSOT za todayIsRest: nadomesti dvojni epoch izračun
+    private val bodyMetricsUseCase: GetBodyMetricsUseCase
 ) : ViewModel() {
 
     /** Faza 9 — SSOT za kalorični izračun */
@@ -136,6 +139,22 @@ class NutritionViewModel(
                 trySend(UserProfileMapper.documentToUserProfile(snap, email))
             }
             awaitClose { listener.remove() }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * Faza 55 — SSOT za todayIsRest: reaktivni tok iz GetBodyMetricsUseCase.
+     *
+     * Nadomešča dvojni epoch-based index izračun v todayNutritionContext.
+     * Isti vir resnice kot BodyModuleHomeViewModel → garantirana sinhronizacija.
+     * Ob clearUser() (uidFlow = null) se tok samodejno prekine prek flatMapLatest.
+     */
+    private val _bodyMetricsFlow: StateFlow<BodyMetrics?> = uidFlow.flatMapLatest { uid ->
+        if (uid == null) flowOf<BodyMetrics?>(null)
+        else {
+            val email = Firebase.auth.currentUser?.email
+                ?: return@flatMapLatest flowOf<BodyMetrics?>(null)
+            bodyMetricsUseCase.invoke(email).map { it.getOrNull() }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -480,20 +499,14 @@ class NutritionViewModel(
         _activePlanFlow,
         _internalProfile,
         nutritionTargets,
-        parsedCustomMeals
-    ) { plan, profile, targets, meals ->
+        parsedCustomMeals,
+        _bodyMetricsFlow
+    ) { plan, profile, targets, meals, metrics ->
 
-        // ── ① Workout / Rest day (epoch-based) ───────────────────────────────
-        val isWorkoutDay = if (plan == null) false else {
-            val startDate = try {
-                LocalDate.parse(plan.startDate)
-            } catch (_: Exception) {
-                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            }
-            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val daysSinceStart = (todayDate.toEpochDays() - startDate.toEpochDays())
-            plan.weeks.flatMap { it.days }.getOrNull(daysSinceStart.toInt())?.isRestDay?.not() ?: true
-        }
+        // ── ① Workout / Rest day — SSOT iz GetBodyMetricsUseCase (Faza 55) ──────
+        // PRED: epoch-based index getOrNull(daysSinceStart) — nevarno pri nesekvencialnih dnevih.
+        // PO:   direktno iz metrics.todayIsRest — isti vir resnice kot BodyModuleHomeViewModel.
+        val isWorkoutDay = !(metrics?.todayIsRest ?: false)
 
         // ── ② Prilagojen cilj za vodo ─────────────────────────────────────────
         val wKg: Double = run {
@@ -699,10 +712,9 @@ class NutritionViewModel(
 
                     // ── Data Budgeting: parse items enkrat tukaj (ne v NutritionScreen) ───
                     val rawItems = doc.get("items") as? List<*>
-                    if (rawItems != null) {
-                        val foods = parseRawItemsToTrackedFoods(rawItems)
-                        if (foods.isNotEmpty()) _firestoreFoods.value = foods
-                    }
+                    // Faza 55 — N-ANOMALIJA-6 Fix: vedno nastavi _firestoreFoods, tudi ko je
+                    // seznam prazen — prepreči prikazovanje izbrisane hrane v UI.
+                    _firestoreFoods.value = if (rawItems != null) parseRawItemsToTrackedFoods(rawItems) else emptyList()
                 }
         }
     }
@@ -804,9 +816,20 @@ class NutritionViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
+            // Faza 55 — N-ANOMALIJA-4 Fix: zamrzni REST-DAY prilagojene kalorije,
+            // ne workout vrednosti. _bodyMetricsFlow.value je sinhron bralec StateFlow-a.
+            val isRestDay = _bodyMetricsFlow.value?.todayIsRest ?: false
+            val profile   = _internalProfile.value
+            val isMale    = profile?.gender?.equals("Male", ignoreCase = true) ?: true
+            val goal      = profile?.workoutGoal?.ifBlank { null }
+            val effectiveCalories = if (isRestDay) {
+                calculateRestDayCalories(targetCalories.toDouble(), goal, isMale)
+            } else {
+                targetCalories
+            }
             DailyLogRepository().updateDailyLog(
                 date               = date,
-                initTargetCalories = targetCalories,
+                initTargetCalories = effectiveCalories,
                 initTargetProtein  = targetProtein,
                 initTargetCarbs    = targetCarbs,
                 initTargetFat      = targetFat
@@ -851,9 +874,15 @@ class NutritionViewModel(
             if (todayStr in _xpAwardedDates) return@launch
 
             val consumedKcal = _firestoreFoods.value.sumOf { it.caloriesKcal.roundToInt() }
+            // Faza 55 — N-ANOMALIJA-5 Fix: na počitni dan primerjaj z rest-day prilagojenim ciljem.
+            // todayNutritionContext.adjustedCalorieTarget je že pravilno znižan za počitne dni.
+            val isRestDay    = _bodyMetricsFlow.value?.todayIsRest ?: false
             val dynTarget    = dynamicTargetCalories.value
-            val staticTarget = nutritionTargets.value.calories
-            val targetCal    = if (dynTarget > 0) dynTarget else staticTarget
+            val targetCal = when {
+                isRestDay    -> todayNutritionContext.value.adjustedCalorieTarget
+                dynTarget > 0 -> dynTarget
+                else          -> nutritionTargets.value.calories
+            }
             if (targetCal <= 0 || consumedKcal <= 0) return@launch
 
             val percentageDiff = kotlin.math.abs(targetCal - consumedKcal).toDouble() / targetCal.toDouble()

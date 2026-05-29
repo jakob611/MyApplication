@@ -59,8 +59,8 @@ class DailyLogRepository {
         initTargetFat: Int? = null,
         action: (MutableMap<String, Any>) -> Unit
     ) {
-        val uid = FirestoreHelper.getCurrentUserDocId() ?: return
-        val ref = db.collection("users").document(uid).collection("dailyLogs").document(date)
+        FirestoreHelper.getCurrentUserDocId() ?: return  // varnostni null check pred getCurrentUserDocRef()
+        val ref = FirestoreHelper.getCurrentUserDocRef().collection("dailyLogs").document(date)
 
         val startMs = System.currentTimeMillis()
         val opLabel = "updateDailyLog($date)"

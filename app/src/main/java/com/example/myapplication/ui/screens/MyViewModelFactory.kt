@@ -88,11 +88,14 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
         if (modelClass.isAssignableFrom(NutritionViewModel::class.java)) {
             requireNotNull(context) { "Context required for NutritionViewModel" }
             val gamificationUseCase = GamificationFactory.provide(context)
+            // Faza 55 — SSOT za todayIsRest: GetBodyMetricsUseCase injiciran v NutritionViewModel
+            val settingsRepo = UserPreferencesRepository(context)
+            val statsRepo    = UserWorkoutStatsRepository(settingsRepo)
             @Suppress("UNCHECKED_CAST")
             // Faza 29.8: FoodRepositoryImpl kot NutritionRepository vmesnik (DI)
             // Faza 48 — UDF fix: PlanRepositoryImpl() injiciran kot PlanRepository domenski vmesnik.
-            // NutritionViewModel ne prejema več PlanResult iz UI — sam se naroči na reaktivni tok.
-            return NutritionViewModel(gamificationUseCase, FoodRepositoryImpl, PlanRepositoryImpl()) as T
+            // Faza 55 — SSOT fix: GetBodyMetricsUseCase za konsistenten todayIsRest signal.
+            return NutritionViewModel(gamificationUseCase, FoodRepositoryImpl, PlanRepositoryImpl(), GetBodyMetricsUseCase(statsRepo)) as T
         }
         if (modelClass.isAssignableFrom(ProgressViewModel::class.java)) {
             requireNotNull(context) { "Context required for ProgressViewModel" }
