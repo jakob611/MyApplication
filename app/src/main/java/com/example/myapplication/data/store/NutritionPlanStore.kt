@@ -7,8 +7,6 @@ import com.example.myapplication.domain.nutrition.calculateEnhancedTDEE
 import com.example.myapplication.domain.nutrition.calculateOptimalMacros
 import com.example.myapplication.domain.nutrition.calculateSmartCalories
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -21,7 +19,6 @@ import kotlin.collections.get
  */
 object NutritionPlanStore {
 
-    private val firestore = Firebase.firestore
 
     /**
      * Shrani nutrition plan v Firestore

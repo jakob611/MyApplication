@@ -9,6 +9,7 @@ import com.example.myapplication.domain.usecase.GetNutritionTargetsUseCase
 import com.example.myapplication.domain.model.BodyMetrics
 import com.example.myapplication.domain.model.NutritionTargets
 import com.example.myapplication.domain.model.PlanResult
+import com.example.myapplication.domain.model.ProfileConstants
 import com.example.myapplication.domain.nutrition.calculateDailyWaterMl
 import com.example.myapplication.domain.nutrition.calculateRestDayCalories
 import com.example.myapplication.domain.repository.PlanRepository
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -257,8 +259,10 @@ class NutritionViewModel(
     fun updateWaterOptimistic(newValue: Int, todayId: String) {
         val safe = newValue.coerceAtLeast(0)
         _localWaterMl.value = safe
-        pendingWaterWrites.value += 1      // ← inkrement PRED cancelom
-        waterSyncJob?.cancel()             // ← cancel prejšnjega (njegov finally dekrementira)
+        // Faza 56 — N-ANOMALIJA-5b Fix: atomski CAS update namesto non-atomskega value += 1.
+        // MutableStateFlow.update { } garantira thread-safety pri vzporednih klikih iz UI.
+        pendingWaterWrites.update { it + 1 }   // ← atomski inkrement PRED cancelom
+        waterSyncJob?.cancel()                  // ← cancel prejšnjega (njegov finally dekrementira)
         waterSyncJob = viewModelScope.launch {
             try {
                 delay(800L)                // debounce: batching hitrih klikov
@@ -267,7 +271,7 @@ class NutritionViewModel(
             } catch (e: Exception) {
                 Log.e("NutritionVM", "❌ Water sync failed: ${e.message}")
             } finally {
-                pendingWaterWrites.value = (pendingWaterWrites.value - 1).coerceAtLeast(0)
+                pendingWaterWrites.update { (it - 1).coerceAtLeast(0) }  // ← atomski dekrement
                 if (pendingWaterWrites.value == 0) {
                     _localWaterMl.value = null  // odpri pot Firestore vrednosti
                 }
@@ -514,7 +518,12 @@ class NutritionViewModel(
             val calories      = plan?.calories
             if (caloriesPerKg != null && caloriesPerKg > 0.0 && calories != null && calories > 0) {
                 calories.toDouble() / caloriesPerKg
-            } else 70.0
+            } else {
+                // Faza 56 — N-ANOMALIJA-3 Fix: nadomesti magic number 70.0 z dokumentirano konstanto.
+                // ProfileConstants.DEFAULT_WEIGHT_KG = 75.0 (WHO mediana odraslih) velja le kot
+                // začasni fallback dokler algorithmData ni naložen iz Firestorea.
+                ProfileConstants.DEFAULT_WEIGHT_KG
+            }
         }
         val isMale   = profile?.gender?.equals("Male", ignoreCase = true) ?: true
         val actLevel = profile?.activityLevel ?: "Sedentary"
@@ -537,8 +546,10 @@ class NutritionViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TodayNutritionContext())
 
     /**
-     * Nastavi BMR in cilj, ko je plan/profil naložen.
-     * Kliče se iz NutritionScreen z LaunchedEffect ob spremembi plana ali nutritionPlan.
+     * Faza 56 — N-ANOMALIJA-7 Fix: `private` — kliče se IZKLJUČNO iz [recomputeCalorieTarget].
+     *
+     * Pred Fazo 29.4 je bil klican iz NutritionScreen prek LaunchedEffect (kršitev UDF).
+     * Zdaj je reaktivni `init { }` combine SSOT — Screen NE sme klicat te funkcije.
      *
      * Faza 9 — SSOT: delegira izračun TDEE in ciljne prilagoditve na
      * [CalculateDailyCalorieTargetUseCase.fromBmr] (ne več inline `bmr × 1.2`).
@@ -546,13 +557,9 @@ class NutritionViewModel(
      * @param bmr           Bazalna presnova (kcal/dan) iz AlgorithmData plana
      * @param goal          Cilj ("Lose fat", "Build muscle", "General health" …)
      * @param activityLevel Frekvenca treningov ("2x"–"6x"); null → sedentarni fallback 1.2
-     */
-    /**
      * @param bodyFatPercentage Opcijsko BF% iz userProfile.bodyFat (parsiran v Double).
-     *   Posreduje se v [CalculateDailyCalorieTargetUseCase.fromBmr] za debug beleženje.
-     *   V prihodnji verziji: lahko sproži polni invoice() za svež Katch-McArdle BMR.
      */
-    fun setUserMetrics(
+    private fun setUserMetrics(
         bmr: Double,
         goal: String,
         activityLevel: String? = null,
