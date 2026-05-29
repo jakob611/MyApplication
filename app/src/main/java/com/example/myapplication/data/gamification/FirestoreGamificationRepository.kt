@@ -310,8 +310,14 @@ class FirestoreGamificationRepository : GamificationRepository {
 
     // ─────────────────────────────────────────────────────────────────────────
     // runMidnightStreakCheck — Strogi statusni check za včerajšnji dan
+    //
+    // Faza 54 — Anomaly #4 Fix:
+    //   yesterdayWasRestDay=true → REST_DAY_PENDING se doda v safeStatuses (ni kazni
+    //   za neoplavljeno raztezanje na počitniškem dnevu).
+    //   yesterdayWasRestDay=true + WORKOUT_PENDING (app ni bila odprta) → dan se
+    //   samodejno zaključi kot REST_DAY_DONE brez streak kazni.
     // ─────────────────────────────────────────────────────────────────────────
-    override suspend fun runMidnightStreakCheck() {
+    override suspend fun runMidnightStreakCheck(yesterdayWasRestDay: Boolean) {
         val userRef      = FirestoreHelper.getCurrentUserDocRef() ?: return
         val yesterdayStr = getYesterdayStr()
 
@@ -322,12 +328,32 @@ class FirestoreGamificationRepository : GamificationRepository {
                 val dailyHistory = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
 
                 val yesterdayStatus = UserDayStatus.fromFirestore(dailyHistory[yesterdayStr]?.toString())
-                val safeStatuses    = setOf(
-                    UserDayStatus.WORKOUT_DONE, UserDayStatus.REST_WORKOUT_DONE,
-                    UserDayStatus.REST_DAY_DONE, UserDayStatus.FROZEN
-                )
+
+                // Faza 54: safeStatuses se razširi z REST_DAY_PENDING kadar je včeraj bil počitniški dan.
+                // Raztezanje ni obvezno — neuporabljeno PENDING_STRETCHING ne sme povzročiti streak reseta.
+                val safeStatuses = buildSet {
+                    addAll(listOf(
+                        UserDayStatus.WORKOUT_DONE, UserDayStatus.REST_WORKOUT_DONE,
+                        UserDayStatus.REST_DAY_DONE, UserDayStatus.FROZEN
+                    ))
+                    if (yesterdayWasRestDay) add(UserDayStatus.REST_DAY_PENDING)
+                }
+
                 if (yesterdayStatus in safeStatuses) {
                     Log.d("GamificationRepo", "✅ Midnight check: včeraj ($yesterdayStr) = '$yesterdayStatus' — ni kazni.")
+                    return@runTransaction null
+                }
+
+                // Faza 54: Posebni primer — app ni bila odprta na počitniški dan (WORKOUT_PENDING).
+                // Ker je yesterdayWasRestDay=true, samodejno zaključimo dan kot REST_DAY_DONE
+                // namesto da bi kaznovali streaka.
+                if (yesterdayWasRestDay && yesterdayStatus == UserDayStatus.WORKOUT_PENDING) {
+                    Log.d("GamificationRepo",
+                        "✅ Midnight check: včeraj ($yesterdayStr) = počitniški dan (app ni bila odprta) → " +
+                        "samodejni REST_DAY_DONE, brez kazni.")
+                    transaction.update(userRef, mapOf(
+                        "dailyHistory.$yesterdayStr" to UserDayStatus.REST_DAY_DONE.firestoreValue
+                    ))
                     return@runTransaction null
                 }
 

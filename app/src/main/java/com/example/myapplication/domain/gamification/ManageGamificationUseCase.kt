@@ -173,6 +173,22 @@ class ManageGamificationUseCase(
         ).getOrElse { throw it }.newStreak
     }
 
-    /** Worker (ob polnoči) pozove streak check za včerajšnji dan. */
-    suspend fun executeMidnightStreakCheck() = repository.runMidnightStreakCheck()
+    /** Worker (ob polnoči) pozove streak check za včerajšnji dan.
+     *
+     * Faza 54 — Anomaly #4 Fix: yesterdayWasRestDay=true preprečuje napačen streak reset
+     * na počitniških dnevih (REST_DAY_PENDING ali WORKOUT_PENDING → ni kazni).
+     */
+    suspend fun executeMidnightStreakCheck(yesterdayWasRestDay: Boolean = false) =
+        repository.runMidnightStreakCheck(yesterdayWasRestDay)
+
+    /**
+     * Faza 54 — Anomaly #4 Fix: Označi danes kot REST_DAY_PENDING v dailyHistory.
+     *
+     * Kliče se iz BodyModuleHomeViewModel, ko ViewModel ugotovi da je danes počitniški dan
+     * (na podlagi plan modela) in status še ni bil nastavljen. S tem midnight worker
+     * vidi REST_DAY_PENDING v dailyHistory in ne penalizira streaka.
+     *
+     * Operacija je idempotentna — ne prepiše zaključenih statusov (WORKOUT_DONE, REST_DAY_DONE…).
+     */
+    suspend fun markRestDayPending() = repository.markRestDayPending()
 }

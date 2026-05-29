@@ -512,6 +512,13 @@ class BodyModuleHomeViewModel(
     private var loadMetricsJob: Job? = null
 
     /**
+     * Faza 54 — Anomaly #4 Fix: Guard, ki preprečuje večkratni klic markRestDayPending()
+     * na isti Firestore event seji. Ko je true, klic je bil že poslan (ali je v teku).
+     * Flag se ponastavi ob novi sejni inicializaciji (LoadMetrics intent).
+     */
+    private var restDayPendingDispatchedToday = false
+
+    /**
      * Faza 32.0 — Fix #1 (State Stomp): Števec aktivnih async operacij.
      * LoadMetrics ne sme postaviti isLoading=false, dokler SwapDays ali
      * CompleteWorkoutSession še teče. Ko je vrednost > 0, spinner ostane viden.
@@ -533,6 +540,9 @@ class BodyModuleHomeViewModel(
                 // Faza 32.0 — Fix #2: inicializiraj živi plan pred launch-om, da collect
                 // blok takoj bere pravilni plan tudi ob prvem klicu.
                 currentPlanState.value = intent.plan
+                // Faza 54 — Anomaly #4 Fix: Ponastavi guard na začetku vsake nove seje,
+                // da markRestDayPending() lahko pokliče za Nov dan / process death recovery.
+                restDayPendingDispatchedToday = false
                 loadMetricsJob = viewModelScope.launch {
                     _ui.update { it.copy(isLoading = true, errorMessage = null) }
                     try {
@@ -569,6 +579,27 @@ class BodyModuleHomeViewModel(
                                     ?.flatMap { it.days }
                                     ?.firstOrNull { it.dayNumber == metrics.planDay }
                                     ?.isRestDay ?: metrics.todayIsRest
+
+                                // Faza 54 — Anomaly #4 Fix: Ko ViewModel ugotovi da je danes počitniški
+                                // dan IN status ni bil še nastavljen (WORKOUT_PENDING), samodejno zapiše
+                                // REST_DAY_PENDING v Firestore dailyHistory. S tem midnight worker vidi
+                                // pravilni status in ne kaznuje streaka. Guard preprečuje večkratni klic
+                                // na isti Firestore listener seji.
+                                if (todayIsRestFromPlan
+                                    && metrics.todayStatus == UserDayStatus.WORKOUT_PENDING
+                                    && !restDayPendingDispatchedToday) {
+                                    restDayPendingDispatchedToday = true
+                                    viewModelScope.launch {
+                                        try {
+                                            gamificationUseCase.markRestDayPending()
+                                        } catch (e: Exception) {
+                                            // Tiha napaka — ne ruši UI. Midnight worker ima fallback prek plan check.
+                                            restDayPendingDispatchedToday = false
+                                            android.util.Log.w("BodyModuleHomeVM",
+                                                "markRestDayPending spodletel — worker bo preveril plan neposredno", e)
+                                        }
+                                    }
+                                }
 
                                 // Vgnezdi BodyMetrics kot atomarno stanje — ni razpršenih metrik na top-levelju.
                                 val updatedMetrics = metrics.copy(todayIsRest = todayIsRestFromPlan)

@@ -36,8 +36,13 @@ interface GamificationRepository {
     /**
      * Ozadičen worker (polnoč) reče repositoryju: "Preveri in resetiraj, če manjkajo workouti".
      * ⚠️ Ta metoda analizira SAMO VČERAJŠNJI dan — nikoli ne auto-complete todayja.
+     *
+     * @param yesterdayWasRestDay true = včeraj je bil načrtovan počitniški dan v planu.
+     *   - REST_DAY_PENDING (app bila odprta, raztezanje ni bilo opravljeno) → ni kazni.
+     *   - WORKOUT_PENDING (app ni bila odprta na počitniški dan) → samodejno zaključen
+     *     kot REST_DAY_DONE brez kazni namesto streak reseta.
      */
-    suspend fun runMidnightStreakCheck()
+    suspend fun runMidnightStreakCheck(yesterdayWasRestDay: Boolean = false)
 
     /**
      * Porabi Streak Freeze, če je na voljo.

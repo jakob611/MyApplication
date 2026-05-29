@@ -28,8 +28,10 @@ import kotlinx.datetime.toLocalDateTime
  * Bere podatke iz Firestore (prek FirestoreHelper) in lokalne SharedPrefs (fallback).
  * Wrappira UserProfileManager.getWorkoutStats() logiko v domenski interface.
  *
- * todayIsRest je vedno false — ViewModel izračuna isRestDay iz plan modela
- * (ki je presentation concern, ne domenski concern).
+ * Faza 54 — Anomaly #4 Fix: todayIsRest se zdaj izračuna iz todayStatus:
+ *   REST_DAY_PENDING (app bila odprta na počitniški dan) → true
+ *   REST_DAY_DONE (raztezanje opravljeno) → true
+ *   vse ostalo → false (ViewModel nato nadgradi iz plan modela)
  *
  * @param prefs UserPreferencesRepository za lokalni fallback (SharedPrefs)
  */
@@ -75,7 +77,12 @@ class UserWorkoutStatsRepository(
                 totalWorkoutsCompleted = doc.getLong("total_workouts_completed")?.toInt() ?: 0,
                 lastWorkoutEpoch = doc.getLong("last_workout_epoch") ?: 0L,
                 todayStatus = todayStatus,
-                todayIsRest = false,  // ViewModel izračuna iz plan modela
+                // Faza 54 — Anomaly #4 Fix: todayIsRest se ne hardkodira na false.
+                // REST_DAY_PENDING (app bila odprta) ali REST_DAY_DONE (raztezanje opravljeno)
+                // sta oba veljavna indikatorja počitniškega dneva.
+                // Kadar niti eden ni prisoten, ViewModel to nadgradi iz plan modela.
+                todayIsRest = todayStatus == UserDayStatus.REST_DAY_PENDING
+                           || todayStatus == UserDayStatus.REST_DAY_DONE,
                 dailyKcal = prefs.getDailyCalories().toInt()
             )
         } catch (e: Exception) {
@@ -154,7 +161,12 @@ class UserWorkoutStatsRepository(
                     totalWorkoutsCompleted = snapshot.getLong("total_workouts_completed")?.toInt() ?: 0,
                     lastWorkoutEpoch       = snapshot.getLong("last_workout_epoch") ?: 0L,
                     todayStatus            = todayStatus,
-                    todayIsRest            = false,
+                    // Faza 54 — Anomaly #4 Fix: todayIsRest se ne hardkodira na false.
+                    // REST_DAY_PENDING (app bila odprta) ali REST_DAY_DONE (raztezanje opravljeno)
+                    // sta oba veljavna indikatorja počitniškega dneva.
+                    // Kadar niti eden ni prisoten, ViewModel to nadgradi iz plan modela.
+                    todayIsRest            = todayStatus == UserDayStatus.REST_DAY_PENDING
+                                          || todayStatus == UserDayStatus.REST_DAY_DONE,
                     dailyKcal              = localKcal
                 ))
                 if (r.isFailure) Log.w(TAG, "callbackFlow buffer poln — stats event izgubljen (Firestore emit preskočen)")
