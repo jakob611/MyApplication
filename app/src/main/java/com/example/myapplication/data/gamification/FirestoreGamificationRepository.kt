@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.myapplication.data.UserProfile
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
+import com.example.myapplication.domain.gamification.GamificationUpdateResult
 import com.example.myapplication.domain.model.UserDayStatus
 import com.example.myapplication.data.store.FirestoreHelper
 import com.google.firebase.firestore.SetOptions
@@ -163,16 +164,9 @@ class FirestoreGamificationRepository : GamificationRepository {
     // ─────────────────────────────────────────────────────────────────────────
     // moveToNextDay — SSOT za VSE aktivnostne zaključke (Faza 21)
     //
-    // ENA atomarna Firestore transakcija za:
-    //   ① De-duplikacija (ne prepiše WORKOUT_DONE z nižjo prioriteto)
-    //   ② Streak izračun (epoch-based, Streak Freeze podpora)
-    //   ③ plan_day +1 (samo kadar incrementPlanDay=true)
-    //   ④ XP + Level atomarno
-    //   ⑤ dailyHistory vpis z UserDayStatus.firestoreValue
-    //   ⑥ burnedCalories v dailyLogs (Nutrition bridge)
-    //   ⑦ Faza 34 — CRIT-03: workoutSessionDoc atomarno v workoutSessions (brez ločenega write-a)
-    //
-    // Če transakcija SPODLETI → Room ni posodobljena (callerji prejmejo -1).
+    // BP-3 / BP-4 Fix: Vrne Result<GamificationUpdateResult> namesto Int.
+    // Transakcija vrne DEJANSKI newStreak + newPlanDay (brani iz Firestore snapshot-a).
+    // Ni več tihega -1 return-a ob napaki — Result.failure propagira napako navzgor.
     // ─────────────────────────────────────────────────────────────────────────
     override suspend fun moveToNextDay(
         newStatus: UserDayStatus,
@@ -181,21 +175,25 @@ class FirestoreGamificationRepository : GamificationRepository {
         caloriesBurned: Double,
         incrementPlanDay: Boolean,
         workoutSessionDoc: Map<String, Any>?
-    ): Int {
-        // Samo zaključitveni statusi so dovoljeni
+    ): Result<GamificationUpdateResult> {
+        // Samo zaključitveni statusi so dovoljeni (programska napaka → throw direktno)
         require(newStatus.isDoneToday) {
             "moveToNextDay zahteva zaključitveni status (WORKOUT_DONE, REST_DAY_DONE, REST_WORKOUT_DONE)."
         }
 
-        val userRef    = FirestoreHelper.getCurrentUserDocRef() ?: return 0
+        val userRef = FirestoreHelper.getCurrentUserDocRef()
+            ?: return Result.failure(
+                IllegalStateException("Uporabnik ni prijavljen — moveToNextDay zahteva veljavno sejo.")
+            )
         val todayStr   = getTodayStr()
         val todayEpoch = getTodayEpoch()
         val nowMillis  = Clock.System.now().toEpochMilliseconds()
 
         return try {
-            // Faza 34 — CRIT-03 Fix: Transakcija neposredno vrne Int kot rezultat (ne prek externalne
-            // mutable var `resultStreak`). Odpravi race condition ob retry-prone transakcijah.
-            val resultStreak: Int = db.runTransaction { transaction ->
+            // BP-4 Fix: Transakcija direktno vrne GamificationUpdateResult — ne Int.
+            // .await() na Task<GamificationUpdateResult> → null ob neričakovani null transakciji
+            // → IllegalStateException namesto tihega nadaljevanja.
+            val gamResult: GamificationUpdateResult = db.runTransaction { transaction ->
                 // ── READ faza ─────────────────────────────────────────────
                 val snapshot = transaction.get(userRef)
 
@@ -203,22 +201,26 @@ class FirestoreGamificationRepository : GamificationRepository {
                 val dailyHistory   = (snapshot.get("dailyHistory") as? Map<String, Any>) ?: emptyMap()
                 val existingStatus = UserDayStatus.fromFirestore(dailyHistory[todayStr]?.toString())
 
-                // De-dup: WORKOUT_DONE je najvišja prioriteta, ne prepiši ga
+                // De-dup: WORKOUT_DONE je najvišja prioriteta, ne prepiši ga.
+                // BP-3 Fix: vrni DEJANSKE vrednosti iz Firestore (ne 0 ali Int za lokalni izračun).
                 if (existingStatus == UserDayStatus.WORKOUT_DONE || existingStatus == newStatus) {
                     Log.d("GamificationRepo", "moveToNextDay: $todayStr že '$existingStatus' — de-dup preskoček.")
-                    return@runTransaction snapshot.getLong("streak_days")?.toInt() ?: 0
+                    return@runTransaction GamificationUpdateResult(
+                        newStreak  = snapshot.getLong("streak_days")?.toInt() ?: 0,
+                        newPlanDay = (snapshot.getLong("plan_day") ?: 1L).toInt()
+                    )
                 }
 
-                val oldStreak     = (snapshot.getLong("streak_days")         ?: 0L).toInt()
-                val oldLastEpoch  =  snapshot.getLong("last_activity_epoch") ?: 0L
-                val oldPlanDay    = (snapshot.getLong("plan_day")            ?: 1L).toInt()
-                val oldFreezes    = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
-                val currentXp     = (snapshot.getLong("xp")                  ?: 0L).toInt()
+                val oldStreak    = (snapshot.getLong("streak_days")         ?: 0L).toInt()
+                val oldLastEpoch =  snapshot.getLong("last_activity_epoch") ?: 0L
+                val oldPlanDay   = (snapshot.getLong("plan_day")            ?: 1L).toInt()
+                val oldFreezes   = (snapshot.getLong("streak_freezes")      ?: 0L).toInt()
+                val currentXp    = (snapshot.getLong("xp")                  ?: 0L).toInt()
 
                 // Burned calories za Nutrition bridge
                 // FIX Faza 46: user-scoped pot namesto globalnega db.collection("dailyLogs")
-                val dailyLogRef = userRef.collection("dailyLogs").document(todayStr)
-                val logSnapshot = if (caloriesBurned > 0.0) transaction.get(dailyLogRef) else null
+                val dailyLogRef  = userRef.collection("dailyLogs").document(todayStr)
+                val logSnapshot  = if (caloriesBurned > 0.0) transaction.get(dailyLogRef) else null
                 val existingCals = (logSnapshot?.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
 
                 // ── Streak izračun ─────────────────────────────────────────
@@ -238,6 +240,8 @@ class FirestoreGamificationRepository : GamificationRepository {
                 }
 
                 // ── Plan day napredovanje ──────────────────────────────────
+                // BP-3 Fix: newPlanDay se izračuna iz SVEŽEGA oldPlanDay (Firestore snapshot),
+                // ne iz parametra currentPlanDay (ki je lahko zastarelo UI stanje).
                 val newPlanDay = if (incrementPlanDay) oldPlanDay + 1 else oldPlanDay
 
                 // ── XP + Level ─────────────────────────────────────────────
@@ -277,28 +281,30 @@ class FirestoreGamificationRepository : GamificationRepository {
                 }
 
                 // Faza 34 — CRIT-03: Atomarni zapis workout session dokumenta.
-                // Oba zapisa (gamification + seja) sta v isti transakciji → all-or-nothing.
                 if (workoutSessionDoc != null) {
                     val sessionRef = userRef.collection("workoutSessions").document()
                     transaction.set(sessionRef, workoutSessionDoc)
                 }
 
-                // Faza 34 — CRIT-03 Fix: Popravljeni log prehoda streak=$oldStreak→$newStreak
                 Log.d("GamificationRepo",
                     "✅ moveToNextDay [$newStatus]: streak=$oldStreak→$newStreak, " +
                     "planDay=$oldPlanDay→$newPlanDay, xp=+$xpToBeAwarded(→$newXp), " +
                     "level=$newLevel, cals=$caloriesBurned, freezeUsed=${newFreezes != oldFreezes}, " +
                     "workoutDocSaved=${workoutSessionDoc != null}")
 
-                newStreak  // atomarni return vrednosti iz transakcije (ne prek var)
-            }.await() ?: 0
-            resultStreak
+                // BP-3 / BP-4 Fix: Vrne GamificationUpdateResult z DEJANSKIMI vrednostmi —
+                // ne samo newStreak (Int). ViewModel zdaj ve kaj je Firestore dejansko zapisal.
+                GamificationUpdateResult(newStreak = newStreak, newPlanDay = newPlanDay)
+            }.await()
+                ?: throw IllegalStateException("Firestore transaction failed to mutate gamification metrics")
+
+            Result.success(gamResult)
         } catch (e: Exception) {
             Log.e("GamificationRepo", "❌ moveToNextDay spodletel: ${e.message}", e)
-            // Faza 31.6 avdit: vrnemo -1 (ne 0) kot ekspliciten signal napake.
-            // 0 je legitimna vrednost de-dup preskakovanj; -1 nedvoumno pomeni "Firestore je spodletel".
-            // VM preverja `takeIf { it > 0 }` → -1 bo pravilno filtiran kot napaka.
-            -1
+            // BP-4 Fix: Result.failure propagira napako navzgor (ne -1).
+            // ManageGamificationUseCase.getOrThrow() remeče izjemo →
+            // UpdateBodyMetricsUseCase → Result.failure → VM Snackbar.
+            Result.failure(e)
         }
     }
 

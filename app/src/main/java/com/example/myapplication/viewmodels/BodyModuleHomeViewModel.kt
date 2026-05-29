@@ -774,8 +774,13 @@ class BodyModuleHomeViewModel(
                             _streakUpdatedEvent.emit(StreakUpdateEvent(newStreak = newStreak))
                             intent.onCompletion(completionResult)
                         } else {
-                            // Faza 32.4/32.6 — Napaka → direktni send() brez nested launch.
-                            val msg = result.exceptionOrNull()?.localizedMessage ?: "Unknown Error"
+                            // BP-4 Fix: result.isFailure se zdaj pravilno sproži ob Firestore napaki
+                            // (prej je bil moveToNextDay() tiho vrnil -1 → Result.success).
+                            // UI state NI posodobljen (ni optimistične posodobitve) → ni rollback potreben.
+                            val exception = result.exceptionOrNull()
+                            val msg = exception?.message
+                                ?.takeIf { it.isNotBlank() }
+                                ?: "Napredek ni bil shranjen — preverite internetno povezavo in poskusite znova."
                             _uiEvent.send(BodyUiEvent.ShowSnackbar(msg))
                             intent.onCompletion(null)
                         }

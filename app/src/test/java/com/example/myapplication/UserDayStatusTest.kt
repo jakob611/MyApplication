@@ -2,6 +2,7 @@ package com.example.myapplication
 
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
+import com.example.myapplication.domain.gamification.GamificationUpdateResult
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.model.UserDayStatus
 import kotlinx.coroutines.runBlocking
@@ -36,6 +37,8 @@ class UserDayStatusTest {
 
         var currentStreak = initialStreak
             private set
+        var currentPlanDay = 1
+            private set
         var planDayWasIncremented = false
             private set
         var lastWrittenStatus: UserDayStatus? = null
@@ -51,14 +54,16 @@ class UserDayStatusTest {
             caloriesBurned: Double,
             incrementPlanDay: Boolean,
             workoutSessionDoc: Map<String, Any>?  // Faza 34 — CRIT-03: atomarni workout session
-        ): Int {
+        ): Result<GamificationUpdateResult> {
             moveCallCount++
-            if (throwOnNextDay) throw RuntimeException("Simulirana Firestore transakcijska napaka")
+            // BP-4 Fix: vrne Result.failure namesto direktnega throw —
+            // ManageGamificationUseCase.getOrElse { throw it } bo napako propagiral navzgor.
+            if (throwOnNextDay) return Result.failure(RuntimeException("Simulirana Firestore transakcijska napaka"))
             // Posnemi realno logiko: streak++ samo za contributesToStreak statuse
             if (newStatus.contributesToStreak) currentStreak++
-            if (incrementPlanDay) planDayWasIncremented = true
+            if (incrementPlanDay) { currentPlanDay++; planDayWasIncremented = true }
             lastWrittenStatus = newStatus
-            return currentStreak
+            return Result.success(GamificationUpdateResult(newStreak = currentStreak, newPlanDay = currentPlanDay))
         }
 
         override suspend fun awardXP(amount: Int, reason: String) { /* no-op */ }

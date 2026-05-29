@@ -6,11 +6,26 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 /**
+ * Rezultat atomarne Firestore transakcije moveToNextDay().
+ *
+ * Vsebuje DEJANSKE vrednosti, ki so bile zapisane v Firestore — ne lokalne ocene.
+ * ViewModel mora zaupati IZKLJUČNO tem vrednostim za optimistično UI posodobitev.
+ *
+ * BP-3 / BP-4 Fix: Odpravlja lokalni newPlanDay izračun v UseCase in tiho -1 napako v repozitoriju.
+ */
+data class GamificationUpdateResult(
+    /** Novi streak po transakciji (kot ga je Firestore dejansko zapisal). */
+    val newStreak: Int,
+    /** Novi plan_day po transakciji (kot ga je Firestore dejansko zapisal). */
+    val newPlanDay: Int
+)
+
+/**
  * Rezultat zaključenega workout-a.
  * unlockedBadges: seznam badge ID-jev (ne Badge objektov — brez data layer odvisnosti).
  *
  * Faza 23: newStreakDays propagiran iz moveToNextDay() → ViewModel ne rabi dodatnega Firestore read-a.
- * newPlanDay: novi plan_day po zaključku (ali enako staro, če extra/rest).
+ * newPlanDay: novi plan_day po zaključku (dejanska vrednost iz Firestore transakcije, ne lokalna ocena).
  */
 data class WorkoutCompletionResult(
     val unlockedBadges: List<String> = emptyList(),
@@ -73,22 +88,24 @@ class ManageGamificationUseCase(
         val xpReason       = if (isRestDay) "REST_WORKOUT_COMPLETE" else "WORKOUT_COMPLETE"
         val shouldIncrement = incrementPlanDay && !isRestDay
 
-        val newStreak = repository.moveToNextDay(
+        // BP-3 / BP-4 Fix: getOrElse { throw it } propagira Firestore napako navzgor (ne vrne tihega -1).
+        // gamResult vsebuje DEJANSKI newStreak in newPlanDay, ki ju je Firestore zapisal —
+        // brez lokalnega ugibanja (oldPlanDay + 1).
+        val gamResult = repository.moveToNextDay(
             newStatus        = newStatus,
             xpToBeAwarded    = totalXP,
             xpReason         = xpReason,
             caloriesBurned   = caloriesBurned,
             incrementPlanDay = shouldIncrement,
-            workoutSessionDoc = workoutSessionDoc  // Faza 34: atomarni passthrough
-        )
-        val newPlanDay = if (shouldIncrement && currentPlanDay > 0) currentPlanDay + 1 else currentPlanDay
+            workoutSessionDoc = workoutSessionDoc
+        ).getOrElse { throw it }  // remeče → ujeto v UpdateBodyMetricsUseCase.invoke() → Result.failure
 
         return WorkoutCompletionResult(
             unlockedBadges = emptyList(),
             xpAwarded      = totalXP,
             isCritical     = isCritical,
-            newStreakDays  = newStreak,
-            newPlanDay     = newPlanDay
+            newStreakDays  = gamResult.newStreak,
+            newPlanDay     = gamResult.newPlanDay  // dejanska vrednost iz Firestore, ne lokalni izračun
         )
     }
 
@@ -145,22 +162,15 @@ class ManageGamificationUseCase(
             return repository.getCurrentStreak()
         }
 
-        // REST_DAY_DONE = streak+1, plan_day nespremenjen, +10 XP
-        val newStreak = repository.moveToNextDay(
+        // BP-4 Fix: getOrElse { throw it } propagira Firestore napako navzgor → CompleteRestDay catch
+        // blok v ViewModel-u prikaže Snackbar. Ni več tihega -1 / 0 return-a ob napaki.
+        return repository.moveToNextDay(
             newStatus      = UserDayStatus.REST_DAY_DONE,
             xpToBeAwarded  = 10,
             xpReason       = "REST_DAY",
             caloriesBurned = 0.0,
             incrementPlanDay = false
-        )
-        // Faza 32.9 — BUG-04 Fix: De-dup (newStreak==0) ne pokliče getCurrentStreak()
-        // z nevarnim getOrDefault(0). Namesto tega vrnemo newStreak direktno:
-        //   newStreak > 0 → uspešna posodobitev, vrnemo jo
-        //   newStreak == 0 → de-dup (dan je bil že zaključen), vrnemo 0 →
-        //     ViewModel-ov takeIf { it > 0 } bo padel na fallback iz current.streakDays
-        //   newStreak == -1 → Firestore napaka, vrnemo -1 →
-        //     ViewModel-ov takeIf { it > 0 } bo pravilno filtiral
-        return newStreak
+        ).getOrElse { throw it }.newStreak
     }
 
     /** Worker (ob polnoči) pozove streak check za včerajšnji dan. */

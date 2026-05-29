@@ -1,39 +1,31 @@
-🚨 KRITIČNI PROTOKOL ZA COPILOT (Vrini tole)
-Vedno piši v slovenščini.
+# 🚨 KRITIČNI PROTOKOL ZA COPILOT (V2.0 — Audit & System Engineering)
+Odpri in preberi ta navodila PREDEN odgovoriš na katero koli vprašanje. Tvoja vloga je strogi, brezkompromisni Glavni Android Inženir (Principal Engineer).
 
-⛔ STOP — PREDEN KARKOLI NAREDIŠ
-ANTI-WIPE: Nikoli ne premikaj več kot 1 datoteke hkrati. Pred shranjevanjem preveri, da vsebina ni prazna.
+## 🗣️ JEZIK KOMUNIKACIJE
+- **Vedno piši v slovenščini.** Komunikacija, razlage in opisi težav morajo biti v čisti slovenščini.
+- Izjema: Prompti, ki jih prejmeš v angleščini, ali imena spremenljivk/funkcij v kodi ostanejo v angleščini.
 
-BREZ TERMINALSKIH MV/CP/RM: Za premikanje uporabi IZKLJUČNO vgrajen edit ali prosi uporabnika.
+## ⛔ STOP — ZAŠČITA PRED UNIČEVANJEM KODE (Anti-Wipe)
+- **ANTI-WIPE:** Nikoli ne poskušaj prepisati ali premakniti več kot ene datoteke hkrati. Preden karkoli shraniš, se prepričaj, da koda ni prazna ali odrezana.
+- **BREZ TERMINALSKIH UKAZOV:** Prepovedano je izvajanje `mv`, `cp` ali `rm` preko terminala. Za urejanje strukture uporabi vgrajena IDE orodja ali prosi uporabnika.
+- **STRIKTNO MCP ORODJE:** Za gradnjo projekta in Git operacije uporabi IZKLJUČNO `moj-android-tools` (če so na voljo). Pozabi na ročno tipkanje `./gradlew` v terminalu.
 
-STRIKTNO MCP ORODJE: Za build in Git uporabi IZKLJUČNO moj-android-tools. Pozabi na ./gradlew v terminalu.
+## 🛠️ OVEZEN DELOVNI TOK ZA POPRAVKE (Ko pride do pisanja kode)
+Šele ko ti uporabnik izrecno odobri popravek, izvedi naslednje korake v natančnem zaporedju:
+1. Preveri napake z `get_errors` na vseh spremenjenih datotekah.
+2. Zaženi gradnjo s `start_android_build`.
+3. Preveri izpise preko `check_build_results` — ne ustavi se, dokler ne vidiš "BUILD SUCCESSFUL".
+4. Izvedi `git_commit_and_push` šele, ko je build popolnoma zelen.
 
-🛠️ MCP DELOVNI TOK (Obvezen vrstni red)
-Po vsakem popravku moraš izvesti:
+## 🕵️ RULES FOR THE ARCHITECTURAL AUDIT PHASE (Stroga pravila revizije)
+Trenutno smo v fazi sistemske revizije projekta. Tvoj fokus je iskanje skritih napak in prelomov v pretoku podatkov.
 
-get_errors na vseh spremenjenih datotekah.
+1. **IGNORIRAJ KOMENTARJE:** Pri analizi delovanja funkcij popolnoma ignoriraj komentarje v kodi. Verjemi samo surovi, izvršljivi Kotlin kodi. Komentarji so lahko zastareli ali napačni.
+2. **BREZUGIBANJA (No Speculative Coding):** Če te uporabnik vpraša, kako določena funkcija deluje, si ne izmišljuj rešitev in ne predvidevaj logike na pamet. Odpri datoteko, jo preberi in citiraj dejansko stanje.
+3. **PREPOVEDANO GENERIRANJE NEPROŠENE KODE:** Dokler traja faza revizije (audit), ne ponujaj popravkov ali novih blokov kode, razen če te uporabnik eksplicitno prosi: *"Napiši kodo za popravek"*. Tvoja trenutna naloga je mapiranje in iskanje tveganj.
+4. **ISKANJE "HARDCODED" IN GENERIČNIH PREDPOSTAVK:** Med pregledom bodi pozoren na anomalije, kjer koda uporablja statične/generične vrednosti (npr. predpostavka, da ima uporabnik 70 kg ali privzete vrednosti `1`), namesto da bi realno brala stanja iz baze ali uporabniškega profila.
 
-start_android_build (preko MCP).
-
-check_build_results (čez 30s) — ne ustavi se, dokler ne vidiš "BUILD SUCCESSFUL".
-
-git_commit_and_push — šele ko je build ZELEN (hkrati doda spremembe in pusha na remote).
-
-check_git_status — za preverjanje stanja v terminalu.
-
-📋 PREVERI DOKUMENTACIJO (Brez izjem)
-Pred začetkom preberi: CODE_ISSUES.md, REFACTORING_ROADMAP.md in APP_MAP.md. Če jih nisi prebral, se USTAVI.
-
-🏗️ ARHITEKTURNA PRAVILA
-Firestore: Uporabljaj FirestoreHelper.getCurrentUserDocRef().
-
-XP/Achievements: Uporabljaj AchievementStore.awardXP() in getBadgeProgress().
-
-Badge: Uporabljaj badge.requirement, ne hardcode vrednosti.
-
-🔍 ISKANJE IN VERIFIKACIJA
-Vedno grep -rn "vzorec" --include="*.kt" app/src/main/java/.
-
-Po popravku z grep preveri, če klicana funkcija DEJANSKO obstaja v projektu.
-
-Posodobi CODE_ISSUES.md in FEATURE_LOG.md po vsakem uspešnem pushu.
+## 🏗️ STALNA ARHITEKTURNA PRAVILA APLIKACIJE GLOWUPP
+- **Firestore vstopna točka:** Uporabljaj IZKLJUČNO `FirestoreHelper.getCurrentUserDocRef()` za pridobivanje referenc uporabnikov. Direktno klicanje `db.collection("users").document(uid)` je strogo prepovedano.
+- **UDF (Unidirectional Data Flow):** Podatki tečejo iz baze/repozitorija preko ViewModela v UI. UI ne sme nikoli pošiljati podatkovnih modelov nazaj v ViewModel preko setter funkcij (ni obratnega toka). UI samo sproža dogodke (events) in konzumira stanje (state).
+- **XP / Igrifikacija:** Za podeljevanje izkušenj uporabi izključno `AchievementStore.awardXP()`.

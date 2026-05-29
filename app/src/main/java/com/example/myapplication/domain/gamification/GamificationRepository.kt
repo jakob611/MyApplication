@@ -77,12 +77,12 @@ interface GamificationRepository {
     //   ⑥ Porabljene kalorije v dailyLogs (Nutrition bridge)
     //   ⑦ Faza 34 — CRIT-03: Atomarni zapis workoutSessionDoc v workoutSessions
     //
-    // Logika glede na [newStatus]:
-    //   WORKOUT_DONE     → streak+1, plan_day+1 (če incrementPlanDay=true)
-    //   REST_WORKOUT_DONE → streak ohranjen, plan_day nespremenjen
-    //   REST_DAY_DONE    → streak+1, plan_day nespremenjen
+    // BP-3 / BP-4 Fix: Vrne Result<GamificationUpdateResult> z DEJANSKIM newStreak IN
+    // newPlanDay iz Firestore transakcije. Odstranjuje lokalni newPlanDay izračun v UseCase.
+    // Result.failure → UseCase getOrThrow() → UpdateBodyMetricsUseCase → VM Snackbar.
     //
-    // @return Novi streak po transakciji (0 ob napaki ali de-dup preskoček).
+    // @return Result.success z GamificationUpdateResult (dejanski DB vrednosti)
+    //         Result.failure z Exception (mrežna napaka, Firestore napaka, itd.)
     // ─────────────────────────────────────────────────────────────────────────
     suspend fun moveToNextDay(
         newStatus: UserDayStatus,
@@ -97,5 +97,5 @@ interface GamificationRepository {
          * Zagotavlja, da gamification posodobitev IN zapis seje uspeta ali propadeta skupaj.
          */
         workoutSessionDoc: Map<String, Any>? = null
-    ): Int
+    ): Result<GamificationUpdateResult>
 }

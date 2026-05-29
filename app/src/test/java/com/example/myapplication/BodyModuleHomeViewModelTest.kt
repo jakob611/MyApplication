@@ -5,6 +5,7 @@ import com.example.myapplication.domain.model.UserProfile
 import com.example.myapplication.domain.auth.AuthStateRepository
 import com.example.myapplication.domain.gamification.GamificationRepository
 import com.example.myapplication.domain.gamification.GamificationState
+import com.example.myapplication.domain.gamification.GamificationUpdateResult
 import com.example.myapplication.domain.gamification.ManageGamificationUseCase
 import com.example.myapplication.domain.model.BodyMeasurementEntry
 import com.example.myapplication.domain.model.DomainException
@@ -144,7 +145,8 @@ class BodyModuleHomeViewModelTest {
             caloriesBurned: Double,
             incrementPlanDay: Boolean,
             workoutSessionDoc: Map<String, Any>?
-        ): Int = 1
+        ): Result<GamificationUpdateResult> =
+            Result.success(GamificationUpdateResult(newStreak = 1, newPlanDay = 1))
     }
 
     /**
