@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.myapplication.data.gamification.GamificationFactory
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import java.time.LocalDateTime
@@ -21,9 +22,10 @@ class WeeklyStreakWorker(
         val email = Firebase.auth.currentUser?.email ?: return Result.success()
         Log.d(TAG, "Daily streak check running for $email")
         try {
-            val repository = com.example.myapplication.data.gamification.FirestoreGamificationRepository()
-            val useCase = com.example.myapplication.domain.gamification.ManageGamificationUseCase(repository)
-            useCase.executeMidnightStreakCheck()
+            // DI FIX: GamificationFactory.provide(context) vrne obstoječo singleton instanco
+            // ManageGamificationUseCase namesto direktne instantiacije FirestoreGamificationRepository().
+            // Preprečuje duplikatne Firestore listenerje in kršitev singleton pattern-a.
+            GamificationFactory.provide(context).executeMidnightStreakCheck()
             Log.d(TAG, "Midnight streak check completed successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error executing midnight streak check.", e)

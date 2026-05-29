@@ -13,10 +13,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.MainActivity
-import com.example.myapplication.data.settings.UserProfileManager
 import com.example.myapplication.data.settings.UserLocalStore
 import com.example.myapplication.data.store.FirestoreHelper
-import com.example.myapplication.data.repository.FirestoreWorkoutRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
@@ -146,12 +144,30 @@ class StreakReminderWorker(
         }
 
         // --- 3. PREBERI PODATKE O VADBI IN STREAKU IZ FIRESTORE (ne bm_prefs) ---
-        val workerStats = UserProfileManager.getWorkoutStats(email)
-        val lastWorkoutEpoch = workerStats?.get("last_workout_epoch") as? Long ?: 0L
+        // SSOT FIX: Direktno branje iz FirestoreHelper.getCurrentUserDocRef() namesto legacy
+        // UserProfileManager.getWorkoutStats() klica, ki je bil posredni vmesni sloj z molčečim
+        // catch { null } in nepotrebno odvisnostjo od settings sloja za gamification podatke.
+        // Zajemamo uid ENKRAT tukaj in ne kličemo getCurrentUserDocId() večkrat (race condition guard).
+        val uid = FirestoreHelper.getCurrentUserDocId()
+        if (uid == null) {
+            Log.w(TAG, "UID ni na voljo med opomnikovim izvajanjem — preskočena seja.")
+            scheduleForTomorrow()
+            return Result.success()
+        }
+
+        val userDocSnapshot = try {
+            FirestoreHelper.getCurrentUserDocRef().get().await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Napaka pri branju user doc iz Firestore: ${e.message}")
+            scheduleForTomorrow()
+            return Result.success()
+        }
+
+        val lastWorkoutEpoch = userDocSnapshot.getLong("last_workout_epoch") ?: 0L
         val workoutDoneToday = if (lastWorkoutEpoch == 0L) false
             else LocalDate.ofEpochDay(lastWorkoutEpoch) == LocalDate.now()
-        val currentStreak = workerStats?.get("streak_days") as? Int ?: 0
-        val planDay = workerStats?.get("plan_day") as? Int ?: 1
+        val currentStreak = userDocSnapshot.getLong("streak_days")?.toInt() ?: 0
+        val planDay = userDocSnapshot.getLong("plan_day")?.toInt() ?: 1
 
         // today_is_rest: preveri iz Firestore plana (ne bm_prefs ki tega nikoli ni zanesljivo shranil)
         val todayIsRest = checkTodayIsRestFromFirestore(planDay)
@@ -219,21 +235,19 @@ class StreakReminderWorker(
         var consumedCalories = 0
         var burnedCalories = 0
 
-        // Preberi iz Firestore dailyLogs (offline-safe — Firestore SDK cache)
-        val uid = FirestoreHelper.getCurrentUserDocId()
-        if (uid != null) {
-            try {
-                val db = FirestoreHelper.getDb()
-                val doc = db.collection("users").document(uid)
-                    .collection("dailyLogs").document(dateKey)
-                    .get().await()
-                waterMl          = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
-                consumedCalories = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
-                burnedCalories   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
-                Log.d(TAG, "Firestore dailyLog [$dateKey]: water=$waterMl, consumed=$consumedCalories, burned=$burnedCalories")
-            } catch (e: Exception) {
-                Log.e(TAG, "Napaka pri branju dailyLog iz Firestore: ${e.message}")
-            }
+        // SSOT FIX: FirestoreHelper.getCurrentUserDocRef() namesto prepovedanega
+        // db.collection("users").document(uid) vzorca. Pokliče se znotraj try-catch,
+        // zato auth state sprememba (sign-out med worker izvajanjem) ne povzroči crasha.
+        try {
+            val doc = FirestoreHelper.getCurrentUserDocRef()
+                .collection("dailyLogs").document(dateKey)
+                .get().await()
+            waterMl          = (doc.get("waterMl")          as? Number)?.toInt() ?: 0
+            consumedCalories = (doc.get("consumedCalories") as? Number)?.toInt() ?: 0
+            burnedCalories   = (doc.get("burnedCalories")   as? Number)?.toInt() ?: 0
+            Log.d(TAG, "Firestore dailyLog [$dateKey]: water=$waterMl, consumed=$consumedCalories, burned=$burnedCalories")
+        } catch (e: Exception) {
+            Log.e(TAG, "Napaka pri branju dailyLog iz Firestore: ${e.message}")
         }
 
         val email = Firebase.auth.currentUser?.email
