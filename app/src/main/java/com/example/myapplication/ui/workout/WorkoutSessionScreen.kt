@@ -3,6 +3,7 @@ package com.example.myapplication.ui.workout
 import android.app.Application
 import com.example.myapplication.domain.model.PlanResult
 import android.content.Context
+import com.example.myapplication.ui.screens.MyViewModelFactory
 import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -174,7 +175,11 @@ fun WorkoutSessionScreen(
     // Replaced ExerciseCache
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { AdvancedExerciseRepository.init(context.assets.open("exercises.json").bufferedReader().use { it.readText() }) } }
 
-    val vm: BodyModuleHomeViewModel = viewModel(factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as Application))
+    // BP-1 FIX: Uporablja MyViewModelFactory namesto AndroidViewModelFactory, ki ne zna
+    // konstruirati BodyModuleHomeViewModel (ni AndroidViewModel, zahteva DI parametre).
+    // MyViewModelFactory vrne obstoječo instanco iz Activity ViewModelStore (isti scope
+    // kot BodyModuleHomeScreen), brez ponovnega konstruiranja.
+    val vm: BodyModuleHomeViewModel = viewModel(factory = MyViewModelFactory(context))
     // ✅ Firestore SSOT: collectiramo state enkrat za celoten composable
     val vmUiState by vm.ui.collectAsState()
 
@@ -410,7 +415,10 @@ fun WorkoutSessionScreen(
         workoutVm.prepareWorkout(
             focusAreas         = dailyFocus,
             equipment          = equipment,
-            planDay            = (vmUiState.metrics?.planDay ?: 1).coerceAtLeast(1),
+            // BP-2 FIX: planDay vzet iz loadedUiState (Firestore-potrjen snapshot, že počakan
+            // z vm.ui.filter { !it.isLoading }.first() zgoraj), NE iz vmUiState (Compose State
+            // ki lahko zaostaja za flow emisijo pri suspension točki).
+            planDay            = (loadedUiState.metrics?.planDay ?: 1).coerceAtLeast(1),
             exerciseCount      = (currentPlan.sessionLength / 4).coerceAtLeast(4).coerceAtMost(15),
             durationMinutes    = currentPlan.sessionLength,
             targetDifficulty   = targetDifficulty,
@@ -452,7 +460,24 @@ fun WorkoutSessionScreen(
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
         when (val s = state) {
             is WorkoutState.Loading -> {
-                CircularProgressIndicator()
+                // BP-2 Skeleton Guard: blokira interakcijo dokler Firestore metrics niso naloženi.
+                // vmUiState.isLoading == true = čakamo Firestore snapshot.
+                // vmUiState.isLoading == false, metrics == null = Firestore ni vrnil podatkov.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    CircularProgressIndicator()
+                    if (vmUiState.isLoading && vmUiState.metrics == null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Loading training data...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             is WorkoutState.Error -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
