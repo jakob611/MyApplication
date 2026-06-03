@@ -50,7 +50,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.domain.model.ActivityType
 import com.example.myapplication.domain.model.LocationPoint
-import com.example.myapplication.data.daily.DailyLogRepository
+import com.example.myapplication.domain.model.ProfileConstants
 import com.example.myapplication.data.settings.UserPreferencesRepository
 import com.example.myapplication.domain.run.MapboxMapMatcher
 import com.example.myapplication.data.store.FirestoreHelper
@@ -63,8 +63,8 @@ import com.example.myapplication.viewmodels.BodyHomeIntent
 import com.example.myapplication.ui.theme.UppColors
 import com.example.myapplication.viewmodels.BodyModuleHomeViewModel
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.Query
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -79,67 +79,13 @@ import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 
 /**
- * Izračun kalorij z MET formulo:
- *   kcal = MET × težaKg × čas_v_urah
- * Doda pribitek za vzpon: ~1 kcal/m vzpona (standardna ocena).
+ * K-3 Fix: calculateCaloriesMet() ODSTRANJENA iz UI plasti.
+ * Kalorije se zdaj izračunavajo IZKLJUČNO prek RunTrackerViewModel.calculateLiveCalories()
+ * in RunTrackerViewModel.saveCurrentRunSession() → CalculateRunCaloriesUseCase.
+ * Screen ne vsebuje nobene poslovne logike za energetske izračune.
  */
-private fun calculateCaloriesMet(
-    activityType: ActivityType,
-    durationSeconds: Long,
-    weightKg: Double,
-    elevationGainM: Float,
-    avgSpeedKmh: Float
-): Int {
-    // 1. Omejimo nerealne hitrosti do 35 km/h za tek (GPS skoki)
-    val safeSpeed = avgSpeedKmh.coerceIn(0f, 35f)
-
-    // Prilagodi MET glede na hitrost z linearno interpolacijo,
-    // da preprečimo stopničaste "GPS skoke" ki umetno dvignejo MET.
-    val met = when (activityType) {
-        ActivityType.RUN -> when {
-            safeSpeed < 4f  -> safeSpeed // Linearno od 0 do 4
-            safeSpeed < 8f  -> 4.0 + (safeSpeed - 4f) * 0.5 // 4 do 6
-            safeSpeed < 10f -> 6.0 + (safeSpeed - 8f) * 1.0 // 6 do 8
-            safeSpeed < 12f -> 8.0 + (safeSpeed - 10f) * 1.0 // 8 do 10
-            safeSpeed < 14f -> 10.0 + (safeSpeed - 12f) * 0.75 // 10 do 11.5
-            else            -> 11.5 + (safeSpeed - 14f) * 0.4
-        }
-        ActivityType.WALK -> when {
-            safeSpeed < 3f -> 2.0 + (safeSpeed / 3f) * 0.5 // do 2.5
-            safeSpeed < 5f -> 2.5 + (safeSpeed - 3f) * 0.5 // 2.5 do 3.5
-            safeSpeed < 7f -> 3.5 + (safeSpeed - 5f) * 0.5 // 3.5 do 4.5
-            else           -> 4.5 + (safeSpeed - 7f) * 0.3
-        }
-        ActivityType.SPRINT -> when {
-            safeSpeed < 10f -> 8.0
-            safeSpeed < 16f -> 8.0 + (safeSpeed - 10f) * 0.83 // 8 do 13
-            safeSpeed < 20f -> 13.0 + (safeSpeed - 16f) * 0.75 // 13 do 16
-            else            -> 16.0 + (safeSpeed - 20f) * 0.5
-        }
-        ActivityType.HIKE -> 6.0 + (elevationGainM / 100f) * 0.5 // Base 6.0 + gain
-        ActivityType.CYCLING -> when {
-            safeSpeed < 15f -> 4.0
-            safeSpeed < 20f -> 6.0
-            safeSpeed < 25f -> 8.0
-            else            -> 10.0
-        }
-        else -> 5.0
-    }.toDouble()
-
-    // 2. Trajanje v urah
-    val hours = durationSeconds / 3600.0
-    // 3. Težo omejimo med 30kg in 200kg zaradi napak v profilu
-    val safeWeight = weightKg.coerceIn(30.0, 200.0)
-
-    val base = met * safeWeight * hours
-    // Vzpon: ~0.8 kcal/m za povprečno težo 70 kg, skalira z dejansko težo. Omejen poskok GPS baz (max 2000m na log).
-    val safeElevation = elevationGainM.coerceIn(0f, 2000f)
-    val elevBonus = safeElevation * 0.8 * (safeWeight / 70.0)
-    return (base + elevBonus).toInt().coerceAtLeast(0)
-}
 
 private fun calculateXP(activityType: ActivityType, distanceMeters: Double, timeSeconds: Long): Int {
     val baseFromDistance = distanceMeters / 100.0
@@ -193,7 +139,6 @@ fun RunTrackerScreen(onBack: () -> Unit) {
     var showGpsDialog by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showSummary by remember { mutableStateOf(false) }
-    var isSavingActivity by remember { mutableStateOf(false) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
     var isMapFollowingTarget by remember { mutableStateOf(true) }
     var finalDistance by remember { mutableStateOf(0.0) }
@@ -202,13 +147,17 @@ fun RunTrackerScreen(onBack: () -> Unit) {
     var finalAvgSpeed by remember { mutableStateOf(0f) }
     var finalElevationGain by remember { mutableStateOf(0f) }
     var finalElevationLoss by remember { mutableStateOf(0f) }
-    var actualWeightKg by remember { mutableStateOf(70.0) }
-    var userDocRef by remember { mutableStateOf<DocumentReference?>(null) }
+    // V-3 Fix: DEFAULT_WEIGHT_KG (75.0 — WHO median) namesto hardcoded 70.0
+    var actualWeightKg by remember { mutableStateOf(ProfileConstants.DEFAULT_WEIGHT_KG) }
+    // Pre-loaded iz Firestore — posredovano v ViewModel.saveCurrentRunSession()
+    var shareActivities by remember { mutableStateOf(false) }
+    // isSavingActivity iz ViewModel StateFlow (UDF) — ne lokalni remember state
+    val isSavingActivity by viewModel.isSaving.collectAsState()
 
     LaunchedEffect(Unit) {
         try {
             val resolvedRef = FirestoreHelper.getCurrentUserDocRef()
-            userDocRef = resolvedRef
+            // Naloži zadnjo telesno težo iz weightLogs za kalorični izračun
             val snap = resolvedRef
                 .collection("weightLogs")
                 .orderBy("date", Query.Direction.DESCENDING)
@@ -217,15 +166,24 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                 .await()
             val w = snap.documents.firstOrNull()?.get("weightKg") as? Number
             if (w != null) actualWeightKg = w.toDouble()
+            // Naloži preference za deljenje aktivnosti (potrebno za ViewModel.saveCurrentRunSession)
+            val userSnap = resolvedRef.get().await()
+            shareActivities = userSnap.getBoolean("share_activities") ?: false
         } catch (_: Exception) {}
     }
 
     val serviceConnection = remember {
         object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                service = (binder as? RunTrackingService.LocalBinder)?.getService(); isBound = true
+                val svc = (binder as? RunTrackingService.LocalBinder)?.getService()
+                service = svc; isBound = true
+                // K-1 Fix: ViewModel dobi referenco na Service za branje activeSessionId
+                if (svc != null) viewModel.onServiceConnected(svc)
             }
-            override fun onServiceDisconnected(name: ComponentName?) { service = null; isBound = false }
+            override fun onServiceDisconnected(name: ComponentName?) {
+                service = null; isBound = false
+                viewModel.onServiceDisconnected()
+            }
         }
     }
 
@@ -260,9 +218,15 @@ fun RunTrackerScreen(onBack: () -> Unit) {
 
     var isTopoMap by remember { mutableStateOf(prefs.getBoolean("topo_map", false)) }
 
-    // Live kcal (prikazano med sledenjem)
-    val liveCalories = remember(elapsedSeconds, avgSpeed, elevationGain, selectedActivity, actualWeightKg) {
-        calculateCaloriesMet(selectedActivity, elapsedSeconds, actualWeightKg, elevationGain, avgSpeed * 3.6f)
+    // Live kcal (prikazano med sledenjem) — K-3 Fix: delegirano v ViewModel UseCase
+    val liveCalories = remember(elapsedSeconds, distanceMeters, avgSpeed, elevationGain, selectedActivity, actualWeightKg) {
+        viewModel.calculateLiveCalories(
+            activityType = selectedActivity,
+            durationSeconds = elapsedSeconds,
+            distanceKm = distanceMeters / 1000.0,
+            elevationGainM = elevationGain,
+            userWeightKg = actualWeightKg
+        )
     }
 
     LaunchedEffect(locationPoints) {
@@ -671,12 +635,8 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                         Button(
                             onClick = {
                                 if (isSavingActivity) return@Button
-                                isSavingActivity = true
-                                val sessionId = UUID.randomUUID().toString()
-                                val avgKmh = finalAvgSpeed * 3.6f
-                                val calories = calculateCaloriesMet(selectedActivity, finalTime, actualWeightKg, finalElevationGain, avgKmh)
-
-                                scope.launch(Dispatchers.IO) {
+                                scope.launch {
+                                    // ── 1. Pripravi surove GPS točke ─────────────────────────────
                                     val mappedLocationPoints = locationPoints.map { loc ->
                                         LocationPoint(
                                             latitude = loc.latitude,
@@ -688,142 +648,119 @@ fun RunTrackerScreen(onBack: () -> Unit) {
                                         )
                                     }
 
+                                    // ── 2. Route smoothing — UI-side priprava podatkov ────────────
                                     var finalLocationPoints = mappedLocationPoints
                                     var successfullySmoothed = false
                                     if (routeSmoothingEnabled) {
-                                        val isWalkingProfile = selectedActivity == ActivityType.RUN || selectedActivity == ActivityType.WALK || selectedActivity == ActivityType.HIKE
-                                        // Opravimo glajenje poti za vgrajene tipe
+                                        val isWalkingProfile = selectedActivity == ActivityType.RUN ||
+                                                selectedActivity == ActivityType.WALK ||
+                                                selectedActivity == ActivityType.HIKE
                                         if (isWalkingProfile || selectedActivity == ActivityType.CYCLING || selectedActivity == ActivityType.SPRINT) {
-                                            finalLocationPoints = MapboxMapMatcher.matchRoute(mappedLocationPoints, isWalkingProfile)
-                                            if (finalLocationPoints !== mappedLocationPoints) {
-                                                successfullySmoothed = true
+                                            withContext(Dispatchers.IO) {
+                                                val smoothed = MapboxMapMatcher.matchRoute(mappedLocationPoints, isWalkingProfile)
+                                                if (smoothed !== mappedLocationPoints) {
+                                                    finalLocationPoints = smoothed
+                                                    successfullySmoothed = true
+                                                }
                                             }
                                         }
                                     }
 
-                                    val resolvedDocRef = userDocRef ?: runCatching {
-                                        FirestoreHelper.getCurrentUserDocRef()
-                                    }.getOrNull()
+                                    // ── 3. RDP kompresija za Firestore ────────────────────────────
+                                    // Maratón (14.400 točk) → ≤500 točk (~25 KB), pod 1 MB limitom.
+                                    val compressedPoints = withContext(Dispatchers.IO) {
+                                        RouteCompressor.compress(finalLocationPoints)
+                                            .map { mapOf("lat" to it.latitude, "lng" to it.longitude, "alt" to it.altitude, "spd" to it.speed, "acc" to it.accuracy, "ts" to it.timestamp) }
+                                    }
 
-                                    if (resolvedDocRef != null) {
-                                        val avgSpeedMps = if (finalTime > 0) (finalDistance / finalTime).toFloat() else 0f
-                                        val runMap = hashMapOf<String, Any>(
-                                            "id" to sessionId, "userId" to resolvedDocRef.id,
-                                            "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
-                                            "endTime" to System.currentTimeMillis(),
-                                            "durationSeconds" to finalTime.toInt(),
-                                            "distanceMeters" to finalDistance,
-                                            "maxSpeedMps" to finalMaxSpeed,
-                                            "avgSpeedMps" to avgSpeedMps,
-                                            "caloriesKcal" to calories,
-                                            "elevationGainM" to finalElevationGain,
-                                            "elevationLossM" to finalElevationLoss,
-                                             "activityType" to selectedActivity.name,
-                                             "createdAt" to System.currentTimeMillis(),
-                                             // 🗜️ RDP kompresija: maraton (14.400 točk) → ≤500 točk (~25 KB).
-                                             // Prepreči FAILED_PRECONDITION crash ob 1 MB Firestore limitu.
-                                             "polylinePoints" to RouteCompressor
-                                                 .compress(finalLocationPoints)
-                                                 .map { mapOf("lat" to it.latitude, "lng" to it.longitude, "alt" to it.altitude, "spd" to it.speed, "acc" to it.accuracy, "ts" to it.timestamp) },
-                                             "pointsCount" to finalLocationPoints.size,
-                                             "isSmoothed" to successfullySmoothed
-                                         )
-                                        Log.d("RunTrackerSave", "WRITE runSessions doc=${resolvedDocRef.id} session=$sessionId points=${finalLocationPoints.size}")
-                                        FirestoreHelper.withRetry {
-                                            resolvedDocRef.collection("runSessions").document(sessionId).set(runMap).await()
-                                        }
-                                        Log.i("RunTrackerSave", "WRITE_OK runSessions doc=${resolvedDocRef.id} session=$sessionId")
+                                    // ── 4. Delegate shranjevanja v ViewModel (K-1 + K-3 + S-5 Fix) ─
+                                    // K-1: sessionId prihaja iz service.activeSessionId (prek ViewModel)
+                                    // K-3: nobenega direktnega Firestore klica iz Screen-a
+                                    // S-5: sessionStartTime prihaja iz service.activeSessionStartTime
+                                    val sessionStartTime = service?.activeSessionStartTime
+                                        ?: (System.currentTimeMillis() - finalTime * 1000L)
+                                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                                    val userId = FirestoreHelper.getCurrentUserDocId() ?: ""
+                                    val avgSpeedMps = if (finalTime > 0) (finalDistance / finalTime).toFloat() else 0f
 
-                                        val shareActSnap = resolvedDocRef.get().await()
-                                        val shareAct = shareActSnap.getBoolean("share_activities") ?: false
-                                        if (shareAct && finalLocationPoints.isNotEmpty()) {
-                                            val routeList = RouteCompressor
-                                                .compress(finalLocationPoints)
-                                                .map { mapOf("lat" to it.latitude, "lng" to it.longitude) }
-                                            val pubMap = hashMapOf<String, Any>(
-                                                "activityType" to selectedActivity.name,
-                                                "distanceMeters" to finalDistance,
-                                                "elevationGainM" to finalElevationGain,
-                                                "elevationLossM" to finalElevationLoss,
-                                                "avgSpeedMps" to avgSpeedMps,
-                                                "maxSpeedMps" to finalMaxSpeed,
-                                                "startTime" to (System.currentTimeMillis() - finalTime * 1000L),
-                                                "routePoints" to routeList
-                                            )
-                                            Log.d("RunTrackerSave", "WRITE publicActivities doc=${resolvedDocRef.id} session=$sessionId routePts=${routeList.size}")
-                                            FirestoreHelper.withRetry {
-                                                resolvedDocRef.collection("publicActivities").document(sessionId).set(pubMap).await()
+                                    val result = viewModel.saveCurrentRunSession(
+                                        activityType = selectedActivity,
+                                        distanceMeters = finalDistance,
+                                        durationSeconds = finalTime,
+                                        maxSpeedMps = finalMaxSpeed,
+                                        avgSpeedMps = avgSpeedMps,
+                                        elevationGainM = finalElevationGain,
+                                        elevationLossM = finalElevationLoss,
+                                        userWeightKg = actualWeightKg,
+                                        compressedPoints = compressedPoints,
+                                        rawPointCount = finalLocationPoints.size,
+                                        isSmoothed = successfullySmoothed,
+                                        userId = userId,
+                                        sessionStartTime = sessionStartTime,
+                                        date = todayDate,
+                                        shareActivity = shareActivities
+                                    )
+
+                                    result.onSuccess { savedResult ->
+                                        // ── 5. Shrani lokalne pot datoteke z definitinim sessionId ──
+                                        // RunRouteStore je lokalna persistenca — ostane v Screen-u
+                                        withContext(Dispatchers.IO) {
+                                            if (mappedLocationPoints.isNotEmpty()) {
+                                                RunRouteStore.saveRoute(context, savedResult.sessionId, mappedLocationPoints)
                                             }
-                                            Log.i("RunTrackerSave", "WRITE_OK publicActivities doc=${resolvedDocRef.id} session=$sessionId")
+                                            if (successfullySmoothed && finalLocationPoints.isNotEmpty()) {
+                                                RunRouteStore.saveRoute(context, savedResult.sessionId + "_smoothed", finalLocationPoints)
+                                            }
                                         }
-                                    }
 
-                                    // VEDNO shranimo originalne (raw) točke, da ohranimo pravilen hitrostni graf in meritve!
-                                    if (mappedLocationPoints.isNotEmpty()) {
-                                        RunRouteStore.saveRoute(context, sessionId, mappedLocationPoints)
-                                    }
-                                    // Če je glajenje uspelo, shranimo dodaten file samo za risanje čudovite poti na mapi
-                                    if (successfullySmoothed && finalLocationPoints.isNotEmpty()) {
-                                        RunRouteStore.saveRoute(context, sessionId + "_smoothed", finalLocationPoints)
-                                    }
-
-                                    // ✅ Faza 15: Sync kalorij teka v dailyLogs/{today}/burnedCalories
-                                    // Ko je vrednost zapisana, Snapshot Listenerja v NutritionViewModel in Progress.kt
-                                    // samodejno zaznata spremembo in posodobita UI brez ponovnega zagona.
-                                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                        .format(Date())
-                                    val runCalories = calories.toDouble()
-                                    runCatching {
-                                        DailyLogRepository().updateDailyLog(todayDate) { data ->
-                                            val existingBurned = (data["burnedCalories"] as? Number)?.toDouble() ?: 0.0
-                                            data["burnedCalories"] = existingBurned + runCalories
-                                        }
-                                        Log.d("RunTrackerSave", "✅ dailyLogs burnedCalories posodobljen: +${runCalories.toInt()} kcal za $todayDate")
-                                    }.onFailure {
-                                        Log.e("RunTrackerSave", "❌ dailyLogs burnedCalories sync spodletel", it)
-                                    }
-
-                                    val xp = calculateXP(selectedActivity, finalDistance, finalTime)
-                                    val runEmail = FirebaseAuth.getInstance().currentUser?.email
-                                    if (runEmail != null) {
+                                        // ── 6. XP nagrajevanje ───────────────────────────────────────
+                                        val xp = calculateXP(selectedActivity, finalDistance, finalTime)
                                         viewModel.awardRunXP(xp)
 
-                                        val bodyVm = ViewModelProvider(
-                                            context as ViewModelStoreOwner,
-                                            MyViewModelFactory(context.applicationContext)
-                                        ).get(BodyModuleHomeViewModel::class.java)
-                                        val uiState = bodyVm.ui.value
-                                        // Faza 38 — Metrile vgnezdene: null-safe dostop prek metrics?.
-                                        val currentDay = uiState.metrics?.planDay ?: 1
-                                        if (uiState.metrics?.isWorkoutDoneToday != true && uiState.metrics?.todayIsRest != true && finalDistance > 1000) {
-                                            bodyVm.handleIntent(
-                                                BodyHomeIntent.CompleteWorkoutSession(
-                                                email = runEmail, // Firebase Auth — pravilni email
-                                                isExtraWorkout = false,
-                                                totalKcal = calories,
-                                                totalTimeMin = finalTime / 60.0
-                                            ))
-                                            withContext(Dispatchers.Main) {
-                                                AppToast.showSuccess(context, "Workout Day $currentDay Complete! +$xp XP!")
-                                            }
-                                        } else {
-                                            withContext(Dispatchers.Main) {
-                                                AppToast.showSuccess(context, "+$xp XP!")
+                                        val runEmail = FirebaseAuth.getInstance().currentUser?.email
+                                        if (runEmail != null) {
+                                            val bodyVm = ViewModelProvider(
+                                                context as ViewModelStoreOwner,
+                                                MyViewModelFactory(context.applicationContext)
+                                            ).get(BodyModuleHomeViewModel::class.java)
+                                            val uiState = bodyVm.ui.value
+                                            val currentDay = uiState.metrics?.planDay ?: 1
+                                            if (uiState.metrics?.isWorkoutDoneToday != true && uiState.metrics?.todayIsRest != true && finalDistance > 1000) {
+                                                bodyVm.handleIntent(
+                                                    BodyHomeIntent.CompleteWorkoutSession(
+                                                    email = runEmail,
+                                                    isExtraWorkout = false,
+                                                    totalKcal = savedResult.caloriesKcal,
+                                                    totalTimeMin = finalTime / 60.0
+                                                ))
+                                                withContext(Dispatchers.Main) {
+                                                    AppToast.showSuccess(context, "Workout Day $currentDay Complete! +$xp XP!")
+                                                }
+                                            } else {
+                                                withContext(Dispatchers.Main) {
+                                                    AppToast.showSuccess(context, "+$xp XP!")
+                                                }
                                             }
                                         }
-                                    }
-                                     // ✅ Faza 14: Shrani zadnjo GPS lokacijo za hitri začetni center mape
-                                     val lastPt = finalLocationPoints.lastOrNull() ?: mappedLocationPoints.lastOrNull()
-                                     if (lastPt != null) {
-                                         prefs.edit()
-                                             .putFloat("last_run_lat", lastPt.latitude.toFloat())
-                                             .putFloat("last_run_lng", lastPt.longitude.toFloat())
-                                             .apply()
-                                     }
 
-                                     withContext(Dispatchers.Main) {
-                                         showSummary = false; onBack()
-                                     }
+                                        // ── 7. Shrani zadnjo GPS lokacijo za hiter začetni center mape ─
+                                        val lastPt = finalLocationPoints.lastOrNull() ?: mappedLocationPoints.lastOrNull()
+                                        if (lastPt != null) {
+                                            prefs.edit()
+                                                .putFloat("last_run_lat", lastPt.latitude.toFloat())
+                                                .putFloat("last_run_lng", lastPt.longitude.toFloat())
+                                                .apply()
+                                        }
+
+                                        withContext(Dispatchers.Main) {
+                                            showSummary = false; onBack()
+                                        }
+                                    }.onFailure { e ->
+                                        Log.e("RunTrackerSave", "❌ Shranjevanje spodletelo: ${e.message}", e)
+                                        withContext(Dispatchers.Main) {
+                                            AppToast.showSuccess(context, "Save failed — try again")
+                                        }
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),

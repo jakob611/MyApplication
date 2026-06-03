@@ -197,6 +197,13 @@ class RunTrackingService : Service() {
      */
     val activeSessionId: String? get() = currentSessionId
 
+    /**
+     * Začetni čas seje v epoch-ms — dostopen za ViewModel (S-5 fix).
+     * Screen NE sme rekonstruirati startTime iz elapsed časa.
+     * Vrne 0 ko seja še ni bila začeta.
+     */
+    val activeSessionStartTime: Long get() = sessionStartTime
+
     private var sessionStartTime: Long = 0L
     // S-1 Fix: omejen sliding buffer (MAX_LOCATION_BUFFER_SIZE) — ne raste v nedogled.
     private val locationBuffer = ArrayDeque<Location>()

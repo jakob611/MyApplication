@@ -138,6 +138,28 @@ class RunTrackerViewModel(
         }
     }
 
+    // ── Live UI helpers ────────────────────────────────────────────────────
+    /**
+     * Izračuna kalorije za prikaz MED SLEDENJEM (live preview v Screen-u).
+     * Delegira na [CalculateRunCaloriesUseCase] — Screen ne vsebuje poslovne logike.
+     * Varna za klic v remember {} bloku — čisto izračunska funkcija brez stranskih učinkov.
+     */
+    fun calculateLiveCalories(
+        activityType: ActivityType,
+        durationSeconds: Long,
+        distanceKm: Double,
+        elevationGainM: Float,
+        userWeightKg: Double
+    ): Int = calculateCaloriesUseCase(
+        CalculateRunCaloriesUseCase.Input(
+            activityType = activityType,
+            durationSeconds = durationSeconds,
+            distanceKm = distanceKm,
+            elevationGainM = elevationGainM,
+            userWeightKg = userWeightKg
+        )
+    )
+
     // ── Gamification ───────────────────────────────────────────────────────
     fun awardRunXP(xp: Int) {
         viewModelScope.launch {
@@ -296,4 +318,5 @@ class RunTrackerViewModel(
         }
     }
 }
+
 
