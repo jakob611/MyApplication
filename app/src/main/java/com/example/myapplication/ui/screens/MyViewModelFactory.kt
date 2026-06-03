@@ -28,6 +28,8 @@ import com.example.myapplication.domain.usecase.CalculateBodyGoldenRatioUseCase
 import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.viewmodels.BodyPlanQuizViewModel
 import com.example.myapplication.data.repository.MetricsRepositoryImpl
+import com.example.myapplication.data.repository.RunRepositoryImpl
+import com.example.myapplication.domain.usecase.CalculateRunCaloriesUseCase
 // Faza 43 — SRP fix: PlanApiClient je edina pravilna DI odvisnost za HTTP plan generiranje.
 // PlanDataStore se NE injicira za mrežne operacije — samo za persistenco.
 // Ko bo ViewModel zahteval AI plan generiranje → inject PlanApiClient() as PlanNetworkService.
@@ -82,8 +84,15 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             val gamificationUseCase = GamificationFactory.provide(context)
             val db = AppDatabase.getInstance(context)
             val offlineRepo = OfflineFirstWorkoutRepository(db)
+            // Faza 58b: RunRepository + CalculateRunCaloriesUseCase za K-1/K-3 fix
             @Suppress("UNCHECKED_CAST")
-            return RunTrackerViewModel(FirestoreWorkoutRepository(), gamificationUseCase, offlineRepo) as T
+            return RunTrackerViewModel(
+                workoutRepo = FirestoreWorkoutRepository(),
+                gamificationUseCase = gamificationUseCase,
+                offlineRepo = offlineRepo,
+                runRepository = RunRepositoryImpl(),
+                calculateCaloriesUseCase = CalculateRunCaloriesUseCase()
+            ) as T
         }
         if (modelClass.isAssignableFrom(NutritionViewModel::class.java)) {
             requireNotNull(context) { "Context required for NutritionViewModel" }

@@ -23,7 +23,9 @@ import androidx.core.app.NotificationCompat
 import com.example.myapplication.MainActivity
 import com.example.myapplication.domain.model.ActivityType
 import com.example.myapplication.domain.model.LocationPoint
+import com.example.myapplication.domain.model.ProfileConstants
 import com.example.myapplication.domain.model.RunSession
+import com.example.myapplication.domain.usecase.CalculateRunCaloriesUseCase
 import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.data.repository.OfflineFirstWorkoutRepository
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -76,8 +78,23 @@ class RunTrackingService : Service() {
         // WakeLock timeout: 4 ure
         private const val WAKELOCK_TIMEOUT_MS = 4L * 60L * 60L * 1000L
 
-        // Singleton instance for binding
-        private var instance: RunTrackingService? = null
+        // S-1 Fix: omejen buffer — preprečuje O(N→∞) alokacijo pri dolgih tekih.
+        // 7200 točk = 4h @ 2s intervalu. Ob prekoračitvi se najstarejša točka izvrže.
+        private const val MAX_LOCATION_BUFFER_SIZE = 7200
+        // UI StateFlow se posodablja vsako N-to GPS točko da zmanjšamo UI recomposition pritisk.
+        // Karti se posodablja gladko (vsaka 3. točka = ~6s pri RUN profilu je sprejemljivo).
+        private const val UI_EMIT_EVERY_N_POINTS = 3
+
+        // ── S-2 Fix: @Volatile zagotavlja vidnost spremembe instance čez vse niti.
+        // getInstance() vrne null med OOM ubijanjem/ponovnim zagonom — klicatelji
+        // MORAJO preverjati null pred dostopom.
+        @Volatile private var instance: RunTrackingService? = null
+
+        /**
+         * Thread-safe singleton accessor.
+         * Vrne null, ko je service bil ubijen (OOM) ali še ni zagnan.
+         * NIKOLI ne throwa NPE — null pomeni "service ne teče".
+         */
         fun getInstance(): RunTrackingService? = instance
     }
 
@@ -173,14 +190,27 @@ class RunTrackingService : Service() {
     // Faza 15: Session tracking za checkpoints in OOM obnovo
     private lateinit var repository: OfflineFirstWorkoutRepository
     private var currentSessionId: String? = null
+
+    /**
+     * SSOT za session ID — dostopen za ViewModel (K-1 fix).
+     * Vrne null ko service ne teče ali še ni bil zagnan.
+     */
+    val activeSessionId: String? get() = currentSessionId
+
     private var sessionStartTime: Long = 0L
-    // interni O(1) buffer za GPS točke (izognemo se O(N) kopiranju pri vsaki točki)
+    // S-1 Fix: omejen sliding buffer (MAX_LOCATION_BUFFER_SIZE) — ne raste v nedogled.
     private val locationBuffer = ArrayDeque<Location>()
     // Checkpoint sledenje
     private var pointsSinceLastCheckpoint: Int = 0
     private var distanceAtLastCheckpoint: Double = 0.0
     // Samo točke od zadnjega checkpointa (za delta vpis v Room)
     private val newPointsBuffer = ArrayDeque<Location>()
+    // S-1 Fix: štetje za throttling UI StateFlow emisij
+    private var uiEmitCounter = 0
+
+    // V-4 Fix: SSOT za izračun kalorij med checkpointi in na koncu seje.
+    // Nima Android/Firebase odvisnosti — varno instantiiran v Service.
+    private val calculateCaloriesUseCase = CalculateRunCaloriesUseCase()
 
     // Faza 16: Anti-Drift Engine — EMA (Exponential Moving Average) stanje
     // Shranjuje zadnjo zglajenost pozicijo za izračun EMA naslednje točke
@@ -328,6 +358,7 @@ class RunTrackingService : Service() {
         distanceAtLastCheckpoint = 0.0
         locationBuffer.clear()
         newPointsBuffer.clear()
+        uiEmitCounter = 0
         // Faza 16: ponastavi EMA filter
         emaLat = null
         emaLon = null
@@ -522,9 +553,19 @@ class RunTrackingService : Service() {
         lastLocation = smoothed
 
         // ── Vpis v buffer (za karti in Room) ─────────────────────────────────
+        // S-1 Fix: sliding window — izvrži najstarejšo točko ob prekoračitvi praga.
+        if (locationBuffer.size >= MAX_LOCATION_BUFFER_SIZE) {
+            locationBuffer.removeFirst()
+        }
         locationBuffer.addLast(smoothed)
         newPointsBuffer.addLast(smoothed)
-        _locationPoints.value = locationBuffer.toList()
+
+        // S-1 Fix: throttle UI emisij — posodabljamo StateFlow vsako N-to točko.
+        // Preprečuje O(N) copy + UI recomposition pri vsaki GPS posodobitvi.
+        uiEmitCounter++
+        if (uiEmitCounter % UI_EMIT_EVERY_N_POINTS == 0) {
+            _locationPoints.value = locationBuffer.toList()
+        }
 
         // ── Posodobi hitrost ──────────────────────────────────────────────────
         if (location.hasSpeed()) {
@@ -589,6 +630,19 @@ class RunTrackingService : Service() {
             )
         }
 
+        // V-4 Fix: izračunaj realnočasovne kalorije prek UseCase namesto hardcoded 0.
+        // Teža ni znana v Service-u → ProfileConstants.DEFAULT_WEIGHT_KG kot varni fallback.
+        // Finalni (točni) izračun z dejansko težo se zgodi v ViewModel.saveCurrentRunSession().
+        val checkpointCalories = calculateCaloriesUseCase(
+            CalculateRunCaloriesUseCase.Input(
+                activityType = currentActivityType,
+                durationSeconds = elapsed,
+                distanceKm = totalDistance / 1000.0,
+                elevationGainM = totalElevationGainM,
+                userWeightKg = ProfileConstants.DEFAULT_WEIGHT_KG
+            )
+        )
+
         val session = RunSession(
             id = sessionId,
             userId = userId,
@@ -600,7 +654,7 @@ class RunTrackingService : Service() {
             avgSpeedMps = _avgSpeed.value,
             polylinePoints = emptyList(), // GPS točke so v Room (GpsPointEntity)
             createdAt = sessionStartTime,
-            caloriesKcal = 0, // izračuna se ob zaključku
+            caloriesKcal = checkpointCalories,
             elevationGainM = totalElevationGainM,
             elevationLossM = totalElevationLossM,
             activityType = currentActivityType,
@@ -714,6 +768,7 @@ class RunTrackingService : Service() {
         pointsSinceLastCheckpoint = 0
         distanceAtLastCheckpoint = totalDistance
         newPointsBuffer.clear()
+        uiEmitCounter = 0
 
         Log.d(TAG, "OOM obnova uspešna: seja ${entity.id}, ${restoredElapsed}s, ${totalDistance.toInt()}m")
     }
