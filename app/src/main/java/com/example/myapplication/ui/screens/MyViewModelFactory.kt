@@ -29,6 +29,7 @@ import com.example.myapplication.domain.usecase.SaveBodyMeasurementsUseCase
 import com.example.myapplication.viewmodels.BodyPlanQuizViewModel
 import com.example.myapplication.data.repository.MetricsRepositoryImpl
 import com.example.myapplication.data.repository.RunRepositoryImpl
+import com.example.myapplication.data.repository.ProgressRepositoryImpl
 import com.example.myapplication.domain.usecase.CalculateRunCaloriesUseCase
 // Faza 43 — SRP fix: PlanApiClient je edina pravilna DI odvisnost za HTTP plan generiranje.
 // PlanDataStore se NE injicira za mrežne operacije — samo za persistenco.
@@ -110,7 +111,11 @@ class MyViewModelFactory(private val context: Context? = null) : ViewModelProvid
             requireNotNull(context) { "Context required for ProgressViewModel" }
             val gamificationUseCase = GamificationFactory.provide(context)
             @Suppress("UNCHECKED_CAST")
-            return ProgressViewModel(gamificationUseCase) as T
+            // Phase 59a: ProgressRepositoryImpl injiciran za P-1/P-2/P-3/P-5/P-8 fixe
+            return ProgressViewModel(
+                gamificationUseCase  = gamificationUseCase,
+                progressRepository   = ProgressRepositoryImpl.getInstance()
+            ) as T
         }
         if (modelClass.isAssignableFrom(GamificationSharedViewModel::class.java)) {
             requireNotNull(context) { "Context required for GamificationSharedViewModel" }

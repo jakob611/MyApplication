@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
@@ -39,28 +40,24 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.GlobalHeaderBar
 import kotlinx.datetime.LocalDate
 import com.example.myapplication.domain.*
+import com.example.myapplication.domain.model.WeightLog
+import com.example.myapplication.domain.model.DailyLogSummary
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import com.example.myapplication.utils.HapticFeedback
-import com.example.myapplication.domain.nutrition.calculateEMA
-import com.example.myapplication.domain.nutrition.calculateAdaptiveTDEE
 import java.util.Locale
 import com.example.myapplication.domain.model.UserProfile
-import com.example.myapplication.debug.NutritionDebugStore
-import com.example.myapplication.debug.WeightPredictorStore
 import com.example.myapplication.data.store.FirestoreHelper
-import com.example.myapplication.data.store.NutritionPlanStore
 import com.example.myapplication.ui.components.XPPopup
 import com.example.myapplication.ui.screens.MyViewModelFactory
 import com.example.myapplication.ui.theme.UppColors
 
-// Data holders
-private data class DailyLogSummary(val date: LocalDate, val calories: Double, val waterMl: Int)
-private data class WeightLog(val date: LocalDate, val weightKg: Double)
+// Data holders — premaknjeni v domain/model/ (Phase 59a):
+// WeightLog → domain.model.WeightLog
+// DailyLogSummary → domain.model.DailyLogSummary
+// WeightPredictionDisplay / WeightPredictionFull → ui.progress.ProgressModels
 enum class ProgressRange(val label: String) { WEEK("Week"), MONTH("Month"), YEAR("Year"), ALL("All") }
 
 private data class NeighborEdges(
@@ -184,34 +181,16 @@ fun ProgressScreen(
     val waterPairs = remember(dailyLogs) { dailyLogs.sortedBy { it.date }.map { it.date to it.waterMl.toDouble() } }
     val burnedPairs = remember(burnedByDay) { burnedByDay.sortedBy { it.first } }
 
-    // ── Faza 7: Weight Predictor ──────────────────────────────────────────────────────────────────
-    // Podatki: weightLogs (EMA) + dailyLogs zadnjih 7 dni (avg balance)
-    //
-    // Faza 29.2: computeWeightPrediction() ostane čista funkcija v remember() bloku.
-    // Pisanje v WeightPredictorStore je prestavljeno iz SideEffect v LaunchedEffect(key) → ProgressViewModel.
-    // LaunchedEffect se sproži SAMO ob spremembi weightPredictionFull (ne ob vsaki rekomposiciji kot SideEffect).
-    val weightPredictionFull: WeightPredictionFull? = remember(weightLogs, dailyLogs, burnedByDay, userProfile) {
-        computeWeightPrediction(weightLogs, dailyLogs, burnedByDay, userProfile)
-    }
+    // ── Faza 59a: Weight Predictor — preseljeno iz remember{} v ViewModel ──────────────────────────
+    // P-1 Fix: computeWeightPrediction() ne blokira več Main niti.
+    //          Izračun teče na Dispatchers.Default v viewModelScope.
+    // P-5 Fix: WeightPredictorStore.update() kliče ViewModel, ne LaunchedEffect tukaj.
+    val weightPredictionFull by progressViewModel.weightPredictionState.collectAsState()
     val weightPrediction: WeightPredictionDisplay? = weightPredictionFull?.display
 
-    // Faza 29.2: LaunchedEffect(key) namesto SideEffect — sproži se le ob spremembi podatkov,
-    // ne ob vsaki rekomposiciji. ProgressViewModel piše v WeightPredictorStore v ozadju (viewModelScope).
-    LaunchedEffect(weightPredictionFull) {
-        weightPredictionFull?.let { full ->
-            progressViewModel.storePrediction(
-                hybridTDEE      = full.hybridTDEE,
-                adaptiveTDEE    = full.adaptiveTDEE,
-                emaWeightKg     = full.emaWeightKg,
-                avgDailyBalance = full.avgDailyBalanceKcal,
-                predicted30     = full.predictedWeightIn30Days,
-                goalWeightKg    = full.goalWeightKg,
-                goalDateStr     = full.goalDateStr,
-                daysToGoal      = full.daysToGoal,
-                activeDaysCount = full.activeDaysCount,
-                confidenceFactor = full.confidenceFactor
-            )
-        }
+    // Posreduj UserProfile v ViewModel za predikcijo (ob vsaki spremembi profila)
+    LaunchedEffect(userProfile) {
+        progressViewModel.updateUserProfile(userProfile)
     }
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1031,7 +1010,6 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
     var weightInput by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     val today = LocalDate.now()
-    val db = Firebase.firestore
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text("Add Weight (${if (isLbs) "lb" else "kg"})") },
@@ -1069,37 +1047,36 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
                     // Convert to kg for storage if input is lbs
                     val wKg = if (isLbs) inputVal / 2.20462 else inputVal
 
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            progressViewModel.saveWeightLog(uid, dateStr, wKg) {}
-                            Log.d("ProgressScreen", "Saved weight $wKg kg to weightLogs")
-
-                            progressViewModel.awardWeightLogXP()
+                    scope.launch {
+                        // P-3 Fix: saveWeightLog prek ViewModel → ProgressRepository (ne direktni Firestore)
+                        val saveResult = progressViewModel.saveWeightLog(dateStr, wKg)
+                        if (saveResult.isFailure) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "+50 XP Earned!", Toast.LENGTH_SHORT).show()
-                            }
-
-                            // Avtomatsko posodobi nutrition plan z novo težo
-                            Log.d("ProgressScreen", " Starting nutrition plan recalculation for uid=$uid, weight=$wKg")
-                            val success = NutritionPlanStore.recalculateNutritionPlan(
-                                uid, wKg
-                            )
-                            Log.d("ProgressScreen", " Recalculation result: $success")
-                            withContext(Dispatchers.Main) {
-                                if (success) {
-                                    Toast.makeText(context, "✅ Nutrition plan updated!", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", Toast.LENGTH_LONG).show()
-                                }
-                                onSaved()
-                                onDismiss()
-                            }
-                        } catch (e: Exception) {
-                            Log.e("ProgressScreen", " ERROR updating nutrition plan", e)
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "❌ Failed to update nutrition plan: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "❌ Failed to save weight: ${saveResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                 saving = false
                             }
+                            return@launch
+                        }
+                        Log.d("ProgressScreen", "Saved weight $wKg kg to weightLogs")
+
+                        progressViewModel.awardWeightLogXP()
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "+50 XP Earned!", Toast.LENGTH_SHORT).show()
+                        }
+
+                        // P-4 Fix: recalculateNutritionPlan prek ViewModel → ProgressRepository
+                        Log.d("ProgressScreen", "Starting nutrition plan recalculation weight=$wKg")
+                        val nutritionResult = progressViewModel.recalculateNutritionPlan(wKg)
+                        val success = nutritionResult.getOrDefault(false)
+                        Log.d("ProgressScreen", "Recalculation result: $success")
+                        withContext(Dispatchers.Main) {
+                            if (success) {
+                                Toast.makeText(context, "✅ Nutrition plan updated!", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "⚠️ Missing plan data - please create a plan first", Toast.LENGTH_LONG).show()
+                            }
+                            onSaved()
+                            onDismiss()
                         }
                     }
                 }
@@ -1151,158 +1128,10 @@ private fun <T> filterRange(list: List<T>, range: ProgressRange): List<T> where 
     }
 }
 
-// ── Faza 7: Weight Predictor ──────────────────────────────────────────────────
+// ── Phase 59a: computeWeightPrediction() → ProgressViewModel.kt (P-1 fix) ───────────────────
+// ── Phase 59a: WeightPredictionDisplay/Full → ProgressModels.kt ──────────────────────────────
+// ── Phase 59a: monthName() → ProgressModels.kt ───────────────────────────────────────────────
 
-/**
- * Podatki za prikaz napovedi teže v UI kartici.
- */
-private data class WeightPredictionDisplay(
-    val emaWeightKg: Double,
-    val avgDailyBalanceKcal: Double,
-    val predictedWeightIn30Days: Double,
-    val goalWeightKg: Double?,         // null = ni cilja nastavljenega
-    val daysToGoal: Int?,              // null = ni dosegljivo
-    val goalDateStr: String?,          // npr. "15 Jul 2026"
-    val activeDaysInLastWeek: Int,
-    val confidenceFactor: Double = 0.0 // C ∈ {0.0, 0.5, 1.0}
-)
-
-/**
- * Vrednosti za propagacijo v WeightPredictorStore po rekomposiciji.
- * Ločene od [WeightPredictionDisplay] — ne vsebuje Compose stanja, samo surove podatke.
- */
-private data class WeightPredictionFull(
-    val display               : WeightPredictionDisplay,
-    val emaWeightKg           : Double,
-    val avgDailyBalanceKcal   : Double,
-    val predictedWeightIn30Days: Double,
-    val goalWeightKg          : Double?,
-    val goalDateStr           : String?,
-    val daysToGoal            : Int?,
-    val activeDaysCount       : Int,
-    val hybridTDEE            : Int,
-    val adaptiveTDEE          : Int,
-    val confidenceFactor      : Double
-)
-
-/**
- * Čista funkcija — izračuna napoved teže brez stranskih učinkov.
- * Ne piše v WeightPredictorStore (to naredi [ProgressViewModel.storePrediction] prek LaunchedEffect).
- * Pokliče se v remember() bloku — samo ob spremembi podatkov.
- */
-private fun computeWeightPrediction(
-    weightLogs: List<WeightLog>,
-    dailyLogs: List<DailyLogSummary>,
-    burnedByDay: List<Pair<LocalDate, Double>>,
-    userProfile: UserProfile
-): WeightPredictionFull? {
-    if (weightLogs.isEmpty()) return null
-
-    // ── EMA teže (7-dnevno okno) —
-    val sortedWeights = weightLogs.sortedBy { it.date }.map { it.weightKg }
-    val emaWeightKg = calculateEMA(sortedWeights, period = 7)
-
-    // ── Povprečni kalorični balans zadnjih 7 dni ──────────────────────────
-    val today = LocalDate.now()
-    val sevenDaysAgo = today.minusDays(6)
-    val burnedMap = burnedByDay.associate { it.first to it.second }
-    val last7Days = dailyLogs.filter { it.date >= sevenDaysAgo && it.date <= today }
-    val activeDaysWithData = last7Days.filter { it.calories > 0.0 }
-
-    if (activeDaysWithData.isEmpty()) return null
-
-    // ── Effective TDEE: hybridTDEE (from previous run) or theoretical fallback ──
-    // Formula: balance = calories_consumed − TDEE  (negative = deficit → weight loss)
-    val theoreticalTDEEEarly = (NutritionDebugStore.lastBmr * 1.2).toInt()
-    val prevHybridTDEE = WeightPredictorStore.lastHybridTDEE
-    val effectiveTDEE: Double = when {
-        prevHybridTDEE > 800 -> prevHybridTDEE.toDouble()
-        theoreticalTDEEEarly > 800 -> theoreticalTDEEEarly.toDouble()
-        else -> 2000.0 // safe default if no profile data yet
-    }
-
-    val avgDailyBalance = activeDaysWithData.map { log ->
-        // Formula: consumed - (TDEE + exerciseBurned)
-        // burnedMap vsebuje Health Connect podatke za ta dan (iz dailyLogs.burnedCalories)
-        val dayBurned = burnedMap[log.date] ?: 0.0
-        log.calories - effectiveTDEE - dayBurned
-    }.average()
-
-    // ── Napoved za 30 dni: 7700 kcal ≈ 1 kg ─────────────────────────────
-    val predictedChangeIn30Days = (avgDailyBalance * 30.0) / 7700.0
-    val predictedWeightIn30Days = emaWeightKg + predictedChangeIn30Days
-
-    // ── Datum dosega cilja ────────────────────────────────────────────────
-    val goalWeightKg = userProfile.goalWeightKg
-    val daysToGoal: Int?
-    val goalDateStr: String?
-
-    if (goalWeightKg != null && goalWeightKg > 0.0 && avgDailyBalance != 0.0) {
-        val kgDiff = goalWeightKg - emaWeightKg
-        val dailyKgChange = avgDailyBalance / 7700.0
-        val correctDirection = (kgDiff < 0.0 && dailyKgChange < 0.0) || (kgDiff > 0.0 && dailyKgChange > 0.0)
-        if (correctDirection && abs(dailyKgChange) > 0.00001) {
-            val days = (kgDiff / dailyKgChange).toInt().coerceIn(1, 3650)
-            daysToGoal = days
-            val goalDate = today.plusDays(days)
-            goalDateStr = "${goalDate.dayOfMonth} ${monthName(goalDate.monthNumber)} ${goalDate.year}"
-        } else {
-            daysToGoal = null
-            goalDateStr = null
-        }
-    } else {
-        daysToGoal = null
-        goalDateStr = null
-    }
-
-    // 5. Shrani v WeightPredictorStore za Debug Dashboard
-    val prevEmaWeightKg = if (sortedWeights.size >= 2)
-        calculateEMA(sortedWeights.dropLast(1), period = 7)
-    else
-        emaWeightKg
-    // Teoretični TDEE = BMR × 1.2 iz zadnjega nalaganja profila (NutritionDebugStore)
-    val theoreticalTDEE = theoreticalTDEEEarly // reuse already-computed value
-    val tdeeResult = calculateAdaptiveTDEE(
-        last7DaysCalories = activeDaysWithData.map { it.calories.toInt() },
-        emaWeightChangeDelta = emaWeightKg - prevEmaWeightKg,
-        theoreticalTDEE = theoreticalTDEE
-    )
-    // P1/29.2 POPRAVEK: NE pišemo v WeightPredictorStore tukaj!
-    // Vrednosti vrnemo v WeightPredictionFull — LaunchedEffect v ProgressScreen jih posreduje v ProgressViewModel.
-    val confidenceValue = when {
-        activeDaysWithData.size < 3 -> 0.0
-        activeDaysWithData.size <= 5 -> 0.5
-        else -> 1.0
-    }
-    val display = WeightPredictionDisplay(
-        emaWeightKg = emaWeightKg,
-        avgDailyBalanceKcal = avgDailyBalance,
-        predictedWeightIn30Days = predictedWeightIn30Days,
-        goalWeightKg = goalWeightKg,
-        daysToGoal = daysToGoal,
-        goalDateStr = goalDateStr,
-        activeDaysInLastWeek = activeDaysWithData.size,
-        confidenceFactor = confidenceValue
-    )
-    return WeightPredictionFull(
-        display                = display,
-        emaWeightKg            = emaWeightKg,
-        avgDailyBalanceKcal    = avgDailyBalance,
-        predictedWeightIn30Days = predictedWeightIn30Days,
-        goalWeightKg           = goalWeightKg,
-        goalDateStr            = goalDateStr,
-        daysToGoal             = daysToGoal,
-        activeDaysCount        = activeDaysWithData.size,
-        hybridTDEE             = tdeeResult.hybridTDEE,
-        adaptiveTDEE           = tdeeResult.adaptiveTDEE,
-        confidenceFactor       = confidenceValue
-    )
-}
-
-private fun monthName(month: Int): String = when (month) {
-    1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
-    7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; else -> "Dec"
-}
 
 /**
  *  Weight Destiny — motivacijska kartica z vizualnim trendom in What-if simulatorjem.
