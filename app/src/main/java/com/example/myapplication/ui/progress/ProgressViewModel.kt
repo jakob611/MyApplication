@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -120,12 +121,22 @@ class ProgressViewModel(
 
     // ── Write Operations ──────────────────────────────────────────────────────
 
+    /** Aktivno shranjevanje — true med saveWeightLog operacijo. */
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
     /**
      * Shrani telesno težo prek Repository (P-3 Fix).
-     * Ne sprejema uid — Repository interno kliče getCurrentUserDocRef().
+     * Nastavi [isSaving] na true med operacijo.
      */
-    suspend fun saveWeightLog(dateStr: String, weightKg: Double): Result<Unit> =
-        progressRepository.saveWeightLog(dateStr, weightKg)
+    suspend fun saveWeightLog(dateStr: String, weightKg: Double): Result<Unit> {
+        _isSaving.value = true
+        return try {
+            progressRepository.saveWeightLog(dateStr, weightKg)
+        } finally {
+            _isSaving.value = false
+        }
+    }
 
     /**
      * Sproži ponovni izračun prehranskega plana.

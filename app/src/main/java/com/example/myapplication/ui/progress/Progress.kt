@@ -42,7 +42,6 @@ import kotlinx.datetime.LocalDate
 import com.example.myapplication.domain.*
 import com.example.myapplication.domain.model.WeightLog
 import com.example.myapplication.domain.model.DailyLogSummary
-import com.google.firebase.firestore.ListenerRegistration
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -103,14 +102,15 @@ fun ProgressScreen(
     onProClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope() // DODANO: Proper coroutine scope namesto GlobalScope
     // Faza 29.2: ProgressViewModel prevzame pisanje v WeightPredictorStore — ni več SideEffect iz UI
     val progressViewModel: ProgressViewModel = viewModel(factory = MyViewModelFactory(context))
     val uid = remember { FirestoreHelper.getCurrentUserDocId() }
-    var dailyLogs by remember { mutableStateOf<List<DailyLogSummary>>(emptyList()) }
-    var weightLogs by remember { mutableStateOf<List<WeightLog>>(emptyList()) }
-    var burnedByDay by remember { mutableStateOf<List<Pair<LocalDate, Double>>>(emptyList()) } // ADDED
-    var loading by remember { mutableStateOf(true) }
+
+    // P-2/P-5 Fix: StateFlows iz ProgressRepository prek ViewModela — brez direktnih Firestore listenerjev v UI
+    val weightLogs by progressViewModel.weightLogsState.collectAsState()
+    val dailyLogs by progressViewModel.dailyLogsState.collectAsState()
+    val burnedByDay by progressViewModel.burnedByDayState.collectAsState()
+
     var range by rememberSaveable { mutableStateOf(ProgressRange.WEEK) }
     var showPreviousProgress by rememberSaveable { mutableStateOf(false) }
     var showWeightDialog by remember { mutableStateOf(openWeightInput) }
@@ -118,62 +118,7 @@ fun ProgressScreen(
     var showXpPopup by remember { mutableStateOf(false) }
 
     LaunchedEffect(openWeightInput) {
-        if (openWeightInput) {
-            showWeightDialog = true
-        }
-    }
-    // ── Data Budgeting (Faza 6) ────────────────────────────────────────────────────────────────
-    // PRED: 3 ločeni listenerji (weightLogs + dailyLogs + daily_health)
-    // PO:   2 listenerja (weightLogs + dailyLogs)
-    //
-    // Spremembe:
-    // 1. dailyLogs: consumedCalories bere direktno iz polja (ne iterira 'items' arraija)
-    // 2. dailyLogs: burnedCalories bere direktno iz polja (ne potrebuje separate daily_health)
-    // 3. sessionListener (daily_health) ODSTRANJEN — ta kolekcija se po Fazi 5 ne piše več,
-    //    burnedCalories je sedaj shranjeno v dailyLogs.burnedCalories
-    // Rezultat: -1 Firestore listener = -33% branj za Progress screen
-    // ─────────────────────────────────────────────────────────────────────────────────────────
-    var dailyListener: ListenerRegistration? by remember { mutableStateOf(null) }
-    var weightListener: ListenerRegistration? by remember { mutableStateOf(null) }
-    // No persistence for range while fixing build issues
-
-    DisposableEffect(uid) {
-        if (uid != null) {
-            val userRef = FirestoreHelper.getUserRef(uid)
-            loading = true
-            weightListener = userRef.collection("weightLogs")
-                .addSnapshotListener { snap, _ ->
-                    weightLogs = snap?.documents?.mapNotNull { d ->
-                        val dateStr = d.getString("date") ?: d.id
-                        val w = (d.get("weightKg") as? Number)?.toDouble() ?: return@mapNotNull null
-                        val date = runCatching { LocalDate.parse(dateStr) }.getOrElse { return@mapNotNull null }
-                        WeightLog(date, w)
-                    }?.sortedBy { it.date } ?: emptyList()
-                }
-            dailyListener = userRef.collection("dailyLogs")
-                .addSnapshotListener { snap, _ ->
-                    // Data Budgeting: beri consumedCalories direktno (ne iteriramo items!)
-                    val parsedLogs = mutableListOf<DailyLogSummary>()
-                    val burnedMap = mutableMapOf<LocalDate, Double>()
-                    snap?.documents?.forEach { d ->
-                        val dateStr = d.getString("date") ?: d.id
-                        val date = runCatching { LocalDate.parse(dateStr) }.getOrElse { return@forEach }
-                        // ⚡ Direktno polje — ne iteriramo items arraija
-                        val caloriesTotal = (d.get("consumedCalories") as? Number)?.toDouble() ?: 0.0
-                        val water = (d.get("waterMl") as? Number)?.toInt() ?: 0
-                        parsedLogs.add(DailyLogSummary(date, caloriesTotal, water))
-                        // ⚡ burnedCalories iz dailyLogs (ne daily_health — ki se po Fazi 5 ne piše več)
-                        val burned = (d.get("burnedCalories") as? Number)?.toDouble() ?: 0.0
-                        if (burned > 0) burnedMap[date] = burned
-                    }
-                    dailyLogs = parsedLogs.sortedBy { it.date }
-                    burnedByDay = burnedMap.entries.sortedBy { it.key }.map { it.key to it.value }
-                    loading = false
-                }
-        }
-        onDispose {
-            dailyListener?.remove(); weightListener?.remove()
-        }
+        if (openWeightInput) showWeightDialog = true
     }
 
     val weightPairs = remember(weightLogs) { weightLogs.sortedBy { it.date }.map { it.date to it.weightKg } }
@@ -373,12 +318,9 @@ fun ProgressScreen(
                     )
                 }
             }
-            if (loading) {
-                item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+            if (weightLogs.isEmpty() && dailyLogs.isEmpty()) {
+                item { Text("No data yet. Log foods, water, and weight to see progress charts.") }
             } else {
-                if (weightLogs.isEmpty() && dailyLogs.isEmpty()) {
-                    item { Text("No data yet. Log foods, water, and weight to see progress charts.") }
-                } else {
                     item {
                         val isLbs = userProfile.weightUnit == "lb"
                         val displayPoints = filteredWeight.map {
@@ -449,16 +391,20 @@ fun ProgressScreen(
                                 rangeType = range
                             )
                         }
-                    }
                 }
             }
         }
         if (showWeightDialog && uid != null) {
-            WeightEntryDialog(uid = uid, weightUnit = userProfile.weightUnit, onDismiss = { showWeightDialog = false }, onSaved = {
-                showWeightDialog = false
-                xpPopupAmount = 50
-                showXpPopup = true
-            })
+            WeightEntryDialog(
+                progressViewModel = progressViewModel,
+                weightUnit = userProfile.weightUnit,
+                onDismiss = { showWeightDialog = false },
+                onSaved = {
+                    showWeightDialog = false
+                    xpPopupAmount = 50
+                    showXpPopup = true
+                }
+            )
         }
     }
 
@@ -625,50 +571,69 @@ private fun InteractiveLineChart(
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     val selectedColor = MaterialTheme.colorScheme.tertiary
-    var xPositions by remember { mutableStateOf<List<Float>>(emptyList()) } // X positions for actual data points
-    var yPositions by remember { mutableStateOf<List<Float>>(emptyList()) }
-    var canvasPaddingStart by remember { mutableStateOf(0f) }
-    var canvasPaddingTop by remember { mutableStateOf(0f) }
 
     BoxWithConstraints(
         modifier = Modifier
             .height(240.dp)
             .fillMaxWidth()
-            .pointerInput(selectedIndex, xPositions, yPositions, canvasPaddingStart, canvasPaddingTop) {
-                detectTapGestures(onTap = { offset ->
-                    if (xPositions.isEmpty()) {
-                        selectedIndex = null
-                        return@detectTapGestures
-                    }
-                    val adjustedX = offset.x - canvasPaddingStart
-                    // val adjustedY = offset.y - canvasPaddingTop
-
-                    // Find nearest point
-                    val nearest = xPositions.withIndex().minByOrNull { (_, x) -> abs(x - adjustedX) }
-                    if (nearest != null) {
-                        val idx = nearest.index
-                        val dx = abs(xPositions[idx] - adjustedX)
-                        // Allow larger hit area vertically
-                        // val dy = if (yPositions.isNotEmpty()) abs(yPositions[idx] - adjustedY) else Float.MAX_VALUE
-                        val thresholdPx = 120f
-                        val newSelection = if (dx <= thresholdPx) idx else null // Relaxed Y check
-
-                        if (newSelection != null && newSelection != selectedIndex) {
-                            HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.LIGHT_CLICK)
-                        }
-                        selectedIndex = newSelection
-                    } else {
-                        selectedIndex = null
-                    }
-                })
-            }
     ) {
+        val density = LocalDensity.current
         val maxW = this.maxWidth
         val maxH = this.maxHeight
         val paddingStartDp = 48.dp
         val paddingTopDp = 8.dp
-        canvasPaddingStart = with(LocalDensity.current) { paddingStartDp.toPx() }
-        canvasPaddingTop = with(LocalDensity.current) { paddingTopDp.toPx() }
+
+        // P-6 Fix: compute canvas dimensions during composition, not in draw phase
+        val canvasPaddingStart = with(density) { paddingStartDp.toPx() }
+        val canvasPaddingTop = with(density) { paddingTopDp.toPx() }
+        val innerWPx = with(density) { maxW.toPx() - paddingStartDp.toPx() - 16.dp.toPx() }
+        val innerHPx = with(density) { maxH.toPx() - paddingTopDp.toPx() - 40.dp.toPx() }
+        val totalDaysForPositions = remember(minDate, maxDate) { daysBetween(minDate, maxDate).coerceAtLeast(1) }
+
+        // P-6 Fix: xPositions/yPositions izračunani v kompozicijski fazi (remember), ne v draw fazi
+        // Preprečuje pisanje MutableState znotraj Canvas drawScope → odpravlja potencialno neskončno zanko
+        val xPositions = remember(sorted, minDate, maxDate, innerWPx, totalDaysForPositions) {
+            sorted.map { (d, _) ->
+                val daysFromStart = daysBetween(minDate, d).toFloat()
+                (daysFromStart / totalDaysForPositions.toFloat()) * innerWPx
+            }
+        }
+        val yPositions = remember(sorted, niceMin, span, innerHPx) {
+            sorted.map { (_, v) ->
+                val norm = (v - niceMin) / span
+                (innerHPx - (norm * innerHPx)).toFloat()
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(selectedIndex, xPositions, canvasPaddingStart) {
+                    detectTapGestures(onTap = { offset ->
+                        if (xPositions.isEmpty()) {
+                            selectedIndex = null
+                            return@detectTapGestures
+                        }
+                        val adjustedX = offset.x - canvasPaddingStart
+
+                        // Find nearest point
+                        val nearest = xPositions.withIndex().minByOrNull { (_, x) -> abs(x - adjustedX) }
+                        if (nearest != null) {
+                            val idx = nearest.index
+                            val dx = abs(xPositions[idx] - adjustedX)
+                            val thresholdPx = 120f
+                            val newSelection = if (dx <= thresholdPx) idx else null
+
+                            if (newSelection != null && newSelection != selectedIndex) {
+                                HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.LIGHT_CLICK)
+                            }
+                            selectedIndex = newSelection
+                        } else {
+                            selectedIndex = null
+                        }
+                    })
+                }
+        ) {
 
         Canvas(
             Modifier
@@ -678,19 +643,7 @@ private fun InteractiveLineChart(
             val innerW = size.width
             val innerH = size.height
 
-            val totalDays = daysBetween(minDate, maxDate).coerceAtLeast(1)
-
-            // Compute xPositions for data points based on global minDate/maxDate
-            xPositions = sorted.map { (d, _) ->
-                val daysFromStart = daysBetween(minDate, d).toFloat()
-                (daysFromStart / totalDays.toFloat()) * innerW
-            }
-
-            // Precompute yPositions from normalized values
-            yPositions = sorted.map { (_, v) ->
-                val norm = (v - niceMin) / span
-                (innerH - (norm * innerH)).toFloat()
-            }
+            val totalDays = totalDaysForPositions
 
             // --- AXES & GRID ---
 
@@ -895,7 +848,7 @@ private fun InteractiveLineChart(
                 // We don't have direct pixel width here outside Canvas easily without BoxWithConstraints scope (which we have).
                 // innerW from canvas is roughly maxWidth - padding.
 
-                val innerW_approx = maxWidth.value * LocalDensity.current.density - with(LocalDensity.current) { paddingStartForAxis.toPx() + 16.dp.toPx() } // Start padding + End padding
+                val innerW_approx = maxW.value * LocalDensity.current.density - with(LocalDensity.current) { paddingStartForAxis.toPx() + 16.dp.toPx() } // Start padding + End padding
                 val px = fraction * innerW_approx
                 val xDp = with(LocalDensity.current) { px.toDp() } + paddingStartForAxis
 
@@ -921,7 +874,7 @@ private fun InteractiveLineChart(
             // Let's put label next to the line.
 
             val totalDays = daysBetween(minDate, maxDate).coerceAtLeast(1)
-            val innerW_approx = maxWidth.value * LocalDensity.current.density - with(LocalDensity.current) { paddingStartForAxis.toPx() + 16.dp.toPx() }
+            val innerW_approx = maxW.value * LocalDensity.current.density - with(LocalDensity.current) { paddingStartForAxis.toPx() + 16.dp.toPx() }
 
             if (current.isBefore(minDate)) current = current.plusMonths(1)
 
@@ -995,17 +948,21 @@ private fun InteractiveLineChart(
                     }
                 }
             }
-        }
-    }
+        }  // end selectedIndex?.let
+        }  // end Box (pointerInput wrapper)
+    }  // end BoxWithConstraints
 }
 
 @Composable
-private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> Unit, onSaved: () -> Unit) {
+private fun WeightEntryDialog(
+    progressViewModel: ProgressViewModel,
+    weightUnit: String,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
     val context = LocalContext.current
-    val progressViewModel: ProgressViewModel = viewModel(
-        factory = MyViewModelFactory(context)
-    )
-    val scope = rememberCoroutineScope() // DODANO: Proper scope namesto GlobalScope
+    val isSaving by progressViewModel.isSaving.collectAsState()
+    val scope = rememberCoroutineScope()
     val isLbs = weightUnit == "lb"
     var weightInput by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
@@ -1037,7 +994,7 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
         },
         confirmButton = {
             TextButton(
-                enabled = !saving && weightInput.isNotBlank(),
+                enabled = !isSaving && weightInput.isNotBlank(),
                 onClick = {
                     val inputVal = weightInput.toDoubleOrNull() ?: return@TextButton
                     HapticFeedback.performHapticFeedback(context, HapticFeedback.FeedbackType.CLICK)
@@ -1093,39 +1050,36 @@ private fun WeightEntryDialog(uid: String, weightUnit: String, onDismiss: () -> 
     )
 }
 
-@Suppress("UNCHECKED_CAST")
-private fun <T> filterRange(list: List<T>, range: ProgressRange): List<T> where T : Any {
-    if (list.isEmpty()) return emptyList()
-    if (range == ProgressRange.ALL) return list
+// P-7 Fix: zamenjano z varnimi tipiziranimi overloadi — odpravlja @Suppress("UNCHECKED_CAST") in tihe runtime napake
+private fun thresholdForRange(lastDate: LocalDate, range: ProgressRange): LocalDate = when (range) {
+    ProgressRange.WEEK  -> lastDate.minusDays(6)
+    ProgressRange.MONTH -> lastDate.minusMonths(1)
+    ProgressRange.YEAR  -> lastDate.minusYears(1)
+    ProgressRange.ALL   -> lastDate
+}
 
-    val lastDate: LocalDate = when {
-        list.firstOrNull() is DailyLogSummary -> (list as List<DailyLogSummary>).maxOfOrNull { it.date }
-        list.firstOrNull() is WeightLog -> (list as List<WeightLog>).maxOfOrNull { it.date }
-        list.firstOrNull() is Pair<*, *> -> {
-            val pairs = list as List<Pair<*, *>>
-            pairs.mapNotNull { (it.first as? LocalDate) }.maxOrNull()
-        }
-        else -> null
-    } ?: return list
+@JvmName("filterRangeDailyLog")
+private fun filterRange(list: List<DailyLogSummary>, range: ProgressRange): List<DailyLogSummary> {
+    if (list.isEmpty() || range == ProgressRange.ALL) return list
+    val lastDate = list.maxOfOrNull { it.date } ?: return list
+    val threshold = thresholdForRange(lastDate, range)
+    return list.filter { it.date >= threshold }
+}
 
-    val threshold = when (range) {
-        ProgressRange.WEEK -> lastDate.minusDays(6)
-        ProgressRange.MONTH -> lastDate.minusMonths(1)
-        ProgressRange.YEAR -> lastDate.minusYears(1)
-        else -> lastDate // Should ideally not happen due to early return
-    }
+@JvmName("filterRangeWeightLog")
+private fun filterRange(list: List<WeightLog>, range: ProgressRange): List<WeightLog> {
+    if (list.isEmpty() || range == ProgressRange.ALL) return list
+    val lastDate = list.maxOfOrNull { it.date } ?: return list
+    val threshold = thresholdForRange(lastDate, range)
+    return list.filter { it.date >= threshold }
+}
 
-    return list.filter { item ->
-        when (item) {
-            is DailyLogSummary -> item.date >= threshold
-            is WeightLog -> item.date >= threshold
-            is Pair<*, *> -> {
-                val date = item.first as? LocalDate
-                date != null && date >= threshold
-            }
-            else -> true
-        }
-    }
+@JvmName("filterRangePairs")
+private fun filterRange(list: List<Pair<LocalDate, Double>>, range: ProgressRange): List<Pair<LocalDate, Double>> {
+    if (list.isEmpty() || range == ProgressRange.ALL) return list
+    val lastDate = list.maxOfOrNull { it.first } ?: return list
+    val threshold = thresholdForRange(lastDate, range)
+    return list.filter { it.first >= threshold }
 }
 
 // ── Phase 59a: computeWeightPrediction() → ProgressViewModel.kt (P-1 fix) ───────────────────
